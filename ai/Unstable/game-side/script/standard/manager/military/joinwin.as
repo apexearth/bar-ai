@@ -29,11 +29,28 @@ void JwCommitIds(IUnitTask@ t, const array<Id>@ roster, int also = -1)
 	JwCommit(t, r, also);
 }
 
+// a launch without a task (a flight, an intercept, a gift of planes): its refusals count in joinwin-stat
+const int JW_EV_REFUSED = 2;   // CMilitaryManager::JW_REFUSED
+void JwRefused(int fightType, int n)
+{
+	if (n > 0)
+		aiMilitaryMgr.NoteJoinWin(fightType, JW_EV_REFUSED, n);
+}
+
 IUnitTask@ JwJoinable(IUnitTask@ t, CCircuitUnit@ u)
 {
 	if ((t is null) || t.IsDead() || (u is null))
 		return t;
 	return t.JoinOpen(u) ? t : null;
+}
+
+// a unit out on a launched squad: a guard or escort sent to it would be joining that squad
+bool JwLaunched(CCircuitUnit@ u)
+{
+	if ((u is null) || !GthOn())
+		return false;
+	IUnitTask@ t = u.task;
+	return (t !is null) && !t.IsDead() && t.IsJoinCommitted();
 }
 
 // every member within r of home: a launched squad back home forms again

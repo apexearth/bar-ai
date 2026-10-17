@@ -169,7 +169,9 @@ bool ISquadTask::PurgeStrays()
 
 bool ISquadTask::Merge(ISquadTask* task)
 {
-	if (IsJoinClosed() || task->IsJoinClosed()) {
+	if (IsJoinClosed() || task->IsJoinClosed()
+		|| (IsEngaged() && static_cast<CMilitaryManager*>(manager)->IsJoinGate()))
+	{
 		manager->NoteJoinRefused(this);
 		return false;
 	}
@@ -260,6 +262,8 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	if (IsJoinClosed()) {
 		return nullptr;
 	}
+	// apex_gather: a squad in a fight is not joined by walking into it
+	const bool gate = static_cast<CMilitaryManager*>(manager)->IsJoinGate();
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
@@ -279,7 +283,7 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	for (const IFighterTask* candidate : tasks) {
 		if ((candidate == this)
 			|| (candidate->GetAttackPower() < attackPower)
-			|| candidate->IsJoinClosed() || !candidate->CanAssignTo(leader))
+			|| candidate->IsJoinClosed() || (gate && candidate->IsEngaged()) || !candidate->CanAssignTo(leader))
 		{
 			continue;
 		}

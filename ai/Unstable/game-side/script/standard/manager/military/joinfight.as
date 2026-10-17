@@ -16,6 +16,36 @@ array<int> gRfLead;
 array<AIFloat3> gRfAt;
 array<int> gRfFrame;
 array<int> gRfDeadline;
+array<float> gRfTravel;
+// apex_gather: a march that would arrive after the fight is a late joiner. What arrived in time, by walk:
+// STAY when most of the marches at least this long arrived after it was over (measured, not a bar)
+array<float> gRfHistS;
+array<bool> gRfHistIn;
+int gRfLateStay = 0;
+
+bool RfLikelyLate(float travelS)
+{
+	int inN = 0, outN = 0;
+	for (uint i = 0; i < gRfHistS.length(); ++i) {
+		if (gRfHistS[i] < travelS)
+			continue;
+		if (gRfHistIn[i])
+			++inN;
+		else
+			++outN;
+	}
+	return outN > inN;
+}
+
+void RfNoteOutcome(float travelS, bool inTime)
+{
+	gRfHistS.insertLast(travelS);
+	gRfHistIn.insertLast(inTime);
+	if (gRfHistS.length() > 64) {
+		gRfHistS.removeAt(0);
+		gRfHistIn.removeAt(0);
+	}
+}
 
 bool AiJoinFight(const AIFloat3& in at, float travelS, float allyPow, float foePow, float ownPow, int leaderId)
 {
@@ -48,10 +78,16 @@ bool AiJoinFight(const AIFloat3& in at, float travelS, float allyPow, float foeP
 		++gRfStay;
 		return false;
 	}
+	if (GthOn() && RfLikelyLate(travelS)) {
+		++gRfLateStay;
+		JwRefused(int(Task::FightType::ATTACK), 1);
+		return false;
+	}
 	gRfLead.insertLast(leaderId);
 	gRfAt.insertLast(at);
 	gRfFrame.insertLast(ai.frame);
 	gRfDeadline.insertLast(ai.frame + int((2.f * travelS + 30.f) * float(SECOND)));
+	gRfTravel.insertLast(travelS);
 	return true;
 }
 
@@ -81,7 +117,10 @@ void JoinFightWatch()
 			continue;
 		}
 		AiLog("apex: nnreinf-done t=" + ai.teamId + " f=" + gRfFrame[i] + " done=" + done + " why=" + why);
+		if (why != "died")
+			RfNoteOutcome(gRfTravel[i], done == 1);
 		gRfLead.removeAt(i);
+		gRfTravel.removeAt(i);
 		gRfAt.removeAt(i);
 		gRfFrame.removeAt(i);
 		gRfDeadline.removeAt(i);
@@ -91,7 +130,7 @@ void JoinFightWatch()
 		if (gRfAsked > 0)
 			AiLog(Factory::T() + "apex: reinf-stat t=" + ai.teamId + " asked=" + gRfAsked + " stay=" + gRfStay
 				+ " in=" + gRfIn + " over=" + gRfOver + " late=" + gRfLate + " died=" + gRfDied
-				+ " pending=" + gRfLead.length());
+				+ " pending=" + gRfLead.length() + " lateStay=" + gRfLateStay);
 	}
 }
 

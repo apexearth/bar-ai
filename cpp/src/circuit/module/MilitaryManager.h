@@ -119,6 +119,9 @@ public:
 	bool IsJoinGate() const { return joinGate; }
 	enum JoinEv { JW_COMMIT, JW_REOPEN, JW_REFUSED, JW_LATE, JW_ADMIT, JW_N };
 	void NoteJoin(IFighterTask::FightType ft, JoinEv e, int n = 1);
+	void NoteJoinScript(int ft, int e, int n) {  // a task-less launch the script holds (flights, intercepts)
+		if ((e >= 0) && (e < JW_N)) { NoteJoin(static_cast<IFighterTask::FightType>(ft), static_cast<JoinEv>(e), n); }
+	}
 	virtual void NoteJoinRefused(IUnitTask* task) override;
 	virtual IUnitTask* JoinFallback(CCircuitUnit* unit) override;
 private:
@@ -233,10 +236,12 @@ public:
 	const std::vector<std::pair<springai::AIFloat3, float>>& GetSupportSpots() const { return supportSpots; }
 	// apex: the TEAM PUSH -- the breach the allied team masses at, and whether
 	// its gathered power has called the go. Set by the script each tick.
-	void SetFocus(const springai::AIFloat3& pos, float radius, float teamPower, bool go, int until) {
-		focusPos = pos; focusR = radius; focusPow = teamPower; focusGo = go; focusUntil = until;
-	}
+	void SetFocus(const springai::AIFloat3& pos, float radius, float teamPower, bool go, int until);
 	bool IsFocus(int frame) const { return frame < focusUntil; }
+	// apex_gather: the push's join window shuts at its GO -- a squad launched after it is not in the push,
+	// is not credited with the team's power and picks its own fight
+	bool InFocusPush(const IFighterTask* t) const;
+	bool IsFocusFor(int frame, const IFighterTask* t) const { return IsFocus(frame) && InFocusPush(t); }
 	const springai::AIFloat3& GetFocusPos() const { return focusPos; }
 	float GetFocusR() const { return focusR; }
 	float GetFocusPow() const { return focusPow; }
@@ -293,6 +298,7 @@ public:
 	float focusPow = 0.f;
 	bool focusGo = false;
 	int focusUntil = -1;
+	int focusGoFrame = -1;
 	springai::AIFloat3 focusHome = -RgtVector;
 	float oddsMul = 1.f;
 	float massMul = 1.f;

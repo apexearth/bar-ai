@@ -140,6 +140,13 @@ IUnitTask@ FlankTaskFor(CCircuitUnit@ unit)
 		if (vip is null)
 			return null;
 		@gFgTask[g] = aiMilitaryMgr.Enqueue(TaskF::Guard(vip));
+		// formed whole: the group is its members at the form
+		array<int> ros;
+		for (uint m = 0; m < gFgMemId.length(); ++m) {
+			if (gFgMemSlot[m] == gFgId[g])
+				ros.insertLast(gFgMemId[m]);
+		}
+		JwCommit(gFgTask[g], ros, int(unit.id));
 	}
 	if (gFgTask[g] !is null)
 		++gFgOrders;
@@ -226,6 +233,9 @@ void FlankDisband(uint g, const string why)
 // Members sitting in some other fighter task re-elect into the group.
 void FlankRecall(int slot, IUnitTask@ keep)
 {
+	// apex_gather: a member that left a formed group does not walk back to it alone
+	if (GthOn() && (keep !is null) && keep.IsJoinCommitted())
+		return;
 	for (uint m = 0; m < gFgMemId.length(); ++m) {
 		if (gFgMemSlot[m] != slot)
 			continue;

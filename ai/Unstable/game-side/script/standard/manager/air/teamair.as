@@ -693,6 +693,12 @@ void TairLaunch(int op)
 			const bool idle = (un.task !is null) && (un.task.GetType() == int(Task::Type::IDLE));
 			if (!claimed && !idle)
 				continue;
+			// apex_gather: the launch takes what stands at the rally
+			if (Military::GthOn() && (un.GetPos(ai.frame).distance2D(TairRally())
+					> ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 1.5f)) {
+				Military::JwRefused(int(Task::FightType::RAID), 1);
+				continue;
+			}
 			if (!claimed)
 				gNaClaim.insertLast(int(un.id));
 			gTairGun.insertLast(un.id);

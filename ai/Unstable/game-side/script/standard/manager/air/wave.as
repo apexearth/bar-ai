@@ -89,6 +89,15 @@ void BuildWave()
 	gWaveBombers = 0;
 	gWaveMass = 0.f;
 	gWaveFighters = 0;
+	// apex_gather: the wave is what stands where it gathers (the team rally, else home); a plane elsewhere --
+	// still flying in, or handed over at an ally's base -- is sent there for the next wave
+	const bool gth = Military::GthOn();
+	const bool atRally = TairOn() && (TairPhase() != TA_PH_NONE);
+	const AIFloat3 gatherAt = atRally ? TairRally() : Builder::gHomePos;
+	float gatherR = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 1.5f;
+	if (!atRally && (aiMilitaryMgr.GetBaseDefRange() > gatherR))
+		gatherR = aiMilitaryMgr.GetBaseDefRange();
+	int away = 0;
 	for (int i = 0; i < 6; ++i) {
 		CCircuitDef@ d = StrikeDef(i);
 		if (d is null)
@@ -99,6 +108,13 @@ void BuildWave()
 		for (uint k = 0; k < us.length(); ++k) {
 			if ((us[k] is null) || Covering(us[k].id))
 				continue;
+			if (gth && OnMap(gatherAt) && (us[k].GetPos(ai.frame).distance2D(gatherAt) > gatherR)) {
+				IUnitTask@ ut = us[k].task;
+				if (((ut is null) || (ut.GetType() == Task::Type::IDLE)) && (us[k].CmdQueueSize() == 0))
+					us[k].CmdMoveTo(gatherAt);
+				++away;
+				continue;
+			}
 			gWave.insertLast(us[k].id);
 			if (i < 4) {
 				gRunWave.insertLast(us[k].id);
@@ -109,6 +125,7 @@ void BuildWave()
 			}
 		}
 	}
+	Military::JwRefused(int(Task::FightType::BOMB), away);
 }
 
 // The wave's combined threat value, the mass the bomb task weighs AA against.

@@ -78,7 +78,9 @@ int Cover(CCircuitUnit@ vip, const AIFloat3& in to, const string& in why)
 		CCircuitDef@ fd = (pass == 0) ? gFighter1 : gFighter;
 		if (fd is null)
 			continue;
-		array<CCircuitUnit@>@ ws = ai.GetOwnUnitsOfDef(fd, orig, 0.f);
+		// apex_gather: the cover leaves with its plane, so only fighters where it starts go
+		const float nearR = Military::GthOn() ? ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 2.f : 0.f;
+		array<CCircuitUnit@>@ ws = ai.GetOwnUnitsOfDef(fd, orig, nearR);
 		if (ws is null)
 			continue;
 		for (uint i = 0; i < ws.length(); ++i) {

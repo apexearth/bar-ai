@@ -15,6 +15,9 @@ three times (raids, the attack task, bombers) and the next path leaked again, so
          uses the verdict
        - every election over live tasks (`->CanAssignTo(`) in the military asks JoinOpen/IsJoinClosed first
        - JoinOpen and JoinTick are final
+       - a fighter task reads the team push through IsFocusFor (a squad launched after the GO is not in it)
+  both - each launch without a task (flights, intercepts, the wave's positions, siege pulls, JoinFight...)
+         keeps its own window: _SENTINELS
   AS   - a military/air function that returns a stored task handle (a live squad) is called only through
          JwJoinable, and a guard task (TaskF::Guard returns the live one) likewise
 """
@@ -74,6 +77,8 @@ def check_cpp(root: Path = CPP) -> list[str]:
                             f"go through ISquadTask::Merge or ITaskModule::AssignTask")
             if "->Merge(" in code and not re.search(r"\bif\s*\(.*->Merge\(", code):
                 errs.append(f"{r}:{n + 1}: Merge's verdict ignored -- a refused merge must not abort the giver")
+            if fighter and re.search(r"->IsFocus\(", code):
+                errs.append(f"{r}:{n + 1}: the team push read without its window -- use IsFocusFor(frame, this)")
             if military and re.search(r"\w(->|\.)CanAssignTo\(", code):
                 near = "\n".join(_code(x) for x in lines[max(n - 2, 0):n + 1])
                 if "JoinOpen(" not in near and "IsJoinClosed(" not in near:
@@ -164,9 +169,50 @@ def check_script(root: Path = SCRIPT) -> list[str]:
     return errs
 
 
+# Launches without a task (direct move orders) and elections the gate cannot see: each keeps its own window.
+_SENTINELS = [
+    ("cpp/src/circuit/task/fighter/SupportTask.cpp", r"candy->JoinOpen\(unit\)", "support bots pick only open squads"),
+    ("cpp/src/circuit/task/fighter/SquadTask.cpp", r"candidate->IsEngaged\(\)", "no merge into a squad in a fight"),
+    ("cpp/src/circuit/task/fighter/BombTask.cpp", r"strike_f", "only the wave is credited with the strike's power"),
+    ("ai/Unstable/game-side/script/standard/manager/air/flight.as", r"gFlightSent && Military::GthOn\(\)",
+     "the scout flight leaves once per raid"),
+    ("ai/Unstable/game-side/script/standard/manager/air/update.as", r"InList\(gInterceptRoster",
+     "an intercept flies its launch roster only"),
+    ("ai/Unstable/game-side/script/standard/manager/air/update.as", r"PublishTeamValue\(\"strike_f\"",
+     "the strike publishes its launch frame"),
+    ("ai/Unstable/game-side/script/standard/manager/air/wave.as", r"distance2D\(gatherAt\) > gatherR",
+     "a wave launches what stands where it gathers"),
+    ("ai/Unstable/game-side/script/standard/manager/air/teamair.as", r"distance2D\(TairRally\(\)\)",
+     "team air launches gunships at the rally only"),
+    ("ai/Unstable/game-side/script/standard/manager/air/nnair.as", r"NaWingLaunch\(", "a gunship wing out is not joined"),
+    ("ai/Unstable/game-side/script/standard/manager/air/cover.as", r"GetOwnUnitsOfDef\(fd, orig, nearR\)",
+     "cover takes fighters where its plane starts"),
+    ("ai/Unstable/game-side/script/standard/manager/military/nnsiege.as", r"if \(!gSgReady \|\| !GthOn\(\)\)",
+     "a siege that marched pulls no one"),
+    ("ai/Unstable/game-side/script/standard/manager/military/joinfight.as", r"RfLikelyLate\(travelS\)",
+     "a march that arrives after the fight stays"),
+    ("ai/Unstable/game-side/script/standard/manager/military/flankguard.as", r"keep\.IsJoinCommitted\(\)",
+     "a formed flank group recalls no one"),
+    ("ai/Unstable/game-side/script/standard/manager/brain/market/aathreat.as", r"JwLaunched\(",
+     "an AA guard does not follow a launched squad"),
+    ("ai/Unstable/game-side/script/standard/manager/military/hooks.as", r"GthOn\(\) \? MassPoolTask",
+     "late scouts wait in the pool"),
+]
+
+
+def check_sentinels(repo: Path = REPO) -> list[str]:
+    errs = []
+    for rel, pat, what in _SENTINELS:
+        p = repo / rel
+        if p.is_file() and not re.search(pat, p.read_text(encoding="utf8", errors="replace")):
+            errs.append(f"{rel}: lost its join window ({what})")
+    return errs
+
+
 def check(repo: Path = REPO) -> list[str]:
     return check_cpp(repo / "cpp" / "src" / "circuit") + \
-        check_script(repo / "ai" / "Unstable" / "game-side" / "script" / "standard" / "manager")
+        check_script(repo / "ai" / "Unstable" / "game-side" / "script" / "standard" / "manager") + \
+        check_sentinels(repo)
 
 
 def main() -> int:

@@ -734,6 +734,28 @@ IUnitTask* CMilitaryManager::JoinFallback(CCircuitUnit* unit)
 	return DefaultMakeTask(unit);
 }
 
+void CMilitaryManager::SetFocus(const AIFloat3& pos, float radius, float teamPower, bool go, int until)
+{
+	const int frame = circuit->GetLastFrame();
+	if (go && (!focusGo || (frame >= focusUntil) || (pos.SqDistance2D(focusPos) > SQUARE(radius)))) {
+		focusGoFrame = frame;
+	}
+	focusPos = pos;
+	focusR = radius;
+	focusPow = teamPower;
+	focusGo = go;
+	focusUntil = until;
+}
+
+bool CMilitaryManager::InFocusPush(const IFighterTask* t) const
+{
+	if (!focusGo || !joinGate) {
+		return true;
+	}
+	const int c = t->GetJoinCommitFrame();
+	return (c >= 0) && (c <= focusGoFrame);
+}
+
 void CMilitaryManager::JoinStatTick()
 {
 	joinGate = circuit->GetTunable("apex_gather", 0.f) > 0.f;

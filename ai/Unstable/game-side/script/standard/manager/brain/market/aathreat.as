@@ -385,7 +385,7 @@ CCircuitUnit@ AatGuardVip(CCircuitUnit@ aa)
 			return null;
 		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(gAatMobDef[best]), gAatPos[best], r * 1.5f);
 		for (uint i = 0; (us !is null) && (i < us.length()); ++i) {
-			if ((us[i] !is null) && (us[i].id != aa.id)) {
+			if ((us[i] !is null) && (us[i].id != aa.id) && !Military::JwLaunched(us[i])) {
 				++gAatGuardN;
 				return us[i];
 			}

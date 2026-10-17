@@ -66,6 +66,7 @@ bool TeamStrikeOut()
 array<Id> gFlightOut;       // launched, flying to their spot
 array<AIFloat3> gFlightDest;
 int gFlightLaunches = 0;
+bool gFlightSent = false;   // this raid's flight has left; a plane finished since waits for the next raid
 
 // Where the i-th of n decoys goes: spread over the raid's cell.
 AIFloat3 DecoyDest(const AIFloat3& in at, float r, uint i, uint n)
@@ -301,8 +302,10 @@ void FlightWatch()
 	}
 	// Only with a raid: a look with no bombers behind it shows them our air
 	// and buys their AA before the first bomb (apexearth).
-	if (!TeamStrikeOut())
+	if (!TeamStrikeOut()) {
+		gFlightSent = false;
 		return;
+	}
 	// What stands goes with the raid, together, over the raid's cell: the look
 	// and the decoys ahead of the bombs. Fighters fill it while there is
 	// something to see.
@@ -314,6 +317,11 @@ void FlightWatch()
 	}
 	if (home.length() == 0)
 		return;
+	if (gFlightSent && Military::GthOn()) {
+		Military::JwRefused(int(Task::FightType::SCOUT), int(home.length()));
+		return;
+	}
+	gFlightSent = true;
 	AIFloat3 cell;
 	float cellR = 0.f;
 	const bool onCell = StrikePoint(cell, cellR);

@@ -312,7 +312,7 @@ void CAttackTask::Update()
 		if (startPos.SqDistance2D(walkPos) < SQUARE(DEFAULT_SLACK * 4)) {
 			return;
 		}
-	} else if ((GetTarget() == nullptr) && circuit->GetMilitaryManager()->IsFocus(frame)
+	} else if ((GetTarget() == nullptr) && circuit->GetMilitaryManager()->IsFocusFor(frame, this)
 		&& !circuit->GetMilitaryManager()->IsFocusGo())
 	{
 		// Stage short of the line's reach, then back toward home until the threat
@@ -691,7 +691,7 @@ void CAttackTask::ChooseFlank(const AIFloat3& tgtPos, int key, int tgtGroup, con
 	// answer parity, or one sent by a strike that has gone, walks straight in.
 	{
 		CMilitaryManager* mm = circuit->GetMilitaryManager();
-		const bool focusGo = mm->IsFocus(frame) && mm->IsFocusGo()
+		const bool focusGo = mm->IsFocusFor(frame, this) && mm->IsFocusGo()
 				&& (tgtPos.SqDistance2D(mm->GetFocusPos()) < SQUARE(mm->GetFocusR() + highestRange));
 		if (focusGo || (maxPow >= 1.2f * foeAll)) {
 			++tally.straight;
@@ -855,7 +855,7 @@ void CAttackTask::FindTarget()
 	// base is taken; on the go, the breach wins the choice and is weighed
 	// against the team's gathered power, not this squad's.
 	CMilitaryManager* milMgr = circuit->GetMilitaryManager();
-	const bool focusOn = milMgr->IsFocus(frame);
+	const bool focusOn = milMgr->IsFocusFor(frame, this);
 	const bool focusGo = focusOn && milMgr->IsFocusGo();
 	const AIFloat3 focusPos = milMgr->GetFocusPos();
 	const float sqFocusR = SQUARE(milMgr->GetFocusR() + highestRange);
@@ -1517,7 +1517,7 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query, bool viaPath)
 	CCircuitAI* circuit = manager->GetCircuit();
 	CMilitaryManager* mm = circuit->GetMilitaryManager();
 	const int frame = circuit->GetLastFrame();
-	if ((GetTarget() == nullptr) && mm->IsFocus(frame) && !mm->IsFocusGo() && (leader != nullptr)) {
+	if ((GetTarget() == nullptr) && mm->IsFocusFor(frame, this) && !mm->IsFocusGo() && (leader != nullptr)) {
 		if (frame >= nextStageLog) {
 			nextStageLog = frame + FRAMES_PER_SEC * 10;
 			const AIFloat3& lp = leader->GetPos(frame);
@@ -1708,7 +1708,7 @@ void CAttackTask::ArmyStep(int frame)
 		stageKey = -1;
 		return;
 	}
-	CAttackTask* army = (mm->IsFocus(frame) || (repairerId >= 0) || leader->GetCircuitDef()->IsAbleToFly())
+	CAttackTask* army = (mm->IsFocusFor(frame, this) || (repairerId >= 0) || leader->GetCircuitDef()->IsAbleToFly())
 			? nullptr : mm->GetMainArmy();
 	if (army == this) {
 		StageArmy(frame);

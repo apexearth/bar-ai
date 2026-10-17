@@ -45,6 +45,7 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "bool IsBirthDefender(CCircuitUnit@) const", asMETHOD(CMilitaryManager, IsBirthDefender), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float AssetHold(CCircuitUnit@, float, AIFloat3& out)", asMETHOD(CMilitaryManager, AssetHold), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void NoteBirthScript(int)", asMETHOD(CMilitaryManager, NoteBirthScript), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void NoteJoinWin(int, int, int)", asMETHOD(CMilitaryManager, NoteJoinScript), asCALL_THISCALL); ASSERT(r >= 0);
 	// apex: the base-defence ring DefendTask's fight-at-any-odds boost and the
 	// defence builder both honor -- bound so the script can DRAW the zone.
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetBaseDefRange() const", asMETHOD(CMilitaryManager, GetBaseDefRange), asCALL_THISCALL); ASSERT(r >= 0);

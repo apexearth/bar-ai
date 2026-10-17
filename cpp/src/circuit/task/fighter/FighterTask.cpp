@@ -71,7 +71,8 @@ void IFighterTask::JoinCommit(int admitFrames)
 	}
 	joinCommitted = true;
 	joinTicked = true;
-	joinAdmitUntil = manager->GetCircuit()->GetLastFrame() + std::max(0, admitFrames);
+	joinCommitFrame = manager->GetCircuit()->GetLastFrame();
+	joinAdmitUntil = joinCommitFrame + std::max(0, admitFrames);
 	static_cast<CMilitaryManager*>(manager)->NoteJoin(fightType, CMilitaryManager::JW_COMMIT);
 }
 

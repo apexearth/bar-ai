@@ -101,7 +101,11 @@ void CSupportTask::Update()
 
 	const std::set<IFighterTask*>& tasksA = static_cast<CMilitaryManager*>(manager)->GetTasks(IFighterTask::FightType::ATTACK);
 	const std::set<IFighterTask*>& tasksD = static_cast<CMilitaryManager*>(manager)->GetTasks(IFighterTask::FightType::DEFEND);
-	const std::set<IFighterTask*>& tasks = tasksA.empty() ? tasksD : tasksA;
+	bool openA = false;
+	for (IFighterTask* t : tasksA) {
+		openA = openA || t->JoinOpen(unit);
+	}
+	const std::set<IFighterTask*>& tasks = openA ? tasksA : tasksD;
 	if (tasks.empty()) {
 		Start(unit);
 		return;
@@ -113,6 +117,9 @@ void CSupportTask::Update()
 	urgentPositions.clear();
 //	urgentPositions.reserve(tasks.size());
 	for (IFighterTask* candy : tasks) {
+		if (!candy->JoinOpen(unit)) {
+			continue;
+		}
 		ISquadTask* task = static_cast<ISquadTask*>(candy);
 		CCircuitUnit* leader = task->GetLeader();
 		if (leader == nullptr) {
@@ -167,7 +174,11 @@ void CSupportTask::ApplyPath(const CQueryPathMulti* query)
 
 	const std::set<IFighterTask*>& tasksA = static_cast<CMilitaryManager*>(manager)->GetTasks(IFighterTask::FightType::ATTACK);
 	const std::set<IFighterTask*>& tasksD = static_cast<CMilitaryManager*>(manager)->GetTasks(IFighterTask::FightType::DEFEND);
-	const std::set<IFighterTask*>& tasks = tasksA.empty() ? tasksD : tasksA;
+	bool openA = false;
+	for (IFighterTask* t : tasksA) {
+		openA = openA || t->JoinOpen(unit);
+	}
+	const std::set<IFighterTask*>& tasks = openA ? tasksA : tasksD;
 	if (tasks.empty()) {
 		Start(unit);
 		return;
@@ -188,6 +199,9 @@ void CSupportTask::ApplyPath(const CQueryPathMulti* query)
 		IFighterTask* task = nullptr;
 		float minSqDist = std::numeric_limits<float>::max();
 		for (IFighterTask* candy : tasks) {
+			if (!candy->JoinOpen(unit)) {
+				continue;
+			}
 			if (kind != 0) {
 				int held = 0;
 				for (CCircuitUnit* u : candy->GetAssignees()) {

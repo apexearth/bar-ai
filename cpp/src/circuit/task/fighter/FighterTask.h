@@ -57,6 +57,7 @@ public:
 	virtual void JoinTick() override final;
 	bool IsJoinClosed() const;
 	bool IsJoinCommitted() const { return joinCommitted; }
+	int GetJoinCommitFrame() const { return joinCommitted ? joinCommitFrame : -1; }
 	void JoinAdmit(int unitId) { if (!joinCommitted) { joinAdmit.insert(unitId); } }
 	void JoinCommit(int admitFrames);
 	void JoinReopen();
@@ -104,6 +105,7 @@ private:
 	bool joinCommitted = false;
 	bool joinTicked = false;
 	int joinAdmitUntil = -1;
+	int joinCommitFrame = -1;
 	std::set<int> joinAdmit;
 
 private:  // NOTE: Never assign directly, use SetTarget() to avoid access to a dead target

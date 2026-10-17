@@ -80,6 +80,9 @@ bool HoldsUnit(CCircuitUnit@ unit)
 // cannot recall them while the raid lasts. Fighters auto-engage whatever air
 // they find there; when the ally's published value clears, the re-issue stops
 // and stock tasks drift them home. No cap: response scales with what we hold.
+// Under apex_gather the intercept is a launch: the fighters held when it starts go, and one finished
+// while it lasts waits for the next.
+array<Id> gInterceptRoster;
 void Intercept()
 {
 	if (Builder::gHomeSet && (ai.frame >= gNextRaidPub)) {
@@ -117,6 +120,7 @@ void Intercept()
 		}
 	}
 	if (worst < 0) {
+		gInterceptRoster.resize(0);
 		if (gInterceptTarget >= 0) {
 			gInterceptTarget = -1;
 			AiLog(Factory::T() + "apex: interceptors stand down");
@@ -129,7 +133,19 @@ void Intercept()
 	if ((to.x < 0.f) || !OnMap(to))
 		return;
 	gNextInterceptCmd = ai.frame + 4 * SECOND;
-	int sent = 0;
+	bool fixedRoster = Military::GthOn() && (gInterceptTarget == worst);
+	if (fixedRoster) {
+		array<Id> alive;
+		for (uint i = 0; i < gInterceptRoster.length(); ++i) {
+			if (ai.GetTeamUnit(gInterceptRoster[i]) !is null)
+				alive.insertLast(gInterceptRoster[i]);
+		}
+		gInterceptRoster = alive;
+		fixedRoster = alive.length() > 0;   // the flight is spent: the next one may launch
+	}
+	if (!fixedRoster)
+		gInterceptRoster.resize(0);
+	int sent = 0, held = 0;
 	for (int pass = 0; pass < 2; ++pass) {
 		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
 		if (fd is null)
@@ -140,10 +156,17 @@ void Intercept()
 		for (uint i = 0; i < wings.length(); ++i) {
 			if ((wings[i] is null) || InWave(wings[i].id) || Covering(wings[i].id))
 				continue;
+			if (fixedRoster && !InList(gInterceptRoster, wings[i].id)) {
+				++held;
+				continue;
+			}
+			if (!fixedRoster)
+				gInterceptRoster.insertLast(wings[i].id);
 			wings[i].CmdMoveTo(to);
 			++sent;
 		}
 	}
+	Military::JwRefused(int(Task::FightType::AA), held);
 	if ((sent > 0) && (gInterceptTarget != worst)) {
 		gInterceptTarget = worst;
 		AiLog(Factory::T() + "apex: intercepting for ally t" + worst
@@ -197,6 +220,7 @@ void Release(const string& in why)
 	// the team blackboard (strike_x/z/r/p) rather than a new binding, so a
 	// DLL without the reader still compiles this script.
 	if (gStrikeHas) {
+		ai.PublishTeamValue("strike_f", float(ai.frame));
 		ai.PublishTeamValue("strike_x", gStrikeAt.x);
 		ai.PublishTeamValue("strike_z", gStrikeAt.z);
 		ai.PublishTeamValue("strike_p", WavePower());

@@ -241,6 +241,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			if (cg !is null)
 				return NoteElect("air.cover", cg);
 		}
+		if (GthOn() && Air::gStrike)
+			return null;   // it left its wave's cover: held for the next one
 	}
 	// A ROLLING BOMB IS NEVER PACKED. It is roled `raider`, so the director
 	// would pull it into a pack and the pack would walk it in formation: one
@@ -365,8 +367,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// coverage but bodies in front, taking fire while the army attacks;
 		// with no target the attack task marches on the enemy box, and finds
 		// their buildings on the way.
+		// apex_gather: with the army means in its pool -- one alone walks out to a squad already gone
 		if (SpamPhase() && Market::IsLateScout(int(cdef.id)))
-			return NoteElect("spamattack", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK)));
+			return GthOn() ? MassPoolTask(unit, cdef)
+				: NoteElect("spamattack", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK)));
 		if (SpamPhase()
 			&& (!cdef.IsRoleAny(Unit::Role::RAIDER.mask)
 				|| (ai.GetTunable("apex_spam_raiders", TUNE_SPAM_RAIDERS) > 0.f)))

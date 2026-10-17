@@ -513,7 +513,14 @@ void CBombTask::FindTarget()
 		focusR = commitR;
 		focusPos = commitPos;
 	}
-	const bool focused = (focusR > 0.f) && isAntiStatic && !spent;
+	// apex_gather: only a task launched with the strike (committed within its admit window) is the wave
+	bool inWave = true;
+	if (!committed && static_cast<CMilitaryManager*>(manager)->IsJoinGate()) {
+		const float sf = circuit->ReadTeamValue(myTeam, "strike_f", -1.f);
+		const int c = GetJoinCommitFrame();
+		inWave = (sf < 0.f) || ((c >= (int)sf) && (c <= (int)sf + FRAMES_PER_SEC * 10));
+	}
+	const bool focused = (focusR > 0.f) && isAntiStatic && !spent && inWave;
 	const float focusPower = focused ? circuit->ReadTeamValue(myTeam, "strike_p", 0.f) : 0.f;
 	const float maxPower = focused
 			? std::max(attackPower * scale * powerMod, focusPower)

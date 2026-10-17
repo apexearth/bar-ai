@@ -503,7 +503,9 @@ void SiegeLook()
 			return;
 		}
 	}
-	SiegePull(h, dsum, screenM);
+	// the squad marched: its window is shut (CSiegeTask commits at ready)
+	if (!gSgReady || !GthOn())
+		SiegePull(h, dsum, screenM);
 	if (ai.frame >= gSgLogAt) {
 		gSgLogAt = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: siege look t=" + ai.teamId + " key=" + gSgKey + " n=" + n
