@@ -3011,12 +3011,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a
 			// fallthrough past the drawn winner.
+			if (!isComm)
+				ExpandFarNoteElect(ranked[i].kind);
 			if (DecideLogOn())
 				AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
 					+ " #" + unit.id + " " + KindName(ranked[i].kind) + ":"
 					+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
 					+ " pick=" + depth
-					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
+					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
+					+ ExecTaskAt(t, ranked[i]));
 			if (DecideLogOn())
 				NnRecord(unit, ranked[i], depth, why);
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
