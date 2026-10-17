@@ -324,6 +324,17 @@ PANELS = [
              "are made moves. `apex: countermix-stat` each minute: their mix, "
              "their economy and our raiders, our candidates' values split into "
              "fight and raid, and the units ordered"),
+            ("TUNE_SURF_DPS", "ON: a unit's damage against ground targets is "
+             "what its ground weapons deal, and its damage against aircraft is "
+             "what its anti-air weapons deal. Off, both read the larger of the "
+             "two, so the Armada amphibious bot's anti-air missile (it cannot "
+             "shoot anything on the ground) counted as ground firepower and the "
+             "T2 bot lab rated it its best fighter per metal. Every ground fight "
+             "estimate, unit worth, counter pick, commander and raid estimate "
+             "and tower price reads the ground figure; anti-air pricing reads "
+             "the air figure. `apex: surfdps` once at start: the old and "
+             "per-domain figures for the amphibious bots, a pure anti-air bot "
+             "and the switch. Needs the rebuilt DLL"),
             ("TUNE_FOCUS_FIRE", "ON: a ground group under enemy fire (an armed "
              "enemy whose range, plus three seconds of walking, covers one of "
              "ours) sets its targets together every second: first the enemy "

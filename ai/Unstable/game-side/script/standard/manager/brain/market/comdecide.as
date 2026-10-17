@@ -64,7 +64,7 @@ void ComTowersFill()
 		if (!Catalog::ValidId(d) || (Catalog::gMaxRange[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
 			continue;
 		gCdTwPos.insertLast(gProtPos[PROT_DEF][t]);
-		gCdTwDps.insertLast(Catalog::gDps[d]);
+		gCdTwDps.insertLast(Catalog::gSurfDps[d]);
 		gCdTwHp.insertLast(Catalog::gHealth[d]);
 		gCdTwRng.insertLast(Catalog::gMaxRange[d]);
 	}
@@ -96,7 +96,7 @@ void ComArmyAt(const AIFloat3& in p, float r, float& out dps, float& out hp)
 		if (u.GetPos(ai.frame).distance2D(p) > r)
 			continue;
 		const int d = int(u.circuitDef.id);
-		dps += Catalog::gDps[d];
+		dps += Catalog::gSurfDps[d];
 		hp += Catalog::gHealth[d] * u.GetHealthPercent();
 	}
 }
@@ -259,7 +259,7 @@ AIFloat3 ComSafePoint(const AIFloat3& in here, const AIFloat3& in foe, bool have
 			continue;
 		float gd = 0.f, gh = 0.f, s = 0.f;
 		ComGunAt(c, gd, gh);
-		if (ComWins(hp, ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd, gh,
+		if (ComWins(hp, ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gSurfDps[cd], gd, gh,
 				foeDps, foeHp, 0.f, n, s)))
 		{
 			best = c;
@@ -315,7 +315,7 @@ void ComAssess(CCircuitUnit@ u)
 	gCsHurtUnseen = (gCsHpPrevAt >= 0) && (gCsHp < gCsHpPrev - 0.005f);
 	gCsHpPrev = gCsHp;
 	gCsHpPrevAt = ai.frame;
-	gCsMyDps = Catalog::gDps[cd];
+	gCsMyDps = Catalog::gSurfDps[cd];
 	const float hpMax = Catalog::gHealth[cd];
 	gCsT2 = Factory::gHaveT2 || CommCaution(u);
 	gCsJob = ComJobKind(u);
@@ -349,7 +349,7 @@ void ComAssess(CCircuitUnit@ u)
 		for (int k = 0; k < nU; ++k) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
 			if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d]
-				|| (Catalog::gSurfT[d] <= 0.f) || (Catalog::gDps[d] <= 0.f))
+				|| (Catalog::gSurfT[d] <= 0.f) || (Catalog::gSurfDps[d] <= 0.f))
 				continue;
 			++nMob;
 			const bool dgk = ComHomeDgKills(d);
@@ -357,7 +357,7 @@ void ComAssess(CCircuitUnit@ u)
 				++nKill;
 			if (dgk && (Catalog::gMaxRange[d] <= dgR))
 				++nCl;
-			dps += Catalog::gDps[d];
+			dps += Catalog::gSurfDps[d];
 			hpS += Catalog::gHealth[d];
 			rad += 4.f * float((Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d]);
 			if (Catalog::gSpeed[d] > vmax)
@@ -514,7 +514,7 @@ void ComAssess(CCircuitUnit@ u)
 			gCsTowersK = k;
 			float s = 0.f;
 			gCsHpTower = ComFightHpAfter(gCsHp, hpMax, gCsMyDps,
-					gCsGunDps + gCsArmyDps + float(k) * Catalog::gDps[ld],
+					gCsGunDps + gCsArmyDps + float(k) * Catalog::gSurfDps[ld],
 					gCsSupHp + float(k) * Catalog::gHealth[ld],
 					gCsFoeDps, gCsFoeHp, gCsKills, gCsN, s);
 		}
@@ -1080,7 +1080,7 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 			const float arr = (cs > 0.f) ? ((dd > rg) ? (dd - rg) / cs : 0.f) : 1e9f;
 			if (arr <= tBack) {
 				fHp += cw * Catalog::gHealth[cDef];
-				fDps += cw * Catalog::gDps[cDef];
+				fDps += cw * Catalog::gSurfDps[cDef];
 				++n;
 				if (ComHomeDgKills(cDef))
 					++nk;
@@ -1094,9 +1094,9 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 		return hp;
 	float gd = 0.f, gh = 0.f, s = 0.f;
 	ComGunAt(pos, gd, gh);
-	ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd, gh, fDps, fHp, 0.f, n, s);
+	ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gSurfDps[cd], gd, gh, fDps, fHp, 0.f, n, s);
 	const float kills = ComDGunKills(u, s, vmax, 12.f, nk);
-	return ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd, gh, fDps, fHp, kills, n, s);
+	return ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gSurfDps[cd], gd, gh, fDps, fHp, kills, n, s);
 }
 
 // Called where COMMANDER LOST is logged: what the assessment said last.

@@ -84,7 +84,7 @@ float CfHeal(int d)
 		gCfHeal[d] = Catalog::Def(d).GetAutoHealPerSec();
 		if (CfIsCom(d))
 			AiLog("apex: comfight-def " + Catalog::Def(d).GetName() + " heal/s=" + formatFloat(gCfHeal[d], "", 0, 2)
-				+ " dps=" + int(Catalog::gDps[d]) + " alpha=" + int(Catalog::gAlpha[d]) + " hp=" + int(Catalog::gHealth[d])
+				+ " dps=" + int(Catalog::gSurfDps[d]) + " alpha=" + int(Catalog::gSurfAlpha[d]) + " hp=" + int(Catalog::gHealth[d])
 				+ " aoe=" + int(Catalog::gAoe[d]) + " range=" + int(Catalog::gMaxRange[d]));
 	}
 	return gCfHeal[d];
@@ -104,7 +104,7 @@ void CfScanStep()
 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
 		if (!Catalog::ValidId(d) || Catalog::gFlyer[d] || Catalog::gKamikaze[d])
 			continue;
-		const bool armed = (Catalog::gDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f);
+		const bool armed = (Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f);
 		const bool eco = (Catalog::gExtractsM[d] > 0.f)
 			|| (Catalog::gBuilder[d] && Catalog::gMobile[d] && !CfIsCom(d));
 		if (!armed && !eco)
@@ -292,7 +292,7 @@ void CfReadGroups()
 			ps.insertLast(p);
 			sx += p.x;
 			sz += p.z;
-			dps += Catalog::gDps[d];
+			dps += Catalog::gSurfDps[d];
 			hp += Catalog::gHealth[d] * u.GetHealthPercent();
 			m += Catalog::gCostM[d];
 			if (Catalog::gMaxRange[d] > rng)
@@ -377,8 +377,8 @@ float CfCovered(float aoe, int n, float spr)
 // shot bigger than the unit spent on that unit alone. A commander's D-gun is counted on its own clock.
 float CfEffDps(int d, float h, int n, float spr)
 {
-	float e = Catalog::gDps[d] * CfCovered(Catalog::gAoe[d], n, spr);
-	const float a = Catalog::gAlpha[d];
+	float e = Catalog::gSurfDps[d] * CfCovered(Catalog::gAoe[d], n, spr);
+	const float a = Catalog::gSurfAlpha[d];
 	if (!CfIsCom(d) && (a > h) && (h > 0.f))
 		e *= h / a;
 	return e;
@@ -425,7 +425,7 @@ bool CfSim(float nOf, float dO, float hO, float mO, float spr, float rngO, float
 	int coms = 0;
 	for (int k = 0; k < nT; ++k) {
 		const int d = defs[k];
-		sumT += Catalog::gDps[d];
+		sumT += Catalog::gSurfDps[d];
 		sumTs += CfEffDps(d, hO, nO, spr);
 		if (CfIsCom(d)) {
 			++coms;
@@ -484,7 +484,7 @@ bool CfSim(float nOf, float dO, float hO, float mO, float spr, float rngO, float
 			gCfLostT += Catalog::gCostM[d];
 			if (Catalog::gMobile[d])
 				gCfLostTMob += Catalog::gCostM[d];
-			sumT -= Catalog::gDps[d];
+			sumT -= Catalog::gSurfDps[d];
 			sumTs -= CfEffDps(d, hO, nO, spr);
 			if (com) {
 				--coms;
@@ -994,7 +994,7 @@ void CfPackOf(array<CCircuitUnit@>@ us, float& out n, float& out dps, float& out
 		sx += p.x;
 		sz += p.z;
 		n += 1.f;
-		dps += Catalog::gDps[d];
+		dps += Catalog::gSurfDps[d];
 		hp += Catalog::gHealth[d] * u.GetHealthPercent();
 		m += Catalog::gCostM[d];
 		if (Catalog::gMaxRange[d] > rng)
@@ -1195,7 +1195,7 @@ bool CfCounters(int k, int c, int n, float spr)
 	}
 	array<int> one(1, kd);
 	const float lo = gCfLostO, lt = gCfLostT, lm = gCfLostTMob, st = gCfSimT;
-	const bool r = !CfSim(float(n), Catalog::gDps[c], Catalog::gHealth[c], Catalog::gCostM[c], spr,
+	const bool r = !CfSim(float(n), Catalog::gSurfDps[c], Catalog::gHealth[c], Catalog::gCostM[c], spr,
 			Catalog::gMaxRange[c], 0.f, 0.f, one, 0.f);
 	gCfLostO = lo;
 	gCfLostT = lt;
@@ -1238,7 +1238,7 @@ bool CfSplit(int g, const array<int>@ foe)
 			const int kd = gCfEDef[foe[i]];
 			if (Catalog::gSpeed[c] <= Catalog::gSpeed[kd])
 				continue;
-			const bool oneShot = !CfIsCom(kd) && Catalog::gMobile[kd] && (Catalog::gAlpha[kd] >= Catalog::gHealth[c]);
+			const bool oneShot = !CfIsCom(kd) && Catalog::gMobile[kd] && (Catalog::gSurfAlpha[kd] >= Catalog::gHealth[c]);
 			if (oneShot || CfCounters(foe[i], c, cnt[j], gCfGSpr[g])) {
 				by[j] = foe[i];
 				any = true;

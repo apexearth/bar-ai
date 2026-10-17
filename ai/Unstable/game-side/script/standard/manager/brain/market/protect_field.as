@@ -470,7 +470,7 @@ float PfOverkill(int d)
 	}
 	if (gPkOkAt[d] == Military::gFmPublishedAt)
 		return gPkOkV[d];
-	const float a = Catalog::gAlpha[d];
+	const float a = Catalog::gSurfAlpha[d];
 	float use = 0.f;
 	float spent = 0.f;
 	if (a > 0.f) {
@@ -557,9 +557,9 @@ float PfAlphaPerMetal()
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gMobile[d] || Catalog::gBuilder[d])
 			continue;
-		if ((Catalog::gAlpha[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
+		if ((Catalog::gSurfAlpha[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
 			continue;
-		r.insertLast(Catalog::gAlpha[d] / Catalog::gCostM[d]);
+		r.insertLast(Catalog::gSurfAlpha[d] / Catalog::gCostM[d]);
 	}
 	if (r.length() == 0) {
 		gPfAlphaPerM = 0.f;
@@ -627,6 +627,8 @@ float PfHeavyRef()
 // that figure, and squaring them out read the Pulsar at a ninth of a Pit Bull.
 float PfSurfDps(int d)
 {
+	if (Catalog::gSurfDpsOn)
+		return (Catalog::gSurfT[d] > 0.f) ? Catalog::gSurfDps[d] : 0.f;
 	const float dps = Catalog::gDps[d];
 	const float st = Catalog::gSurfT[d];
 	const float at = Catalog::gAirT[d];

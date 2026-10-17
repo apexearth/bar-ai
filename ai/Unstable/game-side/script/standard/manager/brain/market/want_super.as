@@ -660,7 +660,7 @@ float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 		inReachM = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
 	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 	const float horizon = (hz > 1.f) ? hz : 300.f;
-	float killM = Catalog::gDps[d] * StructMetalPerHp() * horizon;
+	float killM = Catalog::gSurfDps[d] * StructMetalPerHp() * horizon;
 	// The next cannon grinds only what the standing ones leave: the count
 	// comes out of what is in reach, not out of a ladder on income.
 	float left = inReachM - float(SuperHave(SC_LRPC)) * killM;
@@ -677,7 +677,7 @@ float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 	if ((foeN <= 0) && (plasma > 0.f))
 		foeN = 1;
 	if ((plasma > 0.f) && (foeN > 0) && (Catalog::gHealth[d] > 1.f)) {
-		const float kills = Catalog::gDps[d] * horizon / Catalog::gHealth[d];
+		const float kills = Catalog::gSurfDps[d] * horizon / Catalog::gHealth[d];
 		const float have = float(SuperHave(SC_LRPC));
 		float f0 = have * kills / float(foeN);
 		float f1 = (have + 1.f) * kills / float(foeN);
@@ -697,7 +697,7 @@ float TacticalGain(int d)
 	const float stake = Military::StaticLossRate();
 	if (stake <= 0.f)
 		return 0.f;
-	float cap = Catalog::gDps[d] * StructMetalPerHp();
+	float cap = Catalog::gSurfDps[d] * StructMetalPerHp();
 	if ((cap <= 0.01f * stake) || (cap > stake))
 		cap = stake;
 	float left = stake - float(SuperHave(SC_TACTICAL)) * cap;

@@ -193,6 +193,10 @@ public:
 	float GetTunable(const std::string& name, float defVal) const;
 	// apex_stock_army: every combat unit runs stock BARb's fight code (docs/how-it-works.md, Army control layers)
 	bool IsStockArmy() const;
+	// apex_surf_dps: a def's damage against a domain is that domain's own rate, not the max over all three
+	bool IsSurfDps() const;
+	float DpsVs(const CCircuitDef* cdef, bool air) const;
+	float DmgVs(const CCircuitDef* cdef, bool air) const;
 	bool IsStockCtl(const CCircuitUnit* unit) const;
 	bool IsStockCtlDef(const CCircuitDef* cdef) const;
 	// a script call that would have ordered a combat unit under the switch, dropped and counted by kind
@@ -486,6 +490,7 @@ public:
 private:
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
 	mutable int stockArmy = -1;
+	mutable int surfDpsOn = -1;
 	std::map<std::string, int> stockLeaks;
 	bool squadOrders = false;
 	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options

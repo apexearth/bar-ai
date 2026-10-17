@@ -985,7 +985,7 @@ float LineDpsAxis(int d)
 	// Absolute mode reads the bound dps directly; the per-metal mode keeps
 	// recovering it from power, which carries a sqrt of per-shot damage with it.
 	if (LineAbs())
-		return Catalog::gDps[d];
+		return Catalog::gSurfDps[d];
 	return (Catalog::gPower[d] * Catalog::gPower[d] / Catalog::gHealth[d])
 			/ Catalog::gCostM[d];
 }

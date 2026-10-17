@@ -2561,6 +2561,12 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsDumbFireDef() const", asMETHOD(CCircuitDef, IsDumbFire), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawDps() const", asMETHOD(CCircuitDef, GetRawDps), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawDmg() const", asMETHOD(CCircuitDef, GetRawDmg), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawSurfDps() const", asMETHOD(CCircuitDef, GetRawSurfDps), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawAirDps() const", asMETHOD(CCircuitDef, GetRawAirDps), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawWaterDps() const", asMETHOD(CCircuitDef, GetRawWaterDps), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawSurfDmg() const", asMETHOD(CCircuitDef, GetRawSurfDmg), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawAirDmg() const", asMETHOD(CCircuitDef, GetRawAirDmg), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRawWaterDmg() const", asMETHOD(CCircuitDef, GetRawWaterDmg), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastRadius() const", asMETHOD(CCircuitDef, GetBlastRadius), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastDamage() const", asMETHOD(CCircuitDef, GetBlastDamage), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBlastEdge() const", asMETHOD(CCircuitDef, GetBlastEdge), asCALL_THISCALL); ASSERT(r >= 0);

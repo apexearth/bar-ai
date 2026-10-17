@@ -844,7 +844,7 @@ void LogUnitPower()
 		if (d !is null)
 			ms += " " + sn[i] + "=" + formatFloat(Market::UnitStrength(int(d.id)), "", 0, 4)
 				+ "(pm" + formatFloat(Market::PowerMod(int(d.id)), "", 0, 2)
-				+ " dps" + int(Catalog::gDps[int(d.id)]) + " hp" + int(Catalog::gHealth[int(d.id)]) + ")";
+				+ " dps" + int(Catalog::gSurfDps[int(d.id)]) + " hp" + int(Catalog::gHealth[int(d.id)]) + ")";
 	}
 	AiLog(ms);
 }

@@ -119,7 +119,7 @@ float ComHomeComM(int g)
 	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 	for (int k = 0; k < nU; ++k) {
 		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
-		if (Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d] && (Catalog::gDps[d] > 0.f)
+		if (Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d] && (Catalog::gSurfDps[d] > 0.f)
 			&& Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
 			m += Catalog::gCostM[d];
 	}
@@ -135,10 +135,10 @@ float ComHomeGroupAfter(CCircuitUnit@ u, int g, const AIFloat3& in at)
 	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 	for (int k = 0; k < nU; ++k) {
 		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
-		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d] || (Catalog::gDps[d] <= 0.f))
+		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d] || (Catalog::gSurfDps[d] <= 0.f))
 			continue;
 		++n;
-		dps += Catalog::gDps[d];
+		dps += Catalog::gSurfDps[d];
 		hpS += Catalog::gHealth[d];
 		if (Catalog::gSpeed[d] > vmax)
 			vmax = Catalog::gSpeed[d];
@@ -153,9 +153,9 @@ float ComHomeGroupAfter(CCircuitUnit@ u, int g, const AIFloat3& in at)
 	float gd = 0.f, gh = 0.f, ad = 0.f, ah = 0.f, s = 0.f;
 	ComGunAt(at, gd, gh);
 	ComArmyAt(at, ai.GetTunable("apex_threat_r", TUNE_THREAT_R), ad, ah);
-	ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd + ad, gh + ah, dps, hpS, 0.f, n, s);
+	ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gSurfDps[cd], gd + ad, gh + ah, dps, hpS, 0.f, n, s);
 	const float kills = ComDGunKills(u, s, vmax, (nk > 0) ? rad / float(nk) : 12.f, nk);
-	return ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd + ad, gh + ah, dps, hpS, kills, n, s);
+	return ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gSurfDps[cd], gd + ad, gh + ah, dps, hpS, kills, n, s);
 }
 
 int gCmhShipPriced = 0, gCmhShipDefend = 0;

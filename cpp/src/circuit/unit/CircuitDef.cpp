@@ -129,6 +129,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		, waterThrDmg(.0f), waterThrMod(1.f)
 		, aoe(.0f)
 		, rawDps(.0f), rawDmg(.0f)
+		, rawSurfDps(.0f), rawAirDps(.0f), rawWaterDps(.0f)
+		, rawSurfDmg(.0f), rawAirDmg(.0f), rawWaterDmg(.0f)
 		, power(.0f)
 		, defThreat(.0f)
 		, minRange(.0f)
@@ -436,6 +438,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	float airDmg = .0f;
 	float fireDps = .0f;  // weapons that fire on their own: a D-gun is a command, not a rate
 	float fireDmg = .0f;
+	float fireSurfDps = .0f, fireAirDps = .0f, fireWaterDps = .0f;
+	float fireSurfDmg = .0f, fireAirDmg = .0f, fireWaterDmg = .0f;
 	float surfDps = .0f;
 	float surfDmg = .0f;
 	float waterDps = .0f;
@@ -633,11 +637,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			if (!wd->IsManualFire()) {
 				fireDps += std::max(std::max(aP, sP), wP);
 				fireDmg += std::max(std::max(aD, sD), wD);
+				fireAirDps += aP; fireSurfDps += sP; fireWaterDps += wP;
+				fireAirDmg += aD; fireSurfDmg += sD; fireWaterDmg += wD;
 			}
 		}
 		if (!wd->IsManualFire()) {
 			fireDps += dps;
 			fireDmg += dmg;
+			fireAirDps += dps; fireSurfDps += dps; fireWaterDps += dps;
+			fireAirDmg += dmg; fireSurfDmg += dmg; fireWaterDmg += dmg;
 		}
 		airDmg += dmg;
 		airDps += dps;
@@ -856,6 +864,14 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	// made him read as six pawns once the power mod divided it back out.
 	rawDps = (fireDps > .1f) ? std::min(dps, fireDps) : dps;
 	rawDmg = (fireDps > .1f) ? std::min(dmg, fireDmg) : dmg;
+	// apex_surf_dps: an anti-air missile is no ground gun (armamph read its VTOL-only launcher as land dps)
+	const bool fired = fireDps > .1f;
+	rawSurfDps = fired ? std::min(surfDps, fireSurfDps) : surfDps;
+	rawAirDps = fired ? std::min(airDps, fireAirDps) : airDps;
+	rawWaterDps = fired ? std::min(waterDps, fireWaterDps) : waterDps;
+	rawSurfDmg = fired ? std::min(surfDmg, fireSurfDmg) : surfDmg;
+	rawAirDmg = fired ? std::min(airDmg, fireAirDmg) : airDmg;
+	rawWaterDmg = fired ? std::min(waterDmg, fireWaterDmg) : waterDmg;
 	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
 	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
 	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;

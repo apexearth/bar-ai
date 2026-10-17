@@ -2155,6 +2155,30 @@ bool CCircuitAI::IsStockArmy() const
 	return stockArmy > 0;
 }
 
+bool CCircuitAI::IsSurfDps() const
+{
+	if (surfDpsOn < 0) {
+		surfDpsOn = (GetTunable("apex_surf_dps", 0.f) > 0.f) ? 1 : 0;
+	}
+	return surfDpsOn > 0;
+}
+
+float CCircuitAI::DpsVs(const CCircuitDef* cdef, bool air) const
+{
+	if (!IsSurfDps()) {
+		return cdef->GetRawDps();
+	}
+	return air ? cdef->GetRawAirDps() : std::max(cdef->GetRawSurfDps(), cdef->GetRawWaterDps());
+}
+
+float CCircuitAI::DmgVs(const CCircuitDef* cdef, bool air) const
+{
+	if (!IsSurfDps()) {
+		return cdef->GetRawDmg();
+	}
+	return air ? cdef->GetRawAirDmg() : std::max(cdef->GetRawSurfDmg(), cdef->GetRawWaterDmg());
+}
+
 bool CCircuitAI::IsStockCtlDef(const CCircuitDef* cdef) const
 {
 	return (cdef != nullptr) && cdef->IsMobile() && !cdef->IsBuilder() && !cdef->IsRoleComm()

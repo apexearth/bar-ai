@@ -257,7 +257,7 @@ bool TairPlane(float &out h, float &out dps1, float &out cost1, float &out spd)
 	if (b <= 0)
 		return false;
 	h = Catalog::gHealth[b];
-	dps1 = Catalog::gDps[b];
+	dps1 = Catalog::gSurfDps[b];
 	cost1 = Catalog::gCostM[b];
 	spd = Catalog::gSpeed[b];
 	return (h > 0.f) && (dps1 > 0.f) && (cost1 > 0.f) && (spd > 0.f);
@@ -612,7 +612,7 @@ void TairSeatScan()
 			}
 			++gTairGathN;
 			gTairGathHp += Catalog::gHealth[d];
-			gTairGathDps += Catalog::gDps[d];
+			gTairGathDps += Catalog::gSurfDps[d];
 			gTairGathCost += Catalog::gCostM[d];
 			if (gun)
 				gTairGathGunM += Catalog::gCostM[d];
@@ -826,7 +826,7 @@ float TairReturn(int d)
 	fAA = (fAA > 0.f) ? fAA : 0.f;
 	gNaObsDmg = -1.f;
 	gNaObsLost = -1.f;
-	const float net = NaEval(c, NaPathAA(from, at), fAA, n, Catalog::gHealth[d], Catalog::gDps[d], cost, spd,
+	const float net = NaEval(c, NaPathAA(from, at), fAA, n, Catalog::gHealth[d], Catalog::gSurfDps[d], cost, spd,
 			flyS, true, -1.f, null);
 	gTairRetV[d] = net / (float(n) * cost);
 	return gTairRetV[d];

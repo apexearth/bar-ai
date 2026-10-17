@@ -110,6 +110,8 @@ float NaE2M()
 
 float NaAirDps(int d)
 {
+	if (Catalog::gSurfDpsOn)
+		return Catalog::gAirDps[d];
 	const float t = Catalog::gAirT[d] + Catalog::gSurfT[d] + Catalog::gWaterT[d];
 	return (t > 0.f) ? Catalog::gDps[d] * Catalog::gAirT[d] / t : 0.f;
 }
@@ -404,7 +406,7 @@ void NaSnapGroup(int kind, float& out grpM, float& out hp, float& out dps, float
 		const int d = int(gNaU[i].circuitDef.id);
 		grpM += Catalog::gCostM[d];
 		hp += Catalog::gHealth[d];
-		dps += Catalog::gDps[d];
+		dps += Catalog::gSurfDps[d];
 		spd = ((spd <= 0.f) || (Catalog::gSpeed[d] < spd)) ? Catalog::gSpeed[d] : spd;
 		const AIFloat3 p = gNaU[i].GetPos(ai.frame);
 		cx += p.x; cz += p.z;
@@ -822,7 +824,7 @@ void NaDemandStep()
 			const float fAA = NaFighterAA(cs[i].at, flyS);
 			for (int nn = 1; nn <= 64; nn *= 2) {
 				// doubling, then halving down to the smallest wing that pays
-				const float net = NaEval(cs[i], pAA[i], fAA, nn, Catalog::gHealth[d], Catalog::gDps[d],
+				const float net = NaEval(cs[i], pAA[i], fAA, nn, Catalog::gHealth[d], Catalog::gSurfDps[d],
 						Catalog::gCostM[d], spd, flyS, true, obs, null);
 				if (net <= 0.f)
 					continue;
@@ -832,7 +834,7 @@ void NaDemandStep()
 				int hi = nn - 1;
 				while (lo <= hi) {
 					const int m = (lo + hi) / 2;
-					const float nm = NaEval(cs[i], pAA[i], fAA, m, Catalog::gHealth[d], Catalog::gDps[d],
+					const float nm = NaEval(cs[i], pAA[i], fAA, m, Catalog::gHealth[d], Catalog::gSurfDps[d],
 							Catalog::gCostM[d], spd, flyS, true, obs, null);
 					if (nm > 0.f) {
 						need = m;
