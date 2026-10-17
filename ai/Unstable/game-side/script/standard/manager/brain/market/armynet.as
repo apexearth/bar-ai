@@ -104,6 +104,8 @@ void AAWantLog()
 
 void ArmyNetDecide()
 {
+	if (Military::StockQuiet("armynet"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	AAWantLog();

@@ -165,7 +165,8 @@ void SweepPenVerdicts()
 			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
 			if (v !is null) {
 				const AIFloat3 to = gPenExit[i] + gPenDir[i] * (UNBLOCK_RING * 0.5f);
-				v.CmdMoveTo(OnMap(to) ? to : gPenExit[i]);
+				if (!StockQuietUnit(v, "unblock"))
+					v.CmdMoveTo(OnMap(to) ? to : gPenExit[i]);
 				MarkPenMoved(gPenVictim[i], v.GetPos(ai.frame));
 				++gUnblockWalks;
 				AiLog(Factory::T() + "apex: unblock-walk " + v.circuitDef.GetName()
@@ -406,7 +407,7 @@ bool StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 	}
 	const AIFloat3 dir = ThinnestDir(unit, at);
 	const AIFloat3 to = at + dir * UNBLOCK_REACH;
-	if (!OnMap(to))
+	if (!OnMap(to) || StockQuietUnit(unit, "unblock"))
 		return false;
 	unit.CmdMoveTo(to);
 	gTestId.insertLast(unit.id);
@@ -779,7 +780,8 @@ void UpdateMoveTests()
 			// second. Ask again before eating a building over it.
 			++gTestStrikes[i];
 			gTestFrame[i] = frame;
-			u.CmdMoveTo(at + gTestDir[i] * (UNBLOCK_RING * 0.5f));
+			if (!StockQuietUnit(u, "unblock"))
+				u.CmdMoveTo(at + gTestDir[i] * (UNBLOCK_RING * 0.5f));
 			++i;
 			continue;
 		}

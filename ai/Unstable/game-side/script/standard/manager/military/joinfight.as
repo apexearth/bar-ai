@@ -95,6 +95,8 @@ bool AiJoinFight(const AIFloat3& in at, float travelS, float allyPow, float foeP
 // after it was gone or never arrived in twice the walk (0), died on the way (0).
 void JoinFightWatch()
 {
+	if (StockQuiet("joinfight"))
+		return;
 	for (int i = int(gRfLead.length()) - 1; i >= 0; --i) {
 		CCircuitUnit@ u = ai.GetTeamUnit(Id(gRfLead[i]));
 		string why = "";

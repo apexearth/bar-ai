@@ -30,6 +30,9 @@ public:
 private:
 	NSMicroPather::HitFunc GetHitTest() const;
 	void FindTarget();
+	// apex_stock_army (StockFight.inl)
+	bool StockCanAssignTo(CCircuitUnit* unit) const;
+	void StockFindTarget();
 	void FallbackDisengage();
 	void ApplyDisengagePath(const CQueryPathSingle* query);
 	void ApplyTargetPath(const CQueryPathSingle* query);

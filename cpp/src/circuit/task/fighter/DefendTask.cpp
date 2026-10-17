@@ -52,7 +52,7 @@ CDefendTask::~CDefendTask()
 
 bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
 {
-	if ((leader != nullptr)
+	if ((leader != nullptr) && !manager->GetCircuit()->IsStockArmy()
 		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef()))
 	{
 		return false;
@@ -210,6 +210,10 @@ void CDefendTask::PathToEnemies(int frame)
 
 void CDefendTask::Update()
 {
+	if (manager->GetCircuit()->IsStockArmy()) {
+		StockUpdate();
+		return;
+	}
 	++updCount;
 	if (birth) {
 		BirthUpdate();
@@ -428,7 +432,7 @@ bool CDefendTask::FindTarget()
 	const float ourSpeed = std::max(lowestSpeed, 1.f);
 	const float threatSq = (float)threatMap->GetSquareSize();
 	float detachThreat = .0f;
-	const bool catchOn = circuit->GetTunable("apex_open_race", 0.f) > 0.f;
+	const bool catchOn = (circuit->GetTunable("apex_open_race", 0.f) > 0.f) && !circuit->IsStockArmy();
 	SChaseStat& chase = ChaseStat(circuit);
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;

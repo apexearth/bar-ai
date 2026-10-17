@@ -393,7 +393,7 @@ bool ISquadTask::IsMustRegroup()
 		// (apexearth 2026-09-30: "have the squad stay up towards the front and
 		// wait for the reinforcements to come up").
 		CCircuitUnit* front = bestPlace;
-		if (utils::is_valid(position)) {
+		if (utils::is_valid(position) && !circuit->IsStockArmy()) {
 			float frontSq = std::numeric_limits<float>::max();
 			for (CCircuitUnit* unit : validUnits) {
 				const float sq = unit->GetPos(frame).SqDistance2D(position);
@@ -455,7 +455,7 @@ bool ISquadTask::IsMustRegroup()
 			powNear += p;
 		}
 	}
-	if (anyOut && (powNear * 2.f < powAll)) {
+	if (anyOut && ((powNear * 2.f < powAll) || circuit->IsStockArmy())) {
 		state = State::REGROUP;
 	}
 	{
@@ -1296,6 +1296,10 @@ void ISquadTask::Attack(const int frame)
 
 void ISquadTask::Attack(const int frame, const bool isGround)
 {
+	if (manager->GetCircuit()->IsStockArmy()) {
+		StockAttack(frame, isGround);
+		return;
+	}
 	const AIFloat3& tPos = GetTarget()->GetPos();
 	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 3);
 	attackFrame = isRepeatAttack ? frame : attackFrame;
@@ -1668,3 +1672,5 @@ float ISquadTask::GetSpreadRadius() const
 }
 
 } // namespace circuit
+
+#include "task/fighter/StockFight.inl"  // apex_stock_army

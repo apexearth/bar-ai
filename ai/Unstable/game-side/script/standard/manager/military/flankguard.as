@@ -616,6 +616,8 @@ void FlankUpkeep()
 
 void UpdateFlankGuard()
 {
+	if (StockQuiet("flank"))
+		return;
 	if (!FlankOn())
 		return;
 	FlankUpkeep();

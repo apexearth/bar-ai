@@ -152,6 +152,8 @@ void ArmyHeadsDecide()
 
 void UpdateArmyHeads()
 {
+	if (StockQuiet("armyheads"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	ai.SetTeamBoard(BOARD_ONE_ARMY + ai.teamId, ai.GetTunable("apex_one_army", TUNE_ONE_ARMY));

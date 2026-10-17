@@ -338,6 +338,12 @@ PANELS = [
              "units added after launch, how many seconds their nearest army "
              "was from the chosen targets, and our deaths by how many of ours "
              "stood with the unit"),
+            ("TUNE_STOCK_ARMY", "ON: every fighting unit -- ground, air and anti-air, not builders or the "
+             "commander -- is run by stock BARb's own army code, as an unmodified BARb would: its squads, "
+             "targets, regrouping and retreats. Everything we added that orders the army stands down; "
+             "what gets built is still ours. `apex: stockarmy-stat` each minute: our fighting units by the "
+             "task holding them, any order one of our systems still tried to give one (should be 0), and "
+             "how often each stood down"),
             ("TUNE_JOIN_ARRIVE", "ON: one rule for every unit sent to help "
              "with something already under way. A constructor joining a "
              "tower, a lab or any build, a helper guarding a builder, a rez "

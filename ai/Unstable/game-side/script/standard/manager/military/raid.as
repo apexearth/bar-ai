@@ -280,7 +280,7 @@ float RaidPackNeed(const AIFloat3& in at)
 // invented.
 bool RaidMayPull()
 {
-	if (ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)
+	if (StockArmy())
 		return false;
 	if (Builder::BaseUnderAttack() || BaseContested() || BaseRaided())
 		return false;
@@ -365,6 +365,8 @@ bool EscortSpare(Id uid)
 
 void UpdateRaidAsk()
 {
+	if (StockQuiet("raid"))
+		return;
 	if (ai.GetTunable("apex_raid_ask", TUNE_RAID_ASK) <= 0.f)
 		return;
 	RaidGridStep();

@@ -39,6 +39,12 @@ private:
 	void FallbackRaid();
 	void ApplyRaidPath(const CQueryPathSingle* query);
 	bool GiveUpRaid();
+	// apex_stock_army (StockFight.inl)
+	void StockUpdate();
+	bool StockFindTarget();
+	void StockApplyTargetPath(const CQueryPathMulti* query);
+	void StockFallbackRaid();
+	void StockApplyRaidPath(const CQueryPathSingle* query);
 
 	float maxPower;
 	int noTargetSince = -1;

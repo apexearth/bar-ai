@@ -35,6 +35,10 @@ public:
 
 private:
 	void FindTarget();
+	// apex_stock_army (StockFight.inl)
+	bool StockCanAssignTo(CCircuitUnit* unit) const;
+	void StockUpdate();
+	void StockFindTarget();
 	void ApplyTargetPath(const CQueryPathSingle* query);
 	void FallbackBasePos();
 	void ApplyBasePos(const CQueryPathSingle* query);

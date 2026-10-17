@@ -439,6 +439,8 @@ void PackingCensus(const array<CCircuitUnit@>@ alive, const array<AIFloat3>@ pos
 
 void UpdateWithdraw()
 {
+	if (StockQuiet("withdraw"))
+		return;
 	if ((ai.frame < gNextWithdraw) || !ApexActive())
 		return;
 	gNextWithdraw = ai.frame + 2 * SECOND;

@@ -884,6 +884,8 @@ bool NrArrived()
 
 void UpdateNnRaid()
 {
+	if (StockQuiet("nnraid"))
+		return;
 	if (!NrOn() || !ApexActive())
 		return;
 	NrSpotLook();

@@ -50,6 +50,9 @@ CBombTask::~CBombTask()
 
 bool CBombTask::CanAssignTo(CCircuitUnit* unit) const
 {
+	if (manager->GetCircuit()->IsStockArmy()) {
+		return StockCanAssignTo(unit);
+	}
 	if (!unit->GetCircuitDef()->IsRoleBomber()) {
 		return false;
 	}
@@ -159,6 +162,10 @@ void CBombTask::Start(CCircuitUnit* unit)
 
 void CBombTask::Update()
 {
+	if (manager->GetCircuit()->IsStockArmy()) {
+		StockUpdate();
+		return;
+	}
 	++updCount;
 
 	/*

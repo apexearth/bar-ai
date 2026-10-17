@@ -470,6 +470,8 @@ void TaLead()
 
 void TeamPush()
 {
+	if (Military::StockQuiet("teampush"))
+		return;
 	if (ai.frame < gPushNextAt)
 		return;
 	gPushNextAt = ai.frame + 5 * SECOND;

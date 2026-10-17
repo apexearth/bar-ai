@@ -184,6 +184,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// what "the army came out unassigned and stood still" looks like from a log.
 	Brain::NoteMilRequest();
 
+	if (StockCtl(unit))
+		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
 	const CCircuitDef@ cdef = unit.circuitDef;
 	MarkSpearhead(cdef);
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
@@ -211,10 +213,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 				return NoteElect("aa.guard", ag);
 		}
 	}
-	if ((ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)
-		&& !cdef.IsAbleToFly() && !cdef.IsRoleAny(Unit::Role::COMM.mask)
-		&& !Catalog::gBuilder[int(cdef.id)] && (Catalog::gPower[int(cdef.id)] > 1.f))
-		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
 	// A RELEASED BOMBER BOMBS -- whatever its config role says. The heavy tier
 	// the strike holds and releases (armblade, corcrw, legfort) carries role
 	// "heavy", not "bomber": DefaultMakeTask has no BOMB entry for that role

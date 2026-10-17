@@ -232,7 +232,8 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 
 	// Retreat 0 means never: a disarmed unit fell through to the no-target
 	// retreat below at full health, and a rolling bomb walked home to blow up.
-	if ((cdef->GetRetreat() <= 0.f) || cdef->IsKamikazeDef()) {
+	const bool stock = circuit->IsStockArmy();
+	if (!stock && ((cdef->GetRetreat() <= 0.f) || cdef->IsKamikazeDef())) {
 		return;
 	}
 
@@ -255,7 +256,7 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 		return;
 	} else if (healthPerc < 0.2f) {  // stuck units workaround: they don't shoot and don't see distant threat
-		if (!AllowRetreat(unit)) {
+		if (!stock && !AllowRetreat(unit)) {
 			return;
 		}
 		CRetreatTask* task = manager->EnqueueRetreat();
@@ -263,7 +264,7 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 
-	if (!AllowRetreat(unit)) {
+	if (!stock && !AllowRetreat(unit)) {
 		return;
 	}
 	CThreatMap* threatMap = circuit->GetThreatMap();

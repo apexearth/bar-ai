@@ -95,6 +95,7 @@ protected:
 	unsigned int updateRate = 30;  // TEAM_SLOWUPDATE_RATE
 	float updateCredit = 0.f;
 	bool lodQuiet = false;   // apex: fighter tasks out of contact re-plan on alternate passes
+	bool stockRate = false;  // apex_stock_army: BARb's size/30 + 1 tasks a frame
 	unsigned lodPass = 0;
 	uint64_t perfTypeNs[24] = {};
 	unsigned perfTypeN[24] = {};

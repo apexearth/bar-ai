@@ -204,7 +204,7 @@ void YardWatch()
 	int pushed = 0;
 	const AIFloat3 exitTo = fp + dir * (halfD + 2.f * halfW + 48.f);
 	for (uint i = 0; i < inside.length(); ++i) {
-		if (OnMap(exitTo)) {
+		if (OnMap(exitTo) && !Military::StockQuietUnit(inside[i], "yard")) {
 			inside[i].CmdMoveTo(exitTo);
 			++pushed;
 		}
@@ -214,7 +214,7 @@ void YardWatch()
 		away.y = 0.f;
 		away.SafeNormalize2D();
 		const AIFloat3 to = apron[i].GetPos(now) + away * (2.f * halfW);
-		if (OnMap(to)) {
+		if (OnMap(to) && !Military::StockQuietUnit(apron[i], "yard")) {
 			apron[i].CmdMoveTo(to);
 			++pushed;
 		}

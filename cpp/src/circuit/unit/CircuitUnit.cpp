@@ -207,7 +207,8 @@ bool CCircuitUnit::IsForceUpdate(int frame, Wake want)
 		execFrame = -1;  // consumed either way; an unaccepted wake must not linger
 		++sWakeAsks;
 		const bool accept = (int(w) >= int(want))
-				|| (manager->GetCircuit()->GetTunable("apex_wake_split", 1.f) <= 0.f);
+				|| (manager->GetCircuit()->GetTunable("apex_wake_split", 1.f) <= 0.f)
+				|| manager->GetCircuit()->IsStockCtl(this);
 		if (!accept) {
 			++sWakeRefused;
 		}
@@ -945,7 +946,7 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 	target = enemy;
 	// A sniper takes only the hold move and the target: the queued fight
 	// order below would walk it in.
-	if (circuitDef->IsSniper()) {
+	if (circuitDef->IsSniper() && !manager->GetCircuit()->IsStockCtl(this)) {
 		TRY_UNIT(manager->GetCircuit(), this,
 			CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 			CmdSetTarget(target);
@@ -986,6 +987,28 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout, bool hold)
 {
 	NoteAct("atkp", timeout);
+	if (manager->GetCircuit()->IsStockCtl(this)) {  // apex_stock_army: BARb's move, attack, fight
+		TRY_UNIT(manager->GetCircuit(), this,
+			if (circuitDef->IsAttrMelee() && IsJumpReady()) {
+				CmdJumpTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+				CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout, OrdSrc::RING);
+			} else {
+				CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout, OrdSrc::RING);
+			}
+			if (isGround) {
+				CmdAttackGround(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+			} else {
+				CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+			}
+			CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout, OrdSrc::RING);
+			CmdWantedSpeed(NO_SPEED_LIMIT);
+			CmdSetTarget(target);
+			if (circuitDef->IsAttrOnOff()) {
+				unit->SetOn(isStatic == circuitDef->IsOnSlow());
+			}
+		)
+		return;
+	}
 	// `pos` is a standoff point on a ring of this unit's own weapon range, and
 	// the orders that used to follow it threw it away. CMD_FIGHT re-acquires the
 	// CLOSEST enemy within maxRange + 100*moveState^2 and pushes its own

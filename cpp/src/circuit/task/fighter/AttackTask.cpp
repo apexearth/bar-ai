@@ -73,7 +73,8 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
 	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(mergeR)) {
 		return false;
 	}
-	if (!SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef())) {
+	if (!manager->GetCircuit()->IsStockArmy()
+		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef())) {
 		return false;
 	}
 	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
@@ -196,6 +197,10 @@ void CAttackTask::Start(CCircuitUnit* unit)
 
 void CAttackTask::Update()
 {
+	if (manager->GetCircuit()->IsStockArmy()) {
+		StockUpdate();
+		return;
+	}
 	++updCount;
 	if (ScriptMoveUpdate()) {
 		return;

@@ -895,7 +895,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return null;
 		// A condemned unit stands for it -- walking away made the reclaimer
 		// chase it across the base (apexearth).
-		if (tgt.circuitDef.IsMobile())
+		if (tgt.circuitDef.IsMobile() && !Military::StockQuietUnit(tgt, "reclaim"))
 			tgt.CmdMoveTo(unit.GetPos(ai.frame));
 		IUnitTask@ rt = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, tgt));
 		if (rt !is null) {

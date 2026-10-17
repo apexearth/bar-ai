@@ -207,6 +207,8 @@ array<Id> gEcvSeen;
 int gEcvLogAt = 0;
 void EscortCoverSweep()
 {
+	if (Military::StockQuiet("escort"))
+		return;
 	gEcvSeen.resize(0);
 	for (int i = int(gEcvSet.length()) - 1; i >= 0; --i) {
 		const Id wid = gEcvSet[uint(i)];
@@ -698,6 +700,8 @@ void EscortDiag()
 int gEscReleased = 0;
 void EscortSweep()
 {
+	if (Military::StockQuiet("escort"))
+		return;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	// Pooled, the pairs left on other workers from the spread phase go back to
 	// the election, which sends them to the worker holding the mass.
@@ -812,6 +816,8 @@ void ClearSupport(Id wid)
 
 void SupportSweep()
 {
+	if (Military::StockQuiet("support"))
+		return;
 	for (int s = int(gSupWorker.length()) - 1; s >= 0; --s) {
 		const int si = gSupSpot[s];
 		const bool claimed = LedgerFind(si) >= 0;

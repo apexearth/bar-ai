@@ -755,7 +755,7 @@ void Consider(int id, bool early)
 		if (here > p.distance2D(to) / ((speed > 1.f) ? speed : 1.f))
 			return;
 	}
-	if (!ai.UnitControl(u, false))
+	if (Military::StockQuietUnit(u, "lava") || !ai.UnitControl(u, false))
 		return;
 	u.CmdMoveTo(to);
 	gHeldId.insertLast(id);

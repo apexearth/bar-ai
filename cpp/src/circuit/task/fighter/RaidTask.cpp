@@ -108,6 +108,10 @@ void CRaidTask::Start(CCircuitUnit* unit)
 
 void CRaidTask::Update()
 {
+	if (manager->GetCircuit()->IsStockArmy()) {
+		StockUpdate();
+		return;
+	}
 	++updCount;
 	if (ScriptMoveUpdate()) {
 		return;

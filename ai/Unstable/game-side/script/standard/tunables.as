@@ -1142,9 +1142,8 @@ const float TUNE_E_HEADROOM = 1.75f;   // 1.5 still read 'not that great' in a w
 // CON_ESCORT: exposed constructors claim one army guard each (master).
 const float TUNE_CON_ESCORT = 1.f;
 
-// STOCK_ARMY: 1 hands every armed ground unit to BARb's own task pools and
-// switches off our withdraw orders -- the A/B for "is our assignment layer
-// what loses the fights".
+// STOCK_ARMY: 1 hands every combat unit (ground, air, AA) to stock BARb: its
+// DefaultMakeTask and fight code; our army layers stand down. See docs/tunables.md.
 const float TUNE_STOCK_ARMY = 0.f;
 
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull

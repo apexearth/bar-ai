@@ -59,6 +59,7 @@ protected:
 	NSMicroPather::HitFunc GetHitTest() const;
 	void Attack(const int frame);
 	void Attack(const int frame, const bool isGround);
+	void StockAttack(const int frame, const bool isGround);  // StockFight.inl
 	// one task update (1 s) plus the turn to walk away
 	static constexpr float DGUN_REACT_S = 2.f;
 	static float DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold);

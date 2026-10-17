@@ -873,6 +873,8 @@ void NoteStrikeLaunched()
 // rather than replacing the prior outright.
 void SettleStrike()
 {
+	if (Military::StockQuiet("air"))
+		return;
 	if ((gRunDef < 0) || (ai.frame < gRunSettleAt))
 		return;
 	const int sent = gRunSent;

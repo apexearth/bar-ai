@@ -2402,6 +2402,8 @@ void RetreatRefresh()
 	if (ai.frame < gNextRetreatRefresh)
 		return;
 	gNextRetreatRefresh = ai.frame + 15 * SECOND;
+	if (Military::StockQuiet("retreat"))
+		return;
 	int rezzers = 0;
 	for (uint d2 = 1; d2 < gOwnCount.length(); ++d2) {
 		if ((gOwnCount[d2] > 0) && Catalog::gRezzer[int(d2)])

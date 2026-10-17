@@ -218,6 +218,9 @@ void ITaskModule::Update()
 	updateCredit += float(updateTasks.size()) / float(updateRate);
 	unsigned int n = (unsigned int)updateCredit;
 	updateCredit -= float(n);
+	if (stockRate) {
+		n = (updateTasks.size() / TEAM_SLOWUPDATE_RATE) + 1;
+	}
 
 	while ((updateIterator < updateTasks.size()) && (n != 0)) {
 		IUnitTask* task = updateTasks[updateIterator];

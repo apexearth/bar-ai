@@ -138,6 +138,8 @@ IUnitTask@ SuperGuardTask(CCircuitUnit@ unit)
 // holds are aborted so their supers re-elect into the army.
 void ReleaseHeldSupers()
 {
+	if (StockQuiet("superguard"))
+		return;
 	if (gSuperHolds.length() == 0)
 		return;
 	for (uint i = 0; i < gSuperHolds.length(); ) {

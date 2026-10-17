@@ -402,6 +402,8 @@ void StrikeLook()
 
 void UpdateStrike()
 {
+	if (StockQuiet("strike"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	if (gWnNextAt < 0) {

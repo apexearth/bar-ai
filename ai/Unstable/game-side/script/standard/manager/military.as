@@ -4,6 +4,7 @@
 // namespace Military, split across military/. THE ORDER BELOW IS LOAD-BEARING
 // -- see builder.as for why.
 #include "military/state.as"        // posture flags and the constants behind them
+#include "military/stockarmy.as"    // apex_stock_army: our army layers stand down, stock BARb fights
 #include "military/roles.as"        // rush/eco roles, quotas, metal slinging
 #include "military/deathledger.as"  // where our metal dies, fed back into caution
 #include "military/massing.as"      // how much army to hold back and mass

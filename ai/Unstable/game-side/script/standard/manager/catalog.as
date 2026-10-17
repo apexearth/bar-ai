@@ -252,7 +252,8 @@ void Init()
 	// every unit flee at 60% hp and die shot in the back). A cheap unit's
 	// last half-life is worth more spent shooting than fleeing; an expensive
 	// unit preserves. One derived curve, commander and builders untouched.
-	for (Id rd = 1; rd <= gDefCount; ++rd) {
+	const bool curve = !Military::StockQuiet("retreat");
+	for (Id rd = 1; curve && (rd <= gDefCount); ++rd) {
 		const int ri = int(rd);
 		if (!gMobile[ri] || gBuilder[ri] || (gPower[ri] <= 1.f) || gKamikaze[ri])
 			continue;

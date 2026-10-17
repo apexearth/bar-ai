@@ -385,6 +385,8 @@ public:
 	void NoteBirthReleased(int n) { birthStat.released += n; }
 	// 0 a withdraw order skipped, 1 a consolidation skipped, 2 one redirected to the asset, 3 a raid answer skipped
 	void NoteBirthScript(int kind);
+	// apex_stock_army: our army by the task holding it, and the script orders dropped since the last call
+	std::string StockArmyStat();
 
 private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
