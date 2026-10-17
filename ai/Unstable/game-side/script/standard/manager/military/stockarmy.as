@@ -16,7 +16,29 @@ bool StockArmy()
 	return gSaOn > 0;
 }
 
-// the C++ test is CCircuitAI::IsStockCtlDef: mobile, no builder, no commander, no transport, armed or a scout
+// apex_our_air: under the stock army, aircraft stay ours (C++ CCircuitAI::IsOurAir)
+int gSaAir = -1;
+bool OurAir()
+{
+	if (gSaAir < 0)
+		gSaAir = (StockArmy() && (ai.GetTunable("apex_our_air", TUNE_OUR_AIR) > 0.f)) ? 1 : 0;
+	return gSaAir > 0;
+}
+
+// the air wing's control: stands down only while aircraft are stock's
+bool StockQuietAir(const string &in tag)
+{
+	return !OurAir() && StockQuiet(tag);
+}
+
+// the join window as the air wing reads it: under our air its own value, not the stock army's 0
+bool AirGthOn()
+{
+	return OurAir() ? (ai.GetOwnTunable("apex_gather", TUNE_GATHER) > 0.f) : GthOn();
+}
+
+// the C++ test is CCircuitAI::IsStockCtlDef: mobile, no builder, no commander, no transport, armed or a scout;
+// under apex_our_air, not a flier
 bool StockDef(const CCircuitDef@ d)
 {
 	if (d is null)
@@ -28,7 +50,8 @@ bool StockDef(const CCircuitDef@ d)
 		const bool combat = d.IsMobile() && !d.IsBuilder()
 			&& !d.IsRoleAny(Unit::Role::COMM.mask | Unit::Role::TRANS.mask)
 			&& !Market::IsLiftDef(id)
-			&& ((Catalog::gPower[id] > 0.f) || d.IsRoleAny(Unit::Role::SCOUT.mask) || !d.IsAbleToFly());
+			&& ((Catalog::gPower[id] > 0.f) || d.IsRoleAny(Unit::Role::SCOUT.mask) || !d.IsAbleToFly())
+			&& !(OurAir() && d.IsAbleToFly());
 		gSaDef[id] = combat ? 1 : -1;
 	}
 	return gSaDef[id] > 0;
@@ -71,6 +94,7 @@ void StockArmyStat()
 		gSaN[i] = 0;
 	}
 	AiLog(Factory::T() + "apex: stockarmy-stat t=" + ai.teamId + " on=" + (StockArmy() ? 1 : 0)
+		+ (OurAir() ? "" : " our_air=off")
 		+ " " + aiMilitaryMgr.StockArmyStat() + " quiet=[" + q + "]");
 }
 

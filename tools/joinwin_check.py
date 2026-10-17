@@ -174,7 +174,7 @@ _SENTINELS = [
     ("cpp/src/circuit/task/fighter/SupportTask.cpp", r"candy->JoinOpen\(unit\)", "support bots pick only open squads"),
     ("cpp/src/circuit/task/fighter/SquadTask.cpp", r"candidate->IsEngaged\(\)", "no merge into a squad in a fight"),
     ("cpp/src/circuit/task/fighter/BombTask.cpp", r"strike_f", "only the wave is credited with the strike's power"),
-    ("ai/Unstable/game-side/script/standard/manager/air/flight.as", r"gFlightSent && Military::GthOn\(\)",
+    ("ai/Unstable/game-side/script/standard/manager/air/flight.as", r"gFlightSent && Military::AirGthOn\(\)",
      "the scout flight leaves once per raid"),
     ("ai/Unstable/game-side/script/standard/manager/air/update.as", r"InList\(gInterceptRoster",
      "an intercept flies its launch roster only"),

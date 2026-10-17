@@ -40,6 +40,12 @@ public:
 	// apex: true when dropping members that are dead or tasked elsewhere left the task empty.
 	virtual bool PurgeStrays() { return false; }
 
+	// apex_stock_army: this task runs stock fight code; apex_our_air keeps aircraft tasks on ours. Set by the
+	// first member (an empty task the script enqueued is ours); a unit of the other side never joins.
+	bool IsStockTask() const;
+	bool OtherSide(const CCircuitUnit* unit) const;
+	void SetScriptMade() { scriptMade = true; }
+
 	FightType GetFightType() const { return fightType; }
 	const springai::AIFloat3& GetPosition() const { return position; }
 
@@ -102,6 +108,8 @@ protected:
 
 private:
 	bool JoinAdmitted(const CCircuitUnit* unit) const;
+	bool airSide = false;
+	bool scriptMade = false;
 	bool joinCommitted = false;
 	bool joinTicked = false;
 	int joinAdmitUntil = -1;

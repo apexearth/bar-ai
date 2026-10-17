@@ -46,7 +46,7 @@ array<int> gStrikeTDef;
 
 bool StrikeHolds(CCircuitUnit@ unit)
 {
-	return Military::GthOn() && gStrike && InWave(unit.id);
+	return Military::AirGthOn() && gStrike && InWave(unit.id);
 }
 
 IUnitTask@ StrikeTask(CCircuitUnit@ unit)
@@ -91,7 +91,7 @@ void BuildWave()
 	gWaveFighters = 0;
 	// apex_gather: the wave is what stands where it gathers (the team rally, else home); a plane elsewhere --
 	// still flying in, or handed over at an ally's base -- is sent there for the next wave
-	const bool gth = Military::GthOn();
+	const bool gth = Military::AirGthOn();
 	const bool atRally = TairOn() && (TairPhase() != TA_PH_NONE);
 	const AIFloat3 gatherAt = atRally ? TairRally() : Builder::gHomePos;
 	float gatherR = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 1.5f;

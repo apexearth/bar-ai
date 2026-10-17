@@ -252,13 +252,14 @@ void Init()
 	// every unit flee at 60% hp and die shot in the back). A cheap unit's
 	// last half-life is worth more spent shooting than fleeing; an expensive
 	// unit preserves. One derived curve, commander and builders untouched.
-	const bool curve = !Military::StockQuiet("retreat");
+	const bool airOnly = Military::StockQuiet("retreat");
+	const bool curve = !airOnly || Military::OurAir();
 	for (Id rd = 1; curve && (rd <= gDefCount); ++rd) {
 		const int ri = int(rd);
 		if (!gMobile[ri] || gBuilder[ri] || (gPower[ri] <= 1.f) || gKamikaze[ri])
 			continue;
 		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
-		if (rdef is null)
+		if ((rdef is null) || (airOnly && !rdef.IsAbleToFly()))
 			continue;
 		// a config that says never (retreat 0: the units that detonate on arrival) is not overwritten -- the
 		// curve set the Juggernaut to 0.5 and it walked home at half health (his 10-12)

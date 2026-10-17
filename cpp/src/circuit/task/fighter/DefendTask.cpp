@@ -52,7 +52,7 @@ CDefendTask::~CDefendTask()
 
 bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
 {
-	if ((leader != nullptr) && !manager->GetCircuit()->IsStockArmy()
+	if ((leader != nullptr) && !IsStockTask()
 		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef()))
 	{
 		return false;
@@ -210,7 +210,7 @@ void CDefendTask::PathToEnemies(int frame)
 
 void CDefendTask::Update()
 {
-	if (manager->GetCircuit()->IsStockArmy()) {
+	if (IsStockTask()) {
 		StockUpdate();
 		return;
 	}
@@ -242,7 +242,7 @@ void CDefendTask::Update()
 	 */
 	// apex_gather: a pool never walks out to a squad already launched, and an all-raider pool leaves only when
 	// nnraid.as launches it whole on its fight estimate (gather.as)
-	const bool gather = manager->GetCircuit()->GetTunable("apex_gather", 0.f) > 0.f;
+	const bool gather = manager->GetCircuit()->GetFightTunable("apex_gather", 0.f, IsStockTask()) > 0.f;
 	bool scriptLaunch = false;
 	if (gather && (promote == FightType::RAID) && (manager->GetCircuit()->GetTunable("apex_nnraid", 1.f) > 0.f)) {
 		scriptLaunch = true;
@@ -418,7 +418,7 @@ bool CDefendTask::FindTarget()
 	int leashSkipped = 0;
 	float sqLeash = -1.f;
 	{
-		const float leash = circuit->GetTunable("apex_pool_leash", 0.f);
+		const float leash = circuit->GetFightTunable("apex_pool_leash", 0.f, IsStockTask());
 		if ((leash > 0.f) && !detached && circuit->HasFrontPos()) {
 			sqLeash = SQUARE(basePos.distance2D(circuit->GetFrontPos()) + leash);
 		}
@@ -427,12 +427,12 @@ bool CDefendTask::FindTarget()
 	CEnemyInfo* detachFor = nullptr;
 	float detachSq = std::numeric_limits<float>::max();
 	// apex_target_value: worth over the time to reach and kill it, as AttackTask weighs a group
-	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
+	const bool tv = circuit->GetFightTunable("apex_target_value", 0.f, IsStockTask()) > 0.f;
 	const SFire fire = tv ? SquadFire() : SFire();
 	const float ourSpeed = std::max(lowestSpeed, 1.f);
 	const float threatSq = (float)threatMap->GetSquareSize();
 	float detachThreat = .0f;
-	const bool catchOn = (circuit->GetTunable("apex_open_race", 0.f) > 0.f) && !circuit->IsStockArmy();
+	const bool catchOn = (circuit->GetTunable("apex_open_race", 0.f) > 0.f) && !IsStockTask();
 	SChaseStat& chase = ChaseStat(circuit);
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;

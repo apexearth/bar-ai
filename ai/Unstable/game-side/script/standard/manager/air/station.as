@@ -59,7 +59,7 @@ bool StationFor(uint idx, AIFloat3& out at)
 
 void UpdateFighterStations()
 {
-	if (Military::StockQuiet("air"))
+	if (Military::StockQuietAir("air"))
 		return;
 	if ((ai.frame < gNextStation) || !ApexActive())
 		return;
@@ -119,7 +119,7 @@ void UpdateFighterStations()
 // they are still the answer if their air arrives before ours is replaced.
 void RecycleOldFighters()
 {
-	if (Military::StockQuiet("air"))
+	if (Military::StockQuietAir("air"))
 		return;
 	if ((ai.frame < gNextRecycle) || !ApexActive())
 		return;

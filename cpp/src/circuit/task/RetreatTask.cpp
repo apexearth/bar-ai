@@ -608,9 +608,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 	// working. Once a repairer is assigned and in reach, stand still and let it
 	// finish; the release check above puts the unit back in the fight.
 	if ((repairer != nullptr)
-		&& (circuit->GetTunable("apex_retreat_stand", 0.f) > 0.f)
+		&& (circuit->GetFightTunable("apex_retreat_stand", 0.f, circuit->IsStockFor(unit->GetCircuitDef())) > 0.f)
 		&& (unitPos.SqDistance2D(repairer->GetPos(frame))
-			< SQUARE(circuit->GetTunable("apex_retreat_stand", 0.f))))
+			< SQUARE(circuit->GetFightTunable("apex_retreat_stand", 0.f, circuit->IsStockFor(unit->GetCircuitDef())))))
 	{
 		return;
 	}

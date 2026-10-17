@@ -73,7 +73,7 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
 	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(mergeR)) {
 		return false;
 	}
-	if (!manager->GetCircuit()->IsStockArmy()
+	if (!IsStockTask()
 		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef())) {
 		return false;
 	}
@@ -118,7 +118,7 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
 // the back rows; each row as wide as its widest member wants.
 void CAttackTask::AssignSlots(int frame)
 {
-	if (manager->GetCircuit()->GetTunable("apex_squad_form", 1.f) <= 0.f) {   // A/B switch
+	if (manager->GetCircuit()->GetFightTunable("apex_squad_form", 1.f, IsStockTask()) <= 0.f) {   // A/B switch
 		for (CCircuitUnit* u : units) {
 			u->ClearFormSlot();
 		}
@@ -197,7 +197,7 @@ void CAttackTask::Start(CCircuitUnit* unit)
 
 void CAttackTask::Update()
 {
-	if (manager->GetCircuit()->IsStockArmy()) {
+	if (IsStockTask()) {
 		StockUpdate();
 		return;
 	}
@@ -1021,7 +1021,7 @@ void CAttackTask::FindTarget()
 	float withUs = -1.f;
 	auto withUsPow = [&]() -> float {
 		if (withUs < 0.f) {
-			withUs = (circuit->GetTunable("apex_side_with", 1.f) > 0.f) ? milMgr->GetAttackPowerNear(pos, SIDE_R) : 0.f;
+			withUs = (circuit->GetFightTunable("apex_side_with", 1.f, IsStockTask()) > 0.f) ? milMgr->GetAttackPowerNear(pos, SIDE_R) : 0.f;
 		}
 		return withUs;
 	};
@@ -1070,7 +1070,7 @@ void CAttackTask::FindTarget()
 	}
 
 	// apex_target_value: a group is the metal it holds over the time to reach and clear it
-	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
+	const bool tv = circuit->GetFightTunable("apex_target_value", 0.f, IsStockTask()) > 0.f;
 	std::vector<std::pair<float, float>> grpWorth(tv ? groups.size() : 0, {0.f, 0.f});  // worth, clear s
 	if (tv) {
 		const SFire f = SquadFire();

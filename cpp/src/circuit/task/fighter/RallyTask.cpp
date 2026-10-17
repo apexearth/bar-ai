@@ -41,7 +41,7 @@ bool CRallyTask::CanAssignTo(CCircuitUnit* unit) const
 		return false;
 	}
 	CCircuitDef* cdef = (*units.begin())->GetCircuitDef();
-	if (!manager->GetCircuit()->IsStockArmy() && !ISquadTask::SameClimb(manager->GetCircuit(), cdef, unit->GetCircuitDef())) {
+	if (!IsStockTask() && !ISquadTask::SameClimb(manager->GetCircuit(), cdef, unit->GetCircuitDef())) {
 		return false;
 	}
 	if ((cdef->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())

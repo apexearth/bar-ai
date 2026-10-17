@@ -1041,7 +1041,7 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 	// `hold`: the point keeps it out of a D-gun's reach, and any queued attack
 	// or fight order would walk it back in (a Titan is tagged melee).
 	const bool prefer = hold || circuitDef->IsSniper()
-			|| ((manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
+			|| ((manager->GetCircuit()->GetFightTunable("apex_prefer_target", 1.f, manager->GetCircuit()->IsStockFor(circuitDef)) > 0.f)
 			&& !isGround && !circuitDef->IsAttrMelee()
 			&& (isStatic || enemy->IsInRadarOrLOS() || longGun));
 	TRY_UNIT(manager->GetCircuit(), this,

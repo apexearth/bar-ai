@@ -191,9 +191,18 @@ public:
 	// are cached on first read: this sits inside the per-unit attack loop.
 	float GetTunable(const char* name, float defVal) const { return GetTunable(std::string(name), defVal); }
 	float GetTunable(const std::string& name, float defVal) const;
+	// never the stock value: fight code on a task or unit our own code runs under apex_our_air
+	float GetOwnTunable(const std::string& name, float defVal) const;
+	float GetFightTunable(const char* name, float defVal, bool stock) const {
+		return stock ? GetTunable(std::string(name), defVal) : GetOwnTunable(std::string(name), defVal);
+	}
 	// apex_stock_army: every combat unit runs stock BARb's fight code (docs/how-it-works.md, Army control layers)
 	bool IsStockArmy() const;
+	// apex_our_air: with apex_stock_army, aircraft stay under our air control
+	bool IsOurAir() const;
+	bool IsStockFor(const CCircuitDef* cdef) const { return IsStockArmy() && !(IsOurAir() && cdef->IsAbleToFly()); }
 	bool IsStockCtl(const CCircuitUnit* unit) const;
+	bool IsCombatDef(const CCircuitDef* cdef) const;
 	bool IsStockCtlDef(const CCircuitDef* cdef) const;
 	// a script call that would have ordered a combat unit under the switch, dropped and counted by kind
 	void NoteStockLeak(const char* kind);
@@ -486,6 +495,7 @@ public:
 private:
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
 	mutable int stockArmy = -1;
+	mutable int ourAir = -1;
 	std::map<std::string, int> stockLeaks;
 	bool squadOrders = false;
 	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options

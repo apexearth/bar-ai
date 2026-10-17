@@ -700,7 +700,7 @@ IFighterTask* CMilitaryManager::BestSquadToJoin(IFighterTask::FightType type, CC
 		}
 		ISquadTask* sq = dynamic_cast<ISquadTask*>(t);
 		if ((sq == nullptr) || (sq->GetLeader() == nullptr) || t->GetAssignees().empty()
-			|| !t->JoinOpen(unit) || !t->CanAssignTo(unit))
+			|| !t->JoinOpen(unit) || t->OtherSide(unit) || !t->CanAssignTo(unit))
 		{
 			continue;
 		}
@@ -760,6 +760,7 @@ bool CMilitaryManager::InFocusPush(const IFighterTask* t) const
 void CMilitaryManager::JoinStatTick()
 {
 	joinGate = circuit->GetTunable("apex_gather", 0.f) > 0.f;
+	ownJoinGate = circuit->GetOwnTunable("apex_gather", 0.f) > 0.f;
 	const int frame = circuit->GetLastFrame();
 	if (frame < joinLogAt) {
 		return;
@@ -2360,7 +2361,7 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 					if (task == nullptr) {
 						const std::set<IFighterTask*>& guards = GetTasks(IFighterTask::FightType::GUARD);
 						for (IFighterTask* t : guards) {
-							if (t->JoinOpen(unit) && t->CanAssignTo(unit)) {
+							if (t->JoinOpen(unit) && !t->OtherSide(unit) && t->CanAssignTo(unit)) {
 								task = t;
 								break;
 							}
@@ -2382,7 +2383,7 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 				case IFighterTask::FightType::DEFEND: {
 					const std::set<IFighterTask*>& guards = GetTasks(IFighterTask::FightType::GUARD);
 					for (IFighterTask* t : guards) {
-						if (t->JoinOpen(unit) && t->CanAssignTo(unit)) {
+						if (t->JoinOpen(unit) && !t->OtherSide(unit) && t->CanAssignTo(unit)) {
 							task = t;
 							break;
 						}
@@ -2613,13 +2614,15 @@ void CMilitaryManager::NoteBirthScript(int kind)
 
 std::string CMilitaryManager::StockArmyStat()
 {
-	std::map<std::string, int> by;
-	int combat = 0;
+	std::map<std::string, int> by, air;
+	int combat = 0, fliers = 0;
+	const bool ourAir = circuit->IsOurAir();
 	for (CCircuitUnit* unit : army) {
-		if (!circuit->IsStockCtlDef(unit->GetCircuitDef())) {
+		if (!circuit->IsCombatDef(unit->GetCircuitDef())) {
 			continue;
 		}
-		++combat;
+		const bool ours = ourAir && unit->GetCircuitDef()->IsAbleToFly();
+		++(ours ? fliers : combat);
 		IUnitTask* task = unit->GetTask();
 		std::string key;
 		if (task == nullptr) {
@@ -2635,15 +2638,20 @@ std::string CMilitaryManager::StockArmyStat()
 		} else {
 			key = "t" + utils::int_to_string(static_cast<int>(task->GetType()));
 		}
-		++by[key];
+		++(ours ? air : by)[key];
 	}
-	std::string s = "units=" + utils::int_to_string(combat) + " tasks=[";
-	bool first = true;
-	for (const auto& kv : by) {
-		s += (first ? "" : " ") + kv.first + "=" + utils::int_to_string(kv.second);
-		first = false;
+	auto list = [](const std::map<std::string, int>& m) {
+		std::string l;
+		for (const auto& kv : m) {
+			l += (l.empty() ? "" : " ") + kv.first + "=" + utils::int_to_string(kv.second);
+		}
+		return l;
+	};
+	std::string s = "units=" + utils::int_to_string(combat) + " tasks=[" + list(by) + "]";
+	if (ourAir) {
+		s += " our_air=on fliers=" + utils::int_to_string(fliers) + " air_tasks=[" + list(air) + "]";
 	}
-	return s + "] " + circuit->TakeStockLeaks();
+	return s + " " + circuit->TakeStockLeaks();
 }
 
 void CMilitaryManager::LogBirthStat()

@@ -108,7 +108,7 @@ void CRaidTask::Start(CCircuitUnit* unit)
 
 void CRaidTask::Update()
 {
-	if (manager->GetCircuit()->IsStockArmy()) {
+	if (IsStockTask()) {
 		StockUpdate();
 		return;
 	}
@@ -281,8 +281,8 @@ void CRaidTask::Update()
 			leader, threatMap,
 			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
 			// apex_com_fight / apex_gather: a committed pack still paths around the guns and army it loses to
-			(IsCommitted() && !cdef->IsAbleToFly() && (circuit->GetTunable("apex_com_fight", 0.f) <= 0.f)
-				&& (circuit->GetTunable("apex_gather", 0.f) <= 0.f))
+			(IsCommitted() && !cdef->IsAbleToFly() && (circuit->GetFightTunable("apex_com_fight", 0.f, IsStockTask()) <= 0.f)
+				&& (circuit->GetFightTunable("apex_gather", 0.f, IsStockTask()) <= 0.f))
 				? std::numeric_limits<float>::max()
 				: attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
@@ -335,7 +335,7 @@ bool CRaidTask::IsCommitted() const
 	commitAt = frame;
 	commitVal = false;
 	// 1: every raid -- the RAID posture puts the main army in raid tasks too, and it lost. 2: only raiders.
-	const float mode = circuit->GetTunable("apex_raid_commit", 2.f);
+	const float mode = circuit->GetFightTunable("apex_raid_commit", 2.f, IsStockTask());
 	if (mode <= 0.f) {
 		return false;
 	}
@@ -605,7 +605,7 @@ void CRaidTask::FallbackRaid()
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	const bool bounded = hasGoal && !leader->GetCircuitDef()->IsAbleToFly() && IsCommitted()
-			&& (circuit->GetTunable("apex_gather", 0.f) > 0.f);
+			&& (circuit->GetFightTunable("apex_gather", 0.f, IsStockTask()) > 0.f);
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, threatMap,
 			pos, position, pathfinder->GetSquareSize(), nullptr,
@@ -633,7 +633,7 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 	const int frame = circuit->GetLastFrame();
 	// apex_gather: no way to the goal outside the reach of what beats us -- hold, and after 20 s go home
 	if (pPath->path.empty() && (goalR > 0.f) && !leader->GetCircuitDef()->IsAbleToFly() && IsCommitted()
-		&& (circuit->GetTunable("apex_gather", 0.f) > 0.f))
+		&& (circuit->GetFightTunable("apex_gather", 0.f, IsStockTask()) > 0.f))
 	{
 		if (blockedSince < 0) {
 			blockedSince = frame;
