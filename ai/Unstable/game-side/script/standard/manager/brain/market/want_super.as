@@ -797,6 +797,38 @@ bool SiegeSite(CCircuitUnit@ unit, int d, AIFloat3 &out at)
 	return OnMap(at);
 }
 
+string gGantryWhy = "";
+float gGantryV = 0.f;
+int gNextGantryWhyLog = 0;
+
+void GantryWhy(int sc, const string &in why)
+{
+	if (sc == SC_GANTRY)
+		gGantryWhy = why;
+}
+
+// Why no gantry is asked for while none stands: the skips in ProposeSuper were silent (his 10-17
+// game: first frame lost at 14.4 min, no gantry ask until 26.7 at 240-480 m/s with storage full).
+void GantryWhyLog(CCircuitUnit@ unit, const string &in why, float v, const Want@ w)
+{
+	if ((ai.frame < gNextGantryWhyLog) || (why == "not-offered") || (SuperHave(SC_GANTRY) > 0))
+		return;
+	const array<int>@ bo = Catalog::BuildsOf(int(unit.circuitDef.id));
+	bool can = false;
+	for (uint i = 0; (i < bo.length()) && !can; ++i)
+		can = (SuperClassOf(bo[i]) == SC_GANTRY);
+	if (!can)
+		return;
+	gNextGantryWhyLog = ai.frame + 30 * SECOND;
+	AiLog("apex: gantry-why t=" + ai.teamId + " by=" + unit.circuitDef.GetName() + " " + why
+		+ " v=" + formatFloat(v * 1000.f, "", 0, 2)
+		+ " best=" + ((w.def is null) ? "none" : w.def.GetName())
+		+ " bestV=" + formatFloat(w.value * 1000.f, "", 0, 2)
+		+ " inc=" + int((gIncEma > 0.f) ? gIncEma : Eco::MInc())
+		+ " over=" + int(OverflowM())
+		+ " flight=" + gSuperFlight + "/" + SuperFlightCap());
+}
+
 Want@ ProposeSuper(CCircuitUnit@ unit)
 {
 	Want w;
@@ -804,15 +836,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	if (ai.GetTunable("apex_super_want", TUNE_SUPER_WANT) <= 0.f)
 		return w;
 	if (SuperInFlight())
-		return w;
+		{ GantryWhyLog(unit, "super-in-flight", 0.f, w); return w; }
 	const float budget = SuperBudget();
 	if (budget <= 0.f)
-		return w;
+		{ GantryWhyLog(unit, "no-budget", 0.f, w); return w; }
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	const float speed = Catalog::gSpeed[uid];
 	const float share = ai.GetTunable("apex_super_share", TUNE_SUPER_SHARE);
+	gGantryWhy = "not-offered";
+	gGantryV = 0.f;
 	const float power = EcoPowerM();
 	// NO GANTRY BEFORE THE MILITARY IT FEEDS (apexearth 2026-09-13: "We need
 	// to make sure we do not make a gantry until we intend to make military
@@ -830,9 +864,9 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// the seat's ramp (his "some nuclear missile launchers" from half the
 		// target), scaled below.
 		if (noLines && (sc != SC_ANTINUKE) && !((sc == SC_SILO) && (EcoRoleRamp() > 0.f)))
-			continue;
+			{ GantryWhy(sc, "eco-role"); continue; }
 		if (Catalog::gFloater[d] || Catalog::gSub[d])
-			continue;
+			{ GantryWhy(sc, "floater"); continue; }
 		// AFFORDABILITY IS TWO ARRAY READS; the tests under it walk the live
 		// register and the whole commitment ledger. Same test as the one
 		// below, taken first for every class whose budget IS the plain one --
@@ -841,10 +875,10 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && (SuperBill(d) >= budget * PlanMul(sc)))
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
-			continue;
+			{ GantryWhy(sc, "live-request"); continue; }
 		if ((sc != SC_LRPC) && (sc != SC_TACTICAL) && (sc != SC_JUNO)
 				&& (SuperHave(sc) >= SuperTarget(sc)))
-			continue;
+			{ GantryWhy(sc, "have>=target"); continue; }
 		// HIS RULING, the same law as the plant and tech lanes: a super that
 		// is a PRODUCTION LINE (gantry, advanced air plant) and already
 		// stands manned gets nanos, not a twin -- this lane kept electing a
@@ -856,7 +890,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				+ ComCountManned(d, CS_FRAMED | CS_ORDERED)) >= 1)
 			&& (DupBpSubstMul(d) < 1.f)
 			&& !CopyWaived(d))
-			continue;
+			{ GantryWhy(sc, "copy-law"); continue; }
 		const float bill = SuperBill(d);
 		// ONE LINE, THE TEAM'S PURSE (apexearth 2026-08-28: "I saw a team
 		// with 400m/s income and no gantry -- we can have a gantry at like
@@ -871,11 +905,11 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		if (sc == SC_GANTRY) {
 			if (AdvPlantInFlight() && !WealthWaiver()) {
 				AdvDeferLog("gantry");
-				continue;
+				{ GantryWhy(sc, "adv-in-flight"); continue; }
 			}
 			// its ground is still being cleared: the hands that would die on no-site reclaim it
 			if ((gPlotDef == d) && (PlotLeft() > 0))
-				continue;
+				{ GantryWhy(sc, "plot"); continue; }
 			{
 				AIFloat3 agAt;
 				int agDef = -1;
@@ -884,7 +918,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					&& (AllyGantryFor(unit, agAt, agDef, agDone) >= 0))
 				{
 					AdvDeferLog("gantry(ally's)");
-					continue;
+					{ GantryWhy(sc, "ally-gantry"); continue; }
 				}
 			}
 			// Below the host anchor the gain scales by (own/anchor)^2, as the
@@ -907,7 +941,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		}
 		// A cannon's price is its time to afford (ValueOf), not this cut.
 		if ((sc != SC_LRPC) && (bill >= classBudget))
-			continue;   // cannot afford it; nothing else about it matters
+			{ GantryWhy(sc, "afford"); continue; }   // cannot afford it; nothing else about it matters
 		AIFloat3 at;
 		if (sc == SC_ANTINUKE) {
 			// INSURANCE HAS AN INCOME FLOOR, and the queue-jump below is what
@@ -941,7 +975,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		}
 		at = ProbedSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), at);
 		if (!OnMap(at))
-			continue;
+			{ GantryWhy(sc, "offmap"); continue; }
 		// AFFORDABILITY IS THE GAIN. What is left of the budget once the bill
 		// is paid, as a share of it, times the slice of economic power this
 		// market may speak for -- so the same structure is worth nothing at the
@@ -1038,12 +1072,12 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		if ((sc == SC_GANTRY) && !EcoQuiet())
 			gain *= RushMul(Catalog::gCostM[d]);
 		if (gain <= 0.f)
-			continue;
+			{ GantryWhy(sc, "gain<=0"); continue; }
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;
 		Want c;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
 		if (sc == SC_GANTRY)
-			NotePlantAsk(d, gain, c.value);
+			{ NotePlantAsk(d, gain, c.value); gGantryWhy = "priced"; gGantryV = c.value; }
 		if (((sc == SC_TACTICAL) || (sc == SC_JUNO)) && (ai.frame >= gNextSiegeLog[sc - SC_TACTICAL])) {
 			gNextSiegeLog[sc - SC_TACTICAL] = ai.frame + 30 * SECOND;
 			AiLog("apex: siege t=" + ai.teamId + " " + Catalog::Def(d).GetName()
@@ -1136,6 +1170,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			}
 		}
 	}
+	GantryWhyLog(unit, gGantryWhy, gGantryV, w);
 	if ((w.def is null) && (wIns.def !is null))
 		w = wIns;
 	if ((w.def !is null) && (ai.frame >= gNextSuperLog)) {
