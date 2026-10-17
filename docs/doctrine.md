@@ -44,7 +44,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Nano turrets stand fully adjacent to labs and gantries, in blocks.
 - A factory may pull every nano that can reach its unit off a building and onto its production.
 - Gantries scale with wealth, each heavily supported; in a team game allies share one nearby gantry; every player has one by about 38 minutes of an 8v8.
-- The gantry comes when the economy can carry it, before a second T2 lab and before the enemy's T3 arrives.
+- The gantry comes when the economy can carry it, before a second T2 lab and before the enemy's T3 arrives. It goes up alongside a nuke, anti-nuke or cannon when the money is there, not waiting behind them; a lost gantry or plant is rebuilt at once, its nanos going up while its frame does.
 - Upgrade allies' extractors too, and give a T2 constructor to an ally that has none.
 - In a team game one seat goes T2 a little sooner and hands out T2 constructors as allies' extractors need them; the others stay T1 with a strong army, upgrade their extractors with the handouts, and build their own advanced lab later, not never.
 - When the enemy can reach us soon (small or crowded maps), army comes before tech: build the economy and a strong T1 army first, then the T2 lab.

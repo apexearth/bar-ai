@@ -229,6 +229,12 @@ array<int> gSuperHave(8, 0);
 int gSuperFlight = 0;
 int gSuperCensusAt = -1;
 
+// His 10-17 ruling: the gantry goes up alongside a gun, neither taking nor waiting for the slot.
+bool GantryOwnSlot()
+{
+	return ai.GetTunable("apex_gantry_own_slot", TUNE_GANTRY_OWN_SLOT) > 0.f;
+}
+
 void SuperCensus()
 {
 	if (gSuperCensusAt == ai.frame)
@@ -239,12 +245,13 @@ void SuperCensus()
 		gSuperHave[c] = 0;
 	// One source: standing, half-built, orphaned frame and outstanding order
 	// are all rows of the commitment ledger.
+	const bool ownSlot = GantryOwnSlot();
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		const int sc = SuperClassOf(gComDef[ci]);
 		if (sc < 0)
 			continue;
 		++gSuperHave[sc];
-		if (gComState[ci] != CS_FINISHED)
+		if ((gComState[ci] != CS_FINISHED) && !(ownSlot && (sc == SC_GANTRY)))
 			++gSuperFlight;
 	}
 	gSuperHave[SC_SILO] += Brain::SiloCountAdjust();
@@ -835,7 +842,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	Want wIns;
 	if (ai.GetTunable("apex_super_want", TUNE_SUPER_WANT) <= 0.f)
 		return w;
-	if (SuperInFlight())
+	const bool slotFull = SuperInFlight();
+	if (slotFull && !GantryOwnSlot())
 		{ GantryWhyLog(unit, "super-in-flight", 0.f, w); return w; }
 	const float budget = SuperBudget();
 	if (budget <= 0.f)
@@ -857,6 +865,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const int d = builds[i];
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
+			continue;
+		if (slotFull && (sc != SC_GANTRY))
 			continue;
 		// ...and no big gun or heavy turret either: they are the military
 		// ("makes no military, focusing on economy"). The anti-nuke stays,
@@ -1126,7 +1136,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	// Priced here as what it is, a strategic line the economy can carry, on
 	// the same affordability shape as the rest of this market.
 	{
-		CCircuitDef@ ap = Air::IntelPlantToBuild();
+		CCircuitDef@ ap = slotFull ? null : Air::IntelPlantToBuild();
 		// An ADVANCED air plant waits its turn behind any advanced plant
 		// already in flight -- see AdvPlantInFlight above (Purple's
 		// simultaneous T2 vehicle + T2 air, "a huge 'no no'").
