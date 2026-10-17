@@ -114,6 +114,13 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 				&& !unit.circuitDef.CanBuild(cand.buildDef))
 				continue;
 			GateRef(G_FACFORK);
+			// Never a fork, and never a hand that lands after the lab is up.
+			if ((unit !is null) && JoinArriveOn() && (Workers(cand) > 0)
+				&& (cand !is unit.task)
+				&& !JoinOkTask(JA_BIG, unit, cand, Market::JobGain(cand)))
+				return null;
+			if (unit !is null)
+				JoinTaken(JA_BIG, unit, cand, cand, cand.GetBuildPos());
 			return cand;
 		}
 	}

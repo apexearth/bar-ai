@@ -70,6 +70,22 @@ void UnlockOrphanLog(const CCircuitDef@ d, float done, const string &in kind)
 		+ " total=" + gUnlockOrphanJoins);
 }
 
+// The build a guard of this boss helps: its own build task, else the task whose frame it is.
+IUnitTask@ JobOfBoss(CCircuitUnit@ boss)
+{
+	if (boss is null)
+		return null;
+	if ((boss.task !is null) && (boss.task.GetType() == Task::Type::BUILDER)
+		&& (boss.task.buildDef !is null) && boss.circuitDef.IsMobile())
+		return boss.task;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t !is null) && !t.IsDead() && (t.target is boss))
+			return t;
+	}
+	return null;
+}
+
 Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 {
 	Want w;
@@ -81,6 +97,8 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 	if (defence && (DefenceShortfall() <= 0.f))
 		return w;
 	const AIFloat3 here = unit.GetPos(ai.frame);
+	const int jaPath = defence ? Requests::JA_DEFJOIN : Requests::JA_UNLOCK;
+	const float myBP = Catalog::gBuildPower[int(unit.circuitDef.id)];
 	IUnitTask@ best = null;
 	float bestD = 0.f;
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
@@ -111,7 +129,19 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 			continue;
 		if (!ai.CanDefReach(Catalog::Def(int(unit.circuitDef.id)), here, bp))
 			continue;
-		const float d = here.distance2D(bp);
+		float d = here.distance2D(bp);
+		if (Requests::JoinArriveOn()) {
+			if (lt is unit.task)
+				continue;
+			const float worth = Requests::JoinWorthTask(jaPath, unit, lt, JobGain(lt));
+			if (worth <= 0.f)
+				continue;
+			if (worth <= Requests::gJaWalkCost) {
+				Requests::JoinCountRefuse(jaPath, Requests::JA_WHY_COST);
+				continue;
+			}
+			d = Requests::gJaWalkCost - worth;   // the best net worth ranks first
+		}
 		if ((best is null) || (d < bestD)) {
 			@best = lt;
 			bestD = d;
@@ -124,8 +154,13 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 		int agDef = -1;
 		float agDone = 0.f;
 		const int ag = AllyGantryFor(unit, agAt, agDef, agDone);
+		// The ally's own hands are unseen: one founder at ours, plus our guards.
 		if ((ag >= 0) && ((agDone < 1.f) || (gPlan == NG_T3))
-			&& (uint(AllyGuardsOn(ag)) < Requests::SiteWorkerCap(Catalog::Def(agDef))))
+			&& (uint(AllyGuardsOn(ag)) < Requests::SiteWorkerCap(Catalog::Def(agDef)))
+			&& (!Requests::JoinArriveOn() || (agDone >= 1.f)
+				|| Requests::JoinOk(jaPath, unit, agAt, Requests::JoinArriveSec(unit, agAt),
+					Catalog::gBuildTime[agDef] * (1.f - agDone),
+					float(AllyGuardsOn(ag) + 1) * myBP, myBP, -1.f)))
 		{
 			w.kind = WK_ASSIST;
 			w.pos = agAt;
@@ -165,7 +200,12 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 			return w;
 		float done = fr.GetHealthPercent();
 		done = (done < 0.f) ? 0.f : ((done > 1.f) ? 1.f : done);
+		if (Requests::JoinArriveOn()
+			&& !Requests::JoinOk(jaPath, unit, fp, Requests::JoinArriveSec(unit, fp),
+				Catalog::gBuildTime[gComDef[row]] * (1.f - done), float(onFrame) * myBP, myBP, -1.f))
+			return w;
 		w.kind = WK_ASSIST;
+		w.joinPath = jaPath;
 		w.pos = fp;
 		w.spotId = int(fr.id);
 		w.gain = 1.f;
@@ -199,6 +239,7 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 	if (boss is null)
 		return w;
 	w.kind = WK_ASSIST;
+	w.joinPath = jaPath;
 	w.pos = best.GetBuildPos();
 	w.spotId = int(boss.id);
 	w.gain = 1.f;
@@ -395,10 +436,22 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 		occupiedSec = R / (B + myDrain);
 		gainRate = (G > 0.f) ? (G * savedSec / H)
 				: (myDrain * occupiedSec / H);
+		if (Requests::JoinArriveOn() && boss.circuitDef.IsMobile()) {
+			const float worth = Requests::JoinWorth(Requests::JA_ASSIST, unit,
+					gBossJob.GetBuildPos(), walkSec, R, B, myDrain, G,
+					Requests::NanoFed(gBossJob, (hands > 0) ? hands : 1,
+						walkSec * speed, speed));
+			if (worth <= 0.f)
+				return w;
+			occupiedSec = Requests::gJaOcc;
+			gainRate = worth / H;
+		}
 	}
 
 	Perf::Add("as.price", _tA);
 	w.kind = WK_ASSIST;
+	if (boss.circuitDef.IsMobile() && (gBossJob !is null))
+		w.joinPath = Requests::JA_ASSIST;
 	w.pos = bp;
 	w.spotId = int(boss.id);
 	w.gain = gainRate;
@@ -573,6 +626,17 @@ Want@ AssistEcoPick(CCircuitUnit@ unit, Want@ priced)
 			d = room;
 		const float B = float((gAeHands[i] > 0) ? gAeHands[i] : 1) * Requests::DRAIN + gAeRing[i];
 		const float walkSec = (speed > 1.f) ? (here.distance2D(gAePos[i]) / speed) : 60.f;
+		if (Requests::JoinArriveOn()) {
+			const float worth = Requests::JoinWorth(Requests::JA_ASSIST, unit, gAePos[i], walkSec,
+					gAeR[i], B, d, gAeG[i]);
+			if (worth <= 0.f)
+				continue;
+			occ[i] = Requests::gJaOcc;
+			gn[i] = worth / H;
+			tc[i] = (walkSec + occ[i]) * wage;
+			val[i] = gn[i] / (1.f + tc[i]);
+			continue;
+		}
 		const float R = gAeR[i] - B * walkSec;
 		if (R <= 0.f)
 			continue;   // it lands before this hand arrives
@@ -596,7 +660,8 @@ Want@ AssistEcoPick(CCircuitUnit@ unit, Want@ priced)
 		IUnitTask@ t = gAeTask[b];
 		const AIFloat3 bp = gAePos[b];
 		if (!ai.CanDefReach(Catalog::Def(uid), here, bp)
-			|| (Builder::ThreatFor(unit, bp) > Builder::CON_THREAT_VETO))
+			|| (!Requests::JoinArriveOn()
+				&& (Builder::ThreatFor(unit, bp) > Builder::CON_THREAT_VETO)))
 			continue;
 		CCircuitUnit@ boss = null;
 		array<CCircuitUnit@>@ on = t.GetUnits();
@@ -618,6 +683,7 @@ Want@ AssistEcoPick(CCircuitUnit@ unit, Want@ priced)
 		++gAeWon;
 		Want w;
 		w.kind = WK_ASSIST;
+		w.joinPath = Requests::JA_ASSIST;
 		w.pos = bp;
 		w.spotId = int(boss.id);
 		@w.def = t.buildDef;

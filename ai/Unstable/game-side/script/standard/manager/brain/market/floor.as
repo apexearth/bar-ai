@@ -147,6 +147,7 @@ bool ComFar(const AIFloat3& in p)
 // work per asker.
 array<IUnitTask@> gJcTask;
 array<float> gJcVal;
+array<float> gJcGain;
 array<AIFloat3> gJcPos;
 array<bool> gJcOnMap;
 array<bool> gJcFar;
@@ -174,6 +175,7 @@ void JobCacheFill(bool leashed)
 	gJcLeashed = leashed;
 	gJcTask.resize(0);
 	gJcVal.resize(0);
+	gJcGain.resize(0);
 	gJcPos.resize(0);
 	gJcOnMap.resize(0);
 	gJcFar.resize(0);
@@ -191,6 +193,7 @@ void JobCacheFill(bool leashed)
 		const bool onMap = OnMap(where);
 		gJcTask.insertLast(cand);
 		gJcVal.insertLast(val);
+		gJcGain.insertLast((val > 0.f) ? JobGain(cand) : -1.f);
 		gJcPos.insertLast(where);
 		gJcOnMap.insertLast(onMap);
 		gJcFar.insertLast((val > 0.f) && onMap && leashed && EcoFar(where));
@@ -257,26 +260,34 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			continue;   // the income genuinely cannot feed another hand
 		}
 		const float dist = me.distance2D(where);
-		if (requireFeed
-			&& !Requests::WorthJoiningSite(cand, dist, speed,
-				Catalog::gBuildPower[int(unit.circuitDef.id)])) {
-			++gJobLate;
-			continue;   // it lands before we arrive
-		}
-		if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO) {
-			++gJobHot;
-			continue;
+		if (Requests::JoinArriveOn()) {
+			if (!Requests::JoinOkTask(requireFeed ? Requests::JA_FLOOR : Requests::JA_ASSIST,
+					unit, cand, gJcGain[i])) {
+				++gJobLate;
+				continue;
+			}
+		} else {
+			if (requireFeed
+				&& !Requests::WorthJoiningSite(cand, dist, speed,
+					Catalog::gBuildPower[int(unit.circuitDef.id)])) {
+				++gJobLate;
+				continue;   // it lands before we arrive
+			}
+			if (Builder::ThreatFor(unit, where) > Builder::CON_THREAT_VETO) {
+				++gJobHot;
+				continue;
+			}
+			// The hands on it are its crew, the guards already following that
+			// crew, and the ring SEEN lathing it (his watched seat: 30 guards on
+			// one nano builder at a site full of turrets, advanced converters
+			// raised alone where none stood).
+			if (requireFeed
+				&& Requests::NanoFed(cand, (busy > 0) ? busy : 1, dist, speed)) {
+				++gJobFull;
+				continue;
+			}
 		}
 		const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
-		// The hands on it are its crew, the guards already following that
-		// crew, and the ring SEEN lathing it (his watched seat: 30 guards on
-		// one nano builder at a site full of turrets, advanced converters
-		// raised alone where none stood).
-		if (requireFeed
-			&& Requests::NanoFed(cand, (busy > 0) ? busy : 1, dist, speed)) {
-			++gJobFull;
-			continue;
-		}
 		const float hands = float(busy) + float(gJcGuards[i])
 				+ gJcRing[i] * (NANO_ABSORB / 200.f) / Requests::DRAIN;
 		const float score = val / (hands + 1.f) / (1.f + walkSec / 60.f);
@@ -363,6 +374,13 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 		if (isComm ? ComFar(w.GetPos(ai.frame)) : (leashed && EcoFar(w.GetPos(ai.frame))))
 			continue;
 		const int bt = int(w.task.GetBuildType());
+		if (Requests::JoinArriveOn() && (w.task.buildDef !is null)) {
+			const bool slotTaken = (bt == int(Task::BuildType::NANO)) ? (nano !is null)
+					: ((bt == int(Task::BuildType::FACTORY)) ? (fac !is null) : (any !is null));
+			if (slotTaken
+				|| !Requests::JoinOkTask(Requests::JA_FLOOR, unit, w.task, JobGain(w.task)))
+				continue;
+		}
 		if (bt == int(Task::BuildType::NANO)) {
 			if (nano is null)
 				@nano = w;
@@ -423,6 +441,7 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 					+ " hands=" + Requests::Workers(job)
 					+ " (" + why + ")");
 			}
+			Requests::JoinTaken(Requests::JA_FLOOR, unit, job, job, job.GetBuildPos());
 			return job;
 		}
 	}
@@ -447,10 +466,14 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 		// must not lock a lathe out of the market: the priced assist want
 		// commits for a minute, this one only fills the gap until the next
 		// election has something to say.
+		// join-arrive: BestJobBoss and FloorBoss priced it
 		IUnitTask@ gt = aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
 				boss, false, 15 * SECOND));
 		if (gt !is null) {
 			GuardNote(unit, boss);
+			IUnitTask@ fj = JobOfBoss(boss);
+			if (fj !is null)
+				Requests::JoinTaken(Requests::JA_FLOOR, unit, fj, gt, fj.GetBuildPos());
 			if (logIt) {
 				gNextFloorLog = ai.frame + 30 * SECOND;
 				AiLog("apex: floor " + unit.circuitDef.GetName() + " #" + unit.id
