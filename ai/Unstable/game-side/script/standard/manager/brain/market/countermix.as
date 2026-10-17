@@ -40,7 +40,7 @@ array<array<float>> gCmRow;       // [ia][ib], -1 = not taken
 bool CmGround(int d)
 {
 	return Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d] && !Catalog::gBuilder[d]
-		&& !Catalog::gKamikaze[d] && (Catalog::gDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f)
+		&& !Catalog::gKamikaze[d] && (Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f)
 		&& (Catalog::gMaxRange[d] > 0.f) && (Catalog::gHealth[d] > 0.f) && (Catalog::gCostM[d] > 0.f)
 		&& !Military::CfIsCom(d);
 }
@@ -66,8 +66,8 @@ float CmEff(int x, int y)
 	const float r = Catalog::gAoe[x];
 	float cov = 3.14159265f * r * r / (s * s) - 1.f;
 	cov = 1.f + ((cov > 0.f) ? cov / 3.f : 0.f);
-	float e = Catalog::gDps[x] * cov;
-	const float al = Catalog::gAlpha[x];
+	float e = Catalog::gSurfDps[x] * cov;
+	const float al = Catalog::gSurfAlpha[x];
 	if (al > Catalog::gHealth[y])
 		e *= Catalog::gHealth[y] / al;
 	return e;
@@ -86,7 +86,7 @@ float CmClose(float eFoe, float gap, float spd, float c, float h, float cFoe)
 float CmPairCalc(int a, int b)
 {
 	const float ha = Catalog::gHealth[a], hb = Catalog::gHealth[b];
-	if (Catalog::gAlpha[b] >= ha)
+	if (Catalog::gSurfAlpha[b] >= ha)
 		return 0.f;
 	const float ca = Catalog::gCostM[a], cb = Catalog::gCostM[b];
 	const float eab = CmEff(a, b), eba = CmEff(b, a);

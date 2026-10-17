@@ -62,7 +62,7 @@ protected:
 	void StockAttack(const int frame, const bool isGround);  // StockFight.inl
 	// one task update (1 s) plus the turn to walk away
 	static constexpr float DGUN_REACT_S = 2.f;
-	static float DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold);
+	static float DGunKeepOut(const CCircuitAI* circuit, CCircuitDef* u, CCircuitDef* t, float& hold);
 	bool IsInsideDGun(int frame);
 	bool dgunNear = false;  // the last Attack() had a D-gun carrier to keep out of
 

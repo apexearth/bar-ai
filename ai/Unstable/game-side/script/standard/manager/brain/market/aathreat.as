@@ -89,7 +89,8 @@ float AatQ(int d, bool vsAir)
 	const float t = Catalog::gAirT[d] + Catalog::gSurfT[d] + Catalog::gWaterT[d];
 	if ((c <= 0.f) || (t <= 0.f))
 		return 0.f;
-	const float dps = Catalog::gDps[d] * (vsAir ? Catalog::gAirT[d] : Catalog::gSurfT[d]) / t;
+	const float dps = Catalog::gSurfDpsOn ? (vsAir ? Catalog::gAirDps[d] : Catalog::gSurfDps[d])
+			: Catalog::gDps[d] * (vsAir ? Catalog::gAirT[d] : Catalog::gSurfT[d]) / t;
 	return dps * Catalog::gHealth[d] / (c * c);
 }
 

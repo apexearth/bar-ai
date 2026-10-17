@@ -303,11 +303,11 @@ void RefreshPostLife()
 		// skipping a def whose dps cannot beat it is the old `> dps` guard moved
 		// earlier.
 		for (int k = 1; k <= Catalog::gDefCount; ++k) {
-			if ((Catalog::gSpeed[k] < fastest) || (Catalog::gDps[k] <= dps))
+			if ((Catalog::gSpeed[k] < fastest) || (Catalog::gSurfDps[k] <= dps))
 				continue;
 			if (!Catalog::gAvailable[k] || Catalog::gFlyer[k] || !Market::LineCombat(k))
 				continue;
-			dps = Catalog::gDps[k];
+			dps = Catalog::gSurfDps[k];
 		}
 		gPostRaidDps = (dps < 1.f) ? 20.f : dps;
 	}

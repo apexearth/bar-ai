@@ -545,7 +545,7 @@ NSMicroPather::HitFunc ISquadTask::GetHitTest() const
 // D-gun or outrun its owner, -1 when it is fodder: the metal of `t` it destroys
 // before it dies pays for itself. `hold` is the ring it stands on, midway
 // between their reach and ours.
-float ISquadTask::DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold)
+float ISquadTask::DGunKeepOut(const CCircuitAI* circuit, CCircuitDef* u, CCircuitDef* t, float& hold)
 {
 	const float reach = t->GetDGunReach();
 	if ((reach <= 0.f) || u->IsAbleToFly() || (t->GetSpeed() >= u->GetSpeed())) {
@@ -559,8 +559,8 @@ float ISquadTask::DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold)
 	const float shot = t->GetDGunShotAt(u->GetArmorType());
 	const float alive = (shot >= u->GetHealth())
 			? t->GetDGunReload()
-			: u->GetHealth() / std::max(t->GetRawDps(), 1.f);
-	const float worth = u->GetRawDps() * alive * t->GetCostM() / std::max(t->GetHealth(), 1.f);
+			: u->GetHealth() / std::max(circuit->DpsVs(t, false), 1.f);
+	const float worth = circuit->DpsVs(u, false) * alive * t->GetCostM() / std::max(t->GetHealth(), 1.f);
 	if (worth >= u->GetCostM()) {
 		return -1.f;
 	}
@@ -584,7 +584,7 @@ bool ISquadTask::IsInsideDGun(int frame)
 				continue;
 			}
 			float hold;
-			const float keep = DGunKeepOut(unit->GetCircuitDef(), tdef, hold);
+			const float keep = DGunKeepOut(circuit, unit->GetCircuitDef(), tdef, hold);
 			if ((keep > 0.f) && (sqD < SQUARE(keep))) {
 				return true;
 			}
@@ -645,6 +645,7 @@ void ISquadTask::NoteTargetPick(CCircuitAI* circuit, float pickM, float nearM)
 
 ISquadTask::SFire ISquadTask::SquadFire() const
 {
+	const CCircuitAI* circuit = manager->GetCircuit();
 	SFire f;
 	float cost = 0.f;
 	float hp = 0.f;
@@ -653,15 +654,14 @@ ISquadTask::SFire ISquadTask::SquadFire() const
 		CCircuitDef* d = u->GetCircuitDef();
 		cost += d->GetCostM();
 		hp += d->GetHealth();
-		const float dps = d->GetRawDps();
-		if (dps <= 0.f) {
+		if (d->GetRawDps() <= 0.f) {
 			continue;
 		}
 		if (d->HasSurfToAir() || d->HasSubToAir()) {
-			f.dpsAir += dps;
+			f.dpsAir += circuit->DpsVs(d, true);
 		}
 		if (d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater()) {
-			f.dpsSurf += dps;
+			f.dpsSurf += circuit->DpsVs(d, false);
 		}
 		f.armedRange = std::min(f.armedRange, d->GetMaxRange());
 	}
@@ -755,7 +755,7 @@ float ISquadTask::TargetWorth(const SFire& f, CEnemyInfo* e, float horizonS) con
 		return cost;
 	}
 	const float approachS = std::max(ed->GetMaxRange() - f.armedRange, 0.f) / std::max(lowestSpeed, 1.f);
-	return cost + ed->GetRawDps() * f.mph * (horizonS + approachS);
+	return cost + manager->GetCircuit()->DpsVs(ed, f.air) * f.mph * (horizonS + approachS);
 }
 
 bool ISquadTask::FireStale() const
@@ -809,20 +809,21 @@ void ISquadTask::AllocateFire(int frame, const AIFloat3& tPos, bool apply)
 	}
 	std::sort(cands.begin(), cands.end(), [](const SCand& a, const SCand& b) { return a.w > b.w; });
 
-	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dps, range; int cat; bool air, surf; int tgt; };
+	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dpsS, dpsA, range; int cat; bool air, surf; int tgt; };
 	std::vector<SMem> mem;
 	for (CCircuitUnit* u : units) {
 		CCircuitDef* d = u->GetCircuitDef();
 		if ((u->Blocker() != nullptr) || (d->GetRawDps() <= 0.f)) {
 			continue;
 		}
-		mem.push_back({u, u->GetPos(frame), d->GetRawDps(), d->GetMaxRange(), d->GetTargetCategory(),
-				d->HasSurfToAir() || d->HasSubToAir(),
+		mem.push_back({u, u->GetPos(frame), circuit->DpsVs(d, false), circuit->DpsVs(d, true), d->GetMaxRange(),
+				d->GetTargetCategory(), d->HasSurfToAir() || d->HasSubToAir(),
 				d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater(), -1});
 	}
 	auto canHit = [](const SMem& m, const SCand& c) {
 		return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0) && (m.pos.SqDistance2D(c.pos) <= SQUARE(m.range));
 	};
+	auto dpsOn = [](const SMem& m, const SCand& c) { return c.air ? m.dpsA : m.dpsS; };
 
 	STgtStat& st = TgtStat(circuit);
 	++st.alloc;
@@ -852,7 +853,7 @@ void ISquadTask::AllocateFire(int frame, const AIFloat3& tPos, bool apply)
 			++st.asg;
 			st.asgM += mainCost;
 			if ((mainIdx >= 0) && canHit(m, cands[mainIdx])) {
-				cands[mainIdx].got += m.dps;
+				cands[mainIdx].got += dpsOn(m, cands[mainIdx]);
 			}
 		}
 	}
@@ -871,8 +872,8 @@ void ISquadTask::AllocateFire(int frame, const AIFloat3& tPos, bool apply)
 						pick = (int)k;
 						continue;
 					}
-					const float dk = mem[k].dps * DOSE_S;
-					const float dp = mem[pick].dps * DOSE_S;
+					const float dk = dpsOn(mem[k], c) * DOSE_S;
+					const float dp = dpsOn(mem[pick], c) * DOSE_S;
 					const bool kFin = dk >= need;
 					const bool pFin = dp >= need;
 					if ((kFin && (!pFin || (dk < dp))) || (!kFin && !pFin && (dk > dp))) {
@@ -883,15 +884,15 @@ void ISquadTask::AllocateFire(int frame, const AIFloat3& tPos, bool apply)
 					break;
 				}
 				mem[pick].tgt = (int)i;
-				c.got += mem[pick].dps;
-				need -= mem[pick].dps * DOSE_S;
+				c.got += dpsOn(mem[pick], c);
+				need -= dpsOn(mem[pick], c) * DOSE_S;
 			}
 		}
 		for (SMem& m : mem) {
 			for (size_t i = 0; (m.tgt < 0) && (i < cands.size()); ++i) {
 				if (canHit(m, cands[i])) {
 					m.tgt = (int)i;
-					cands[i].got += m.dps;
+					cands[i].got += dpsOn(m, cands[i]);
 				}
 			}
 			if (m.tgt >= 0) {
@@ -1017,7 +1018,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 		return false;
 	}
 
-	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dps, range, speed, hp; int cat; bool air, surf; int tgt; };
+	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dpsS, dpsA, range, speed, hp; int cat; bool air, surf; int tgt; };
 	std::vector<SMem> mem;
 	AIFloat3 mid = ZeroVector;
 	float maxRange = 0.f, maxSpeed = 0.f, hpSum = 0.f;
@@ -1027,7 +1028,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 			continue;
 		}
 		const AIFloat3& p = u->GetPos(frame);
-		mem.push_back({u, p, d->GetRawDps(), d->GetMaxRange(), d->GetSpeed(), std::max(d->GetHealth(), 1.f),
+		mem.push_back({u, p, circuit->DpsVs(d, false), circuit->DpsVs(d, true), d->GetMaxRange(), d->GetSpeed(), std::max(d->GetHealth(), 1.f),
 				d->GetTargetCategory(), d->HasSurfToAir() || d->HasSubToAir(),
 				d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater(), -1});
 		mid += p;
@@ -1073,8 +1074,8 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 		float alpha = 0.f;
 		bool engaging = false;
 		if (hitsUs) {
-			alpha = ed->GetRawDmg();
-			float dps = ed->GetRawDps();
+			alpha = circuit->DmgVs(ed, false);
+			float dps = circuit->DpsVs(ed, false);
 			if (alpha > meanHp) {
 				dps *= meanHp / alpha;
 			}
@@ -1103,6 +1104,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 
 	auto canHit = [](const SMem& m, const SCand& c) { return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0); };
 	auto inRange = [](const SMem& m, const SCand& c) { return m.pos.SqDistance2D(c.pos) <= SQUARE(m.range); };
+	auto dpsOn = [](const SMem& m, const SCand& c) { return c.air ? m.dpsA : m.dpsS; };
 	// kill time counts the fire already in range and the fire 3 s of walking brings (the task's own movement)
 	for (SCand& c : cands) {
 		float dps = 0.f, trav = 0.f;
@@ -1112,8 +1114,8 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 			}
 			const float d = m.pos.distance2D(c.pos);
 			if (d <= m.range + FOCUS_TRAVEL_S * m.speed) {
-				dps += m.dps;
-				trav += m.dps * std::max(d - m.range, 0.f) / std::max(m.speed, 1.f);
+				dps += dpsOn(m, c);
+				trav += dpsOn(m, c) * std::max(d - m.range, 0.f) / std::max(m.speed, 1.f);
 			}
 		}
 		if (dps <= 0.f) {
@@ -1151,7 +1153,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 				break;
 			}
 			mem[p.second].tgt = (int)i;
-			need -= mem[p.second].dps * FOCUS_DOSE_S;
+			need -= dpsOn(mem[p.second], c) * FOCUS_DOSE_S;
 		}
 	}
 	for (SMem& m : mem) {
@@ -1464,7 +1466,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 			const AIFloat3 uPos = unit->GetPos(frame);
 			for (size_t i = 0; i < fears.size(); ++i) {
 				float h = 0.f;
-				const float keep = DGunKeepOut(unit->GetCircuitDef(), fears[i].tdef, h);
+				const float keep = DGunKeepOut(circuit, unit->GetCircuitDef(), fears[i].tdef, h);
 				keepHold[i] = std::make_pair(keep, h);
 				fodder |= (keep < 0.f);
 				if (keep > 0.f) {

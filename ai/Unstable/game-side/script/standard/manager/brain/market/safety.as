@@ -435,15 +435,15 @@ void ComRaidFill(CCircuitUnit@ unit)
 				continue;
 			// their standing guns, seen: what a claim or a walk-in stands under (apex_com_home)
 			if (!Catalog::gMobile[d]) {
-				if (!guns || (Catalog::gDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
+				if (!guns || (Catalog::gSurfDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
 					continue;
 				rng = (Catalog::gMaxRange[d] > rng) ? Catalog::gMaxRange[d] : rng;
 			}
 			++nMob;
 			if (ComHomeDgKills(d))
 				++nKill;
-			dps += Catalog::gDps[d];
-			if (Catalog::gDps[d] > 0.f) hpS += Catalog::gHealth[d];
+			dps += Catalog::gSurfDps[d];
+			if (Catalog::gSurfDps[d] > 0.f) hpS += Catalog::gHealth[d];
 			if (Catalog::gSpeed[d] > vmax)
 				vmax = Catalog::gSpeed[d];
 			const int t = DefTier(d);
@@ -758,7 +758,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 				if (!Catalog::ValidId(d) || !Catalog::gMobile[d])
 					continue;
 				++nMob;
-				dps += Catalog::gDps[d];
+				dps += Catalog::gSurfDps[d];
 				const int t = DefTier(d);
 				if (t > tier)
 					tier = t;

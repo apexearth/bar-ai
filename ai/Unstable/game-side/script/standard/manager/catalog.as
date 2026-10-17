@@ -72,6 +72,13 @@ array<float> gCombat;    // dps * (hp + shield) * sqrt(dmg), i.e. power^2
 array<float> gDps;       // sustained damage/s
 array<float> gAlpha;     // per-shot damage
 array<float> gAoe;       // weapon splash radius (NOT gBlastR, the death blast)
+// apex_surf_dps: the rate and shot against one domain. gDps is the max over surface, air and water, so an
+// amphibious bot's anti-air missile read as ground fire. Off, both equal gDps/gAlpha.
+bool gSurfDpsOn = false;
+array<float> gSurfDps;
+array<float> gAirDps;
+array<float> gSurfAlpha;
+array<float> gAirAlpha;
 // Can this weapon actually hit something that is MOVING: instant-hit beams and
 // rifles, cannons whose shell is fast for their range, and TRACKING missiles.
 // A slow un-tracked rocket fails it -- reach it cannot land on a mover is reach
@@ -122,6 +129,8 @@ void Init()
 	gStock.resize(n);
 	gCombat.resize(n);
 	gDps.resize(n); gAlpha.resize(n); gAoe.resize(n);
+	gSurfDps.resize(n); gAirDps.resize(n); gSurfAlpha.resize(n); gAirAlpha.resize(n);
+	gSurfDpsOn = ai.GetTunable("apex_surf_dps", TUNE_SURF_DPS) > 0.f;
 	gAimTrue.resize(n); gDumbFire.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gWaterT.resize(n); gRole.resize(n); gKamikaze.resize(n);
 	gShield.resize(n); gShieldR.resize(n); gRezzer.resize(n);
@@ -189,6 +198,10 @@ void Init()
 		gCombat[i]       = cdef.power * cdef.power;
 		gDps[i]          = cdef.GetRawDps();
 		gAlpha[i]        = cdef.GetRawDmg();
+		gSurfDps[i]      = gSurfDpsOn ? cdef.GetRawSurfDps() : gDps[i];
+		gAirDps[i]       = gSurfDpsOn ? cdef.GetRawAirDps() : gDps[i];
+		gSurfAlpha[i]    = gSurfDpsOn ? cdef.GetRawSurfDmg() : gAlpha[i];
+		gAirAlpha[i]     = gSurfDpsOn ? cdef.GetRawAirDmg() : gAlpha[i];
 		gAoe[i]          = cdef.GetAoe();
 		gAimTrue[i]      = cdef.IsAlwaysHitDef();
 		gDumbFire[i]     = cdef.IsDumbFireDef();
@@ -362,6 +375,23 @@ void Init()
 			waterGuns += " " + Def(i).GetName();
 	}
 	AiLog("apex: water-only guns:" + waterGuns);
+	{
+		const array<string> probe = {"armamph", "coramph", "armpincer", "corgarp", "armjeth", "corcrash"};
+		string sd = "";
+		for (uint k = 0; k < probe.length(); ++k) {
+			CCircuitDef@ pd = ai.GetCircuitDef(probe[k]);
+			if (pd is null)
+				continue;
+			const int pIdx = int(pd.id);
+			sd += " " + probe[k] + " dps=" + formatFloat(gDps[pIdx], "", 0, 1)
+				+ "/surf=" + formatFloat(pd.GetRawSurfDps(), "", 0, 1)
+				+ "/air=" + formatFloat(pd.GetRawAirDps(), "", 0, 1)
+				+ " alpha=" + formatFloat(gAlpha[pIdx], "", 0, 0)
+				+ "/surf=" + formatFloat(pd.GetRawSurfDmg(), "", 0, 0)
+				+ "/air=" + formatFloat(pd.GetRawAirDmg(), "", 0, 0);
+		}
+		AiLog("apex: surfdps on=" + (gSurfDpsOn ? 1 : 0) + sd);
+	}
 	const float dump = ai.GetTunable("apex_catalog_dump", TUNE_CATALOG_DUMP);
 	AiLog("apex: catalog init defs=" + gDefCount + " edges=" + gEdges
 		+ " avail=" + nAvail + " frame=" + ai.frame

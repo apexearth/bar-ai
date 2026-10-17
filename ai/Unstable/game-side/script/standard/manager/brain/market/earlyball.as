@@ -79,7 +79,7 @@ void EbPriorsFill()
 			if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d]
 				|| (Catalog::gSurfT[d] <= 0.01f) || (Catalog::gCostM[d] <= 0.f))
 				continue;
-			sD += Catalog::gDps[d];
+			sD += Catalog::gSurfDps[d];
 			sH += Catalog::gHealth[d];
 			sM += Catalog::gCostM[d];
 		}
@@ -142,9 +142,9 @@ void EbRefresh()
 		for (int k = 0; k < nU; ++k) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
 			if (!Catalog::ValidId(d) || Catalog::gMobile[d] || Catalog::gFlyer[d]
-				|| (Catalog::gDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.01f))
+				|| (Catalog::gSurfDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.01f))
 				continue;
-			gEbTowDps += Catalog::gDps[d];
+			gEbTowDps += Catalog::gSurfDps[d];
 			gEbTowHp += Catalog::gHealth[d];
 			gEbTowM += Catalog::gCostM[d];
 		}
@@ -152,7 +152,7 @@ void EbRefresh()
 	gEbTowDps /= float(foes);
 	gEbTowHp /= float(foes);
 	gEbTowM /= float(foes);
-	gEbComDps = (gSmhComDef > 0) ? Catalog::gDps[gSmhComDef] : 0.f;
+	gEbComDps = (gSmhComDef > 0) ? Catalog::gSurfDps[gSmhComDef] : 0.f;
 	gEbComHp = (gSmhComDef > 0) ? Catalog::gHealth[gSmhComDef] : 0.f;
 	const float seenS = aiEnemyMgr.GetEnemyStructCost() / float(foes);
 	const float mirror = EconAssetsM();
@@ -176,7 +176,7 @@ void EbBall(int d)
 	gEbDefW[d] = 0.f;
 	gEbDefN[d] = 0.f;
 	gEbDefS[d] = 0.f;
-	const float dps = Catalog::gDps[d];
+	const float dps = Catalog::gSurfDps[d];
 	const float hp = Catalog::gHealth[d];
 	const float c = Catalog::gCostM[d];
 	const float v = Catalog::gSpeed[d];

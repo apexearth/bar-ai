@@ -103,8 +103,8 @@ void WorthMeans()
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || !WorthScorable(d))
 			continue;
-		dp += Catalog::gDps[d];
-		al += Catalog::gAlpha[d];
+		dp += Catalog::gSurfDps[d];
+		al += Catalog::gSurfAlpha[d];
 		hp += Catalog::gHealth[d];
 		rr += Catalog::gMaxRange[d];
 		ao += Catalog::gAoe[d];
@@ -427,9 +427,9 @@ float UnitCoreRawCalc(int d)
 	const float wAoe = ai.GetTunable("apex_worth_aoe", TUNE_WORTH_AOE);
 	const float wCost = ai.GetTunable("apex_worth_cost", TUNE_WORTH_COST);
 	if (wDps != 0.f)
-		v *= pow(Catalog::gDps[d] / gWMDps, wDps);
+		v *= pow(Catalog::gSurfDps[d] / gWMDps, wDps);
 	if (wAlpha != 0.f)
-		v *= pow(Catalog::gAlpha[d] / gWMAlpha, wAlpha);
+		v *= pow(Catalog::gSurfAlpha[d] / gWMAlpha, wAlpha);
 	if (wHp != 0.f)
 		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
 	if (wRng != 0.f)
@@ -587,9 +587,9 @@ float UnitStrength(int d)
 	const float wRng = ai.GetTunable("apex_worth_range", TUNE_WORTH_RANGE);
 	const float wAoe = ai.GetTunable("apex_worth_aoe", TUNE_WORTH_AOE);
 	if (wDps != 0.f)
-		v *= pow(Catalog::gDps[d] / gWMDps, wDps);
+		v *= pow(Catalog::gSurfDps[d] / gWMDps, wDps);
 	if (wAlpha != 0.f)
-		v *= pow(Catalog::gAlpha[d] / gWMAlpha, wAlpha);
+		v *= pow(Catalog::gSurfAlpha[d] / gWMAlpha, wAlpha);
 	if (wHp != 0.f)
 		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
 	if (wRng != 0.f)
@@ -948,8 +948,8 @@ void WorthDiag()
 		AiLog("apex: worth-rank " + (i + 1) + " " + Catalog::Def(d).GetName()
 			+ " core=" + formatFloat(topV[i], "", 0, 4)
 			+ " m=" + formatFloat(Catalog::gCostM[d], "", 0, 0)
-			+ " dps=" + formatFloat(Catalog::gDps[d], "", 0, 1)
-			+ " alpha=" + formatFloat(Catalog::gAlpha[d], "", 0, 0)
+			+ " dps=" + formatFloat(Catalog::gSurfDps[d], "", 0, 1)
+			+ " alpha=" + formatFloat(Catalog::gSurfAlpha[d], "", 0, 0)
 			+ " hp=" + formatFloat(Catalog::gHealth[d], "", 0, 0)
 			+ " rng=" + formatFloat(Catalog::gMaxRange[d], "", 0, 0)
 			+ " aoe=" + formatFloat(Catalog::gAoe[d], "", 0, 0));

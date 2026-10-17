@@ -269,6 +269,12 @@ public:
 	// product by squaring, never the terms.
 	float GetRawDps() const { return rawDps; }
 	float GetRawDmg() const { return rawDmg; }
+	float GetRawSurfDps() const { return rawSurfDps; }
+	float GetRawAirDps() const { return rawAirDps; }
+	float GetRawWaterDps() const { return rawWaterDps; }
+	float GetRawSurfDmg() const { return rawSurfDmg; }
+	float GetRawAirDmg() const { return rawAirDmg; }
+	float GetRawWaterDmg() const { return rawWaterDmg; }
 	// apex: the longest surface weapon of engine type "DGun" (commander D-gun,
 	// Behemoth gauss), manual or not; 0 = none. Its shot is per victim armor.
 	float GetDGunReach() const { return dgunReach; }
@@ -539,6 +545,8 @@ private:
 	float aoe;  // radius
 	float rawDps;  // sustained damage/s, before power fuses it
 	float rawDmg;  // per-shot alpha, likewise
+	float rawSurfDps, rawAirDps, rawWaterDps;  // per domain: rawDps is their max
+	float rawSurfDmg, rawAirDmg, rawWaterDmg;
 	float dgunReach = 0.f;
 	float dgunReload = 0.f;
 	std::vector<float> dgunShots;

@@ -221,7 +221,7 @@ void NrSnapEnemy()
 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
 			continue;
 		int k = 0;
-		const bool armed = (Catalog::gMaxRange[d] > 0.f) && (Catalog::gDps[d] > 0.f);
+		const bool armed = (Catalog::gMaxRange[d] > 0.f) && (Catalog::gSurfDps[d] > 0.f);
 		if (!Catalog::gMobile[d]) {
 			if (armed)
 				k = 2;
@@ -321,7 +321,7 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
 			gNrAltRate.insertLast(alt);
 			grpM += Catalog::gCostM[d];
 			grpS += s;
-			dps += Catalog::gDps[d];
+			dps += Catalog::gSurfDps[d];
 			const AIFloat3 p = u.GetPos(ai.frame);
 			cx += p.x; cz += p.z;
 			if (ours) {

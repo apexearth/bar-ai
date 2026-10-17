@@ -104,7 +104,7 @@ float ShipDGunStr(CCircuitUnit@ u, int g)
 		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
 		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d] || (Catalog::gPower[d] <= 1.f))
 			continue;
-		dps += Catalog::gDps[d];
+		dps += Catalog::gSurfDps[d];
 		if (Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
 		s.insertLast(UnitStrength(d));

@@ -188,7 +188,7 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 {
 	terms = "";
 	const float spd = Catalog::gSpeed[fd];
-	const float dps = Catalog::gDps[fd];
+	const float dps = Catalog::gSurfDps[fd];
 	if ((lineBp <= 0.f) || (spd <= 1.f) || (dps <= 0.f))
 		return 0.f;
 	const float walkE = (gSmhWalk > 0.f) ? gSmhWalk : ((gSmhTc > 0.f) ? gSmhTc * gRushSpd : -1.f);
@@ -198,7 +198,7 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 	// one's strength fights like sqrt(k) of them (linear, a Centurion read 3143 m for 270)
 	// Speed is not strength here: it is already in tA and tau below.
 	const int bd = gSmhWalkDef;
-	const float sBasic = (bd > 0) ? Catalog::gDps[bd] * Catalog::gHealth[bd] : 0.f;
+	const float sBasic = (bd > 0) ? Catalog::gSurfDps[bd] * Catalog::gHealth[bd] : 0.f;
 	const float c = (sBasic > 0.f) ? sqrt(dps * Catalog::gHealth[fd] / sBasic) * Catalog::gCostM[bd] : Catalog::gCostM[fd];
 	const float bs = Catalog::gBuildTime[fd] / lineBp;
 	const float tB = bs / OpenRaceFeed(fd, bs);

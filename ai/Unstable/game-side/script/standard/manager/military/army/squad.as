@@ -148,7 +148,7 @@ void SqRead(Squad@ s, float r, float cx, float cz)
 		sx += q.x;
 		sz += q.z;
 		p.n += 1.f;
-		p.dps += Catalog::gDps[d];
+		p.dps += Catalog::gSurfDps[d];
 		p.hp += Catalog::gHealth[d] * un.GetHealthPercent();
 		p.m += Catalog::gCostM[d];
 		const float rg = Catalog::gMaxRange[d];

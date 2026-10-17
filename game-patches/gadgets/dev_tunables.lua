@@ -364,6 +364,7 @@ local NAMES = {
 	"apex_expand_far",       -- expandfar.as + want_mex.as PickSpot/ProposeMex + events.as claim release + BuilderTask.cpp road + EconomyManager.cpp FindOpenMexSpot: claims priced by P(we hold it), no threat bar (0)
 	"apex_com_fight",        -- comfight.as + FighterTask.cpp ScriptMove + RaidTask.cpp committed path: one fight estimate per group, engage or fall back and pool (0)
 	"apex_counter_mix",      -- countermix.as + production.as draw + facqueue.as: production priced by fight value against the army we have seen, raid value where it outruns what it cannot fight (0)
+	"apex_surf_dps",         -- catalog.as gSurfDps/gAirDps + every land/AA valuation + CircuitAI.cpp DpsVs (SquadTask.cpp): damage per domain, not the max of all three (0)
 	"apex_focus_fire",       -- SquadTask.cpp FocusTick + FighterTask.cpp ScriptMove + Attack/Defend/RaidTask FocusHold: set targets by enemy damage removed per second of our fire, lethal doses (0)
 	"apex_join_arrive",      -- requests/joinarrive.as + want_assist/decide defjoin + floor.as + want_mex JoinBig + take.as fork + rules_rezzer.as + gift.as + lift.as: a hand joins live work only for what it adds after it arrives (0)
 	"apex_gather",           -- gather.as + nnraid.as + DefendTask.cpp pool join/promote + RaidTask.cpp sealed goal pack, bounded path: raid packs launch whole from the gathered raiders and keep their members (0)
