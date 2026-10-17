@@ -62,6 +62,23 @@ float EvFoeFlightS()
 	return foe.distance2D(Builder::gHomePos) / gEvFoeSpd;
 }
 
+// The time our fighters get at their bombers: from where our radar first shows them to the base, not their
+// whole flight from home, which only lengthens on a big map.
+float EvInterceptS(int f)
+{
+	if (gEvFoeSpd <= 0.f)
+		return 0.f;
+	float r = Catalog::gLosR[f];
+	const array<int>@ own = Market::OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		if (!Catalog::gMobile[own[i]] && (Catalog::gRadarR[own[i]] > r))
+			r = Catalog::gRadarR[own[i]];
+	}
+	const float t = r / gEvFoeSpd;
+	const float fl = EvFoeFlightS();
+	return ((fl > 0.f) && (fl < t)) ? fl : t;
+}
+
 // The metal of fighter f that answers their air: enough to win the square-law fight against their fighters,
 // and enough air dps to kill their bombers and gunships inside their flight to us.
 float EvFighterWantM(int f)
@@ -75,7 +92,7 @@ float EvFighterWantM(int f)
 	if ((hp <= 0.f) || (dps <= 0.f) || (c <= 0.f))
 		return 0.f;
 	float n = sqrt(gEvFoeFtrHp * gEvFoeFtrDps / (hp * dps));
-	const float tau = EvFoeFlightS();
+	const float tau = EvInterceptS(f);
 	if ((tau > 0.f) && (gEvFoeStrHp > 0.f)) {
 		const float nK = gEvFoeStrHp / (tau * dps);
 		if (nK > n)
@@ -508,6 +525,7 @@ void EveryStat()
 	CCircuitDef@ wf = (gFighter !is null && Have(gPlant2) > 0) ? gFighter : gFighter1;
 	if (wf !is null)
 		ftrWant = EvFighterWantM(int(wf.id)) * EvFighterShare();
+	const float tauI = (wf !is null) ? EvInterceptS(int(wf.id)) : 0.f;
 	LifeStat();
 	AiLog(Factory::T() + "apex: airevery-stat t=" + ai.teamId + " on=" + (EveryOn() ? 1 : 0)
 		+ " seats=" + seats + "/" + mates
@@ -523,7 +541,7 @@ void EveryStat()
 		+ " wing=[b " + gEvWingWhy[0] + " g " + gEvWingWhy[1] + "]"
 		+ " go=" + gEvGoN[0] + "/" + gEvGoN[1] + " hold=" + gEvHoldN[0] + "/" + gEvHoldN[1] + " small=" + gEvGoSmall
 		+ " foeAir=" + int(gEvFoeAirM) + "(ftr " + int(gEvFoeFtrM) + " strike " + int(gEvFoeStrM) + ")"
-		+ " ourFtrM=" + int(ftrM) + " ftrWant=" + int(ftrWant) + " ftrPend=" + ftrPend
+		+ " ourFtrM=" + int(ftrM) + " ftrWant=" + int(ftrWant) + " tau=" + int(tauI) + "/" + int(EvFoeFlightS()) + " ftrPend=" + ftrPend
 		+ " hunt=" + gEvHuntLaunch + "/" + gEvHuntN + "/" + gEvHuntHold + ":" + gEvHuntWhy);
 	gEvPlantVBest = 0.f;
 	gEvPlantDefBest = -1;
