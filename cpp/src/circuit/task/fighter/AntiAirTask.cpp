@@ -75,7 +75,7 @@ CAntiAirTask::~CAntiAirTask()
 
 bool CAntiAirTask::CanAssignTo(CCircuitUnit* unit) const
 {
-	if (manager->GetCircuit()->IsStockArmy()) {
+	if (IsStockTask()) {
 		return StockCanAssignTo(unit);
 	}
 	if (!unit->GetCircuitDef()->IsRoleAA()) {
@@ -321,7 +321,7 @@ NSMicroPather::HitFunc CAntiAirTask::GetHitTest() const
 
 void CAntiAirTask::FindTarget()
 {
-	if (manager->GetCircuit()->IsStockArmy()) {
+	if (IsStockTask()) {
 		StockFindTarget();
 		return;
 	}

@@ -28,10 +28,18 @@ static bool StockDrop(CMilitaryManager* mgr, const char* kind)
 	return true;
 }
 
+// apex_our_air: the script enqueues for aircraft; a stock-controlled unit that joins one counts (FighterTask AssignTo)
 static IFighterTask* CMilitaryManager_Enqueue(CMilitaryManager* mgr, const TaskF::SFightTask& ti)
 {
-	StockDrop(mgr, "enqueue");
-	return mgr->Enqueue(ti);
+	if (!mgr->GetCircuit()->IsOurAir()) {
+		StockDrop(mgr, "enqueue");
+		return mgr->Enqueue(ti);
+	}
+	IFighterTask* task = mgr->Enqueue(ti);
+	if ((task != nullptr) && task->GetAssignees().empty()) {
+		task->SetScriptMade();
+	}
+	return task;
 }
 
 static unsigned int CMilitaryManager_ReleaseHoldPools(CMilitaryManager* mgr)

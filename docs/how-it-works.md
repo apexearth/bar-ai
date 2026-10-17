@@ -175,7 +175,9 @@ Everything beyond stock BARb that takes, re-elects, orders or overrides a combat
 no commander, no transport). `TUNE_STOCK_ARMY` (`apex_stock_army`, off) silences every row: script rows
 return at their entry through `Military::StockQuiet(tag)`, C++ rows take the stock branch
 (`CCircuitAI::IsStockArmy`/`IsStockCtl`), and the bindings that order a combat unit or override a fight task
-drop the call and count it (`apex: stockarmy-stat ... leak=`, 0 when this table is whole).
+drop the call and count it (`apex: stockarmy-stat ... leak=`, 0 when this table is whole). `TUNE_OUR_AIR`
+(`apex_our_air`, off) takes aircraft out of the census: the Air row and C++ air rows run ours again, a fight
+task takes its side from its first member (`IFighterTask::IsStockTask`), and ground and air never share one.
 
 | Layer | Files | What it overrides | Under the switch |
 |---|---|---|---|

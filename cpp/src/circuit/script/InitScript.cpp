@@ -397,7 +397,7 @@ static bool StockDropTask(IUnitTask* task, const char* kind)
 		return false;
 	}
 	CCircuitAI* circuit = task->GetManager()->GetCircuit();
-	if (!circuit->IsStockArmy()) {
+	if (!static_cast<IFighterTask*>(task)->IsStockTask()) {
 		return false;
 	}
 	circuit->NoteStockLeak(kind);
@@ -1830,6 +1830,11 @@ static float CCircuitAI_GetTunable(CCircuitAI* circuit, const std::string& name,
 	return circuit->GetTunable(name, defVal);
 }
 
+static float CCircuitAI_GetOwnTunable(CCircuitAI* circuit, const std::string& name, float defVal)
+{
+	return circuit->GetOwnTunable(name, defVal);
+}
+
 static int CCircuitAI_LoadOptionFloats(CCircuitAI* circuit, const std::string& name)
 {
 	return circuit->LoadOptionFloats(name);
@@ -2392,6 +2397,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetOwnTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetOwnTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int LoadOptionFloats(const string &in)", asFUNCTION(CCircuitAI_LoadOptionFloats), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float OptionFloat(int) const", asFUNCTION(CCircuitAI_OptionFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetSpeedFactor() const", asFUNCTION(CCircuitAI_GetSpeedFactor), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

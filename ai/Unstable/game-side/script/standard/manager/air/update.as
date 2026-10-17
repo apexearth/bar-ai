@@ -92,7 +92,7 @@ void Intercept()
 		ai.PublishTeamValue(TV_HOMEX, Builder::gHomePos.x);
 		ai.PublishTeamValue(TV_HOMEZ, Builder::gHomePos.z);
 	}
-	if ((ai.frame < gNextInterceptCmd) || Military::StockQuiet("air"))
+	if ((ai.frame < gNextInterceptCmd) || Military::StockQuietAir("air"))
 		return;
 	// The fighters HELD at home are the pool an ally can call on; the ones out
 	// with a strike are not, and a raid on an ally must not recall them.
@@ -133,7 +133,7 @@ void Intercept()
 	if ((to.x < 0.f) || !OnMap(to))
 		return;
 	gNextInterceptCmd = ai.frame + 4 * SECOND;
-	bool fixedRoster = Military::GthOn() && (gInterceptTarget == worst);
+	bool fixedRoster = Military::AirGthOn() && (gInterceptTarget == worst);
 	if (fixedRoster) {
 		array<Id> alive;
 		for (uint i = 0; i < gInterceptRoster.length(); ++i) {
@@ -250,7 +250,7 @@ void Release(const string& in why)
 // Release throws the whole thing at once.
 void ReArm()
 {
-	if (Military::StockQuiet("air"))
+	if (Military::StockQuietAir("air"))
 		return;
 	if (!gStrike)
 		return;
@@ -467,7 +467,7 @@ void SpotCensus()
 
 void ScoutOverflight()
 {
-	if (Military::StockQuiet("air"))
+	if (Military::StockQuietAir("air"))
 		return;
 	const float per = ai.GetTunable("apex_scout_over_s", TUNE_SCOUT_OVER_S);
 	if (per <= 0.f)
@@ -569,7 +569,7 @@ void Update()
 	{ double _tA = Perf::T0(); SettleStrike(); Perf::Add("air.SettleStrike", _tA); }
 	{ double _tA = Perf::T0(); ResolveDefs(); Perf::Add("air.ResolveDefs", _tA); }
 	{ double _tA = Perf::T0(); ReArm(); Perf::Add("air.ReArm", _tA); }
-	const bool airCtl = !Military::StockQuiet("air");   // apex_stock_army: the wing's control stands down
+	const bool airCtl = !Military::StockQuietAir("air");   // apex_stock_army: the wing's control stands down, unless apex_our_air
 	if (airCtl) {
 	{ double _tA = Perf::T0(); AtomicWatch(); Perf::Add("air.AtomicWatch", _tA); }
 	{ double _tA = Perf::T0(); AtomicLookWatch(); Perf::Add("air.AtomicLookWatch", _tA); }

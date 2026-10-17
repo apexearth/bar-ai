@@ -1150,6 +1150,9 @@ const float TUNE_CON_ESCORT = 1.f;
 // DefaultMakeTask and fight code; our army layers stand down. See docs/tunables.md.
 const float TUNE_STOCK_ARMY = 0.f;
 
+// OUR_AIR: 1 (with STOCK_ARMY 1) keeps aircraft under our air control; the ground army stays stock. See docs/tunables.md.
+const float TUNE_OUR_AIR = 0.f;
+
 // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
 const float TUNE_SQUADS = 0.f;
 

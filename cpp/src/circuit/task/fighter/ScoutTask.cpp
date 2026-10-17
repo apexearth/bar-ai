@@ -203,7 +203,7 @@ bool CScoutTask::FindTarget(CCircuitUnit* unit, const AIFloat3& pos)
 			if (((targetCat & canTargetCat) == 0)
 				|| (isAntiStatic && edef->IsMobile())
 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
-				|| (edef->IsAbleToFly() && !(circuit->IsStockArmy()
+				|| (edef->IsAbleToFly() && !(IsStockTask()
 					? (IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir()) : cdef->IsAirHunter(IsInWater))))  // notAA
 			{
 				continue;

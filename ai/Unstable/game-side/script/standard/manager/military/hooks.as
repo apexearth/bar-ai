@@ -241,7 +241,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			if (cg !is null)
 				return NoteElect("air.cover", cg);
 		}
-		if (GthOn() && Air::gStrike)
+		if (AirGthOn() && Air::gStrike)
 			return null;   // it left its wave's cover: held for the next one
 	}
 	// A ROLLING BOMB IS NEVER PACKED. It is roled `raider`, so the director

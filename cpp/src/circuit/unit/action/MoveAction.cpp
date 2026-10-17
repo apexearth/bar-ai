@@ -40,7 +40,7 @@ CMoveAction::~CMoveAction()
 // fighting everywhere lost a same-seed 2v2 outright.
 static void TravelTo(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& pos, short options, int timeout)
 {
-	if (circuit->GetTunable("apex_fight_travel", 0.f) > 0.f) {
+	if (circuit->GetFightTunable("apex_fight_travel", 0.f, circuit->IsStockFor(unit->GetCircuitDef())) > 0.f) {
 		IUnitTask* task = unit->GetTask();
 		bool walker = (task == nullptr) || (task->GetType() != IUnitTask::Type::FIGHTER);
 		if (!walker) {

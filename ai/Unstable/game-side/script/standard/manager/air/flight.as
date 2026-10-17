@@ -317,7 +317,7 @@ void FlightWatch()
 	}
 	if (home.length() == 0)
 		return;
-	if (gFlightSent && Military::GthOn()) {
+	if (gFlightSent && Military::AirGthOn()) {
 		Military::JwRefused(int(Task::FightType::SCOUT), int(home.length()));
 		return;
 	}

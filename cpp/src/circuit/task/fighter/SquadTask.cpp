@@ -170,7 +170,7 @@ bool ISquadTask::PurgeStrays()
 bool ISquadTask::Merge(ISquadTask* task)
 {
 	if (IsJoinClosed() || task->IsJoinClosed()
-		|| (IsEngaged() && static_cast<CMilitaryManager*>(manager)->IsJoinGate()))
+		|| (IsEngaged() && static_cast<CMilitaryManager*>(manager)->IsJoinGate(IsStockTask())))
 	{
 		manager->NoteJoinRefused(this);
 		return false;
@@ -263,7 +263,7 @@ ISquadTask* ISquadTask::CheckMergeTask()
 		return nullptr;
 	}
 	// apex_gather: a squad in a fight is not joined by walking into it
-	const bool gate = static_cast<CMilitaryManager*>(manager)->IsJoinGate();
+	const bool gate = static_cast<CMilitaryManager*>(manager)->IsJoinGate(IsStockTask());
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
@@ -283,7 +283,8 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	for (const IFighterTask* candidate : tasks) {
 		if ((candidate == this)
 			|| (candidate->GetAttackPower() < attackPower)
-			|| candidate->IsJoinClosed() || (gate && candidate->IsEngaged()) || !candidate->CanAssignTo(leader))
+			|| candidate->IsJoinClosed() || (gate && candidate->IsEngaged()) || candidate->OtherSide(leader)
+			|| !candidate->CanAssignTo(leader))
 		{
 			continue;
 		}
@@ -393,7 +394,7 @@ bool ISquadTask::IsMustRegroup()
 		// (apexearth 2026-09-30: "have the squad stay up towards the front and
 		// wait for the reinforcements to come up").
 		CCircuitUnit* front = bestPlace;
-		if (utils::is_valid(position) && !circuit->IsStockArmy()) {
+		if (utils::is_valid(position) && !IsStockTask()) {
 			float frontSq = std::numeric_limits<float>::max();
 			for (CCircuitUnit* unit : validUnits) {
 				const float sq = unit->GetPos(frame).SqDistance2D(position);
@@ -455,7 +456,7 @@ bool ISquadTask::IsMustRegroup()
 			powNear += p;
 		}
 	}
-	if (anyOut && ((powNear * 2.f < powAll) || circuit->IsStockArmy())) {
+	if (anyOut && ((powNear * 2.f < powAll) || IsStockTask())) {
 		state = State::REGROUP;
 	}
 	{
@@ -1006,7 +1007,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const auto t0 = std::chrono::steady_clock::now();
 	SFocusStat& st = FocusStat(circuit);
-	focusOn = circuit->GetTunable("apex_focus_fire", 0.f) > 0.f;
+	focusOn = circuit->GetFightTunable("apex_focus_fire", 0.f, IsStockTask()) > 0.f;
 	focusAt.clear();
 	focusOrder.clear();
 	if ((focusEp >= 0) && (frame - focusSeen > FOCUS_END)) {
@@ -1230,7 +1231,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 bool ISquadTask::FocusHold(int frame)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	if ((circuit->GetTunable("apex_focus_fire", 0.f) <= 0.f) || (circuit->GetTunable("apex_com_fight", 0.f) <= 0.f)) {
+	if ((circuit->GetFightTunable("apex_focus_fire", 0.f, IsStockTask()) <= 0.f) || (circuit->GetFightTunable("apex_com_fight", 0.f, IsStockTask()) <= 0.f)) {
 		return false;
 	}
 	if (!FocusTick(frame, false) || focusOrder.empty()) {
@@ -1298,7 +1299,7 @@ void ISquadTask::Attack(const int frame)
 
 void ISquadTask::Attack(const int frame, const bool isGround)
 {
-	if (manager->GetCircuit()->IsStockArmy()) {
+	if (IsStockTask()) {
 		StockAttack(frame, isGround);
 		return;
 	}
@@ -1409,7 +1410,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	int& fearLog = fearLogAt[circuit->GetTeamId()];
 	std::string fearEx;
 
-	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
+	const bool tv = circuit->GetFightTunable("apex_target_value", 0.f, IsStockTask()) > 0.f;
 	const bool newEng = GetTarget()->GetId() != engTgt;
 	STgtStat& tst = TgtStat(circuit);
 	if (newEng) {

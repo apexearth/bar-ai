@@ -54,9 +54,20 @@ bool IFighterTask::JoinAdmitted(const CCircuitUnit* unit) const
 	return (manager->GetCircuit()->GetLastFrame() < joinAdmitUntil) && (joinAdmit.count(unit->GetId()) != 0);
 }
 
+bool IFighterTask::IsStockTask() const
+{
+	const CCircuitAI* circuit = manager->GetCircuit();
+	return circuit->IsStockArmy() && !(circuit->IsOurAir() && (units.empty() ? scriptMade : airSide));
+}
+
+bool IFighterTask::OtherSide(const CCircuitUnit* unit) const
+{
+	return !units.empty() && manager->GetCircuit()->IsOurAir() && (airSide != unit->GetCircuitDef()->IsAbleToFly());
+}
+
 bool IFighterTask::IsJoinClosed() const
 {
-	return joinCommitted && static_cast<CMilitaryManager*>(manager)->IsJoinGate();
+	return joinCommitted && static_cast<CMilitaryManager*>(manager)->IsJoinGate(IsStockTask());
 }
 
 bool IFighterTask::JoinOpen(const CCircuitUnit* unit) const
@@ -110,6 +121,12 @@ void IFighterTask::AssignTo(CCircuitUnit* unit)
 	if (joinCommitted) {
 		static_cast<CMilitaryManager*>(manager)->NoteJoin(fightType,
 				JoinAdmitted(unit) ? CMilitaryManager::JW_ADMIT : CMilitaryManager::JW_LATE);
+	}
+	if (units.empty()) {
+		airSide = unit->GetCircuitDef()->IsAbleToFly();
+	}
+	if (scriptMade && manager->GetCircuit()->IsStockCtl(unit)) {
+		manager->GetCircuit()->NoteStockLeak("enqueue");
 	}
 	IUnitTask::AssignTo(unit);
 
@@ -232,7 +249,7 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 
 	// Retreat 0 means never: a disarmed unit fell through to the no-target
 	// retreat below at full health, and a rolling bomb walked home to blow up.
-	const bool stock = circuit->IsStockArmy();
+	const bool stock = IsStockTask();
 	if (!stock && ((cdef->GetRetreat() <= 0.f) || cdef->IsKamikazeDef())) {
 		return;
 	}
@@ -361,7 +378,7 @@ AIFloat3 IFighterTask::RoamPos(CCircuitUnit* unit) const
 	CCircuitAI* circuit = manager->GetCircuit();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	AIFloat3 pos;
-	if ((circuit->GetTunable("apex_roam_front", 1.f) > 0.f) && circuit->HasFrontPos()) {
+	if ((circuit->GetFightTunable("apex_roam_front", 1.f, IsStockTask()) > 0.f) && circuit->HasFrontPos()) {
 		const int r = (int)circuit->GetTunable("apex_roam_r", 1200.f);
 		const AIFloat3& fp = circuit->GetFrontPos();
 		// drawn from the part of the square on the map: clamping a point drawn off it piled every such

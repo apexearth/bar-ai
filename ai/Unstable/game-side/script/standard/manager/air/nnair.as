@@ -662,7 +662,7 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 		}
 		const float homeR = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 2.f;
 		NaWingLaunch(homeR);
-		const bool gth = Military::GthOn();
+		const bool gth = Military::AirGthOn();
 		for (uint i = 0; i < gNaU.length(); ++i) {
 			IUnitTask@ t = gNaT[i];
 			if ((t is null) || t.IsDead())
@@ -695,7 +695,7 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 // gathered ones go as a new wing; a wing back home forms again (apex_gather).
 void NaWingLaunch(float homeR)
 {
-	if (!Military::GthOn() || (gNaTask is null) || gNaTask.IsDead() || !gNaTask.IsJoinCommitted())
+	if (!Military::AirGthOn() || (gNaTask is null) || gNaTask.IsDead() || !gNaTask.IsJoinCommitted())
 		return;
 	if (Military::JwHome(gNaTask, homeR))
 		gNaTask.JoinReopen();
@@ -771,7 +771,7 @@ IUnitTask@ NaTask(CCircuitUnit@ unit)
 // wing thinks it is ready; they are an input to the decision now, not a release.
 void NaLegacy(const string why)
 {
-	if (Military::StockQuiet("air"))
+	if (Military::StockQuietAir("air"))
 		return;
 	gNaLegacyFrame = ai.frame;
 	gNaLegacyWhy = why;

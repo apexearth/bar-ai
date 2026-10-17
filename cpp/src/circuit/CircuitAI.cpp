@@ -2134,15 +2134,21 @@ float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
 	return game->GetRulesParamFloat(key.c_str(), -1.f);
 }
 
-// apex_stock_army: the value at which each fight-code tunable runs stock BARb's code
-static const std::unordered_map<std::string, float>& StockArmyValues()
+// apex_stock_army: the value at which each fight-code tunable runs stock BARb's code; air = read only by
+// aircraft code, so apex_our_air keeps its own value
+struct SStockValue {
+	float value;
+	bool air;
+};
+static const std::unordered_map<std::string, SStockValue>& StockArmyValues()
 {
-	static const std::unordered_map<std::string, float> vals = {
-		{"apex_gather", 0.f}, {"apex_com_fight", 0.f}, {"apex_focus_fire", 0.f}, {"apex_birth_defend", 0.f},
-		{"apex_target_value", 0.f}, {"apex_fight_travel", 0.f}, {"apex_pool_leash", 0.f}, {"apex_roam_front", 0.f},
-		{"apex_air_form", 0.f}, {"apex_squad_form", 0.f}, {"apex_side_with", 0.f}, {"apex_bomb_enroute", 0.f},
-		{"apex_raid_commit", 0.f}, {"apex_raid_first", 0.f}, {"apex_attack_share", 0.f}, {"apex_prefer_target", 0.f},
-		{"apex_retreat_stand", 0.f},
+	static const std::unordered_map<std::string, SStockValue> vals = {
+		{"apex_gather", {0.f, false}}, {"apex_com_fight", {0.f, false}}, {"apex_focus_fire", {0.f, false}},
+		{"apex_birth_defend", {0.f, false}}, {"apex_target_value", {0.f, false}}, {"apex_fight_travel", {0.f, false}},
+		{"apex_pool_leash", {0.f, false}}, {"apex_roam_front", {0.f, false}}, {"apex_air_form", {0.f, true}},
+		{"apex_squad_form", {0.f, false}}, {"apex_side_with", {0.f, false}}, {"apex_bomb_enroute", {0.f, true}},
+		{"apex_raid_commit", {0.f, false}}, {"apex_raid_first", {0.f, false}}, {"apex_attack_share", {0.f, false}},
+		{"apex_prefer_target", {0.f, false}}, {"apex_retreat_stand", {0.f, false}},
 	};
 	return vals;
 }
@@ -2179,10 +2185,23 @@ float CCircuitAI::DmgVs(const CCircuitDef* cdef, bool air) const
 	return air ? cdef->GetRawAirDmg() : std::max(cdef->GetRawSurfDmg(), cdef->GetRawWaterDmg());
 }
 
-bool CCircuitAI::IsStockCtlDef(const CCircuitDef* cdef) const
+bool CCircuitAI::IsOurAir() const
+{
+	if (ourAir < 0) {
+		ourAir = (IsStockArmy() && (GetOwnTunable("apex_our_air", 0.f) > 0.f)) ? 1 : 0;
+	}
+	return ourAir > 0;
+}
+
+bool CCircuitAI::IsCombatDef(const CCircuitDef* cdef) const
 {
 	return (cdef != nullptr) && cdef->IsMobile() && !cdef->IsBuilder() && !cdef->IsRoleComm()
 		&& !cdef->IsRoleTrans() && (cdef->IsAttacker() || cdef->IsRoleScout() || !cdef->IsAbleToFly());
+}
+
+bool CCircuitAI::IsStockCtlDef(const CCircuitDef* cdef) const
+{
+	return IsCombatDef(cdef) && !(IsOurAir() && cdef->IsAbleToFly());
 }
 
 bool CCircuitAI::IsStockCtl(const CCircuitUnit* unit) const
@@ -2212,10 +2231,15 @@ float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 	if ((stockArmy != 0) && (name != "apex_stock_army") && IsStockArmy()) {
 		const auto& sv = StockArmyValues();
 		auto st = sv.find(name);
-		if (st != sv.end()) {
-			return st->second;
+		if ((st != sv.end()) && !(st->second.air && IsOurAir())) {
+			return st->second.value;
 		}
 	}
+	return GetOwnTunable(name, defVal);
+}
+
+float CCircuitAI::GetOwnTunable(const std::string& name, float defVal) const
+{
 	auto it = tunables.find(name);
 	if (it != tunables.end()) {
 		return it->second;

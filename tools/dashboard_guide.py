@@ -413,6 +413,10 @@ PANELS = [
              "what gets built is still ours. `apex: stockarmy-stat` each minute: our fighting units by the "
              "task holding them, any order one of our systems still tried to give one (should be 0), and "
              "how often each stood down"),
+            ("TUNE_OUR_AIR", "ON (needs the stock army switch on too): aircraft come back to our own air "
+             "control -- the massed bomber strikes, gunship raids, fighter cover and intercepts -- while the "
+             "ground army stays with stock BARb. `apex: stockarmy-stat` adds our_air=on and our aircraft by "
+             "the task holding them; the stray-order count still covers only the ground army and should stay 0"),
             ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
              "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
              "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "

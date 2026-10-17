@@ -694,7 +694,7 @@ void TairLaunch(int op)
 			if (!claimed && !idle)
 				continue;
 			// apex_gather: the launch takes what stands at the rally
-			if (Military::GthOn() && (un.GetPos(ai.frame).distance2D(TairRally())
+			if (Military::AirGthOn() && (un.GetPos(ai.frame).distance2D(TairRally())
 					> ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 1.5f)) {
 				Military::JwRefused(int(Task::FightType::RAID), 1);
 				continue;
@@ -897,7 +897,7 @@ void TairLog()
 
 void TairUpdate()
 {
-	if (Military::StockQuiet("air"))
+	if (Military::StockQuietAir("air"))
 		return;
 	if (!TairSwitch() || !Builder::gHomeSet || (ai.frame < gTairNextAt))
 		return;

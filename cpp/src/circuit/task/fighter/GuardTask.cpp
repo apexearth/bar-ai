@@ -91,7 +91,7 @@ void CFGuardTask::Update()
 	const bool airOnly = vip->GetCircuitDef()->IsAbleToFly();
 	const std::vector<ICoreUnit::Id>& enemyIds = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, vip->GetCircuitDef()->GetLosRadius() + 500.f);
 	// apex_open_race: the guards' slowest speed, their reach and whether any can shoot up
-	const bool catchOn = (circuit->GetTunable("apex_open_race", 0.f) > 0.f) && !circuit->IsStockArmy();
+	const bool catchOn = (circuit->GetTunable("apex_open_race", 0.f) > 0.f) && !IsStockTask();
 	SChaseStat& chase = ChaseStat(circuit);
 	float gSpeed = std::numeric_limits<float>::max();
 	float gReach = 0.f;

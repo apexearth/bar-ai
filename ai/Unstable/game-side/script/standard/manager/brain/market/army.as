@@ -2402,7 +2402,8 @@ void RetreatRefresh()
 	if (ai.frame < gNextRetreatRefresh)
 		return;
 	gNextRetreatRefresh = ai.frame + 15 * SECOND;
-	if (Military::StockQuiet("retreat"))
+	const bool airOnly = Military::StockQuiet("retreat");
+	if (airOnly && !Military::OurAir())
 		return;
 	int rezzers = 0;
 	for (uint d2 = 1; d2 < gOwnCount.length(); ++d2) {
@@ -2428,7 +2429,7 @@ void RetreatRefresh()
 			|| Catalog::gRezzer[ri])
 			continue;
 		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
-		if (rdef is null)
+		if ((rdef is null) || (airOnly && !rdef.IsAbleToFly()))
 			continue;
 		if (uint(ri) >= gRetreatNever.length()) {
 			const uint was = gRetreatNever.length();
