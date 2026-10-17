@@ -1559,7 +1559,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const bool waterOnly = overLine;
 	// The first-way-into-the-water exemption belongs to the NAVAL LEAD only:
 	// per-player it marched eight commanders to eight beaches.
-	if (overLine && !(MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead()))
+	// apex_air_every: an air plant carries its own yield, so past the marginal line it is still priced.
+	const bool evOn = Air::EveryOn();
+	const bool navalEx = MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead();
+	if (overLine && !navalEx && !evOn)
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -1601,7 +1604,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// what the line can put on the field whatever tier it is.
 	const float pipeTerm = BPGap() * pipe;
 	const float prodHalf = prodTerm * pipe;
-	if (stream + pipeTerm + prodHalf <= 0.05f)
+	if ((stream + pipeTerm + prodHalf <= 0.05f) && !evOn)
 		return w;
 	// None of these varies with the candidate plant; the two flags and the
 	// denial premium were re-read per rung, and the fallback anchor -- a base
@@ -1633,7 +1636,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				continue;
 		}
 		const int dClass = PlantClass(d);
-		if (waterOnly && (dClass != PC_WATER))
+		const bool evAir = evOn && (dClass == PC_AIR);
+		if (waterOnly && !evAir && ((dClass != PC_WATER) || !navalEx))
 			continue;
 		// A naval lead with no hand that can reach its water buys the plant
 		// that makes one before any other land plant.
@@ -1657,7 +1661,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// team fielded air where the enemy walked in with ground.
 		// A 1v1's lone player is the air lead by default and waits the same (his
 		// 2026-10-03: "we shouldn't be making an air lab early at all").
-		if ((dClass == PC_AIR) && (!Air::IsAirLead() || ((Military::AllyCount() <= 1.f) && !LandLocked()))
+		if (!evAir && (dClass == PC_AIR) && (!Air::IsAirLead() || ((Military::AllyCount() <= 1.f) && !LandLocked()))
 			&& !gEcoRole && !Military::EnemyAfloat()
 			&& (Eco::MInc()
 				< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
@@ -1667,11 +1671,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// ground army and defense to survive").
 		{
 			AIFloat3 smh;
-			if ((dClass == PC_AIR) && !Air::IsAirLead() && !gEcoRole
+			if (!evAir && (dClass == PC_AIR) && !Air::IsAirLead() && !gEcoRole
 				&& (ShelterMate(smh) < 0) && Military::TeamHasSheltered())
 				continue;
 		}
-		if (DuelAirTechHeld(d))
+		if (!evAir && DuelAirTechHeld(d))
 			continue;
 		// FOCUS: ONE T1 LINE UNTIL T2 (apexearth 2026-10-03: "focusing on the
 		// factories is good. Later on in the game, you can have multiple types"
@@ -1683,6 +1687,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if ((PlantTier(d) < 2) && (TopOwnPlantTier() < 2) && (dClass != PC_WATER)
 			&& !((dClass == PC_AIR) && Air::IsAirLead())
 			&& !((dClass == PC_AIR) && gEcoRole && MetalWasting())
+			&& !evAir
 			&& ((Factory::gFacUnits.length() > 0) || AnyPlantInFlight()))
 			continue;
 		// The water mandate is held and ships-only -- see the naval election
@@ -1772,14 +1777,16 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// production -- see the duplicate block. Expansion is not substitutable
 		// (a nano claims no ground), so only pipeTerm is.
 		const float rateMul = PipeRateMul(d, uid);
-		const float conHalf = (pipeTerm + expTerm) * rateMul;
+		const float pipeT = evAir ? Air::EvHandsTerm(pipeTerm, pipe) * Air::EvConEff(bestCon) : pipeTerm;
+		const float conHalf = (pipeT + expTerm) * rateMul;
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
 		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
-		const float prodOwn = prodHalf * FoeTierPlantMul(d)
-				* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d);
+		const float prodOwn = evAir ? Air::EvPlantProdYield(d, fillS0)
+				: prodHalf * FoeTierPlantMul(d)
+					* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d);
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
@@ -1932,9 +1939,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// is substituted too -- the cons claim the ground, not the plant, and
 		// nanos on the standing kin deliver the same cons cheaper. A new
 		// capability keeps its expansion at full value.
-		const float conSub = (pipeTerm * subMul * dupSubst
+		const float conSub = (pipeT * subMul * dupSubst
 				+ expTerm * subMul * (isCopy ? dupSubst : 1.f)) * rateMul;
-		float dupGain = (conSub + prodOwn * dupSubst)
+		float dupGain = (conSub + prodOwn * ((evAir && !isCopy) ? 1.f : dupSubst))
 				/ float(1 + dupKin);
 		if (liveOther > 0)
 			dupGain /= float(1 + liveOther);
@@ -1988,6 +1995,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
 			&& !EcoQuiet())
 			plantG *= RushMul(Catalog::gCostM[d]);
+		const float evCaution = evAir ? Air::EvSeatCaution() : 1.f;
+		plantG *= evCaution;
 		const float liftG = PlantLiftGain(d);
 		if ((liftG > 0.f) && (ai.frame >= gNextPlantLiftLog)) {
 			gNextPlantLiftLog = ai.frame + 30 * SECOND;
@@ -1997,6 +2006,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		}
 		ValueOf(d, plantG + liftG,
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
+		if (evAir)
+			Air::EvNotePlant(d, c.value, evCaution);
 		if (candLog) {
 			cand += " " + Catalog::Def(d).GetName()
 				+ "=" + formatFloat(c.value, "", 0, 2)

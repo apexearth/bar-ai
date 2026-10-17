@@ -63,6 +63,12 @@ array<float> gNaFtS;
 array<float> gNaFtV;
 int gNaSnapAt = -1;
 int gNaCsAt = -1;
+float gNaCsD = -1.f;
+float gNaKeyD = 0.f;           // the deciding wing's damage before the AA spends it, x the AA: dps n^2 h / 2
+uint gNaExtra0 = 0, gNaExtra1 = 0;
+array<float> gNaAAG;
+int gNaAAGw = 0, gNaAAGh = 0, gNaAAGAt = -2;
+float gNaAAGc = 0.f;
 
 // the bomber target that wing production prices (NaDemandStep)
 array<int> gNaNeedDef;
@@ -188,11 +194,12 @@ void NaSnapEnemy(const AIFloat3& in foe)
 // The richest buildings, each with everything of theirs inside the cell around it.
 void NaCands(float r, array<NaCand@>& out cs)
 {
-	if (gNaCsAt == ai.frame) {
+	if ((gNaCsAt == ai.frame) && (gNaCsD == gNaKeyD)) {
 		cs = gNaCs;
 		return;
 	}
 	gNaCsAt = ai.frame;
+	gNaCsD = gNaKeyD;
 	array<int> top;
 	for (uint e = 0; e < gNaEcoV.length(); ++e) {
 		uint at = top.length();
@@ -221,6 +228,10 @@ void NaCands(float r, array<NaCand@>& out cs)
 		}
 		cs.insertLast(c);
 	}
+	gNaExtra0 = cs.length();
+	if ((gNaKeyD > 0.f) && EveryOn())
+		NaCandsWon(r, top, cs);
+	gNaExtra1 = cs.length();
 	// The team push's breach while its go stands: the line's guns, struck as
 	// the ground push lands (his 2026-10-07: combined air and ground).
 	AIFloat3 bAt;
@@ -255,6 +266,96 @@ void NaCands(float r, array<NaCand@>& out cs)
 		}
 	}
 	gNaCs = cs;
+}
+
+// The AA over each cell of the map, so a building's cover is one read.
+void NaAAGrid(float r)
+{
+	if ((gNaAAGAt == gNaSnapAt) && (gNaAAGc == r))
+		return;
+	gNaAAGAt = gNaSnapAt;
+	gNaAAGc = r;
+	gNaAAGw = int(float(AiTerrainWidth()) / r) + 1;
+	gNaAAGh = int(float(AiTerrainHeight()) / r) + 1;
+	gNaAAG.resize(gNaAAGw * gNaAAGh);
+	for (uint i = 0; i < gNaAAG.length(); ++i)
+		gNaAAG[i] = 0.f;
+	const float halfDiag = r * 0.7072f;
+	for (uint e = 0; e < gNaAAP.length(); ++e) {
+		const float reach = gNaAAR[e] + r * 0.5f;
+		int x0 = int((gNaAAP[e].x - reach) / r), x1 = int((gNaAAP[e].x + reach) / r);
+		int z0 = int((gNaAAP[e].z - reach) / r), z1 = int((gNaAAP[e].z + reach) / r);
+		x0 = (x0 < 0) ? 0 : x0; z0 = (z0 < 0) ? 0 : z0;
+		x1 = (x1 >= gNaAAGw) ? gNaAAGw - 1 : x1; z1 = (z1 >= gNaAAGh) ? gNaAAGh - 1 : z1;
+		for (int z = z0; z <= z1; ++z) {
+			for (int x = x0; x <= x1; ++x) {
+				const AIFloat3 c((float(x) + 0.5f) * r, 0.f, (float(z) + 0.5f) * r);
+				if (c.distance2D(gNaAAP[e]) <= reach + halfDiag)
+					gNaAAG[z * gNaAAGw + x] += gNaAAV[e];
+			}
+		}
+	}
+}
+
+float NaAAAt(const AIFloat3& in p)
+{
+	if ((gNaAAGw <= 0) || (gNaAAGc <= 0.f))
+		return 0.f;
+	int x = int(p.x / gNaAAGc), z = int(p.z / gNaAAGc);
+	x = (x < 0) ? 0 : ((x >= gNaAAGw) ? gNaAAGw - 1 : x);
+	z = (z < 0) ? 0 : ((z >= gNaAAGh) ? gNaAAGh - 1 : z);
+	return gNaAAG[z * gNaAAGw + x];
+}
+
+// THE CELLS THIS WING BEATS (apex_air_every). The richest buildings sit under their AA, so a small wing found
+// every one of them a loss and held for a wing one slow plant never fills. Each building is also ranked by
+// what the wing at home could kill of it before the AA over it spends the wing -- the race's own
+// dps n^2 h / 2A against its health -- and the best of those join the cells NaEval prices.
+void NaCandsWon(float r, const array<int>& in top, array<NaCand@>& cs)
+{
+	NaAAGrid(r);
+	array<int> pick;
+	array<float> key;
+	const uint want = NA_CANDS / 2;
+	for (uint e = 0; e < gNaEcoV.length(); ++e) {
+		if (top.find(int(e)) >= 0)
+			continue;
+		const float aa = NaAAAt(gNaEcoP[e]);
+		const float hpE = Catalog::gHealth[gNaEcoD[e]];
+		float k = gNaEcoV[e];
+		if ((aa > 0.f) && (hpE > 0.f)) {
+			const float f = gNaKeyD / (aa * hpE);
+			if (f < 1.f)
+				k *= f;
+		}
+		uint at = pick.length();
+		while ((at > 0) && (key[at - 1] < k))
+			--at;
+		if (at >= want)
+			continue;
+		pick.insertAt(at, int(e));
+		key.insertAt(at, k);
+		if (pick.length() > want) {
+			pick.removeLast();
+			key.removeLast();
+		}
+	}
+	for (uint i = 0; i < pick.length(); ++i) {
+		NaCand c;
+		c.at = gNaEcoP[pick[i]];
+		for (uint e = 0; e < gNaEcoP.length(); ++e) {
+			if (gNaEcoP[e].distance2D(c.at) <= r) {
+				c.v += gNaEcoV[e];
+				c.hp += Catalog::gHealth[gNaEcoD[e]];
+				++c.n;
+			}
+		}
+		for (uint e = 0; e < gNaAAP.length(); ++e) {
+			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
+				c.aaT += gNaAAV[e];
+		}
+		cs.insertLast(c);
+	}
 }
 
 // Air dps times elmos flown inside its reach, on the straight line in.
@@ -438,16 +539,21 @@ AIFloat3 NaFoe()
 // One decision for one group. Returns the option chosen, -1 when there was no group.
 int NaDecide(int kind, const string why)
 {
-	if (!Builder::gHomeSet || TairOn())
+	if (!Builder::gHomeSet || TairOn()) {
+		EvNoteSkip(kind, "teamair");
 		return -1;
-	if ((kind == 0) && gStrike)
+	}
+	if ((kind == 0) && gStrike) {
+		EvNoteSkip(kind, "out");
 		return -1;
+	}
 	const double _t = Perf::T0();
 	float grpM, hpSum, dpsSum, spd;
 	AIFloat3 ctr = Builder::gHomePos;
 	NaSnapGroup(kind, grpM, hpSum, dpsSum, spd, ctr);
 	const int n = int(gNaU.length());
 	if ((n == 0) || (spd <= 0.f)) {
+		EvNoteSkip(kind, "none");
 		Perf::Add("air.nnair", _t);
 		return -1;
 	}
@@ -456,7 +562,10 @@ int NaDecide(int kind, const string why)
 	NaSnapEnemy(OnMap(foe) ? foe : ctr);
 	const float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
 	array<NaCand@> cs;
+	gNaKeyD = EveryOn() ? dpsSum * hpSum * 0.5f : 0.f;
 	NaCands(r, cs);
+	const uint ex0 = gNaExtra0, ex1 = gNaExtra1;
+	gNaKeyD = 0.f;
 	// THE BASE NOBODY HAS SEEN (his 2026-10-12: the gunships never got deep enough to find the fusions,
 	// and with no air scout bought for them they hit edge mexes or flew at cells worth 0). A gunship wing
 	// prices their mirrored start as a cell holding the economy we have not found yet.
@@ -507,6 +616,7 @@ int NaDecide(int kind, const string why)
 	gNaObsLost = (kind == 0) ? ObsLost(DominantBomberDef()) : -1.f;
 	NaPrice@ best = NaPrice();
 	bool have = false;
+	uint bestI = 0;
 	for (uint i = 0; i < cs.length(); ++i) {
 		const float flyS = ctr.distance2D(cs[i].at) / spd;
 		const float pAA = NaPathAA(ctr, cs[i].at);
@@ -516,6 +626,7 @@ int NaDecide(int kind, const string why)
 		if (!have || (p.netM > best.netM)) {
 			@best = p;
 			have = true;
+			bestI = i;
 		}
 	}
 	int rule;
@@ -618,6 +729,7 @@ int NaDecide(int kind, const string why)
 		ln += ((o == 0) ? " | " : " ; ") + NaName(o) + "," + Market::NnF(w[o], 4) + "," + Market::NnF(pr[o], 6);
 	ln += " | chosen=" + chosen;
 	AiLog(ln);
+	EvNoteWing(kind, chosen, have, best.netM, n, have && (bestI >= ex0) && (bestI < ex1));
 	NaBind(kind, chosen, best, have, why, r);
 	Perf::Add("air.nnair", _t);
 	return chosen;
@@ -797,6 +909,7 @@ void NaDemandStep()
 	NaSnapEnemy(foe);
 	const float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
 	array<NaCand@> cs;
+	gNaKeyD = 0.f;
 	NaCands(r, cs);
 	const AIFloat3 from = Builder::gHomePos;
 	array<float> pAA(cs.length());
@@ -919,6 +1032,7 @@ void NaUpdate()
 		if (gNaPhase == 0) {
 			double _t = Perf::T0();
 			NaDemandStep();
+			EvDemandStep(ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S));
 			Perf::Add("air.nnair.demand", _t);
 		} else if (gNaPhase == 1) {
 			NaDecide(1, "clock");

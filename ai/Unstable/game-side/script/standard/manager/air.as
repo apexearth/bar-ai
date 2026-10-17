@@ -17,3 +17,4 @@
 #include "air/atomic.as"      // the atomic bomber: a strike by itself
 #include "air/nnair.as"       // the strike as a priced WAIT/GO decision (bombers, gunships)
 #include "air/teamair.as"     // the team air plan: priced, gathered at one rally, launched together
+#include "air/every.as"       // apex_air_every: every seat's plant priced, the wing flies what it has, fighters answer their air

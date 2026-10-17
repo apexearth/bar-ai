@@ -648,6 +648,8 @@ bool Hunts(CCircuitUnit@ unit)
 		return false;
 	if (InList(gHunters, unit.id))
 		return true;
+	if (EveryOn())
+		return EvHuntLaunch(unit);
 	if (aiEnemyMgr.GetEnemyCostFresh(RT::AIR) <= 0.f)
 		return false;
 	HuntPrune();

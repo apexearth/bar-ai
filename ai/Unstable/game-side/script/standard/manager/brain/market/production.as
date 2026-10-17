@@ -2066,7 +2066,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// THE WING'S ESCORT: fighters the lead's wave waits for.
 		if (Air::IsFighterDef(d)) {
 			const float gainE = (Air::EscortFighterGainFor(d, fillS)
-					+ Air::HuntFighterGainFor(d, fillS)) * roleMul;
+					+ (Air::EveryOn() ? Air::EveryFighterGainFor(d, fillS) : Air::HuntFighterGainFor(d, fillS))) * roleMul;
 			if (gainE > 0.f) {
 				candDef.insertLast(d);
 				candV.insertLast(gainE);

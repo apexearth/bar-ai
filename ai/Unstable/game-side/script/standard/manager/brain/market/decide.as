@@ -2906,6 +2906,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	TobPathLog();
 	LabNanoNoteTop(top);
+	if (Air::EveryOn()) {
+		float altV = 0.f;
+		for (uint z = 0; (z < ranked.length()) && (z < 2); ++z) {
+			if (ranked[z] !is top) {
+				altV = ranked[z].value;
+				break;
+			}
+		}
+		Air::EvNoteElection(top.value, altV,
+			(top.kind == WK_PLANT) && (top.def !is null) && AirPlant(int(top.def.id)));
+	}
 	ComHomeNoteElection(unit, top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.

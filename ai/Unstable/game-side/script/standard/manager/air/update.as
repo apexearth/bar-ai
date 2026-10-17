@@ -133,7 +133,7 @@ void Intercept()
 	if ((to.x < 0.f) || !OnMap(to))
 		return;
 	gNextInterceptCmd = ai.frame + 4 * SECOND;
-	bool fixedRoster = Military::AirGthOn() && (gInterceptTarget == worst);
+	bool fixedRoster = (Military::AirGthOn() || EveryOn()) && (gInterceptTarget == worst);
 	if (fixedRoster) {
 		array<Id> alive;
 		for (uint i = 0; i < gInterceptRoster.length(); ++i) {
@@ -585,6 +585,7 @@ void Update()
 	{ double _tA = Perf::T0(); NaUpdate(); Perf::Add("air.NaUpdate", _tA); }
 	}
 	TairUpdate();
+	EveryStat();
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
 		{ double _tA = Perf::T0(); RunElection(); Perf::Add("air.RunElection", _tA); }

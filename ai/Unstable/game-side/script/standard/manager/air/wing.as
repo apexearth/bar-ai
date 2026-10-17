@@ -130,6 +130,9 @@ CCircuitDef@ IntelPlantToBuild()
 	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
 		&& Market::AirPlantOwed(int(gPlant1.id)) && ((Have(gPlant1) > 0) || !Duel()))
 		return gPlant1;
+	// apex_air_every: the first plant of each tier is priced in the plant market (ProposePlant), not here.
+	if (EveryOn() && (Have(gPlant1) == 0))
+		return null;
 	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
 		&& (Have(gPlant1) == 0))
 	{
@@ -152,7 +155,8 @@ CCircuitDef@ IntelPlantToBuild()
 	// late game has neither. The count scales with income, one per
 	// apex_adv_air_income of metal -- a rich economy wants several, and
 	// PlantApproved's per-def curve still bounds it.
-	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()) {
+	if ((gPlant2 !is null) && gPlant2.IsAvailable(ai.frame) && HaveAirCon()
+		&& !(EveryOn() && (Have(gPlant2) == 0))) {
 		int wantN = int(inc / ai.GetTunable("apex_adv_air_income", TUNE_ADV_AIR_INCOME));
 		// AIR PLANTS FOLLOW MILITARY NEED -- the first included. apexearth
 		// 2026-08-19, a 1v1 lost with <10% relative army, a silo and two T2
