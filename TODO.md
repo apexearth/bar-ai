@@ -7,6 +7,14 @@ phrased as a bar ("at 150 metal/s, build a gantry") it is a symptom at the incom
 not a number to code. The fight layer is stock BARb since 2026-09-07, so squad behaviour below is
 C++ work on top of stock. Older text: `git log -p TODO.md`.
 
+# Army control redo (his 10-16: "the bane of this AI")
+
+Too many separate systems order the same units. Replace them with one simple layer he can reason
+about: an Army says what it wants (attackArea, defend, hold), Squads own their members and do their
+own thinking each update (moveTo, attack, setTarget, assessThreat, join), AirSquads search and
+strike. Nothing else commands a squad's units. Step 1: TUNE_STOCK_ARMY (our economy, stock BARb army
+control) as the floor; then the squad layer, piece by piece, each beating the floor in a few games.
+
 # Next big job (his 10-15: "we'll do it later")
 
 ## Replace the overrides with one pricing scale
