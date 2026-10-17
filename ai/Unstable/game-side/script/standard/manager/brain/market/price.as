@@ -221,6 +221,7 @@ void TrackEPull()
 	const float dem = Eco::EPull() - ConvUseE();
 	const float d0 = (dem > 0.f) ? dem : 0.f;
 	gEDemandPk = (d0 > gEDemandPk) ? d0 : (0.97f * gEDemandPk + 0.03f * d0);
+	ErTrackE();
 }
 
 // The metal twin of the block above. Nothing is excluded from the demand here:
@@ -509,9 +510,12 @@ float ERealizeShare(float addE, float buildSec)
 	if (!gPrERealizeOn)
 		return 1.f;
 	TrackEPull();
+	const bool er = EcoReturnOn();
 	float demand = Eco::EPull() - ConvUseE();
 	if (demand < gEDemandPk)
 		demand = gEDemandPk;
+	if (er)
+		demand = ErDemandE();
 	if (demand < 0.f)
 		demand = 0.f;
 	// Anticipation, over the build's own delivery time but never further out
@@ -534,7 +538,7 @@ float ERealizeShare(float addE, float buildSec)
 	float target = demand * gPrEHeadroom
 			+ ConvCapE() + fill;
 	// ...and never below the standing fleet's full-speed ask.
-	{
+	if (!er) {
 		const float ask = FleetAskE() + ConvCapE() + fill;
 		if (target < ask)
 			target = ask;
@@ -873,10 +877,15 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// and bought T1 solars instead all game (20 solars and 4 advanced ones
 	// against their 9 and 13 at minute 8, four 2v2s). The build itself is
 	// still stretched by the stall above; that part is physical.
-	const float ePriceE = (Catalog::gMakeE[defId] > 0.f)
+	float ePriceE = (Catalog::gMakeE[defId] > 0.f)
 			? EPriceFloor()
 			: EPriceCostAt(buildSec, Catalog::gCostE[defId]);
 	const bool makesM = (Catalog::gExtractsM[defId] > 0.f) || (Catalog::gConvRatio[defId] > 0.f);
+	if (makesM && EcoReturnOn()) {
+		const float fl = EPriceFloor();
+		if (ePriceE < fl)
+			ePriceE = fl;
+	}
 	w.mCost = Catalog::gCostM[defId] * MCostScale() * (makesM ? 1.f : MStallPremium())
 			+ Catalog::gCostE[defId] * ePriceE * gVwECost
 			+ float(Catalog::gAreaCells[defId])

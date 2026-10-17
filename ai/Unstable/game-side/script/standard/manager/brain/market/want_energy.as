@@ -283,7 +283,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			continue;
 		const float walkSec = WalkSecTo(unit, site);
 		const double _tVo = Perf::T0();
-		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn());
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 		Perf::Add("en.value", _tVo);
 		// Rent on the defended ground this footprint would occupy -- PLUS the
 		// measured scarcity of base room, the same term RetireGain charges.
@@ -484,6 +484,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		ProposeEnergy(unit);
 		gWtRunning = false;
 	}
+	if (!gWtRunning)
+		ErNotePrice(WK_ENERGY, w);
 	return w;
 }
 
@@ -1467,7 +1469,7 @@ Want@ ProposeStorage(CCircuitUnit@ unit, float eWasted)
 			continue;
 		Want c;
 		ValueOf(d, useful * BestConvRatio(), WalkSecTo(unit, site),
-				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn());
+				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_CONVERT;
@@ -1517,10 +1519,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// capacity stopped growing while energy overflowed. What is NOT in pull is
 	// the capacity we have already ordered.
 	const bool realize = ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f;
+	const bool er = EcoReturnOn();
 	const float eWasted = (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma;
-	const float eSurplus = realize
+	float eSurplus = realize
 			? (eWasted - ConvCapInFlight())
 			: (eWasted - StandingConvCap());
+	if (er)
+		eSurplus = ErConvRoomE();
 	gCwSurplus = eSurplus;
 	// A pinned bank is its own evidence -- see EnergyPinned. The EMA is the
 	// wrong instrument there, so it does not get to veto.
@@ -1531,7 +1536,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// against BARb's none, each one eating the energy that then forced the
 	// stall rule to buy basic solars. His ruling is converters on WASTE;
 	// with nothing wasted there is nothing for one to modulate.
-	const bool pinned = EnergyPinned() && (eWasted > 1.f);
+	const bool pinned = !er && EnergyPinned() && (eWasted > 1.f);
 	if ((eSurplus <= 1.f) && !pinned) {
 		++gCwNoSurplus;
 		ConvWhyLog();
@@ -1575,7 +1580,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		if (teamCell > cvBestPerCell)
 			cvBestPerCell = teamCell;
 	}
-	float cvDisp = 0.f, cvRisk = 0.f, cvFlow = 0.f;
+	float cvDisp = 0.f, cvRisk = 0.f, cvFlow = 0.f, cvChew = 0.f;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -1687,7 +1692,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 					* growC / ((cvPower > growC) ? cvPower : ((growC > 0.f) ? growC : 1.f));
 		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
-				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn());
+				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is
 		// nearly as good and far cheaper; what T2 actually buys is ten times
 		// the throughput behind the same guns, and a body that does not die to
@@ -1713,11 +1718,14 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			cvDisp = gPrLastDisp;
 			cvRisk = gPrLastRisk;
 			cvFlow = gPrLastFlow;
+			cvChew = chew;
 		}
 	}
 	if (w.value > 0.f) {
 		++gCwProposed;
 		gCwVal = w.value;
+		ErNotePrice(WK_CONVERT, w);
+		ErNoteChew(cvChew);
 		// The price, term by term: the seat wasted 24k E/s with the converter
 		// at v=8 under an assist at v=17, and only m= and t= were readable.
 		if (ai.frame >= gNextConvPriceLog) {

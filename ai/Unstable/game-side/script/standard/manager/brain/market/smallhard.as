@@ -252,6 +252,7 @@ void ShRefresh()
 {
 	gSmhAt = ai.frame;
 	gSmhK = 0.f;
+	gErKRaw = 0.f;
 	gSmhFloorX = 0.f;
 	if (!Builder::gHomeSet)
 		return;
@@ -289,6 +290,8 @@ void ShRefresh()
 	gSmhTA = (rSeat > 0.f) ? ArmyTargetBase() * ARMY_FLOOR_PARITY / rSeat : 0.f;
 	if ((gSmhTc >= 0.f) && (gSmhTA > gSmhTc))
 		gSmhK = (gSmhTA - gSmhTc) / (gSmhTA + gSmhTc);
+	gErKRaw = gSmhK;
+	gSmhK *= EcoReturnArmyMul();
 	gSmhFloorX = gSmhK * (gSmhComM + prod) * ARMY_FLOOR_PARITY / float(fighting);
 	const float A = Military::TeamArmyCost();
 	gSmhHold = (A + gSmhArrive > 1.f) ? A / (A + gSmhArrive) : 0.f;

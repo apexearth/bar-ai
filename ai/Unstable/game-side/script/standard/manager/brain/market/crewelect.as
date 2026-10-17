@@ -93,8 +93,10 @@ void CrewExecNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, int leader)
 	if ((w.kind == WK_MEX) || ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT)))
 		NoteClaim(unit, w);
 	OpenNoteExec(false, w.kind);
-	if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+	if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
 		ExpandFarNoteElect(w.kind);
+		ErNoteExec(w.kind);
+	}
 	if (DecideLogOn())
 		AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
 			+ " #" + unit.id + " " + KindName(w.kind) + ":"
