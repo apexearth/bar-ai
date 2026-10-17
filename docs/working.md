@@ -40,6 +40,7 @@ python tools/diagnose.py <run>                  # 3 lines when clean
 python tools/deadcheck.py <run>                 # rules that never fired
 python tools/frametime.py <run>                 # per-section maxMs + the 16-AI verdict (apex_perf=1)
 python tools/hitch.py <run>                     # wall-gap freezes no section owns (S31)
+python tools/scenario.py run all --parallel 2   # scripted fights, PASS/FAIL in ~1 min each (army.md)
 python tools/composition.py <tournament>        # where the metal went
 python tools/spendtable.py <tournament>         # income/mex/army/spend/lost per 4 min, us vs them
 python tools/progress.py [--games] [--by day]   # are we getting better vs BARb, batch over batch

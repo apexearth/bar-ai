@@ -1,0 +1,16 @@
+{
+  "about": "an enemy commander walks into our base with 10 of our light units nearby",
+  "passes": "the commander dies, and our bots engage together or hold under the towers: all but one reach it within the window of the first, at most one dies alone",
+  "map": "Geyser Plains",
+  "seconds": 120,
+  "units": [
+    {"side": 0, "def": "armllt", "n": 1, "at": ["s0", 160, -220], "order": "ai"},
+    {"side": 0, "def": "armllt", "n": 1, "at": ["s0", 160, 220], "order": "ai"},
+    {"side": 0, "def": "armsolar", "n": 2, "at": ["s0", -160, 0], "spacing": 120, "order": "ai"},
+    {"side": 0, "def": "armpw", "n": 10, "at": ["s0", 380, 0], "order": "ai"},
+    {"side": 1, "def": "armcom", "n": 1, "at": ["s0", 1500, 0], "order": "move", "to": ["s0", 0, 0]}
+  ],
+  "expect": [
+    {"killed:armcom": [">=", 1], "trickle": ["<=", 1], "alone": ["<=", 1]}
+  ]
+}

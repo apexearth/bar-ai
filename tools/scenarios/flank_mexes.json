@@ -1,0 +1,15 @@
+{
+  "about": "a raid pack vs undefended enemy mexes on the flank, their army on the other flank",
+  "passes": "goes around: at least 3 of 4 mexes die and at least half the pack lives",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "units": [
+    {"side": 0, "def": "armpw", "n": 8, "at": ["c", -900, 0], "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 4, "at": ["c", 600, 1300], "spacing": 160, "order": "ai"},
+    {"side": 1, "def": "armwar", "n": 10, "at": ["c", 600, -1300], "spacing": 56, "order": "guard"},
+    {"side": 1, "def": "armpw", "n": 6, "at": ["c", 800, -1300], "order": "guard"}
+  ],
+  "expect": [
+    {"killed:armmex": [">=", 3], "alive_frac0": [">=", 0.5]}
+  ]
+}

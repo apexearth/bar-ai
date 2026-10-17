@@ -1,0 +1,14 @@
+{
+  "about": "our squad of 8 meets a superior enemy blob in the open",
+  "passes": "falls back whole: at least 6 of 8 survive and at most one dies standing still",
+  "map": "Geyser Plains",
+  "seconds": 120,
+  "units": [
+    {"side": 0, "def": "armpw", "n": 8, "at": ["c", -300, 0], "order": "ai"},
+    {"side": 1, "def": "armwar", "n": 10, "at": ["c", 700, 0], "spacing": 56, "order": "fight", "to": ["c", -700, 0]},
+    {"side": 1, "def": "armpw", "n": 10, "at": ["c", 700, 300], "order": "fight", "to": ["c", -700, 0]}
+  ],
+  "expect": [
+    {"alive_frac0": [">=", 0.75], "still": ["<=", 1]}
+  ]
+}

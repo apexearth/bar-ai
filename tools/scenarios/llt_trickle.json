@@ -1,0 +1,15 @@
+{
+  "about": "12 of our light bots vs an LLT with a Centurion beside it",
+  "passes": "no trickle: no bot comes within reach, or all but one arrive within the window of the first, and at most one dies alone",
+  "map": "Geyser Plains",
+  "seconds": 120,
+  "units": [
+    {"side": 0, "def": "armpw", "n": 12, "at": ["c", -800, 0], "order": "ai"},
+    {"side": 1, "def": "armllt", "n": 1, "at": ["c", 400, 0], "order": "ai"},
+    {"side": 1, "def": "armwar", "n": 1, "at": ["c", 400, 96], "order": "hold"}
+  ],
+  "expect": [
+    {"contacted": ["==", 0]},
+    {"trickle": ["<=", 1], "alone": ["<=", 1]}
+  ]
+}

@@ -48,3 +48,24 @@ control follows this document; where code disagrees, the code is the bug.
    switch, with the simplest behaviours (guard home, form, advance together, fall back whole).
 3. Behaviours one at a time, each with its scenario: defend, raid the flanks, focus fire,
    matchups, air.
+
+## Scenarios
+
+`python tools/scenario.py run all --parallel 2 [--ai-option K=V]` plays each spec in
+`tools/scenarios/` on Geyser Plains through `dev_scenario.lua` (`deploy_ai.py gadgets`, or
+`--install-gadget` for that one file): starting units removed, units spawned at frame 90, global
+LOS, resources topped up, about 50 s wall at `--speed 20`. Groups with a scripted order belong to a
+NullAI holder on that side; `disableAiControl` is read only when CircuitAI loads a save, so it
+cannot take a unit from an AI. `judge <dir>` re-reads a run. One run each, `apex_stock_army=1` on
+Apexc9 vs BARb hard, 2026-10-16:
+
+| scenario | passes when | stock baseline |
+|---|---|---|
+| `llt_trickle` | no bot reaches the LLT + Centurion, or all but one arrive within 4 s of the first, at most one dies alone | PASS: 0/12 lost, none came in reach; the raid group skirted the map edge for 2 min |
+| `open_blob` | 6 of 8 survive 10 Centurions + 10 Pawns walking at them, at most one dies standing | FAIL: 5/8 dead, 1 alone, 0 still; killed 7/20 (270 m lost, 378 killed). An earlier run: 4/8 dead, killed 1 |
+| `com_in_base` | the walking commander dies, all but one bot arrive together, at most one dies alone | PASS: the two LLTs killed it at 35 s and died in its death blast; the 10 bots were away raiding and never came in reach |
+| `flank_mexes` | 3 of 4 flank mexes die and half the pack of 8 lives | PASS: 4/4 mexes by 26 s, no losses (same in an earlier run) |
+
+Two stock passes come from absence: a pack that is elsewhere neither trickles nor dies alone. The
+scripted commander never D-guns. `contact` is sampled every 15 frames; "still" is under 40 elmos
+moved in the 3 s before death.
