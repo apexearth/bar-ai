@@ -507,6 +507,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				: AdoptWorthDetour(unit, w, orph0.GetBuildPos(), Requests::Progress(orph0)))) {
 			if (xfClaim)
 				ExpandFarHoldNote(unit, orph0.GetBuildPos());
+			if (Requests::OrderReleaseOn()) {
+				const int oli = Requests::LiveIndex(orph0);
+				if ((oli >= 0) && Requests::AbandonedAt(uint(oli)))
+					Requests::NoteOrderRelease(orph0, Requests::gLiveAt[oli], "adopt", Requests::ORL_ACT);
+			}
 			return orph0;
 		}
 		const double _tPe = Perf::T0();

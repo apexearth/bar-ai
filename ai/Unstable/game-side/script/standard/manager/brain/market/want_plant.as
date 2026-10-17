@@ -858,7 +858,7 @@ bool UnlocksProduct(int plantId)
 		bool made = false;
 		const array<int>@ by = Catalog::gBuiltBy[prods[p]];
 		for (uint b = 0; b < by.length(); ++b) {
-			if (ComAny(by[b], CS_ANY)) {
+			if (ComAnyHeld(by[b])) {
 				made = true;
 				break;
 			}
@@ -890,7 +890,7 @@ float OwnedBestUnitWorth()
 	float best = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() == 0)
-			|| !ComAny(d, CS_ANY))
+			|| !ComAnyHeld(d))
 			continue;
 		const array<int>@ prods = Catalog::gBuildsList[d];
 		for (uint p = 0; p < prods.length(); ++p) {
@@ -919,7 +919,7 @@ float UnlockWorth(int plantId)
 		bool made = false;
 		const array<int>@ by = Catalog::gBuiltBy[pd];
 		for (uint b = 0; b < by.length(); ++b) {
-			if (ComAny(by[b], CS_ANY)) {
+			if (ComAnyHeld(by[b])) {
 				made = true;
 				break;
 			}

@@ -340,6 +340,22 @@ int ComCountManned(int defId, int mask)
 	return n;
 }
 
+// An order nobody walks to and nothing stands on (Requests::AbandonedOrder).
+bool ComAbandoned(uint i)
+{
+	return (gComState[i] == CS_ORDERED) && Requests::AbandonedOrder(gComTask[i], gComAt[i]);
+}
+
+// Any row of this def, a released order aside.
+bool ComAnyHeld(int defId)
+{
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if ((gComDef[i] == defId) && !ComAbandoned(i))
+			return true;
+	}
+	return false;
+}
+
 bool ComAny(int defId, int mask)
 {
 	for (uint i = 0; i < gComDef.length(); ++i) {
