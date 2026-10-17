@@ -412,9 +412,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			gHotCheckAt[uidx] = ai.frame;
 			const AIFloat3 at = held.GetBuildPos();
 			const float reach = Catalog::gBuildDist[int(unit.circuitDef.id)] + 64.f;
-			if (OnMap(at) && (unit.GetPos(ai.frame).distance2D(at) > reach)
-				&& SiteLiveHot(at) && !EscortCovers(unit, at))
-			{
+			bool letGo = false;
+			if (OnMap(at) && (unit.GetPos(ai.frame).distance2D(at) > reach)) {
+				const bool live = SiteLiveHot(at);
+				const int xh = Market::ExpandFarHold(unit, held, live);
+				letGo = (xh >= 0) ? (xh > 0) : (live && !EscortCovers(unit, at));
+			}
+			if (letGo) {
 				held.RemoveUnit(unit);
 				++gLetGo;
 				if (ai.frame >= gNextLetGoLog) {

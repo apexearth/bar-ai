@@ -501,9 +501,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const double _tOr = Perf::T0();
 		IUnitTask@ orph0 = Requests::OrphanOf(w.def);
 		Perf::Add("xw.orph", _tOr);
-		if ((orph0 !is null) && AdoptWorthDetour(unit, w,
-				orph0.GetBuildPos(), Requests::Progress(orph0)))
+		const bool xfClaim = (orph0 !is null) && (w.kind == WK_MEX) && ExpandFarOn()
+				&& (orph0.target is null);
+		if ((orph0 !is null) && (xfClaim ? ExpandFarAdoptOrphan(unit, w, orph0)
+				: AdoptWorthDetour(unit, w, orph0.GetBuildPos(), Requests::Progress(orph0)))) {
+			if (xfClaim)
+				ExpandFarHoldNote(unit, orph0.GetBuildPos());
 			return orph0;
+		}
 		const double _tPe = Perf::T0();
 		CCircuitUnit@ pf0 = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
 		Perf::Add("xw.pend", _tPe);
@@ -563,8 +568,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Help the one already going before opening another, exactly as every
 		// other build type does -- the metal path used to skip this rung.
 		IUnitTask@ jm = Requests::JoinSpot(unit, w.def, w.pos);
-		if (jm !is null)
+		if (jm !is null) {
+			ExpandFarHoldNote(unit, jm.GetBuildPos());
 			return jm;
+		}
 		// TaskB::Spot, not Common: CBMexTask::Execute refuses to issue the
 		// build order unless IsOpenSpot(spotId) holds, and Common leaves
 		// spotId at -1 (measured: one decide, then a game-long freeze).
@@ -576,6 +583,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			const float sp = Catalog::gSpeed[int(unit.circuitDef.id)];
 			ExpandFarNoteExec(w.pos, XfPOpen(w.spotId, (sp > 1.f) ? uAt.distance2D(w.pos) / sp : 60.f),
 					ExpandFarRoadRisk(uAt, w.pos));
+			ExpandFarHoldNote(unit, t.GetBuildPos());
 		}
 		return t;
 	}

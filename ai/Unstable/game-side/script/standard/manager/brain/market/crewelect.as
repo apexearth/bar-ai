@@ -93,11 +93,13 @@ void CrewExecNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, int leader)
 	if ((w.kind == WK_MEX) || ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT)))
 		NoteClaim(unit, w);
 	OpenNoteExec(false, w.kind);
+	if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		ExpandFarNoteElect(w.kind);
 	if (DecideLogOn())
 		AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
 			+ " #" + unit.id + " " + KindName(w.kind) + ":"
 			+ ((w.def is null) ? "-" : w.def.GetName())
-			+ " pick=0 at=" + int(w.pos.x) + "," + int(w.pos.z) + " crew=#" + leader);
+			+ " pick=0 at=" + int(w.pos.x) + "," + int(w.pos.z) + ExecTaskAt(t, w) + " crew=#" + leader);
 	const int uid = int(unit.id);
 	if ((uid >= 0) && (uid < int(gIncTask.length()))) {
 		@gIncTask[uid] = t;
@@ -154,7 +156,8 @@ IUnitTask@ CrewTake(CCircuitUnit@ unit)
 		if (s.taken[i] >= s.cap[i])
 			continue;
 		Want@ w = s.list[i];
-		if (Builder::SiteLiveHot(w.pos) && !Builder::EscortCovers(unit, w.pos)) {
+		if (!((w.kind == WK_MEX) && ExpandFarOn())
+			&& Builder::SiteLiveHot(w.pos) && !Builder::EscortCovers(unit, w.pos)) {
 			++gCsBrkDanger;
 			return null;
 		}
