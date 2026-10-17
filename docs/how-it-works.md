@@ -97,7 +97,9 @@ little deeper than the re-election gap (`TUNE_FAC_QUEUE`), inserting orders with
 floors (derived from income and the hands' backlog), then army priced against the army target
 and the enemy's army, the unit track record (`worth.as`: damage dealt over own health, per type
 and matchup), counter roles, scouts, rez bots, escorts and fodder. Which factory to build is a
-Want of kind plant/tech. Nano turrets are owed to a plant before any copy of it. Under
+Want of kind plant/tech. Nano turrets are owed to a plant before any copy of it; their price is
+otherwise spare metal only, and under `TUNE_LAB_NANO` (off, `market/labnano.as`) a turret at a lab
+is priced by the army metal per second it adds there, up to income / labs less its ring. Under
 `TUNE_OPEN_RACE` (off) a con-floor order is first raced against the lab's best fighter on one
 clock (`market/openrace.as`), and a lab short of energy prices its units by feed share instead of
 idling; on short contact the con is worth the open spots it reaches before their cons

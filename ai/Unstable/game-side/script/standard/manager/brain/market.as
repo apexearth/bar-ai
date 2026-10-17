@@ -34,6 +34,7 @@
 #include "market/plot.as"           // room for a gantry: spare labs reclaimed, the ground held for it
 #include "market/sites.as"          // where a build goes: farm rows, spot clearance, eco sites
 #include "market/nanopack.as"       // where an ASSIST nano stands: the packed lattice
+#include "market/labnano.as"        // apex_lab_nano: a turret at a lab priced by the army it adds there
 #include "market/want_nano.as"      // the nano Want
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/escnet.as"         // escort strength net, existing raiders recruited to escort

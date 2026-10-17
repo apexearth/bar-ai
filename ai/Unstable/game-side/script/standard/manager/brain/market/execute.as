@@ -932,7 +932,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// the turret; failing either, it parks beside any factory.
 		AIFloat3 slot = w.pos;
 		// A floor turret stands at its factory; nothing below re-sites it.
-		bool sited = (w.spotId == NS_FLOOR) && OnMap(w.pos);
+		bool sited = ((w.spotId == NS_FLOOR) || (w.spotId == NS_LAB)) && OnMap(w.pos);
 		// The line's pull is priced ONCE, in NeediestLine, so the turret is
 		// sited by the same arithmetic that bought it.
 		float worst = 0.f;
@@ -972,7 +972,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// lines -- free flow less the lathe already on it. Bank-gated -- at an empty bank the lathe already outruns
 		// income and pre-positioning BP at a sink serves nothing.
 		const float mSt = Eco::MStor();
-		if ((w.spotId != NS_FLOOR) && (mSt > 1.f) && (Eco::MCur() > mSt
+		if ((w.spotId != NS_FLOOR) && (w.spotId != NS_LAB) && (mSt > 1.f) && (Eco::MCur() > mSt
 				* ai.GetTunable("apex_nano_sink_bank", TUNE_NANO_SINK_BANK))) {
 			// Same hoist as the want side: one free-flow read for the walk.
 			const float skFeed = FreeMetalFlow()
