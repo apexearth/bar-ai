@@ -49,6 +49,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - In a team game one seat goes T2 a little sooner and hands out T2 constructors as allies' extractors need them; the others stay T1 with a strong army, upgrade their extractors with the handouts, and build their own advanced lab later, not never.
 - When the enemy can reach us soon (small or crowded maps), army comes before tech: build the economy and a strong T1 army first, then the T2 lab.
 - Spilling metal and short of hands: an air plant and many air constructors; lots of T1 air constructors is fine, late too.
+- Every seat eventually builds air: an air plant comes when what it yields (air constructors, bombers and gunships against the AA seen) beats what else the income buys -- not at a fixed income bar, and not on one seat only.
 - An air constructor starts a safe big build; a front-line site belongs to the ground crew.
 - Builders work near where they are.
 - Rebuild a lost extractor quickly, at home too.
