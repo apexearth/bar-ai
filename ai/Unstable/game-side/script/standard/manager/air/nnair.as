@@ -167,7 +167,7 @@ void NaSnapEnemy(const AIFloat3& in foe)
 				gNaFtV.insertLast(aDps);
 			} else {
 				gNaAAP.insertLast(aiEnemyMgr.GetEnemyUnitPosAt(i));
-				gNaAAR.insertLast(Catalog::gMaxRange[d]);
+				gNaAAR.insertLast(Catalog::gAirRange[d]);
 				gNaAAV.insertLast(aDps);
 			}
 		} else if (!Catalog::gMobile[d] && (Catalog::gMaxRange[d] > 0.f) && (Catalog::gSurfT[d] > 0.f)) {

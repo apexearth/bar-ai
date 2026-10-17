@@ -79,6 +79,8 @@ array<float> gSurfDps;
 array<float> gAirDps;
 array<float> gSurfAlpha;
 array<float> gAirAlpha;
+array<float> gLandRange;  // and the reach, likewise: armamph's VTOL missile reaches 600, its laser 275
+array<float> gAirRange;
 // Can this weapon actually hit something that is MOVING: instant-hit beams and
 // rifles, cannons whose shell is fast for their range, and TRACKING missiles.
 // A slow un-tracked rocket fails it -- reach it cannot land on a mover is reach
@@ -130,6 +132,7 @@ void Init()
 	gCombat.resize(n);
 	gDps.resize(n); gAlpha.resize(n); gAoe.resize(n);
 	gSurfDps.resize(n); gAirDps.resize(n); gSurfAlpha.resize(n); gAirAlpha.resize(n);
+	gLandRange.resize(n); gAirRange.resize(n);
 	gSurfDpsOn = ai.GetTunable("apex_surf_dps", TUNE_SURF_DPS) > 0.f;
 	gAimTrue.resize(n); gDumbFire.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gWaterT.resize(n); gRole.resize(n); gKamikaze.resize(n);
@@ -202,6 +205,8 @@ void Init()
 		gAirDps[i]       = gSurfDpsOn ? cdef.GetRawAirDps() : gDps[i];
 		gSurfAlpha[i]    = gSurfDpsOn ? cdef.GetRawSurfDmg() : gAlpha[i];
 		gAirAlpha[i]     = gSurfDpsOn ? cdef.GetRawAirDmg() : gAlpha[i];
+		gLandRange[i]    = gSurfDpsOn ? cdef.GetLandRange() : gMaxRange[i];
+		gAirRange[i]     = gSurfDpsOn ? cdef.GetAirRange() : gMaxRange[i];
 		gAoe[i]          = cdef.GetAoe();
 		gAimTrue[i]      = cdef.IsAlwaysHitDef();
 		gDumbFire[i]     = cdef.IsDumbFireDef();
@@ -389,7 +394,8 @@ void Init()
 				+ "/air=" + formatFloat(pd.GetRawAirDps(), "", 0, 1)
 				+ " alpha=" + formatFloat(gAlpha[pIdx], "", 0, 0)
 				+ "/surf=" + formatFloat(pd.GetRawSurfDmg(), "", 0, 0)
-				+ "/air=" + formatFloat(pd.GetRawAirDmg(), "", 0, 0);
+				+ "/air=" + formatFloat(pd.GetRawAirDmg(), "", 0, 0)
+				+ " range=" + int(gMaxRange[pIdx]) + "/land=" + int(pd.GetLandRange()) + "/air=" + int(pd.GetAirRange());
 		}
 		AiLog("apex: surfdps on=" + (gSurfDpsOn ? 1 : 0) + sd);
 	}

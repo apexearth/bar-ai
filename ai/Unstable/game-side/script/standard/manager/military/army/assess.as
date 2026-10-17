@@ -85,7 +85,7 @@ bool SqAssess(const SqPool@ p, float fx, float fz, float x, float z, bool blind,
 			if ((e >= nE) || seen[e])
 				continue;
 			const int d = gCfEDef[e];
-			float er = Catalog::gMaxRange[d];
+			float er = Catalog::gLandRange[d];
 			if (er < p.rng)
 				er = p.rng;
 			const float gap = CfDist(gCfEX[e], gCfEZ[e], sx, sz) - er - p.spr;
@@ -113,7 +113,7 @@ bool SqAssess(const SqPool@ p, float fx, float fz, float x, float z, bool blind,
 				continue;
 			const int d = gFmDef[s];
 			const float dt = float(ai.frame - gFmSeen[s]) / float(SECOND);
-			if (Catalog::gSpeed[d] * dt <= Catalog::gMaxRange[d])
+			if (Catalog::gSpeed[d] * dt <= Catalog::gLandRange[d])
 				continue;   // the registry still holds it where it was
 			defs.insertLast(d);
 			gSqAThemM += Catalog::gCostM[d];

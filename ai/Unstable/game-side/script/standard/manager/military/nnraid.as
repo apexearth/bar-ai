@@ -86,15 +86,15 @@ void NrGridBuild()
 		if (gNeK[e] == 1) {
 			gNrG1[c].insertLast(int(e));
 		} else if (gNeK[e] == 2) {
-			if (Catalog::gMaxRange[d] > NR_LONG) {
+			if (Catalog::gLandRange[d] > NR_LONG) {
 				gNrLong2.insertLast(int(e));
 			} else {
 				gNrG2[c].insertLast(int(e));
-				gNrMaxR2 = (Catalog::gMaxRange[d] > gNrMaxR2) ? Catalog::gMaxRange[d] : gNrMaxR2;
+				gNrMaxR2 = (Catalog::gLandRange[d] > gNrMaxR2) ? Catalog::gLandRange[d] : gNrMaxR2;
 			}
 		} else if (gNeK[e] == 3) {
 			gNrG3[c].insertLast(int(e));
-			gNrMaxR3 = (Catalog::gMaxRange[d] > gNrMaxR3) ? Catalog::gMaxRange[d] : gNrMaxR3;
+			gNrMaxR3 = (Catalog::gLandRange[d] > gNrMaxR3) ? Catalog::gLandRange[d] : gNrMaxR3;
 			gNrMaxSpd3 = (Catalog::gSpeed[d] > gNrMaxSpd3) ? Catalog::gSpeed[d] : gNrMaxSpd3;
 		}
 	}
@@ -221,7 +221,7 @@ void NrSnapEnemy()
 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
 			continue;
 		int k = 0;
-		const bool armed = (Catalog::gMaxRange[d] > 0.f) && (Catalog::gSurfDps[d] > 0.f);
+		const bool armed = (Catalog::gLandRange[d] > 0.f) && (Catalog::gSurfDps[d] > 0.f);
 		if (!Catalog::gMobile[d]) {
 			if (armed)
 				k = 2;
@@ -486,7 +486,7 @@ void NrPriceSpot(uint s)
 	for (uint i = 0; i < near.length(); ++i) {
 		const uint e = uint(near[i]);
 		const int d = gNeD[e];
-		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + rP * 0.5f) {
+		if (gNeP[e].distance2D(sp) <= Catalog::gLandRange[d] + rP * 0.5f) {
 			t.defS += DgStr(d);
 			cfI.insertLast(int(e));
 		}
@@ -515,7 +515,7 @@ void NrPriceSpot(uint s)
 	for (uint i = 0; i < near.length(); ++i) {
 		const uint e = uint(near[i]);
 		const int d = gNeD[e];
-		const float gap = gNeP[e].distance2D(sp) - Catalog::gMaxRange[d];
+		const float gap = gNeP[e].distance2D(sp) - Catalog::gLandRange[d];
 		if (gap <= Catalog::gSpeed[d] * stay) {
 			t.armyS += DgStr(d);
 			cfI.insertLast(int(e));
@@ -531,7 +531,7 @@ void NrPriceSpot(uint s)
 		AIFloat3 cAt;
 		int cDef = 0;
 		const float cw = Market::SmallHardComPrior(cAt, cDef);
-		if ((cw > 0.f) && (cAt.distance2D(sp) <= Catalog::gMaxRange[cDef] + Catalog::gSpeed[cDef] * stay)) {
+		if ((cw > 0.f) && (cAt.distance2D(sp) <= Catalog::gLandRange[cDef] + Catalog::gSpeed[cDef] * stay)) {
 			t.armyS += cw * DgStr(cDef);
 			Market::SmallHardNoteRaidPriced();
 			cfComAt = cAt;
@@ -573,7 +573,7 @@ void NrPriceSpot(uint s)
 		NrNear(gNrG2, p34, gNrMaxR2, near);
 		for (uint i = 0; i < near.length(); ++i) {
 			const uint e = uint(near[i]);
-			if ((gNeP[e].distance2D(p34) <= Catalog::gMaxRange[gNeD[e]]) && (cfI.find(int(e)) < 0))
+			if ((gNeP[e].distance2D(p34) <= Catalog::gLandRange[gNeD[e]]) && (cfI.find(int(e)) < 0))
 				cfI.insertLast(int(e));
 		}
 		array<int> cfD;
@@ -962,7 +962,7 @@ void NrNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs
 		CCircuitUnit@ u = on[i];
 		if ((u is null) || (u.circuitDef is null))
 			continue;
-		const float reach = Catalog::gMaxRange[int(u.circuitDef.id)] + 100.f;
+		const float reach = Catalog::gLandRange[int(u.circuitDef.id)] + 100.f;
 		if (u.GetPos(ai.frame).distance2D(pos) > reach)
 			continue;
 		const int d = int(edef.id);

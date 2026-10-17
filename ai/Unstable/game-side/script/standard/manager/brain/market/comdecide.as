@@ -61,12 +61,12 @@ void ComTowersFill()
 	gCdTwRng.resize(0);
 	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t) {
 		const int d = (t < gProtDefId[PROT_DEF].length()) ? gProtDefId[PROT_DEF][t] : -1;
-		if (!Catalog::ValidId(d) || (Catalog::gMaxRange[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
+		if (!Catalog::ValidId(d) || (Catalog::gLandRange[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
 			continue;
 		gCdTwPos.insertLast(gProtPos[PROT_DEF][t]);
 		gCdTwDps.insertLast(Catalog::gSurfDps[d]);
 		gCdTwHp.insertLast(Catalog::gHealth[d]);
-		gCdTwRng.insertLast(Catalog::gMaxRange[d]);
+		gCdTwRng.insertLast(Catalog::gLandRange[d]);
 	}
 }
 
@@ -355,7 +355,7 @@ void ComAssess(CCircuitUnit@ u)
 			const bool dgk = ComHomeDgKills(d);
 			if (dgk)
 				++nKill;
-			if (dgk && (Catalog::gMaxRange[d] <= dgR))
+			if (dgk && (Catalog::gLandRange[d] <= dgR))
 				++nCl;
 			dps += Catalog::gSurfDps[d];
 			hpS += Catalog::gHealth[d];
@@ -1076,7 +1076,7 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 		const float cw = SmallHardComPrior(cAt, cDef);
 		if (cw > 0.f) {
 			const float dd = cAt.distance2D(pos);
-			const float rg = Catalog::gMaxRange[cDef], cs = Catalog::gSpeed[cDef];
+			const float rg = Catalog::gLandRange[cDef], cs = Catalog::gSpeed[cDef];
 			const float arr = (cs > 0.f) ? ((dd > rg) ? (dd - rg) / cs : 0.f) : 1e9f;
 			if (arr <= tBack) {
 				fHp += cw * Catalog::gHealth[cDef];

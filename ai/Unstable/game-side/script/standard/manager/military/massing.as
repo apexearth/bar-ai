@@ -509,7 +509,7 @@ float HoldNeedFor(int defId)
 	if (k >= 0)
 		return gHoldNeedVal[k];
 	CCircuitDef@ d = Catalog::Def(defId);
-	const float r = (Catalog::gMaxRange[defId] > 64.f) ? Catalog::gMaxRange[defId] : 64.f;
+	const float r = (Catalog::gLandRange[defId] > 64.f) ? Catalog::gLandRange[defId] : 64.f;
 	float need = 0.f;
 	bool seen = false;
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();

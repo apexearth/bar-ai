@@ -290,6 +290,9 @@ public:
 	float GetMinRange() const { return minRange; }
 	float GetMaxRange(RangeType type) const { return maxRange[static_cast<RangeT>(type)]; }
 	float GetMaxRange() const { return maxRange[static_cast<RangeT>(maxRangeType)]; }
+	float GetLandRange() const { return maxRange[static_cast<RangeT>(RangeType::LAND)]; }
+	float GetAirRange() const { return maxRange[static_cast<RangeT>(RangeType::AIR)]; }
+	float GetWaterRange() const { return maxRange[static_cast<RangeT>(RangeType::WATER)]; }
 	// apex: "can this shoot a unit standing there", which GetMaxRange does not
 	// answer -- it is the max over EVERY weapon, so a nuke silo reads 72000 and
 	// an antinuke (a projectile-only interceptor) reads the same.

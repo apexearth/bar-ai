@@ -275,7 +275,7 @@ void FmPublish()
 			str = DgStr(d);
 			m = Catalog::gCostM[d];
 			spd = Catalog::gSpeed[d];
-			rng = Catalog::gMaxRange[d];
+			rng = Catalog::gLandRange[d];
 		} else {
 			str = blipS;
 			m = blipM;

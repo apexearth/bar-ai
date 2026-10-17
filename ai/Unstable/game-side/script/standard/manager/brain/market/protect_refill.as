@@ -52,7 +52,7 @@ bool RefillOn()
 bool RefillGun(int d)
 {
 	return Catalog::ValidId(d) && !Catalog::gMobile[d] && (ProtClassOf(d) == PROT_DEF)
-		&& (Catalog::gSurfT[d] > 0.01f) && (Catalog::gMaxRange[d] > 1.f);
+		&& (Catalog::gSurfT[d] > 0.01f) && (Catalog::gLandRange[d] > 1.f);
 }
 
 void RfRemove(uint i)
@@ -106,7 +106,7 @@ void RefillNoteDeath(int d, const AIFloat3& in at)
 		gRoGain.removeAt(uint(best));
 	}
 	++gRfRecorded;
-	const float half = 0.5f * Catalog::gMaxRange[d];
+	const float half = 0.5f * Catalog::gLandRange[d];
 	for (uint i = 0; i < gRfPos.length(); ++i) {
 		if ((gRfDef[i] == d) && (gRfPos[i].distance2D(at) < half)) {
 			gRfAt[i] = ai.frame;
@@ -147,7 +147,7 @@ void RefillNoteBuilt(const AIFloat3& in at)
 	if (!RefillOn())
 		return;
 	for (uint i = 0; i < gRfPos.length(); ) {
-		if (gRfPos[i].distance2D(at) <= Catalog::gMaxRange[gRfDef[i]]) {
+		if (gRfPos[i].distance2D(at) <= Catalog::gLandRange[gRfDef[i]]) {
 			RfRemove(i);
 			++gRfStood;
 		} else
@@ -184,7 +184,7 @@ void RefillRefreshOne()
 	const AIFloat3 mid = gPfRimOk ? gPfMid : Builder::gHomePos;
 	float inReach = 0.f;
 	float beyond = 0.f;
-	PfStakeShield(s, Catalog::gMaxRange[d], s - mid, true, inReach, beyond);
+	PfStakeShield(s, Catalog::gLandRange[d], s - mid, true, inReach, beyond);
 	gRfExpM[i] = inReach + beyond;
 	gRfCover[i] = CoverAt(s);
 	gRfThreat[i] = ThreatAt(s);
@@ -198,7 +198,7 @@ float RefillGain(uint i, int d, float horizS)
 	const AIFloat3 s = gRfPos[i];
 	const float tau = LossTau();
 	const float fade = pow(2.718282f, -(float(ai.frame - gRfAt[i]) / 30.f) / tau);
-	const float reach = Catalog::gMaxRange[d];
+	const float reach = Catalog::gLandRange[d];
 	float threat = gRfThreat[i];
 	if (threat < 1.f)
 		threat = 1.f;

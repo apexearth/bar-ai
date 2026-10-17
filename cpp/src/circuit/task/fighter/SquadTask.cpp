@@ -664,7 +664,7 @@ ISquadTask::SFire ISquadTask::SquadFire() const
 		if (d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater()) {
 			f.dpsSurf += circuit->DpsVs(d, false);
 		}
-		f.armedRange = std::min(f.armedRange, d->GetMaxRange());
+		f.armedRange = std::min(f.armedRange, circuit->RangeVs(d, false));
 	}
 	if (f.armedRange == std::numeric_limits<float>::max()) {
 		f.armedRange = 0.f;
@@ -755,8 +755,9 @@ float ISquadTask::TargetWorth(const SFire& f, CEnemyInfo* e, float horizonS) con
 	if (!hitsUs) {
 		return cost;
 	}
-	const float approachS = std::max(ed->GetMaxRange() - f.armedRange, 0.f) / std::max(lowestSpeed, 1.f);
-	return cost + manager->GetCircuit()->DpsVs(ed, f.air) * f.mph * (horizonS + approachS);
+	const CCircuitAI* circuit = manager->GetCircuit();
+	const float approachS = std::max(circuit->RangeVs(ed, f.air) - f.armedRange, 0.f) / std::max(lowestSpeed, 1.f);
+	return cost + circuit->DpsVs(ed, f.air) * f.mph * (horizonS + approachS);
 }
 
 bool ISquadTask::FireStale() const
@@ -810,19 +811,21 @@ void ISquadTask::AllocateFire(int frame, const AIFloat3& tPos, bool apply)
 	}
 	std::sort(cands.begin(), cands.end(), [](const SCand& a, const SCand& b) { return a.w > b.w; });
 
-	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dpsS, dpsA, range; int cat; bool air, surf; int tgt; };
+	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dpsS, dpsA, rangeS, rangeA; int cat; bool air, surf; int tgt; };
 	std::vector<SMem> mem;
 	for (CCircuitUnit* u : units) {
 		CCircuitDef* d = u->GetCircuitDef();
 		if ((u->Blocker() != nullptr) || (d->GetRawDps() <= 0.f)) {
 			continue;
 		}
-		mem.push_back({u, u->GetPos(frame), circuit->DpsVs(d, false), circuit->DpsVs(d, true), d->GetMaxRange(),
+		mem.push_back({u, u->GetPos(frame), circuit->DpsVs(d, false), circuit->DpsVs(d, true),
+				circuit->RangeVs(d, false), circuit->RangeVs(d, true),
 				d->GetTargetCategory(), d->HasSurfToAir() || d->HasSubToAir(),
 				d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater(), -1});
 	}
 	auto canHit = [](const SMem& m, const SCand& c) {
-		return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0) && (m.pos.SqDistance2D(c.pos) <= SQUARE(m.range));
+		return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0)
+				&& (m.pos.SqDistance2D(c.pos) <= SQUARE(c.air ? m.rangeA : m.rangeS));
 	};
 	auto dpsOn = [](const SMem& m, const SCand& c) { return c.air ? m.dpsA : m.dpsS; };
 
@@ -1019,7 +1022,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 		return false;
 	}
 
-	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dpsS, dpsA, range, speed, hp; int cat; bool air, surf; int tgt; };
+	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dpsS, dpsA, rangeS, rangeA, speed, hp; int cat; bool air, surf; int tgt; };
 	std::vector<SMem> mem;
 	AIFloat3 mid = ZeroVector;
 	float maxRange = 0.f, maxSpeed = 0.f, hpSum = 0.f;
@@ -1029,7 +1032,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 			continue;
 		}
 		const AIFloat3& p = u->GetPos(frame);
-		mem.push_back({u, p, circuit->DpsVs(d, false), circuit->DpsVs(d, true), d->GetMaxRange(), d->GetSpeed(), std::max(d->GetHealth(), 1.f),
+		mem.push_back({u, p, circuit->DpsVs(d, false), circuit->DpsVs(d, true), circuit->RangeVs(d, false), circuit->RangeVs(d, true), d->GetSpeed(), std::max(d->GetHealth(), 1.f),
 				d->GetTargetCategory(), d->HasSurfToAir() || d->HasSubToAir(),
 				d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater(), -1});
 		mid += p;
@@ -1063,7 +1066,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 			continue;
 		}
 		const AIFloat3& ep = e->GetPos();
-		const float eRange = ed->GetMaxRange();
+		const float eRange = circuit->RangeVs(ed, false);
 		const float eSpeed = ed->GetSpeed();
 		const float reach = spreadMax + std::max(maxRange, eRange) + FOCUS_TRAVEL_S * (maxSpeed + eSpeed);
 		if (mid.SqDistance2D(ep) > SQUARE(reach)) {
@@ -1104,7 +1107,8 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 	}
 
 	auto canHit = [](const SMem& m, const SCand& c) { return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0); };
-	auto inRange = [](const SMem& m, const SCand& c) { return m.pos.SqDistance2D(c.pos) <= SQUARE(m.range); };
+	auto rangeOn = [](const SMem& m, const SCand& c) { return c.air ? m.rangeA : m.rangeS; };
+	auto inRange = [&rangeOn](const SMem& m, const SCand& c) { return m.pos.SqDistance2D(c.pos) <= SQUARE(rangeOn(m, c)); };
 	auto dpsOn = [](const SMem& m, const SCand& c) { return c.air ? m.dpsA : m.dpsS; };
 	// kill time counts the fire already in range and the fire 3 s of walking brings (the task's own movement)
 	for (SCand& c : cands) {
@@ -1114,9 +1118,9 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 				continue;
 			}
 			const float d = m.pos.distance2D(c.pos);
-			if (d <= m.range + FOCUS_TRAVEL_S * m.speed) {
+			if (d <= rangeOn(m, c) + FOCUS_TRAVEL_S * m.speed) {
 				dps += dpsOn(m, c);
-				trav += dpsOn(m, c) * std::max(d - m.range, 0.f) / std::max(m.speed, 1.f);
+				trav += dpsOn(m, c) * std::max(d - rangeOn(m, c), 0.f) / std::max(m.speed, 1.f);
 			}
 		}
 		if (dps <= 0.f) {
@@ -1493,7 +1497,8 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				const auto fo = focusAt.find(unit->GetId());
 				CEnemyInfo* a = (fo != focusAt.end()) ? circuit->GetEnemyInfo(fo->second) : nullptr;
 				if ((a != nullptr) && a->IsInRadarOrLOS()
-					&& (uPos.SqDistance2D(a->GetPos()) <= SQUARE(unit->GetCircuitDef()->GetMaxRange())))
+					&& (uPos.SqDistance2D(a->GetPos()) <= SQUARE(circuit->RangeVs(unit->GetCircuitDef(),
+							(a->GetCircuitDef() != nullptr) && a->GetCircuitDef()->IsAbleToFly()))))
 				{
 					own = (a != GetTarget());
 					uTgt = a;

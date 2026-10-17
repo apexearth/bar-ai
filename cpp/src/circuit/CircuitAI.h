@@ -202,6 +202,7 @@ public:
 	bool IsSurfDps() const;
 	float DpsVs(const CCircuitDef* cdef, bool air) const;
 	float DmgVs(const CCircuitDef* cdef, bool air) const;
+	float RangeVs(const CCircuitDef* cdef, bool air) const;
 	// apex_our_air: with apex_stock_army, aircraft stay under our air control
 	bool IsOurAir() const;
 	bool IsStockFor(const CCircuitDef* cdef) const { return IsStockArmy() && !(IsOurAir() && cdef->IsAbleToFly()); }

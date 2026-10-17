@@ -1131,7 +1131,7 @@ float HomeGunStrength(int& out n)
 			continue;
 		const AIFloat3 p = gProtPos[PROT_DEF][i];
 		const float rim = wall ? WallRimDist(p) : p.distance2D(Builder::gHomePos);
-		if (rim > Catalog::gMaxRange[d])
+		if (rim > Catalog::gLandRange[d])
 			continue;
 		++n;
 		s += Military::DgStr(d);

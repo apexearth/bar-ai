@@ -106,7 +106,7 @@ void WorthMeans()
 		dp += Catalog::gSurfDps[d];
 		al += Catalog::gSurfAlpha[d];
 		hp += Catalog::gHealth[d];
-		rr += Catalog::gMaxRange[d];
+		rr += Catalog::gLandRange[d];
 		ao += Catalog::gAoe[d];
 		cm += Catalog::gCostM[d];
 		++n;
@@ -138,8 +138,8 @@ void WorthMeans()
 float ClassRange(int d)
 {
 	if (!Catalog::gDumbFire[d])
-		return Catalog::gMaxRange[d];
-	return Catalog::gMaxRange[d] * ai.GetTunable("apex_aim_miss", TUNE_AIM_MISS);
+		return Catalog::gLandRange[d];
+	return Catalog::gLandRange[d] * ai.GetTunable("apex_aim_miss", TUNE_AIM_MISS);
 }
 
 // A def's own worth multiplier. The hardcoded table is the DEFAULT, so a game
@@ -191,7 +191,7 @@ float OutrangeMul(int d)
 	const float oP = (outP > 1.f) ? 1.f : outP;
 	if (oP <= 0.05f)
 		return 1.f;
-	const float rNorm = (Catalog::gMaxRange[d] - gWMRng) / gWMRng;
+	const float rNorm = (Catalog::gLandRange[d] - gWMRng) / gWMRng;
 	float rMul = 1.f + rNorm * oP * 1.2f;
 	if (rMul < 0.3f)
 		rMul = 0.3f;
@@ -433,7 +433,7 @@ float UnitCoreRawCalc(int d)
 	if (wHp != 0.f)
 		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
 	if (wRng != 0.f)
-		v *= pow(Catalog::gMaxRange[d] / gWMRng, wRng);
+		v *= pow(Catalog::gLandRange[d] / gWMRng, wRng);
 	// 1 + share, not a bare power: aoe == 0 is a real value for most units and
 	// must not zero the product.
 	if ((wAoe != 0.f) && (gWMAoe > 0.f))
@@ -593,7 +593,7 @@ float UnitStrength(int d)
 	if (wHp != 0.f)
 		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
 	if (wRng != 0.f)
-		v *= pow(Catalog::gMaxRange[d] / gWMRng, wRng);
+		v *= pow(Catalog::gLandRange[d] / gWMRng, wRng);
 	if ((wAoe != 0.f) && (gWMAoe > 0.f))
 		v *= pow(1.f + Catalog::gAoe[d] / gWMAoe, wAoe);
 	v *= 1.f + (Catalog::gSpeed[d] / FoeSpeedCap())
@@ -696,7 +696,7 @@ float UnitPPC(int d)
 	// units with more range... on their own they're garbage"). Scaled by the
 	// share of our line that can stand in front, so reach pays exactly as much
 	// as we have shield to buy it with.
-	v *= 1.f + (Catalog::gMaxRange[d] / gWMRng)
+	v *= 1.f + (Catalog::gLandRange[d] / gWMRng)
 			* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH) * ShieldShare();
 	// STANDOFF SURVIVABILITY: hit points are only worth paying for by a unit
 	// that can actually be shot. apexearth 2026-08-30: "we outrange most of
@@ -951,7 +951,7 @@ void WorthDiag()
 			+ " dps=" + formatFloat(Catalog::gSurfDps[d], "", 0, 1)
 			+ " alpha=" + formatFloat(Catalog::gSurfAlpha[d], "", 0, 0)
 			+ " hp=" + formatFloat(Catalog::gHealth[d], "", 0, 0)
-			+ " rng=" + formatFloat(Catalog::gMaxRange[d], "", 0, 0)
+			+ " rng=" + formatFloat(Catalog::gLandRange[d], "", 0, 0)
 			+ " aoe=" + formatFloat(Catalog::gAoe[d], "", 0, 0));
 	}
 }

@@ -282,13 +282,13 @@ bool FieldOutclasses(int cd)
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gFlyer[d]
 			|| (Catalog::gSurfT[d] <= 0.f))
 			continue;
-		if ((Catalog::gMaxRange[d] > Catalog::gMaxRange[cd])
+		if ((Catalog::gLandRange[d] > Catalog::gLandRange[cd])
 			&& (Catalog::gSpeed[d] > Catalog::gSpeed[cd]))
 		{
 			hit = 1;
 			AiLog("apex: commander " + Catalog::Def(cd).GetName() + " is outclassed by "
-				+ Catalog::Def(d).GetName() + " (range " + int(Catalog::gMaxRange[d])
-				+ " > " + int(Catalog::gMaxRange[cd]) + ", speed "
+				+ Catalog::Def(d).GetName() + " (range " + int(Catalog::gLandRange[d])
+				+ " > " + int(Catalog::gLandRange[cd]) + ", speed "
 				+ int(Catalog::gSpeed[d]) + " > " + int(Catalog::gSpeed[cd]) + ")");
 		}
 	}
@@ -347,7 +347,7 @@ void FoeT2Fill(int cd)
 	gFoeT2At = ai.frame;
 	gFoeT2Str = 0.f;
 	gFoeT2Out = false;
-	const float cRng = Catalog::gMaxRange[cd];
+	const float cRng = Catalog::gLandRange[cd];
 	const float cSpd = Catalog::gSpeed[cd];
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
 	for (int gi = 0; gi < nG; ++gi) {
@@ -359,7 +359,7 @@ void FoeT2Fill(int cd)
 				|| Catalog::Def(d).IsRoleAny(Unit::Role::RAIDER.mask | Unit::Role::SCOUT.mask))
 				continue;
 			gFoeT2Str += UnitStrength(d);
-			if ((cSpd > 0.f) && (Catalog::gMaxRange[d] > cRng) && (Catalog::gSpeed[d] > cSpd))
+			if ((cSpd > 0.f) && (Catalog::gLandRange[d] > cRng) && (Catalog::gSpeed[d] > cSpd))
 				gFoeT2Out = true;
 		}
 	}
@@ -437,7 +437,7 @@ void ComRaidFill(CCircuitUnit@ unit)
 			if (!Catalog::gMobile[d]) {
 				if (!guns || (Catalog::gSurfDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
 					continue;
-				rng = (Catalog::gMaxRange[d] > rng) ? Catalog::gMaxRange[d] : rng;
+				rng = (Catalog::gLandRange[d] > rng) ? Catalog::gLandRange[d] : rng;
 			}
 			++nMob;
 			if (ComHomeDgKills(d))
