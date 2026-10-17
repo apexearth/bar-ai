@@ -76,7 +76,8 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// not, so an eco commander re-elected the same doomed converter on the
 	// same occupied square 156 times in one game (t7, si8-fix2-15m-s104)
 	// while its energy gate sat unbuilt. See Builder::AbortBackoff.
-	if (Gate(G_BACKOFF, Builder::AbortBackoff(int(want.id))))
+	if (Gate(G_BACKOFF, Market::LiveNotBan() ? Builder::AbortSiteRefuses(int(want.id), spot)
+			: Builder::AbortBackoff(int(want.id))))
 		return null;
 
 	// A FACTORY IS NEVER A FORK -- enforced at THE chokepoint, because the

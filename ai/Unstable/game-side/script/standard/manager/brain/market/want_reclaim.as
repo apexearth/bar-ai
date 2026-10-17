@@ -912,7 +912,7 @@ float DenserLatheStandingBP(int d)
 // accessible ring wins the election; flyers see no walls.
 //
 // Only a def-less mark on the victim's own footprint counts: a reclaim walk
-// marks its victim's centre when it dies on nopath or hot-road. A mark with a
+// marks its victim's centre when it dies on nopath (a hot road no longer marks). A mark with a
 // def is mostly "no free slot here" -- a full block -- and a rez bot's failed
 // wreck walk 250 elmos off says nothing about this building; both vetoed the
 // reclaims that make room.

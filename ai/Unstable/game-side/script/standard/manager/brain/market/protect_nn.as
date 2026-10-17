@@ -337,7 +337,7 @@ void DsCandidates(int d, const AIFloat3& in ruleAt, float reach, array<AIFloat3>
 	}
 	for (int k = DS_WALL; k < DS_N; ++k) {
 		const AIFloat3 s = at[k];
-		if (!OnMap(s) || DsTaken(at, on, s) || InteriorGunSite(d, s) || TowerGraveNear(s, cost))
+		if (!OnMap(s) || DsTaken(at, on, s) || InteriorGunSite(d, s) || (!LiveNotBan() && TowerGraveNear(s, cost)))
 			continue;
 		if ((k != DS_MEXG) && (k != DS_FRONT) && KoInsideGrowth(s))
 			continue;

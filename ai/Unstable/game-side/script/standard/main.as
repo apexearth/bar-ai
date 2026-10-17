@@ -187,7 +187,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::UpkeepTick(); Perf::Add("up.upkeep", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Market::PressUpdate(); Perf::Add("up.rush", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Market::ExpandFarUpdate(); Market::EcoReturnUpdate(); Perf::Add("up.mapshare", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Market::ExpandFarUpdate(); Market::EcoReturnUpdate(); Market::LiveBanStat(); Perf::Add("up.mapshare", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::SmallHardUpdate(); Perf::Add("up.smallhard", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EarlyBallUpdate(); Market::OpenRaceUpdate(); Perf::Add("up.earlyball", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::CounterMixUpdate(); Perf::Add("up.countermix", _t); }
@@ -494,7 +494,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		Market::NoteEcoLoss(at, cdef.costM);
 		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
 			Market::NoteTowerLost(at);
-			Market::NoteTowerGrave(at, cdef.costM);
+			Market::NoteTowerGrave(at, cdef.costM, int(attackerDef.id));
 			Market::RefillNoteDeath(int(cdef.id), at);
 		}
 		if (Catalog::ValidId(int(attackerDef.id)) && Catalog::gMobile[int(attackerDef.id)]

@@ -887,7 +887,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		// A gun is re-sited within its own range by the executor's probe and
 		// keeps its worth; it is the unarmed classes whose fallback served
 		// nothing.
-		if ((cls != PROT_DEF) && Gate(GATE_SITE_BLOCKED, NearBlocked(at)))
+		if ((cls != PROT_DEF) && Gate(GATE_SITE_BLOCKED, NearBlockedDef(at, d)))
 			continue;
 		// ROUTE THE WANT TO A HAND THAT CAN FULFIL IT. apexearth 2026-08-27:
 		// "if our defence want is for T3 we should *not* be routing it through

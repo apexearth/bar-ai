@@ -423,6 +423,7 @@ int ClaimableSpots()
 	CacheSpots();
 	const array<int>@ lidx = LedgerIdx();
 	const array<bool>@ allyHeld = AllyHeldSpots();
+	const int md = LnbMexDef();
 	int n = 0;
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		if ((int(si) < int(lidx.length())) && (lidx[si] >= 0))
@@ -430,7 +431,7 @@ int ClaimableSpots()
 		if ((si < allyHeld.length()) && allyHeld[si])
 			continue;
 		const AIFloat3 sp = gAllSpots[si];
-		if (!OnMap(sp) || NearBlocked(sp))   // a con death is read live below (enemy cost), never a 3-min ban
+		if (!OnMap(sp) || NearBlockedDef(sp, md))   // a con death is read live below (enemy cost), never a 3-min ban
 			continue;
 		if (ai.GetEnemyCostAt(sp, 48.f) > 0.f)
 			continue;
@@ -921,7 +922,7 @@ array<float> gPsScore;
 // walk is the same for every asker -- marks, heat, trip risk -- and it was
 // re-read for every spot on every mex election. The ledger is NOT in it: it
 // moves on every claim, and PickSpot reads it live.
-const int PT_OPEN = 0, PT_BLOCKED = 2, PT_CONDEATH = 3, PT_HOT = 4, PT_NONE = 5, PT_ALLY = 6;
+const int PT_OPEN = 0, PT_BLOCKED = 2, PT_HOT = 4, PT_NONE = 5, PT_ALLY = 6;
 
 // SPOTS AN ALLY ALREADY EXTRACTS: our ledger knows only our own, and an
 // allied spot offered as a claim is refused at the site.
@@ -988,8 +989,10 @@ void SpotTableFill()
 	gPtMark.resize(n);
 	for (uint si = 0; si < n; ++si)
 		gPtMark[si] = PT_OPEN;
+	// Under apex_live_not_ban another footprint's refusal does not mark a spot.
+	const int md = LiveNotBan() ? LnbMexDef() : -1;
 	for (uint k = 0; k < gBlockPos.length(); ++k) {
-		if (ai.frame - gBlockAt[k] <= BLOCK_TTL)
+		if ((ai.frame - gBlockAt[k] <= BLOCK_TTL) && MarkBlocks(gBlockDef[k], md))
 			PtMarkNear(gBlockPos[k], PT_BLOCKED);
 	}
 	// A constructor's death near a spot no longer bans it for three minutes:
@@ -1074,10 +1077,10 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// A spot a hand could not reach in the last three minutes is not
 		// offered to the next hand (the stuck watch and the C++ path test
 		// both write the mark).
-		if ((st == PT_BLOCKED) || (st == PT_CONDEATH)) {
+		if (st == PT_BLOCKED) {
 			++gSwPast;
 			++gXfBlocked;
-			DeadSpotSay(dw, sp, (st == PT_BLOCKED) ? "blocked" : "condeath");
+			DeadSpotSay(dw, sp, "blocked");
 			continue;
 		}
 		// THE EXECUTOR'S OWN BAR, ASKED HERE. The builder task refuses a site

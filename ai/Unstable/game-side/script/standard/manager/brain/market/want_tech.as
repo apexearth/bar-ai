@@ -148,24 +148,37 @@ bool UpgradeUnderway(const AIFloat3& in spot)
 // AN UPGRADE THAT DIES BEFORE ITS FRAME STANDS is refused at that spot for a
 // while, doubling each time: the owner upgrading its own extractor there, or a
 // spot our hands cannot reach, took one T2 hand 39 elections in a row.
+// Under apex_live_not_ban: no doubling, and a drop under threat lifts the moment the threat
+// there is gone.
 array<AIFloat3> gUpDropPos;
 array<int> gUpDropN;
 array<int> gUpDropUntil;
+array<bool> gUpDropHot;
+bool UpSiteHot(const AIFloat3& in at)
+{
+	return Builder::SiteHot(at) || SpotHot(at);
+}
 void NoteUpDropped(const AIFloat3& in at)
 {
+	const bool lnb = LiveNotBan();
+	const bool hot = lnb && UpSiteHot(at);
+	if (hot)
+		++gLnbUpHot;
 	for (uint i = 0; i < gUpDropPos.length(); ++i) {
 		if (gUpDropPos[i].distance2D(at) <= Requests::SAME_SITE) {
 			gUpDropN[i] = gUpDropN[i] + 1;
-			int n = gUpDropN[i];
+			int n = lnb ? 0 : gUpDropN[i];
 			if (n > 5)
 				n = 5;
 			gUpDropUntil[i] = ai.frame + (10 << n) * SECOND;
+			gUpDropHot[i] = hot;
 			return;
 		}
 	}
 	gUpDropPos.insertLast(at);
 	gUpDropN.insertLast(0);
 	gUpDropUntil.insertLast(ai.frame + 10 * SECOND);
+	gUpDropHot.insertLast(hot);
 }
 
 void NoteUpStarted(const AIFloat3& in at)
@@ -175,6 +188,7 @@ void NoteUpStarted(const AIFloat3& in at)
 			gUpDropPos.removeAt(i);
 			gUpDropN.removeAt(i);
 			gUpDropUntil.removeAt(i);
+			gUpDropHot.removeAt(i);
 			return;
 		}
 	}
@@ -182,9 +196,30 @@ void NoteUpStarted(const AIFloat3& in at)
 
 bool UpRefused(const AIFloat3& in spot)
 {
-	for (uint i = 0; i < gUpDropPos.length(); ++i)
-		if ((ai.frame < gUpDropUntil[i]) && (gUpDropPos[i].distance2D(spot) <= Requests::SAME_SITE))
+	const bool lnb = LiveNotBan();
+	for (uint i = 0; i < gUpDropPos.length(); ) {
+		if (lnb && (ai.frame >= gUpDropUntil[i])) {
+			gUpDropPos.removeAt(i);
+			gUpDropN.removeAt(i);
+			gUpDropUntil.removeAt(i);
+			gUpDropHot.removeAt(i);
+			continue;
+		}
+		if ((ai.frame < gUpDropUntil[i]) && (gUpDropPos[i].distance2D(spot) <= Requests::SAME_SITE)) {
+			if (lnb && gUpDropHot[i] && !UpSiteHot(gUpDropPos[i])) {
+				++gLnbUpCleared;
+				gUpDropPos.removeAt(i);
+				gUpDropN.removeAt(i);
+				gUpDropUntil.removeAt(i);
+				gUpDropHot.removeAt(i);
+				continue;
+			}
+			if (lnb)
+				++gLnbUpRefused;
 			return true;
+		}
+		++i;
+	}
 	return false;
 }
 
@@ -285,9 +320,12 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	const uint nOwn = uPos.length();
 	AllyUpgradeSpots(uPos, uSpot, uInc, uExt);
 	float topExt = 0.f;
+	int topDef = -1;
 	for (uint i = 0; i < builds.length(); ++i) {
-		if (Catalog::gAvailable[builds[i]] && (Catalog::gExtractsM[builds[i]] > topExt))
+		if (Catalog::gAvailable[builds[i]] && (Catalog::gExtractsM[builds[i]] > topExt)) {
 			topExt = Catalog::gExtractsM[builds[i]];
+			topDef = builds[i];
+		}
 	}
 	for (uint li = 0; li < uPos.length(); ++li) {
 		if (uExt[li] >= topExt)
@@ -302,7 +340,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 		//
 		// The mark expires, so a spot that becomes reachable -- the front
 		// moves, a wreck clears -- returns to the ladder on its own.
-		if (NearBlocked(uPos[li]))
+		if (NearBlockedDef(uPos[li], topDef))
 			continue;
 		float surv = -1.f;
 		// A forward mex we hold can still be a lethal walk. Asked only of a

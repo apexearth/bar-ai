@@ -531,13 +531,14 @@ int SpotHandsOwed()
 	const array<int>@ lidx = LedgerIdx();
 	const array<bool>@ allyHeld = AllyHeldSpots();
 	array<AIFloat3> open;
+	const int mexD = LnbMexDef();
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		if ((int(si) < int(lidx.length())) && (lidx[si] >= 0))
 			continue;
 		if ((si < allyHeld.length()) && allyHeld[si])
 			continue;
 		const AIFloat3 sp = gAllSpots[si];
-		if (!OnMap(sp) || NearBlocked(sp))   // a con death is read live below (enemy cost), never a 3-min ban
+		if (!OnMap(sp) || NearBlockedDef(sp, mexD))   // a con death is read live below (enemy cost), never a 3-min ban
 			continue;
 		if (ai.GetEnemyCostAt(sp, 48.f) > 0.f)
 			continue;

@@ -1378,15 +1378,18 @@ bool NearConDeath(const AIFloat3& in p)
 array<AIFloat3> gGravePos;
 array<int> gGraveAt;
 array<float> gGraveCost;
-void NoteTowerGrave(const AIFloat3& in at, float costM)
+array<int> gGraveBy;
+void NoteTowerGrave(const AIFloat3& in at, float costM, int byDef)
 {
 	gGravePos.insertLast(at);
 	gGraveAt.insertLast(ai.frame);
 	gGraveCost.insertLast(costM);
+	gGraveBy.insertLast(byDef);
 	while (gGravePos.length() > BLOCK_MAX) {
 		gGravePos.removeAt(0);
 		gGraveAt.removeAt(0);
 		gGraveCost.removeAt(0);
+		gGraveBy.removeAt(0);
 	}
 }
 // A gun no stronger than one that died within reach of p in the mark's life.
@@ -1399,6 +1402,7 @@ bool TowerGraveNear(const AIFloat3& in p, float costM)
 			gGravePos.removeAt(i);
 			gGraveAt.removeAt(i);
 			gGraveCost.removeAt(i);
+			gGraveBy.removeAt(i);
 			continue;
 		}
 		if ((gGravePos[i].distance2D(p) < BLOCK_NEAR) && (costM <= gGraveCost[i]))
@@ -1457,12 +1461,15 @@ bool NearPathBlocked(const AIFloat3& in p)
 }
 
 // Marks for THIS def, and marks with no def: another def's refusal says
-// nothing about this footprint. def < 0 reads every mark.
+// nothing about this footprint. def < 0 reads every mark. Under
+// apex_live_not_ban a smaller footprint's refusal counts too.
 bool NearBlockedFor(const AIFloat3& in p, int def)
 {
 	if (!OnMap(p))
 		return false;
 	BlockPoll();
+	const bool lnb = LiveNotBan();
+	bool spared = false;
 	for (uint i = 0; i < gBlockPos.length(); ) {
 		if (ai.frame - gBlockAt[i] > BLOCK_TTL) {
 			gBlockPos.removeAt(i);
@@ -1470,11 +1477,21 @@ bool NearBlockedFor(const AIFloat3& in p, int def)
 			gBlockDef.removeAt(i);
 			continue;
 		}
-		if ((gBlockPos[i].distance2D(p) < BLOCK_NEAR)
-			&& ((def < 0) || (gBlockDef[i] < 0) || (gBlockDef[i] == def)))
-			return true;
+		if (gBlockPos[i].distance2D(p) < BLOCK_NEAR) {
+			if ((def < 0) || (gBlockDef[i] < 0) || (gBlockDef[i] == def)
+				|| (lnb && MarkBlocks(gBlockDef[i], def))) {
+				if (gBlockDef[i] < 0)
+					++gLnbRefPath;
+				else
+					++gLnbRefDef;
+				return true;
+			}
+			spared = true;
+		}
 		++i;
 	}
+	if (spared)
+		++gLnbSpared;
 	return false;
 }
 

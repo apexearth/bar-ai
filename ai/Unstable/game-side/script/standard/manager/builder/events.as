@@ -68,12 +68,98 @@ array<int> gAbortAt;
 // min held the lab while its site was re-probed, his Isthmus game).
 bool AbortBackoff(int d)
 {
-	if ((d <= 0) || (d >= int(gAbortStreak.length())))
+	if ((d <= 0) || (d >= int(gAbortStreak.length())) || Market::LiveNotBan())
 		return false;
 	if (!Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0))
 		return false;
 	return (gAbortStreak[d] >= 3)
 		&& (ai.frame < gAbortAt[d] + 120 * SECOND);
+}
+
+// Under apex_live_not_ban the streak is the cause's: fast aborts of one def AT ONE SITE, not
+// counted when the frame stood (killed or left) or the site is hot. It prices that site
+// against the runner-up at the request door: a site that failed n times running is a success
+// with odds 1/(1+n).
+array<int> gAsDef;
+array<AIFloat3> gAsPos;
+array<int> gAsN;
+array<int> gAsAt;
+const int AS_CHAIN = 30 * SECOND;   // the streak's own "fast" window, as AbortBackoff's
+int AsFind(int d, const AIFloat3& in at)
+{
+	for (uint i = 0; i < gAsDef.length(); ++i) {
+		if ((gAsDef[i] == d) && (gAsPos[i].distance2D(at) <= Requests::SAME_SITE))
+			return int(i);
+	}
+	return -1;
+}
+void AbortSiteNote(IUnitTask@ task, int d, bool done)
+{
+	const AIFloat3 bp = task.GetBuildPos();
+	if (!OnMap(bp))
+		return;
+	const int k = AsFind(d, bp);
+	if (done) {
+		if (k >= 0) {
+			gAsDef.removeAt(uint(k));
+			gAsPos.removeAt(uint(k));
+			gAsN.removeAt(uint(k));
+			gAsAt.removeAt(uint(k));
+		}
+		return;
+	}
+	if (Requests::FrameStood(task)) {
+		++Market::gLnbAbortFrame;
+		return;
+	}
+	if (SiteHot(bp) || Market::SpotHot(bp)) {
+		++Market::gLnbAbortThreat;
+		return;
+	}
+	++Market::gLnbAbortCounted;
+	if (k >= 0) {
+		gAsN[k] = (ai.frame < gAsAt[k] + AS_CHAIN) ? (gAsN[k] + 1) : 1;
+		gAsAt[k] = ai.frame;
+		return;
+	}
+	gAsDef.insertLast(d);
+	gAsPos.insertLast(bp);
+	gAsN.insertLast(1);
+	gAsAt.insertLast(ai.frame);
+	while (gAsDef.length() > 48) {
+		gAsDef.removeAt(0);
+		gAsPos.removeAt(0);
+		gAsN.removeAt(0);
+		gAsAt.removeAt(0);
+	}
+}
+int AbortSiteStreak(int d, const AIFloat3& in at)
+{
+	const int k = AsFind(d, at);
+	return ((k >= 0) && (ai.frame < gAsAt[k] + AS_CHAIN)) ? gAsN[k] : 0;
+}
+bool AbortSiteRefuses(int d, const AIFloat3& in at)
+{
+	const int n = AbortSiteStreak(d, at);
+	if ((n <= 0) || (Market::gExecWantV < 0.f) || (Market::gExecRunnerV < 0.f))
+		return false;
+	const bool refuse = Market::gExecWantV / float(1 + n) < Market::gExecRunnerV;
+	if (refuse)
+		++Market::gLnbAbortPriced;
+	else
+		++Market::gLnbAbortKept;
+	return refuse;
+}
+string AbortSiteSay()
+{
+	string s = "";
+	for (uint i = 0; i < gAsDef.length(); ++i) {
+		if ((ai.frame >= gAsAt[i] + AS_CHAIN) || !Catalog::ValidId(gAsDef[i]))
+			continue;
+		s += ((s == "") ? "" : ",") + Catalog::Def(gAsDef[i]).GetName() + "@"
+			+ int(gAsPos[i].x) + ":" + int(gAsPos[i].z) + "=" + gAsN[i];
+	}
+	return (s == "") ? "-" : s;
 }
 
 void AiTaskRemoved(IUnitTask@ task, bool done)
@@ -105,6 +191,8 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 		gAbortAt.resize(Catalog::gDefCount + 1);
 	}
 	const int d = (task.buildDef !is null) ? int(task.buildDef.id) : 0;
+	if ((d > 0) && Market::LiveNotBan())
+		AbortSiteNote(task, d, done);
 	if ((d >= 0) && (d < int(gGoneOk.length()))) {
 		if (done) {
 			++gGoneOk[d];

@@ -222,8 +222,18 @@ void UpdateStuckBuilds()
 		// cons standing 400-5,000 elmo from their site). The site is noted
 		// whatever the distance -- the mark lives three minutes -- so the
 		// next election does not send the next hand.
-		if ((dSite > reach) && (done <= 0.f))
-			BlockNote(bp);
+		// Under apex_live_not_ban only ground the reach test refuses, and only for this def:
+		// a stall for crowding or order lag is not a ban.
+		if ((dSite > reach) && (done <= 0.f)) {
+			if (!LiveNotBan())
+				BlockNote(bp);
+			else if (!ai.CanDefReachAt(Catalog::Def(int(u.circuitDef.id)), p, bp,
+					Catalog::gBuildDist[int(u.circuitDef.id)])) {
+				BlockAdd(bp, int(t.buildDef.id));
+				++gLnbStuckMarked;
+			} else
+				++gLnbStuckSpared;
+		}
 		if ((dSite > reach) && (dx * dx + dz * dz <= STUCK_MOVED * STUCK_MOVED))
 			Military::UnstickBuilder(u);
 		freed.insertLast(u);

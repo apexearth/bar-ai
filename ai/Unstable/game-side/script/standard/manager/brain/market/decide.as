@@ -55,6 +55,7 @@ array<int> gExecFail(32, 0);
 int gExecNone = 0;
 int gComFwdLogAt = -999999;   // see the commander forward skip in the exec loop
 float gExecRunnerV = -1.f;    // the runner-up's value while the exec loop runs ExecuteWant; -1 none known
+float gExecWantV = -1.f;      // the executing want's own value then
 int gNextExecLog = 0;
 int gNextComRefuseLog = 0;
 
@@ -2975,8 +2976,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			const double _tExec = Perf::T0();
 			gExecWhy = (depth == 0) ? why : "fall";
 			gExecRunnerV = (ranked.length() > 1) ? ranked[1].value : 0.f;
+			gExecWantV = ranked[i].value;
 			@t = ExecuteWant(unit, ranked[i]);
 			gExecRunnerV = -1.f;
+			gExecWantV = -1.f;
 			Perf::Add("exec.want", _tExec);
 			// The name is built whether or not anyone is profiling, and the
 			// concat plus KindName ran on every execution at apex_perf=0.

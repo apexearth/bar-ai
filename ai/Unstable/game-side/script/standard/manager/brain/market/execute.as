@@ -44,7 +44,7 @@ bool InteriorGunSite(int d, const AIFloat3& in at)
 bool DefSiteOk(int d, const AIFloat3& in p, const AIFloat3& in ask)
 {
 	return OnMap(p) && (p.distance2D(ask) <= Catalog::gMaxRange[d])
-		&& !InteriorGunSite(d, p) && !TowerGraveNear(p, Catalog::gCostM[d])
+		&& !InteriorGunSite(d, p) && (LiveNotBan() || !TowerGraveNear(p, Catalog::gCostM[d]))
 		&& !Builder::SiteHot(p);
 }
 // Interior: out along its own bearing to where half its reach clears the hull.
@@ -692,8 +692,32 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		// A gun no stronger than one that just died here is not an answer
 		// here: the ground is outgunned, and the market goes on to its next
-		// want (a stronger gun, or elsewhere).
-		if (groundDef && TowerGraveNear(sAt, Catalog::gCostM[int(w.def.id)])) {
+		// want (a stronger gun, or elsewhere). Under apex_live_not_ban only while
+		// what killed it still reaches the site, and then as a price.
+		if (groundDef && LiveNotBan()) {
+			const int gd = int(w.def.id);
+			const float gbs = Catalog::BuildSecondsAt(gd, Catalog::gBuildPower[int(unit.circuitDef.id)]);
+			if (GraveDangerM(sAt, gd, gbs) > 0.f) {
+				hit = (hit == "") ? "grave" : (hit + "+grave");
+				++gLnbGraveLive;
+				const AIFloat3 b = GraveBestSite(w, unit, sAt, askAt, gbs);
+				if (!GraveKeeps(w, unit, b, gbs)) {
+					++gLnbGraveDropped;
+					++gGunExecGrave;
+					if (isT2)
+						++gGunT2Ref;
+					DefRefuseLog(w, b, hit, "priced", b.distance2D(sAt) > 1.f, false);
+					return null;
+				}
+				if (b.distance2D(sAt) > 1.f) {
+					sAt = b;
+					++gGunRelocGrave;
+					++gLnbGraveMoved;
+				}
+			} else if (GraveNearAny(sAt, Catalog::gCostM[gd])) {
+				++gLnbGraveDead;
+			}
+		} else if (groundDef && TowerGraveNear(sAt, Catalog::gCostM[int(w.def.id)])) {
 			hit = (hit == "") ? "grave" : (hit + "+grave");
 			const AIFloat3 b = DefGraveBack(int(w.def.id), sAt, askAt);
 			if (!OnMap(b)) {
@@ -708,7 +732,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		const bool soleCover = groundDef && InteriorGunGeom(int(w.def.id), sAt)
 				&& SoleMexCover(int(w.def.id), sAt);
-		if (NearBlocked(sAt)) {
+		if (NearBlockedDef(sAt, int(w.def.id))) {
 			const AIFloat3 ask = sAt;
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
 			// A radar is worth only if it watches the ask; the probe's fallback
@@ -1385,7 +1409,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Probed ONLY when the mark is near this slot, so the farm's packing --
 		// generators beside their own kind, in the rear -- is untouched in
 		// every other case.
-		if ((unit !is null) && !floats && NearBlocked(slot)) {
+		if ((unit !is null) && !floats && NearBlockedDef(slot, int(w.def.id))) {
 			slot = ProbedSite(w.def,
 					Catalog::Def(int(unit.circuitDef.id)), slot);
 		}
@@ -1475,7 +1499,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// deterministic, and a seat whose farm sits past a cliff lost every
 		// advanced converter it ordered at one point (27 unreach deaths,
 		// zero built, 91% of its energy thrown away).
-		if ((unit !is null) && NearBlocked(slot))
+		if ((unit !is null) && NearBlockedDef(slot, int(w.def.id)))
 			slot = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		// THE BLOCK GOES WHERE THE LATHE IS (apexearth 2026-10-02: converters
 		// "up on a hill" with no turret in reach took minutes while energy

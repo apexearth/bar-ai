@@ -384,6 +384,17 @@ uint FactoryManned()
 	return n;
 }
 
+bool FrameStood(IUnitTask@ task)
+{
+	if (task.target !is null)
+		return true;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] is task)
+			return (i < gLiveStarted.length()) && gLiveStarted[i];
+	}
+	return false;
+}
+
 void Forget(IUnitTask@ task)
 {
 	for (uint i = 0; i < gLive.length(); ++i) {

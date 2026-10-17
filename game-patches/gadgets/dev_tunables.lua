@@ -374,6 +374,7 @@ local NAMES = {
 	"apex_aa_threat",        -- aathreat.as + protect_senseprice.as AA site/gain + decide.as AA panic/exposure + budget.as AIRDEF row + production.as lab AA/AASplit + hooks.as AA guard: AA where their air hurts us (0)
 	"apex_lab_nano",         -- labnano.as + want_nano.as + execute.as NS_LAB: a nano at a lab priced by the army m/s it adds, bounded by income / labs less its ring (0)
 	"apex_unstick",        -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
+	"apex_live_not_ban",     -- liveban.as + sites.as NearBlockedFor/graves + execute.as gun grave + want_mex.as spot table + stuck.as + events.as/take.as abort streak + want_tech.as UpRefused: site judgements live or priced, no clock bans (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
 	"apex_defend_solo_deep",

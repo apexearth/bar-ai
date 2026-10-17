@@ -606,6 +606,61 @@ def check_threat_ban(script_root: Path, rep: Report) -> None:
                           f"-- read the live threat instead (his ruling)")
 
 
+_TB_WRECK = ("rules_rezzer.as", "reclaim.as", "want_reclaim.as")
+_TB_MARK_HOME = ("sites.as", "liveban.as")
+_TB_FUNC = re.compile(r"^bool\s+(\w+)\s*\(")
+_TB_CLOCK = re.compile(r"ai\.frame\s*[<>-]")
+_TB_CLOCK_UNIT = re.compile(r"\b(SECOND|MINUTE|\w*TTL\w*|\w*Until\w*)\b")
+_TB_REFUSER = re.compile(r"(Refused|Backoff|Banned|Blocked|Lockout|Locked|Grave|Barred|Vetoed)")
+_TB_DEFIDX = re.compile(r"\[\s*(d|def|did|defId)\s*\]")
+
+
+def check_timed_bans(script_root: Path, rep: Report) -> None:
+    """His 2026-10-16 ruling after the 3-minute mex ban: a judgement about a site is read live
+    or priced, never held on a clock. Flags: a reader of every def's placement mark
+    (NearBlocked(p), def -1) outside the wreck jobs; a BLOCK_TTL read outside the mark's own
+    home; a tower-grave read with no apex_live_not_ban branch beside it; a bool lockout whose
+    answer is a clock (ai.frame against SECOND/MINUTE/TTL/Until) with no live re-check
+    (LiveNotBan) in it. '// timed-ok: <why>' on the line passes it."""
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        lines = path.read_text(encoding="utf8", errors="replace").splitlines()
+        rel = path.relative_to(script_root.parent).as_posix()
+        fn, fn_start = "", 0
+        for n, raw in enumerate(lines):
+            m = _TB_FUNC.match(raw)
+            if m:
+                fn, fn_start = m.group(1), n
+            elif raw and not raw[0].isspace() and raw[0] not in "{}/":
+                fn = ""
+            if "timed-ok:" in raw:
+                continue
+            code = raw.split("//", 1)[0]
+            if (re.search(r"\bNearBlocked\(", code) and path.name not in _TB_WRECK + _TB_MARK_HOME):
+                rep.error(f"{rel}:{n + 1}: NearBlocked(p) reads every def's placement mark -- another "
+                          f"footprint's refusal says nothing here; ask NearBlockedDef(p, def)")
+            if "BLOCK_TTL" in code and path.name not in _TB_WRECK + _TB_MARK_HOME \
+                    and "MarkBlocks(" not in code:
+                rep.error(f"{rel}:{n + 1}: a BLOCK_TTL read in a candidate filter with no live "
+                          f"re-check -- read the cause live or price it (his 2026-10-16)")
+            if "TowerGraveNear(" in code and not code.lstrip().startswith("bool TowerGraveNear"):
+                window = "\n".join(lines[max(n - 25, 0):n + 1])
+                if "LiveNotBan()" not in window:
+                    rep.error(f"{rel}:{n + 1}: a tower grave read as a 3-minute ban with no "
+                              f"apex_live_not_ban branch -- price the live danger (GraveDangerM)")
+            if fn and "return" in code and _TB_CLOCK.search(code) and _TB_CLOCK_UNIT.search(code):
+                body = "\n".join(lines[fn_start:n + 1])
+                if "LiveNotBan()" in body or fn in ("TowerGraveNear", "NearConDeath"):
+                    continue
+                if _TB_REFUSER.search(fn):
+                    rep.error(f"{rel}:{n + 1}: {fn} refuses on a clock with no live re-check -- read "
+                              f"the cause live or price it (his 2026-10-16), or '// timed-ok: <why>'")
+                elif _TB_DEFIDX.search(code):
+                    rep.warn(f"{rel}:{n + 1}: {fn} answers from a clock per def -- a def-wide lockout "
+                             f"is never the answer; key it to the site and re-check the cause live")
+
+
 _CPP_SIDE = re.compile(r"[Pp]ower\w*\)?\s*<=?\s*[\w.>()-]*influence")
 _CPP_SIDE_TOKENS = ("sideAt(", "GetAllySquadPowerAt", "GetAllyPowerAt", "seat-local:")
 
@@ -707,6 +762,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_side_strength(script_root, rep)
     check_join_arrive(script_root, rep)
     check_threat_ban(script_root, rep)
+    check_timed_bans(script_root, rep)
     check_cpp_side_strength(rep)
     if variant == "Unstable":
         check_join_window(rep)

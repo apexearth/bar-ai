@@ -439,7 +439,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 					++gNPTaken;
 					continue;
 				}
-				if (NearBlocked(p))
+				if (NearBlockedDef(p, nanoDef))
 					continue;
 				if (InDeepDoorway(p, pitch, exitDir, span)) {
 					if (!probe)
@@ -579,7 +579,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 				}
 				// Ground the reach veto refused is not a slot (the ring
 				// re-elected the same unreachable cell twelve times a game).
-				if (NearBlocked(p))
+				if (NearBlockedDef(p, nanoDef))
 					continue;
 				if (InDeepDoorway(p, pitch, exitDir, span)) {
 					if (!probe)
