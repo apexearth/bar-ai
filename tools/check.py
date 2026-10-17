@@ -829,8 +829,10 @@ def main() -> int:
     if not units:
         print("note: BAR.sdd not found -- skipping unit-name checks\n")
 
+    # A release (ai/v*) is a frozen copy of Unstable: by default its findings are Unstable's twice.
     names = args.variants or sorted(
-        p.name for p in AI_DIR.iterdir() if (p / "game-side").is_dir()
+        p.name for p in AI_DIR.iterdir()
+        if (p / "game-side").is_dir() and not re.match(r"v\d", p.name)
     )
     failed = 0
     # DOC ROT IS A CHECK, NOT A JUDGEMENT CALL. A doc naming a file or symbol
