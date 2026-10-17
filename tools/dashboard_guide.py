@@ -358,6 +358,13 @@ PANELS = [
              "what gets built is still ours. `apex: stockarmy-stat` each minute: our fighting units by the "
              "task holding them, any order one of our systems still tried to give one (should be 0), and "
              "how often each stood down"),
+            ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
+             "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
+             "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "
+             "beats what it will meet at a target, keeps together on the way, and turns back whole when a fight "
+             "turns against it. `apex: squad` logs every change of a squad's state with the reason; "
+             "`apex: squad-stat` each minute: squads by state, units held, launches, fall-backs and how many "
+             "came back from them, deaths by state"),
             ("TUNE_JOIN_ARRIVE", "ON: one rule for every unit sent to help "
              "with something already under way. A constructor joining a "
              "tower, a lab or any build, a helper guarding a builder, a rez "

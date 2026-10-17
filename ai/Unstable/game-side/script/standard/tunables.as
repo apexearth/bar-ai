@@ -1147,6 +1147,9 @@ const float TUNE_CON_ESCORT = 1.f;
 // DefaultMakeTask and fight code; our army layers stand down. See docs/tunables.md.
 const float TUNE_STOCK_ARMY = 0.f;
 
+// SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
+const float TUNE_SQUADS = 0.f;
+
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
 //   guarding a con is a Bull missing from the line.
 const float TUNE_ESCORT_MAX_COST = 120.f;

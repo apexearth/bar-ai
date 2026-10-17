@@ -197,6 +197,8 @@ _SENTINELS = [
      "an AA guard does not follow a launched squad"),
     ("ai/Unstable/game-side/script/standard/manager/military/hooks.as", r"GthOn\(\) \? MassPoolTask",
      "late scouts wait in the pool"),
+    ("ai/Unstable/game-side/script/standard/manager/military/army/squad.as", r"if \(!SqOpen\(s\)\)",
+     "a squad takes members only while forming or regrouping"),
 ]
 
 

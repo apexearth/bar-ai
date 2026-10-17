@@ -2624,6 +2624,8 @@ std::string CMilitaryManager::StockArmyStat()
 		std::string key;
 		if (task == nullptr) {
 			key = "none";
+		} else if (unit->IsSquadOwned()) {
+			key = (task->GetType() == IUnitTask::Type::IDLE) ? "SQUAD" : "SQUAD_LEAK";
 		} else if (task->GetType() == IUnitTask::Type::FIGHTER) {
 			key = IFighterTask::FightTypeName(static_cast<int>(static_cast<IFighterTask*>(task)->GetFightType()));
 		} else if (task->GetType() == IUnitTask::Type::RETREAT) {

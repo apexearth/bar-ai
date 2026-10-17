@@ -98,6 +98,10 @@ void CIdleTask::Update()
 			it = updateUnits.erase(it);
 			continue;
 		}
+		if (ass->IsSquadOwned()) {
+			it = updateUnits.erase(it);
+			continue;
+		}
 
 		// get rid of delayed by engine UnitIdle event from previous task
 		if (frame < ass->GetTaskFrame() + settleFrames) {
@@ -152,6 +156,9 @@ void CIdleTask::OnUnitIdle(CCircuitUnit* unit)
 
 void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
+	if (unit->IsSquadOwned()) {
+		return;
+	}
 	const float healthPerc = unit->GetHealthPercent();
 	if (healthPerc < unit->GetCircuitDef()->GetRetreat()) {
 		// AT HOME, A FIGHTER STANDS. Units touch IDLE constantly between task

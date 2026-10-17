@@ -198,6 +198,15 @@ Not switched: `behaviour.json` (retreat thresholds, `quota`, `thr_mod`), the thr
 sets on commanders and the Behemoth, `SetBaseDefRange` (builders path by it), the commander (`comdecide.as`,
 `comship.as`, `safety.as`), and production.
 
+`TUNE_SQUADS` (`apex_squads`, off; only on top of `apex_stock_army`) replaces stock control of the ground army
+with one owner, `military/army/` (`docs/army.md`). `SqClaim`, the first line of the election, marks each ground
+combat unit squad-owned (`CCircuitUnit::SetSquadOwned`): it stays in the C++ idle task, which neither re-asks nor
+retreats it, `ITaskModule::AssignTask` refuses it any other task, and the order bindings refuse it unless
+`Military::SqIssue` holds the order window open (`ai.SetSquadOrders`); refusals count in stockarmy-stat `leak=`
+as `squad.<kind>`, and `tools/squad_check.py` (in `check.py`) holds the rule statically. `Army` puts new units in
+the forming squad and hands each squad its target; `Squad` runs forming / moving / engaged / falling_back /
+regrouping on `SqAssess`, comfight's calibrated estimate over what reaches the walk to a place.
+
 ## The nets
 
 Every decision head goes through **one policy network** (`market/policy.as`). The live state (36

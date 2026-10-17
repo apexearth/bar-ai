@@ -198,6 +198,9 @@ public:
 	// a script call that would have ordered a combat unit under the switch, dropped and counted by kind
 	void NoteStockLeak(const char* kind);
 	std::string TakeStockLeaks();
+	// apex_squads: orders reach a squad-owned unit only while the script's Squad update holds this open
+	void SetSquadOrders(bool open) { squadOrders = open; }
+	bool IsSquadOrders() const { return squadOrders; }
 	const std::string& GetAiOption(const std::string& name) const;
 	// the floats in the file a lobby option names: the policy net's weights (tools/neuro.py),
 	// thousands of them, which no start script holds. -1 = no such option or file
@@ -484,6 +487,7 @@ private:
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
 	mutable int stockArmy = -1;
 	std::map<std::string, int> stockLeaks;
+	bool squadOrders = false;
 	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options
 	mutable bool aiOptsRead = false;
 	void ReadAiOpts() const;
