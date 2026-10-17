@@ -537,7 +537,7 @@ int SpotHandsOwed()
 		if ((si < allyHeld.length()) && allyHeld[si])
 			continue;
 		const AIFloat3 sp = gAllSpots[si];
-		if (!OnMap(sp) || NearBlocked(sp) || NearConDeath(sp))
+		if (!OnMap(sp) || NearBlocked(sp))   // a con death is read live below (enemy cost), never a 3-min ban
 			continue;
 		if (ai.GetEnemyCostAt(sp, 48.f) > 0.f)
 			continue;

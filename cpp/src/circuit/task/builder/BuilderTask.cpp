@@ -1522,10 +1522,8 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 			unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
 			sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)),
 			roadMax, roadBarLog, pawn);
-	// apex_expand_far: a road refused for threat is read live next election, not banned for three minutes
-	if (circuit->GetTunable("apex_expand_far", 0.f) <= 0.f) {
-		circuit->NoteBuildBlocked(endPos, buildDef);
-	}
+	// No NoteBuildBlocked: a road refused for threat is read live next election, never banned for
+	// three minutes (his ruling; the same fix as the reach test above, lost here once).
 	SetDeathNote("hot-road");
 	manager->AbortTask(this);
 }

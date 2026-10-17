@@ -580,6 +580,32 @@ def check_join_arrive(script_root: Path, rep: Report) -> None:
                           f"'// join-arrive: <why>' (his 2026-10-16, TUNE_JOIN_ARRIVE)")
 
 
+def check_threat_ban(script_root: Path, rep: Report) -> None:
+    """His ruling, lost once in a sibling path: a site refused for THREAT is read live next
+    election, never banned for three minutes (BLOCK_TTL). The hot-road abort must not mark the
+    ground blocked, and a constructor's death must not drop a spot from the open-spot counts."""
+    cpp = REPO / "cpp" / "src" / "circuit" / "task" / "builder" / "BuilderTask.cpp"
+    if cpp.is_file():
+        lines = cpp.read_text(encoding="utf8", errors="replace").splitlines()
+        for n, raw in enumerate(lines):
+            if '"apex: hot-road %s' in raw:
+                window = "\n".join(l.split("//", 1)[0] for l in lines[n:n + 10])
+                if "NoteBuildBlocked" in window:
+                    rep.error(f"cpp/src/circuit/task/builder/BuilderTask.cpp:{n + 1}: the hot-road "
+                              f"abort marks the site blocked -- threat is read live, never a 3-min ban")
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        # wreck jobs keep it: rez bots walked into killers the AI could not see (rules_rezzer.as, reclaim.as)
+        if path.name in ("sites.as", "want_reclaim.as", "rules_rezzer.as", "reclaim.as"):
+            continue
+        rel = path.relative_to(script_root.parent).as_posix()
+        for n, raw in enumerate(path.read_text(encoding="utf8", errors="replace").splitlines()):
+            if "NearConDeath(" in raw.split("//", 1)[0]:
+                rep.error(f"{rel}:{n + 1}: NearConDeath bans a spot for BLOCK_TTL after a con death "
+                          f"-- read the live threat instead (his ruling)")
+
+
 _CPP_SIDE = re.compile(r"[Pp]ower\w*\)?\s*<=?\s*[\w.>()-]*influence")
 _CPP_SIDE_TOKENS = ("sideAt(", "GetAllySquadPowerAt", "GetAllyPowerAt", "seat-local:")
 
@@ -680,6 +706,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_spend_census(script_root, rep)
     check_side_strength(script_root, rep)
     check_join_arrive(script_root, rep)
+    check_threat_ban(script_root, rep)
     check_cpp_side_strength(rep)
     if variant == "Unstable":
         check_join_window(rep)
