@@ -341,6 +341,9 @@ void IUnitTask::OnUnitMoveFailed(CCircuitUnit* unit)
 				n, toSite);
 	}
 
+	if (unit->IsSquadOwned()) {
+		return;
+	}
 	AIFloat3 pos = utils::get_radial_pos(unit->GetPos(frame), SQUARE_SIZE * 32);
 	CTerrainManager::CorrectPosition(pos);
 	TRY_UNIT(circuit, unit,

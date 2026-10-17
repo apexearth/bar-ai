@@ -130,6 +130,10 @@ public:
 	void SetIsDead() { isDead = true; }
 	bool IsDead() const { return isDead; }
 
+	// apex_squads: held in the idle task, out of every C++ task, ordered only by its script Squad
+	void SetSquadOwned(bool own) { squadOwned = own; }
+	bool IsSquadOwned() const { return squadOwned; }
+
 	// The BLACK BOX: last actions before death, for the deaths.py forensics
 	// (apexearth: "need to see the last ~N actions before a unit's death").
 	void NoteAct(const char* tag, int frame) {
@@ -411,6 +415,7 @@ private:
 	bool isSelfD : 1;
 	bool isAllowedToJump : 1;
 	// ---- Bit fields ---- END
+	bool squadOwned = false;
 
 	springai::Command* command;  // current top command
 	CWeaponDef* dgunDef;

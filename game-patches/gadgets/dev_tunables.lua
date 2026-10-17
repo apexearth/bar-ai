@@ -72,6 +72,7 @@ local NAMES = {
 	"apex_e_response",
 	"apex_e_bill_share",
 	"apex_stock_army",
+	"apex_squads",                 -- military/army/: Army + Squad own the ground army (needs apex_stock_army=1)
 	"apex_space_m",
 	"apex_bp_headroom",
 	"apex_assist_share",

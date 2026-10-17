@@ -29,6 +29,9 @@
 #include "military/flankguard.as"  // groups stand at the economy's untowered approaches
 #include "military/withdraw.as"   // pull a losing squad back under our guns
 #include "military/comfight.as"   // one fight estimate per group: engage what it beats, else fall back and pool
+#include "military/army/assess.as"  // apex_squads: the one assessment, on comfight's calibrated paper
+#include "military/army/squad.as"   // a squad's state machine and the one order path to an owned unit
+#include "military/army/army.as"    // owns the ground army, hands squads their intent
 #include "military/gather.as"     // raid packs launch whole from the gathered raiders and keep their members
 #include "military/territory.as"    // what we hold, where the border and front are
 #include "military/defenceline.as"  // the front gun and AiMakeDefence

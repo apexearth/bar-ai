@@ -83,6 +83,10 @@ void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
 	if (task->IsDead()) {
 		return;  // assigning a dead task re-animates a zombie; see below
 	}
+	if (unit->IsSquadOwned() && (task->GetType() != IUnitTask::Type::IDLE) && (task->GetType() != IUnitTask::Type::PLAYER)) {
+		circuit->NoteStockLeak("squad.assign");
+		return;
+	}
 	if (!task->JoinOpen(unit)) {
 		NoteJoinRefused(task);
 		IUnitTask* was = unit->GetTask();
@@ -120,6 +124,9 @@ IUnitTask* ITaskModule::AssignTask(CCircuitUnit* unit)
 	// itself is affected the same way, AssignTo(unit) below dereferences it
 	// freed. AddRef the moment we have it, for the same reason DequeueTask
 	// does.
+	if (unit->IsSquadOwned()) {
+		return nullptr;
+	}
 	IUnitTask* task = MakeTask(unit);
 	// A DEAD task must never be assigned: script-side re-election caches can
 	// return a task that was aborted since it was remembered, and AssignTo

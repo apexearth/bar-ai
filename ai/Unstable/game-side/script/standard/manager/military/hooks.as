@@ -184,6 +184,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// what "the army came out unassigned and stood still" looks like from a log.
 	Brain::NoteMilRequest();
 
+	if (SqClaim(unit))
+		return NoteElect("squad", null);
 	if (StockCtl(unit))
 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
 	const CCircuitDef@ cdef = unit.circuitDef;
@@ -855,6 +857,8 @@ void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 	// SUPER is registered by UnitAddedInner, so it has to be forgotten here too
 	// or the register keeps an id that only the null sweep will ever clear.
 	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER)) {
+		if (unit.IsSquadOwned())
+			SqForget(unit);
 		ForgetPenned(unit.id);
 		ForgetCover(unit.id);
 		ForgetHold(unit.id);

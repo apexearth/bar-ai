@@ -615,6 +615,17 @@ def check_join_window(rep: Report) -> None:
         rep.error(f"{e} (join window, docs/doctrine.md)")
 
 
+def check_squad_owner(rep: Report) -> None:
+    """A squad-owned unit is ordered by its Squad alone (tools/squad_check.py)."""
+    try:
+        import squad_check
+    except Exception as e:                       # pragma: no cover
+        rep.note(f"squad_check unavailable: {e}")
+        return
+    for e in squad_check.check(REPO):
+        rep.error(f"{e} (one owner, docs/army.md)")
+
+
 def check_as_scope(script_root: Path, rep: Report) -> None:
     """Scope and include-order errors, from every root the DLL compiles.
 
@@ -672,6 +683,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_cpp_side_strength(rep)
     if variant == "Unstable":
         check_join_window(rep)
+        check_squad_owner(rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []
     if declared:

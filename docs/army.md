@@ -66,6 +66,14 @@ Apexc9 vs BARb hard, 2026-10-16:
 | `com_in_base` | the walking commander dies, all but one bot arrive together, at most one dies alone | PASS: the two LLTs killed it at 35 s and died in its death blast; the 10 bots were away raiding and never came in reach |
 | `flank_mexes` | 3 of 4 flank mexes die and half the pack of 8 lives | PASS: 4/4 mexes by 26 s, no losses (same in an earlier run) |
 
+`apex_squads=1` (on `apex_stock_army=1`; the skeleton in `military/army/`, needs the DLL built and deployed):
+not yet run. Run it as `python tools/scenario.py run all --parallel 2 --ai-option apex_stock_army=1
+--ai-option apex_squads=1`; the `apex: squad` lines in the run say why each squad moved. What each scenario should
+show if the skeleton works: `open_blob` -- no launch (the blob reaches every path), the squad gathers at home out of
+its reach; `llt_trickle` -- one launch of all 12 at the Centurion if the estimate wins there, else none;
+`com_in_base` -- the whole squad onto the commander (an army target, or guard-home once it nears our buildings);
+`flank_mexes` -- launch at the best mex, `at-target`, then `fight-over` -> `retarget` mex by mex.
+
 Two stock passes come from absence: a pack that is elsewhere neither trickles nor dies alone. The
 scripted commander never D-guns. `contact` is sampled every 15 frames; "still" is under 40 elmos
 moved in the 3 s before death.
