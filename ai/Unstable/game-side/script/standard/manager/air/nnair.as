@@ -658,9 +658,14 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 				+ " killF=" + Market::NnF(best.killF, 2) + " lossN=" + Market::NnF(best.lossN, 1)
 				+ " net=" + int(best.netM));
 		}
+		const float homeR = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 2.f;
+		NaWingLaunch(homeR);
+		const bool gth = Military::GthOn();
 		for (uint i = 0; i < gNaU.length(); ++i) {
 			IUnitTask@ t = gNaT[i];
 			if ((t is null) || t.IsDead())
+				continue;
+			if (gth && (t !is gNaTask) && t.IsJoinCommitted() && !Military::JwHome(t, homeR))
 				continue;
 			// ONE WING, ONE TASK: a gunship goaled in its own raid flew alone and arrived alone (his 10-12:
 			// "they do this with just 1 at a time"), while the GO was priced on all n arriving together.
@@ -676,11 +681,24 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 		}
 		if (gNaClaim.length() > 64)
 			gNaClaim.removeRange(0, gNaClaim.length() - 64);
+		Military::JwCommit(gNaTask, gNaClaim);
 		return;
 	}
 	gNaGunGoal = Builder::gHomePos;
 	gNaGunR = 0.f;
 	NaHoldGunships();
+}
+
+// A gunship GO launches the gunships at home: a wing still out keeps its members and its goal and the
+// gathered ones go as a new wing; a wing back home forms again (apex_gather).
+void NaWingLaunch(float homeR)
+{
+	if (!Military::GthOn() || (gNaTask is null) || gNaTask.IsDead() || !gNaTask.IsJoinCommitted())
+		return;
+	if (Military::JwHome(gNaTask, homeR))
+		gNaTask.JoinReopen();
+	else
+		@gNaTask = null;
 }
 
 // THE SAME CELL, THE SAME MOMENT: a bomber strike takes the gunships with it.
@@ -736,10 +754,12 @@ bool NaClaimed(CCircuitUnit@ unit)
 }
 
 // Called from Military::MakeTaskInner for a claimed gunship.
-IUnitTask@ NaTask()
+IUnitTask@ NaTask(CCircuitUnit@ unit)
 {
-	if ((gNaTask is null) || gNaTask.IsDead())
+	if ((gNaTask is null) || gNaTask.IsDead()) {
 		@gNaTask = aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
+		Military::JwCommit(gNaTask, gNaClaim, int(unit.id));
+	}
 	if ((gNaTask !is null) && (gNaGunNow == NA_GO) && (gNaGunR > 0.f))
 		gNaTask.SetRaidGoal(gNaGunGoal, gNaGunR);
 	return gNaTask;

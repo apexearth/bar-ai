@@ -192,8 +192,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// the air force is held at home until Air::Release().
 	if (Air::Hunts(unit))
 		return NoteElect("air.hunt", aiMilitaryMgr.DefaultMakeTask(unit));
-	if (Air::NaClaimed(unit))
-		return NoteElect("air.gunraid", Air::NaTask());
+	if (Air::NaClaimed(unit)) {
+		IUnitTask@ gw = JwJoinable(Air::NaTask(unit), unit);
+		if (gw !is null)
+			return NoteElect("air.gunraid", gw);
+	}
 	if (Air::HoldsUnit(unit))
 		return null;
 	if (LookHolds(unit))
@@ -202,8 +205,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return null;
 	if (Market::AatOn() && Market::AatGroundAADef(int(cdef.id))) {
 		CCircuitUnit@ vip = Market::AatGuardVip(unit);
-		if (vip !is null)
-			return NoteElect("aa.guard", aiMilitaryMgr.Enqueue(TaskF::Guard(vip)));
+		if (vip !is null) {
+			IUnitTask@ ag = JwJoinable(aiMilitaryMgr.Enqueue(TaskF::Guard(vip)), unit);
+			if (ag !is null)
+				return NoteElect("aa.guard", ag);
+		}
 	}
 	if ((ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)
 		&& !cdef.IsAbleToFly() && !cdef.IsRoleAny(Unit::Role::COMM.mask)
@@ -215,17 +221,26 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// and WantsMassing does not exclude it, so every one we released joined the
 	// GROUND massing pool and traded with armies. ANTI_STAT and the eco-value
 	// target scoring live in CBombTask::FindTarget, which those never reached.
-	if (Air::IsBomberDef(int(cdef.id)))
+	if (Air::IsBomberDef(int(cdef.id))) {
+		IUnitTask@ st = JwJoinable(Air::StrikeTask(unit), unit);
+		if (st !is null)
+			return NoteElect("air.strike", st);
+		if (Air::StrikeHolds(unit))
+			return null;   // it left its wave: held for the next one
 		return NoteElect("air.bomb",
 				aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::BOMB)));
+	}
 	// A WAVE FIGHTER FLIES WITH A BOMBER (apexearth 2026-09-16: "when we send
 	// bombers ... have fighters to guard them"). Stock's AA task hunts on its
 	// own; the guard task follows the bomber and engages only air.
 	if (Air::InWave(unit.id) && Air::IsFighterDef(int(cdef.id))
 		&& (ai.GetTunable("apex_air_cover", TUNE_AIR_COVER) > 0.f)) {
 		CCircuitUnit@ b = Air::WaveBomberFor(unit);
-		if (b !is null)
-			return NoteElect("air.cover", aiMilitaryMgr.Enqueue(TaskF::Guard(b)));
+		if (b !is null) {
+			IUnitTask@ cg = JwJoinable(Air::WaveCoverTask(b, unit), unit);
+			if (cg !is null)
+				return NoteElect("air.cover", cg);
+		}
 	}
 	// A ROLLING BOMB IS NEVER PACKED. It is roled `raider`, so the director
 	// would pull it into a pack and the pack would walk it in formation: one
@@ -237,28 +252,28 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	}
 	// split off a group by a threat that counters it: round it, to their economy (comfight.as)
 	if (CfClaimed(int(unit.id))) {
-		IUnitTask@ ct = CfEcoTaskFor(int(unit.id));
+		IUnitTask@ ct = JwJoinable(CfEcoTaskFor(int(unit.id)), unit);
 		if (ct !is null)
 			return NoteElect("comfight.eco", ct);
 	}
 	if (AnswerClaimed(int(unit.id))) {
-		IUnitTask@ ans = AnswerTaskFor(int(unit.id));
+		IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
 		if (ans !is null)
 			return NoteElect("raid.answer", ans);
 	}
-	IUnitTask@ flank = FlankTaskFor(unit);
+	IUnitTask@ flank = JwJoinable(FlankTaskFor(unit), unit);
 	if (flank !is null)
 		return NoteElect("flank", flank);
 	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
 	// below -- it was taken off one of them on purpose. See raid.as.
 	if (RaidClaimed(int(unit.id))) {
 		DropRaidClaim(int(unit.id));
-		IUnitTask@ pack = RaidTaskFor();
+		IUnitTask@ pack = JwJoinable(RaidTaskFor(unit), unit);
 		if (pack !is null)
 			return NoteElect("raid.pull", pack);
 	}
 	// A unit the siege claimed or still lacks goes to the squad that exists for that fortification.
-	IUnitTask@ sg = SiegeTaskForUnit(unit);
+	IUnitTask@ sg = JwJoinable(SiegeTaskForUnit(unit), unit);
 	if (sg !is null)
 		return NoteElect("siege", sg);
 	// ESCORT DUTY outranks the pools for cheap ground army: an exposed
@@ -289,9 +304,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		Market::EscortGone(unit.id);
 		CCircuitUnit@ vip = Market::EscortNeeded(unit);
 		if (vip !is null) {
-			AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
-				+ " escorts " + vip.circuitDef.GetName() + " #" + vip.id);
-			return NoteElect("escort", aiMilitaryMgr.Enqueue(TaskF::Guard(vip)));
+			IUnitTask@ eg = JwJoinable(aiMilitaryMgr.Enqueue(TaskF::Guard(vip)), unit);
+			if (eg !is null) {
+				AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
+					+ " escorts " + vip.circuitDef.GetName() + " #" + vip.id);
+				return NoteElect("escort", eg);
+			}
 		}
 	}
 	// COVER UNITS: what the base buys against raiders (guardposts.as), spread

@@ -573,6 +573,17 @@ def check_cpp_side_strength(rep: Report) -> None:
                           f"GetAllySquadPowerAt) or mark '// seat-local: <why>' (S42)")
 
 
+def check_join_window(rep: Report) -> None:
+    """Every way into a fighter squad asks the join window (tools/joinwin_check.py)."""
+    try:
+        import joinwin_check
+    except Exception as e:                       # pragma: no cover
+        rep.note(f"joinwin_check unavailable: {e}")
+        return
+    for e in joinwin_check.check(REPO):
+        rep.error(f"{e} (join window, docs/doctrine.md)")
+
+
 def check_as_scope(script_root: Path, rep: Report) -> None:
     """Scope and include-order errors, from every root the DLL compiles.
 
@@ -627,6 +638,8 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_spend_census(script_root, rep)
     check_side_strength(script_root, rep)
     check_cpp_side_strength(rep)
+    if variant == "Unstable":
+        check_join_window(rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []
     if declared:

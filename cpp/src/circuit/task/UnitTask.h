@@ -55,6 +55,9 @@ public:
 	virtual void ClearRelease();
 
 	virtual bool CanAssignTo(CCircuitUnit* unit) const;
+	// apex: the join window (IFighterTask); every path that adds a unit to a live task asks it first
+	virtual bool JoinOpen(const CCircuitUnit* unit) const { return true; }
+	virtual void JoinTick() {}
 	virtual void AssignTo(CCircuitUnit* unit);
 	virtual void RemoveAssignee(CCircuitUnit* unit);
 

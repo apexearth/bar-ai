@@ -219,6 +219,19 @@ void CDefendTask::Update()
 		return;
 	}
 	const bool hunting = manager->GetCircuit()->GetLastFrame() < detachUntil;
+	// a sortie back home is a pool again
+	if (!hunting && IsJoinCommitted() && (leader != nullptr)) {
+		CCircuitAI* c = manager->GetCircuit();
+		CMilitaryManager* mm = c->GetMilitaryManager();
+		const float sqR = SQUARE(mm->GetBaseDefRange());
+		const AIFloat3& lp = leader->GetPos(c->GetLastFrame());
+		const AIFloat3 stand = mm->GetDefenceStand();
+		if ((lp.SqDistance2D(c->GetSetupManager()->GetBasePos()) < sqR)
+			|| (utils::is_valid(stand) && (lp.SqDistance2D(stand) < sqR)))
+		{
+			JoinReopen();
+		}
+	}
 
 	/*
 	 * Promote task if possible
@@ -263,6 +276,7 @@ void CDefendTask::Update()
 			for (CCircuitUnit* unit : tmpUnits) {
 				manager->AssignTask(unit, task);
 			}
+			task->JoinCommit(0);
 //			manager->DoneTask(this);  // NOTE: RemoveAssignee() will abort task
 			return;
 		}
@@ -272,8 +286,7 @@ void CDefendTask::Update()
 	 * Merge tasks if possible
 	 */
 	ISquadTask* task = hunting ? nullptr : GetMergeTask();
-	if (task != nullptr) {
-		task->Merge(this);
+	if ((task != nullptr) && task->Merge(this)) {
 		units.clear();
 		manager->AbortTask(this);
 		return;
@@ -336,7 +349,7 @@ void CDefendTask::Update()
 	PathToEnemies(frame);
 }
 
-void CDefendTask::Merge(ISquadTask* task)
+void CDefendTask::MergeFrom(ISquadTask* task)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	int frame = circuit->GetLastFrame();
@@ -620,6 +633,7 @@ int CDefendTask::Detach(CEnemyInfo* enemy, float threat)
 	for (CCircuitUnit* unit : pick) {
 		manager->AssignTask(unit, det);
 	}
+	det->JoinCommit(0);
 	return int(pick.size());
 }
 

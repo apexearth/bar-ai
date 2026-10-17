@@ -30,7 +30,11 @@ public:
 	virtual void AssignTo(CCircuitUnit* unit) override;
 	virtual void RemoveAssignee(CCircuitUnit* unit) override;
 
-	virtual void Merge(ISquadTask* task);
+	// apex: the one way a squad folds into another; refused when either join window is closed
+	bool Merge(ISquadTask* task);
+protected:
+	virtual void MergeFrom(ISquadTask* task);
+public:
 	virtual bool PurgeStrays() override;
 	// apex: a ground member of a squad of two or more does not walk home alone
 	virtual bool AllowRetreat(CCircuitUnit* unit) override;

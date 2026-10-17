@@ -18,6 +18,7 @@
 #include "military/unstick.as"      // units with an order that do not move: nudge, pen test, priced self-d
 #include "military/joinfight.as"    // march to a fight already on only if we arrive in time
 #include "military/bombs.as"       // rolling bombs: never squadded, never massed
+#include "military/joinwin.as"     // a squad takes members while it forms, none once it launches
 #include "military/hooks.as"        // AiMakeTask, task/unit hooks, save/load
 #include "military/fightcensus.as"  // live fighter pools by fight type, once a game-minute
 #include "military/guardposts.as"   // idle home units posted where building cover is missing

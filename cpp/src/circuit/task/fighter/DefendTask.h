@@ -51,7 +51,7 @@ protected:
 	float GetMaxPower() const { return maxPower; }
 
 private:
-	virtual void Merge(ISquadTask* task) override;
+	virtual void MergeFrom(ISquadTask* task) override;
 	bool FindTarget();
 	void ApplyTargetPath(const CQueryPathMulti* query);
 	void FallbackFrontPos();

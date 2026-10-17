@@ -1869,6 +1869,38 @@ static void IUnitTask_SetKeepOut(IUnitTask* task, const AIFloat3& pos, float r, 
 	}
 }
 
+// apex: the join window (FighterTask.h); a non-fighter task is always open
+static bool IUnitTask_JoinOpen(IUnitTask* task, CCircuitUnit* unit)
+{
+	return (unit == nullptr) || task->JoinOpen(unit);
+}
+
+static bool IUnitTask_IsJoinCommitted(IUnitTask* task)
+{
+	return (task->GetType() == IUnitTask::Type::FIGHTER) && static_cast<IFighterTask*>(task)->IsJoinCommitted();
+}
+
+static void IUnitTask_JoinAdmit(IUnitTask* task, int unitId)
+{
+	if (task->GetType() == IUnitTask::Type::FIGHTER) {
+		static_cast<IFighterTask*>(task)->JoinAdmit(unitId);
+	}
+}
+
+static void IUnitTask_JoinCommit(IUnitTask* task, int admitFrames)
+{
+	if (task->GetType() == IUnitTask::Type::FIGHTER) {
+		static_cast<IFighterTask*>(task)->JoinCommit(admitFrames);
+	}
+}
+
+static void IUnitTask_JoinReopen(IUnitTask* task)
+{
+	if (task->GetType() == IUnitTask::Type::FIGHTER) {
+		static_cast<IFighterTask*>(task)->JoinReopen();
+	}
+}
+
 // hp per second (the engine stores it per slow update, UnitDef.cpp)
 static float CCircuitDef_GetAutoHealPerSec(CCircuitDef* cdef)
 {
@@ -2172,6 +2204,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetScriptMove(const AIFloat3& in, int, bool)", asFUNCTION(IUnitTask_SetScriptMove), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetKeepOut(const AIFloat3& in, float, int)", asFUNCTION(IUnitTask_SetKeepOut), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "bool IsFocusFight() const", asFUNCTION(IUnitTask_IsFocusFight), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "bool JoinOpen(CCircuitUnit@) const", asFUNCTION(IUnitTask_JoinOpen), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "bool IsJoinCommitted() const", asFUNCTION(IUnitTask_IsJoinCommitted), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void JoinAdmit(int)", asFUNCTION(IUnitTask_JoinAdmit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void JoinCommit(int)", asFUNCTION(IUnitTask_JoinCommit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void JoinReopen()", asFUNCTION(IUnitTask_JoinReopen), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
 

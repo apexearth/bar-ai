@@ -44,6 +44,9 @@ protected:
 	virtual void DequeueTask(IUnitTask* task, bool done = false);
 
 public:
+	// apex: a join a closed window refused (counted), and where the refused unit goes instead
+	virtual void NoteJoinRefused(IUnitTask* task) {}
+	virtual IUnitTask* JoinFallback(CCircuitUnit* unit) { return nullptr; }
 	virtual void FallbackTask(CCircuitUnit* unit) {}
 	void AbortTask(IUnitTask* task) { DequeueTask(task, false); }
 	void DoneTask(IUnitTask* task) { DequeueTask(task, true); }

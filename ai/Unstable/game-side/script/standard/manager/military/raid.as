@@ -53,12 +53,14 @@ void DropRaidClaim(int id)
 // The pack, created on the first claimed unit's re-election rather than up
 // front: an empty fighter task is a task the manager may reap before anything
 // reaches it.
-IUnitTask@ RaidTaskFor()
+IUnitTask@ RaidTaskFor(CCircuitUnit@ unit)
 {
 	if ((gAskTask !is null) && !gAskTask.IsDead())
 		return gAskTask;
 	@gAskTask = aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
 	NrApplyGoal(gAskTask);
+	// born at the GO: its roster is what that GO claimed
+	JwCommit(gAskTask, gAskClaim, int(unit.id));
 	return gAskTask;
 }
 

@@ -141,7 +141,13 @@ with the same calibrated fight. A raid GO pulls every raider in the home pools a
 onto the one live pack, wherever it is; under `TUNE_GATHER` (off, `gather.as`) the pack in the
 field and the raiders at home are priced as two groups, a GO launches the home group whole as a new
 pack whose members never change, and their army counts at the target if it can arrive while the
-pack walks and works. Who a squad member shoots: the task picks ONE target (raid: nearest
+pack walks and works. The same switch closes every squad's join window (`joinwin.as`, C++
+`IFighterTask::JoinOpen`): a fighter task is OPEN while it forms and COMMITTED from its launch (the
+pool's promotion, a detach, ATTACK/RAID/BOMB tasks on their first update, a script launch with its
+claimed roster admitted for 10 s, a siege when the script calls it ready) until it is home again;
+`ITaskModule::AssignTask`, `ISquadTask::Merge` and every election over live tasks refuse a committed
+one, and a refused ground unit takes a fresh pool from `DefaultMakeTask` while a flier stays held. Off,
+the state is still kept and only counted (`apex: joinwin-stat`). Who a squad member shoots: the task picks ONE target (raid: nearest
 economy when committed, else builders then highest influence; attack/defend: group worth) and
 `ISquadTask::Attack` gives each member a ring move plus set-target on it (refused beyond the
 member's own range, so out-of-range members fire at whatever the engine auto-targets); under a

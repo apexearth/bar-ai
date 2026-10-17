@@ -56,10 +56,6 @@ bool CRaidTask::CanAssignTo(CCircuitUnit* unit) const
 	if (attackPower > maxPower) {
 		return false;
 	}
-	// apex_gather: a pack sent at a priced target keeps the members it launched with
-	if ((goalR > 0.f) && (manager->GetCircuit()->GetTunable("apex_gather", 0.f) > 0.f)) {
-		return false;
-	}
 	const int frame = manager->GetCircuit()->GetLastFrame();
 	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
 		return false;
@@ -122,8 +118,7 @@ void CRaidTask::Update()
 	 */
 	// apex: a pack sent to a priced target is not folded into another task's roam.
 	ISquadTask* task = (goalR > 0.f) ? nullptr : GetMergeTask();
-	if (task != nullptr) {
-		task->Merge(this);
+	if ((task != nullptr) && task->Merge(this)) {
 		units.clear();
 		manager->AbortTask(this);
 		return;

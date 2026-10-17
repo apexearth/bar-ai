@@ -115,6 +115,19 @@ public:
 	// list, since a fightTasks set may hold a freed task
 	IFighterTask* BestSquadToJoin(IFighterTask::FightType type, CCircuitUnit* unit, const IUnitTask* self) const;
 
+	// apex_gather: the join window's gate (read each second) and its counts, `apex: joinwin-stat` a minute
+	bool IsJoinGate() const { return joinGate; }
+	enum JoinEv { JW_COMMIT, JW_REOPEN, JW_REFUSED, JW_LATE, JW_ADMIT, JW_N };
+	void NoteJoin(IFighterTask::FightType ft, JoinEv e, int n = 1);
+	virtual void NoteJoinRefused(IUnitTask* task) override;
+	virtual IUnitTask* JoinFallback(CCircuitUnit* unit) override;
+private:
+	void JoinStatTick();
+	bool joinGate = false;
+	int joinLogAt = 0;
+	int joinStat[static_cast<int>(IFighterTask::FightType::_SIZE_)][JW_N] = {};
+public:
+
 	IFighterTask* Enqueue(const TaskF::SFightTask& ti);
 	virtual CRetreatTask* EnqueueRetreat() override;
 	// apex: their fortifications and our siege goal; created on first use (unit/enemy/FortCensus.cpp)

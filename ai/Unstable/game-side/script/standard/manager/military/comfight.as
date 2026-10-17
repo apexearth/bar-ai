@@ -1117,6 +1117,13 @@ IUnitTask@ CfEcoTaskFor(int id)
 		gCfEcoT[s].SetRaidGoal(goal, gCfEcoR[s]);
 		AIFloat3 ko(gCfEcoKX[s], 0.f, gCfEcoKZ[s]);
 		gCfEcoT[s].SetKeepOut(ko, gCfEcoKR[s], ai.frame + int(CF_REACT_S * float(SECOND)));
+		// it launched at the split: its roster is what the split claimed
+		array<int> ros;
+		for (uint i = 0; i < gCfClaimId.length(); ++i) {
+			if (gCfClaimSlot[i] == s)
+				ros.insertLast(gCfClaimId[i]);
+		}
+		JwCommit(gCfEcoT[s], ros, id);
 	}
 	return gCfEcoT[s];
 }

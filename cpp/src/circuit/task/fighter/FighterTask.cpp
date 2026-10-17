@@ -10,6 +10,7 @@
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
 #include "module/BuilderManager.h"
+#include "module/MilitaryManager.h"
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
 #include "unit/action/RearmAction.h"
@@ -48,8 +49,67 @@ IFighterTask::~IFighterTask()
 	}
 }
 
+bool IFighterTask::JoinAdmitted(const CCircuitUnit* unit) const
+{
+	return (manager->GetCircuit()->GetLastFrame() < joinAdmitUntil) && (joinAdmit.count(unit->GetId()) != 0);
+}
+
+bool IFighterTask::IsJoinClosed() const
+{
+	return joinCommitted && static_cast<CMilitaryManager*>(manager)->IsJoinGate();
+}
+
+bool IFighterTask::JoinOpen(const CCircuitUnit* unit) const
+{
+	return !IsJoinClosed() || (units.count(const_cast<CCircuitUnit*>(unit)) != 0) || JoinAdmitted(unit);
+}
+
+void IFighterTask::JoinCommit(int admitFrames)
+{
+	if (joinCommitted) {
+		return;
+	}
+	joinCommitted = true;
+	joinTicked = true;
+	joinAdmitUntil = manager->GetCircuit()->GetLastFrame() + std::max(0, admitFrames);
+	static_cast<CMilitaryManager*>(manager)->NoteJoin(fightType, CMilitaryManager::JW_COMMIT);
+}
+
+void IFighterTask::JoinReopen()
+{
+	if (!joinCommitted) {
+		return;
+	}
+	joinCommitted = false;
+	joinAdmit.clear();
+	joinAdmitUntil = -1;
+	static_cast<CMilitaryManager*>(manager)->NoteJoin(fightType, CMilitaryManager::JW_REOPEN);
+}
+
+void IFighterTask::JoinTick()
+{
+	if (joinTicked) {
+		return;
+	}
+	joinTicked = true;
+	if ((FightType::ATTACK == fightType) || (FightType::RAID == fightType) || (FightType::BOMB == fightType)) {
+		JoinCommit(0);
+	}
+}
+
+void IFighterTask::NoteJoinMerged(int n)
+{
+	if (joinCommitted && (n > 0)) {
+		static_cast<CMilitaryManager*>(manager)->NoteJoin(fightType, CMilitaryManager::JW_LATE, n);
+	}
+}
+
 void IFighterTask::AssignTo(CCircuitUnit* unit)
 {
+	if (joinCommitted) {
+		static_cast<CMilitaryManager*>(manager)->NoteJoin(fightType,
+				JoinAdmitted(unit) ? CMilitaryManager::JW_ADMIT : CMilitaryManager::JW_LATE);
+	}
 	IUnitTask::AssignTo(unit);
 
 	CCircuitDef* cdef = unit->GetCircuitDef();

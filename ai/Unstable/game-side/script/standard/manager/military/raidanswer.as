@@ -62,8 +62,16 @@ IUnitTask@ AnswerTaskFor(int id)
 			continue;
 		if ((gAnsTask[i] is null) || gAnsTask[i].IsDead()) {
 			@gAnsTask[i] = aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
-			if (gAnsTask[i] !is null)
+			if (gAnsTask[i] !is null) {
 				gAnsTask[i].SetRaidGoal(gAnsPos[i], gAnsR[i]);
+				// sent at the answer: its roster is what the answer claimed
+				array<int> ros;
+				for (uint k = 0; k < gAnsClaim.length(); ++k) {
+					if (gAnsClaimSlot[k] == slot)
+						ros.insertLast(gAnsClaim[k]);
+				}
+				JwCommit(gAnsTask[i], ros, id);
+			}
 		}
 		return gAnsTask[i];
 	}

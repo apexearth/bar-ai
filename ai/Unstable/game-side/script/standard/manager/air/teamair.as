@@ -676,6 +676,7 @@ void TairLaunch(int op)
 			gTairSentM += Catalog::gCostM[int(wu.circuitDef.id)];
 		}
 	}
+	NaWingLaunch(ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 2.f);
 	const array<int>@ own = Market::OwnedDefs();
 	for (uint oi = 0; oi < own.length(); ++oi) {
 		const int d = own[oi];
@@ -706,6 +707,7 @@ void TairLaunch(int op)
 		gNaGunR = r;
 		if ((gNaTask !is null) && !gNaTask.IsDead())
 			gNaTask.SetRaidGoal(at, r);
+		Military::JwCommit(gNaTask, gNaClaim);
 	}
 	++gTairLaunches;
 	AiLog(Factory::T() + "apex: teamair-launch t=" + ai.teamId + " op=" + op + " at=" + int(at.x) + "," + int(at.z)

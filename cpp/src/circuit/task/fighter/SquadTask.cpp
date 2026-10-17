@@ -167,7 +167,18 @@ bool ISquadTask::PurgeStrays()
 	return false;
 }
 
-void ISquadTask::Merge(ISquadTask* task)
+bool ISquadTask::Merge(ISquadTask* task)
+{
+	if (IsJoinClosed() || task->IsJoinClosed()) {
+		manager->NoteJoinRefused(this);
+		return false;
+	}
+	NoteJoinMerged((int)task->GetAssignees().size());
+	MergeFrom(task);
+	return true;
+}
+
+void ISquadTask::MergeFrom(ISquadTask* task)
 {
 	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
 	// a unit cleared to an idle task has no travel action (null after ClearAct)
@@ -246,6 +257,9 @@ bool ISquadTask::IsMergeSafe() const
 ISquadTask* ISquadTask::CheckMergeTask()
 {
 	const ISquadTask* task = nullptr;
+	if (IsJoinClosed()) {
+		return nullptr;
+	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
@@ -265,7 +279,7 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	for (const IFighterTask* candidate : tasks) {
 		if ((candidate == this)
 			|| (candidate->GetAttackPower() < attackPower)
-			|| !candidate->CanAssignTo(leader))
+			|| candidate->IsJoinClosed() || !candidate->CanAssignTo(leader))
 		{
 			continue;
 		}

@@ -261,6 +261,9 @@ void CSiegeTask::Execute()
 			rally = leader->GetPos(frame);
 		}
 		CTerrainManager::CorrectPosition(rally);
+		if (IsJoinCommitted() && (leader->GetPos(frame).SqDistance2D(rally) < SQUARE(DEFAULT_SLACK * 4))) {
+			JoinReopen();
+		}
 		for (CCircuitUnit* unit : units) {
 			if (unit->Blocker() == nullptr) {
 				Order(unit, rally, nullptr, false, frame);
@@ -280,6 +283,7 @@ void CSiegeTask::Execute()
 		}
 		return;
 	}
+	JoinCommit(0);
 
 	int cls = -1;
 	CEnemyInfo* tgt = PickTarget(s.pos, area, from, carryR, cls);

@@ -187,8 +187,7 @@ void CBombTask::Update()
 	 * Merge tasks if possible
 	 */
 	ISquadTask* task = GetMergeTask();
-	if (task != nullptr) {
-		task->Merge(this);
+	if ((task != nullptr) && task->Merge(this)) {
 		units.clear();
 		manager->AbortTask(this);
 		return;

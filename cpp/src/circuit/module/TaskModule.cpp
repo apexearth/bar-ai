@@ -83,6 +83,17 @@ void ITaskModule::AssignTask(CCircuitUnit* unit, IUnitTask* task)
 	if (task->IsDead()) {
 		return;  // assigning a dead task re-animates a zombie; see below
 	}
+	if (!task->JoinOpen(unit)) {
+		NoteJoinRefused(task);
+		IUnitTask* was = unit->GetTask();
+		if ((was != nullptr) && (was->GetType() != IUnitTask::Type::IDLE)) {
+			return;
+		}
+		task = JoinFallback(unit);
+		if ((task == nullptr) || task->IsDead() || !task->JoinOpen(unit)) {
+			return;
+		}
+	}
 	task->AddRef();
 	// Bracket the CURRENT task too: RemoveAssignee moves the unit to idle,
 	// and if the unit held the task's last reference, SetTask(idle)'s Release
@@ -117,6 +128,13 @@ IUnitTask* ITaskModule::AssignTask(CCircuitUnit* unit)
 	// RemoveAssignee (the mirror-loop crash family).
 	if ((task != nullptr) && task->IsDead()) {
 		return nullptr;
+	}
+	if ((task != nullptr) && !task->JoinOpen(unit)) {
+		NoteJoinRefused(task);
+		task = JoinFallback(unit);
+		if ((task != nullptr) && (task->IsDead() || !task->JoinOpen(unit))) {
+			task = nullptr;
+		}
 	}
 	if (task != nullptr) {
 		task->AddRef();
@@ -218,6 +236,7 @@ void ITaskModule::Update()
 				}
 				AbortTask(task);
 			} else {
+				task->JoinTick();
 				// apex: LEVEL OF DETAIL. A fighter task with no enemy influence where
 				// its first unit stands re-plans on alternate passes; one in or near
 				// contact keeps every pass.

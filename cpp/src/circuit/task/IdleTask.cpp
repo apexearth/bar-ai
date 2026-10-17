@@ -170,7 +170,7 @@ void CIdleTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 		CRetreatTask* task = manager->EnqueueRetreat();
 		if (task != nullptr) {
-			task->AssignTo(unit);
+			task->AssignTo(unit);  // joinwin: a retreat, not a squad
 			task->Start(unit);
 		}
 	} else if (healthPerc < unit->GetCircuitDef()->GetSelfDHP()) {

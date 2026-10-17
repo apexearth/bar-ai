@@ -39,9 +39,51 @@ bool InWave(Id id)
 	return InList(gWave, id);
 }
 
+// The wave's bomb tasks, one per bomber type, each made on its first arrival and closed to all but the wave
+// (Military::JwCommit): a bomber finished after the launch is held for the next wave.
+array<IUnitTask@> gStrikeT;
+array<int> gStrikeTDef;
+
+bool StrikeHolds(CCircuitUnit@ unit)
+{
+	return Military::GthOn() && gStrike && InWave(unit.id);
+}
+
+IUnitTask@ StrikeTask(CCircuitUnit@ unit)
+{
+	if (!StrikeHolds(unit))
+		return null;
+	const int d = int(unit.circuitDef.id);
+	for (uint i = 0; i < gStrikeT.length(); ++i) {
+		if ((gStrikeTDef[i] == d) && (gStrikeT[i] !is null) && !gStrikeT[i].IsDead())
+			return gStrikeT[i];
+	}
+	IUnitTask@ t = aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::BOMB));
+	if (t is null)
+		return null;
+	Military::JwCommitIds(t, gWave, int(unit.id));
+	gStrikeT.insertLast(t);
+	gStrikeTDef.insertLast(d);
+	return t;
+}
+
+// A wave fighter's guard on its bomber: made at the launch, it takes the wave's fighters only.
+IUnitTask@ WaveCoverTask(CCircuitUnit@ b, CCircuitUnit@ unit)
+{
+	IUnitTask@ t = aiMilitaryMgr.Enqueue(TaskF::Guard(b));
+	if ((t is null) || t.IsJoinCommitted())
+		return t;
+	array<CCircuitUnit@>@ on = t.GetUnits();
+	if ((on is null) || (on.length() == 0))
+		Military::JwCommitIds(t, gWave, int(unit.id));
+	return t;
+}
+
 // Everything airborne right now becomes the wave. Called from Release().
 void BuildWave()
 {
+	gStrikeT.resize(0);
+	gStrikeTDef.resize(0);
 	gWave.resize(0);
 	gRunWave.resize(0);
 	gWaveBombers = 0;

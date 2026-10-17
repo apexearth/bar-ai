@@ -59,6 +59,7 @@ they never change; the evidence behind each is in git (`git log -p docs/25-silen
 - **S42** A strength test weighing one seat against the whole enemy side (fixed three times). In a team game "ours" is the side; `check.py` fails a `StrRatio` caller that does not count allies unless marked `// seat-local: <why>`.
 - **S43** A field appended to a logged line broke its parser silently. When you append to a log line, grep `tools/` for its parser and run it on a fresh game.
 - **S44** A comment named a guard that no longer existed; a `fightTasks` set holds freed tasks. Grep a guard's name before trusting a comment; scan `updateTasks` for live tasks.
+- **S57** A unit joined a squad already launched (attack, raid, bomber run) and walked out alone to it; fixed per path three times and the next path leaked. The join window is one gate, `IFighterTask::JoinOpen`: `tools/joinwin_check.py` (in `check.py`) flags a join path that skips it, and `apex: joinwin-stat late=` must read 0 under `TUNE_GATHER`.
 
 ## Engine and binding facts that bite
 

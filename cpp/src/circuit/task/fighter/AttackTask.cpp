@@ -205,9 +205,8 @@ void CAttackTask::Update()
 	 * Merge tasks if possible
 	 */
 	ISquadTask* task = GetMergeTask();
-	if (task != nullptr) {
+	if ((task != nullptr) && task->Merge(this)) {
 		manager->GetCircuit()->GetMilitaryManager()->NoteArmy(CMilitaryManager::AE_MERGE);
-		task->Merge(this);
 		units.clear();
 		// TODO: Deal with cowards?
 		manager->AbortTask(this);
