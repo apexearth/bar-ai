@@ -496,6 +496,8 @@ void NoteFinished(CCircuitUnit@ unit)
 			}
 		}
 	}
+	if ((i >= 0) && (gLExtract[i] <= 0.f))
+		ExpandFarNoteBuilt();
 	if (i >= 0)
 		gLExtract[i] = Catalog::gExtractsM[defId];
 	if (Catalog::gExtractsM[defId] >= BestExtract())

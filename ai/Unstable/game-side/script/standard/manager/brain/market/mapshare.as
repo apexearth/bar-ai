@@ -88,7 +88,7 @@ void MsStep()
 		if ((d <= 0) || (d > Catalog::gDefCount))
 			continue;
 		if (Catalog::gMobile[d]) {
-			if (gOrcOn && Catalog::gBuilder[d])
+			if ((gOrcOn || ExpandFarOn()) && Catalog::gBuilder[d])
 				SprFoeNote(i, d);
 			continue;
 		}
@@ -241,7 +241,7 @@ void MapShareNoteRaid(const AIFloat3& in at)
 
 void MapShareUpdate()
 {
-	if (!MapShareOn() && !SmallHardOn())
+	if (!MapShareOn() && !SmallHardOn() && !ExpandFarOn())
 		return;
 	CacheSpots();
 	if (gAllSpots.length() == 0)

@@ -51,6 +51,7 @@
 #include "market/openrace.as"       // the lab's con floor against its best fighter on one clock; stalls priced, not idled
 #include "market/countermix.as"     // the army draw priced by fight value against the army we have seen; raid value round what it cannot fight
 #include "market/spotrace.as"       // open spots by who reaches them first: a con's marginal claims, the army's contest targets
+#include "market/expandfar.as"      // apex_expand_far: a claim priced by P(we hold it), no threat bar refuses it
 #include "market/ecoseat.as"        // the strict eco seat: what its hands and labs may take while it grows
 #include "market/teamtech.as"       // one seat techs and hands out advanced cons; the others price their own lab down
 #include "market/stuck.as"          // the stuck-builder watchdog: no progress, no movement
