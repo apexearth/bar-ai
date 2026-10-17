@@ -14,6 +14,7 @@ here:
 | `docs/working.md` | rules of work, commands, lanes, machine limits, testing, building, releasing |
 | `docs/traps.md` | the S-numbered silent failures, one line each with its check |
 | `docs/tunables.md` | why a default is what it is, keyed by `TUNE_` name |
+| `docs/army.md` | the army layer: one owner, squads, one assessment, how army changes are made and tested |
 
 ## The one idea
 
@@ -45,7 +46,7 @@ his core tenet is: always be making economy. The nets decide; balances are their
 | believe a match result | traps S3, S12, S15, S16, S17, S19, S29, S34 |
 | run a sweep of a tunable | trap S8: deploy the gadget, not only the AI |
 | launch or kill a run | `working.md` (lanes, machine limits, testing) |
-| touch army / fighting | `doctrine.md`, then `ai-military`, `ai-army-composition`, `fight-analysis` |
+| touch army / fighting | `army.md` FIRST (how army changes are made), `doctrine.md`, then `ai-military`, `fight-analysis` |
 | touch what gets built | `ai-auction`, `ai-eco-pricing`, `how-it-works.md` (market, factories) |
 | touch where buildings land | `ai-placement`, `ai-risk-model` |
 | touch builders / crews | `ai-builder-crew`; trap S14 (AiMakeTask re-elects) |
