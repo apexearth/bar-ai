@@ -401,6 +401,15 @@ bool Outgrown(int d)
 // dps x sqrt(alpha) x hp / cost; the square-law per-metal index would be / cost^2
 // (docs/tunables.md TUNE_EARLY_BALL has the Pawn/Centurion arithmetic).
 array<float> gUcRaw;
+// An anti-air unit is worth its fire at aircraft; the AA role's target holds it to the air we see.
+bool WorthVsAir(int d)
+{
+	return Catalog::gSurfDpsOn && (Catalog::gRole[d] == int(Unit::Role::AA.type));
+}
+float WorthDps(int d) { return WorthVsAir(d) ? Catalog::gAirDps[d] : Catalog::gSurfDps[d]; }
+float WorthAlpha(int d) { return WorthVsAir(d) ? Catalog::gAirAlpha[d] : Catalog::gSurfAlpha[d]; }
+float WorthRange(int d) { return WorthVsAir(d) ? Catalog::gAirRange[d] : Catalog::gLandRange[d]; }
+
 float UnitCoreRaw(int d)
 {
 	WorthMeans();
@@ -427,13 +436,13 @@ float UnitCoreRawCalc(int d)
 	const float wAoe = ai.GetTunable("apex_worth_aoe", TUNE_WORTH_AOE);
 	const float wCost = ai.GetTunable("apex_worth_cost", TUNE_WORTH_COST);
 	if (wDps != 0.f)
-		v *= pow(Catalog::gSurfDps[d] / gWMDps, wDps);
+		v *= pow(WorthDps(d) / gWMDps, wDps);
 	if (wAlpha != 0.f)
-		v *= pow(Catalog::gSurfAlpha[d] / gWMAlpha, wAlpha);
+		v *= pow(WorthAlpha(d) / gWMAlpha, wAlpha);
 	if (wHp != 0.f)
 		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
 	if (wRng != 0.f)
-		v *= pow(Catalog::gLandRange[d] / gWMRng, wRng);
+		v *= pow(WorthRange(d) / gWMRng, wRng);
 	// 1 + share, not a bare power: aoe == 0 is a real value for most units and
 	// must not zero the product.
 	if ((wAoe != 0.f) && (gWMAoe > 0.f))
@@ -587,13 +596,13 @@ float UnitStrength(int d)
 	const float wRng = ai.GetTunable("apex_worth_range", TUNE_WORTH_RANGE);
 	const float wAoe = ai.GetTunable("apex_worth_aoe", TUNE_WORTH_AOE);
 	if (wDps != 0.f)
-		v *= pow(Catalog::gSurfDps[d] / gWMDps, wDps);
+		v *= pow(WorthDps(d) / gWMDps, wDps);
 	if (wAlpha != 0.f)
-		v *= pow(Catalog::gSurfAlpha[d] / gWMAlpha, wAlpha);
+		v *= pow(WorthAlpha(d) / gWMAlpha, wAlpha);
 	if (wHp != 0.f)
 		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
 	if (wRng != 0.f)
-		v *= pow(Catalog::gLandRange[d] / gWMRng, wRng);
+		v *= pow(WorthRange(d) / gWMRng, wRng);
 	if ((wAoe != 0.f) && (gWMAoe > 0.f))
 		v *= pow(1.f + Catalog::gAoe[d] / gWMAoe, wAoe);
 	v *= 1.f + (Catalog::gSpeed[d] / FoeSpeedCap())
@@ -696,7 +705,7 @@ float UnitPPC(int d)
 	// units with more range... on their own they're garbage"). Scaled by the
 	// share of our line that can stand in front, so reach pays exactly as much
 	// as we have shield to buy it with.
-	v *= 1.f + (Catalog::gLandRange[d] / gWMRng)
+	v *= 1.f + (WorthRange(d) / gWMRng)
 			* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH) * ShieldShare();
 	// STANDOFF SURVIVABILITY: hit points are only worth paying for by a unit
 	// that can actually be shot. apexearth 2026-08-30: "we outrange most of

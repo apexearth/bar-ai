@@ -181,6 +181,11 @@ float CoverDemandM()
 	CCircuitDef@ fd = (gFighter1 !is null) ? gFighter1 : gFighter;
 	if ((n > 0) && (fd !is null) && (m < Catalog::gCostM[int(fd.id)]))
 		m = Catalog::gCostM[int(fd.id)];
+	if (EveryOn() && (fd !is null)) {
+		const float capM = float(EvEscortThreatN(int(fd.id))) * Catalog::gCostM[int(fd.id)];
+		if (capM < m)
+			m = capM;
+	}
 	gCoverDemandM = m;
 	return m;
 }
