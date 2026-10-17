@@ -1310,7 +1310,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// it did -- the twin of the share energy has always had to prove.
 		gain *= MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
 		gain *= MapShareMul();
-		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM);
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM, EcoReturnOn());
 		// A spot with a recent loss near it is a rebuild: say what it is
 		// priced at and why (sampled 10 s).
 		// ...and any spot, sampled the same way, so a collapse in the value
@@ -1351,6 +1351,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 			gLastSpotM = spotIncome * Catalog::gExtractsM[d];
 		}
 	}
+	ErNotePrice(WK_MEX, w);
 	return w;
 }
 

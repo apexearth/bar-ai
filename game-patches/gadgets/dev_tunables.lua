@@ -361,6 +361,7 @@ local NAMES = {
 	"apex_com_home",         -- comhome.as + decide.as ChargeTrip + want_assist.as + comdecide.as + comship.as + safety.as: the commander's time off the lab priced as army owed, his fight estimate fixed, the base he defends, his walk-ins priced (0)
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
 	"apex_open_race",        -- openrace.as + production.as con floor/e-stall + budget.as hold ledger + DefendTask/GuardTask.cpp catchability: con vs fighter on one clock (0)
+	"apex_eco_return",       -- ecoreturn.as + want_energy.as ProposeConvert/ProposeEnergy + price.as ERealizeShare/ValueOf + want_mex.as + smallhard.as/rush.as/army.as/budget.as: eco by return at the energy available, army extras by the threat arriving (0)
 	"apex_expand_far",       -- expandfar.as + want_mex.as PickSpot/ProposeMex + events.as claim release + BuilderTask.cpp road + EconomyManager.cpp FindOpenMexSpot: claims priced by P(we hold it), no threat bar (0)
 	"apex_com_fight",        -- comfight.as + FighterTask.cpp ScriptMove + RaidTask.cpp committed path: one fight estimate per group, engage or fall back and pool (0)
 	"apex_counter_mix",      -- countermix.as + production.as draw + facqueue.as: production priced by fight value against the army we have seen, raid value where it outruns what it cannot fight (0)

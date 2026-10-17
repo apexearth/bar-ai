@@ -183,7 +183,7 @@ float RushFloorExtra()
 {
 	if (!RushOn())
 		return 0.f;
-	return RushExtra(gRushNextLock);
+	return RushExtra(gRushNextLock) * EcoReturnArmyMul();
 }
 
 // A big non-defending investment's gain is scaled by the share of the rush its

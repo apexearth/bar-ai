@@ -3011,8 +3011,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a
 			// fallthrough past the drawn winner.
-			if (!isComm)
+			if (!isComm) {
 				ExpandFarNoteElect(ranked[i].kind);
+				ErNoteExec(ranked[i].kind);
+			}
 			if (DecideLogOn())
 				AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
 					+ " #" + unit.id + " " + KindName(ranked[i].kind) + ":"

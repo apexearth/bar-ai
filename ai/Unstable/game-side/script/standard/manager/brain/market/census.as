@@ -435,6 +435,7 @@ void NoteFinished(CCircuitUnit@ unit)
 		return;
 	const int defId = int(unit.circuitDef.id);
 	OwnAdd(defId, 1);
+	ErNoteBuilt(defId);
 	if (!Catalog::gMobile[defId] && (int(unit.id) >= 0)
 		&& (int(unit.id) < int(gBuiltFrame.length())))
 		gBuiltFrame[int(unit.id)] = (ai.frame > 0) ? ai.frame : 1;
