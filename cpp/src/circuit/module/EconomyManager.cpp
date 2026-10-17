@@ -1029,6 +1029,17 @@ int CEconomyManager::FindOpenMexSpot(CCircuitUnit* unit, const AIFloat3& pos, fl
 		}
 		return false;
 	};
+	// apex_expand_far: the script ranked THIS spot; the cluster walk below answered with
+	// another one (a stale claim of ours, ~1,000 a 4-minute window) or with -1 when the
+	// spot's cluster read a threat over 1.
+	if (circuit->GetTunable("apex_expand_far", 0.f) > 0.f) {
+		const int asked = metalMgr->FindNearestSpot(pos);
+		if ((asked >= 0) && (spots[asked].position.SqDistance2D(pos) < SQUARE(SQUARE_SIZE * 2))
+			&& predicate(asked))
+		{
+			return asked;
+		}
+	}
 	int idx = metalMgr->GetSpotToBuild(pos, predicate);
 
 	// apexearth 2026-08-22: "our cons that go out and get mexes sometimes choose

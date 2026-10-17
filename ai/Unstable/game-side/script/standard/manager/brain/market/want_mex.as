@@ -860,6 +860,7 @@ array<int> gDeadSpotAt;
 array<int> gDeadSpotLogAt;
 void NoteMexDeath(const AIFloat3& in at)
 {
+	ExpandFarNoteLost();
 	gDeadSpotPos.insertLast(at);
 	gDeadSpotAt.insertLast(ai.frame);
 	gDeadSpotLogAt.insertLast(0);
@@ -950,6 +951,7 @@ const array<bool>@ AllyHeldSpots()
 }
 array<int> gPtState;
 array<float> gPtRisk;
+array<float> gPtHeat;
 int gPtAt = -1000;
 float gPtShare = 0.f;
 array<int> gPtMark;
@@ -974,7 +976,9 @@ void SpotTableFill()
 	const uint n = gAllSpots.length();
 	gPtState.resize(n);
 	gPtRisk.resize(n);
+	gPtHeat.resize(n);
 	gPtShare = TripShare();
+	const bool xf = ExpandFarOn();
 	const float incMul = IncomeMult();
 	// The live marks, once: NearBlocked/NearConDeath polled the engine and
 	// walked both rings for every spot.
@@ -995,6 +999,7 @@ void SpotTableFill()
 	for (uint si = 0; si < n; ++si) {
 		const AIFloat3 sp = gAllSpots[si];
 		gPtRisk[si] = 0.f;
+		gPtHeat[si] = 0.f;
 		if (!OnMap(sp) || (gAllSpotInc[si] * incMul <= 0.f)) {
 			gPtState[si] = PT_NONE;
 			continue;
@@ -1009,6 +1014,8 @@ void SpotTableFill()
 		}
 		gPtRisk[si] = TripRiskWith(sp, gPtShare);
 		gPtState[si] = SpotHot(sp) ? PT_HOT : PT_OPEN;
+		if (xf)
+			gPtHeat[si] = ExpandFarHeatAt(sp);
 	}
 }
 
@@ -1041,6 +1048,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const bool dsOn = gDeadSpotPos.length() > 0;
 	if (dsOn)
 		DeadSpotPrep();
+	const bool xf = ExpandFarOn();
 	float bestHotScore = 0.f;
 	int bestHot = -1;
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
@@ -1068,6 +1076,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// both write the mark).
 		if ((st == PT_BLOCKED) || (st == PT_CONDEATH)) {
 			++gSwPast;
+			++gXfBlocked;
 			DeadSpotSay(dw, sp, (st == PT_BLOCKED) ? "blocked" : "condeath");
 			continue;
 		}
@@ -1080,8 +1089,11 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// the ground it sits on is the defence market's starved-spot stake.
 		// Hot for a constructor; the commander takes it where nothing there can kill him.
 		const float comF = (comm && !gCsT2) ? ComRaidF(unit, sp) : 1.f;   // caution (T2) ends his dangerous claims
-		if ((st == PT_HOT) && !(comm && (comF < 1.f)) && !Builder::EscortCovers(unit, sp)) {
+		if ((st == PT_HOT) && !(comm && (comF < 1.f)) && xf) {
+			++gXfHot;
+		} else if ((st == PT_HOT) && !(comm && (comF < 1.f)) && !Builder::EscortCovers(unit, sp)) {
 			++gSwHot;
+			++gXfHot;
 			DeadSpotSay(dw, sp, "hot");
 			if (supFree) {
 				const float hw = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
@@ -1122,7 +1134,17 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			comPen = cp;
 		}
 		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
-		const float risk = gPtRisk[si];
+		float risk = gPtRisk[si];
+		float pOpen = 1.f;
+		if (xf) {
+			if (gPtHeat[si] > risk)
+				risk = gPtHeat[si];
+			pOpen = XfPOpen(int(si), walk);
+			if (pOpen <= 0.f) {
+				++gXfFoe;
+				continue;
+			}
+		}
 		if (dw >= 0)
 			DeadSpotSay(dw, sp, "priced risk=" + formatFloat(risk, "", 0, 2));
 		if (risk >= 0.5f)
@@ -1130,7 +1152,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		gPsCand.insertLast(int(si));
 		// The commander's edge at a spot is the risk a constructor would carry
 		// there that he does not: he keeps 1 - risk*comF and spares a con risk*(1 - comF).
-		gPsScore.insertLast(comPen * inc * (comm ? (1.f + risk * (1.f - 2.f * comF)) : (1.f - risk))
+		gPsScore.insertLast(comPen * inc * pOpen * (comm ? (1.f + risk * (1.f - 2.f * comF)) : (1.f - risk))
 				/ (walk + 1.f));
 	}
 	gSwCand = int(gPsCand.length());
@@ -1164,6 +1186,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			continue;
 		if (LedgerFind(open) >= 0) {
 			++gMexClaimed;
+			++gXfClaimed;
 			continue;
 		}
 		// A hot road moves this hand to the next spot, not to no want.
@@ -1175,7 +1198,8 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		if (DeathWalk(unit, aiEconomyMgr.GetMexSpotPos(open))
 			&& !(comm && (ComRaidF(unit, aiEconomyMgr.GetMexSpotPos(open)) < 1.f))) {
 			++gMexDeathWalk;
-			if (ai.GetTunable("apex_deathwalk_price", TUNE_DEATHWALK_PRICE) <= 0.f)
+			++gXfDeath;
+			if (!xf && (ai.GetTunable("apex_deathwalk_price", TUNE_DEATHWALK_PRICE) <= 0.f))
 				continue;
 		}
 		return open;
@@ -1196,12 +1220,14 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	gMexOpen = (spot >= 0);
 	if (spot < 0) {
 		++gMexNoOpen;
+		++gXfNoOpen;
 		return w;
 	}
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
+	const bool xf = ExpandFarOn();
 	// Deadly for THIS walker; the spot itself stays open for a safer angle,
 	// so gMexOpen is not cleared.
-	if (DeathWalk(unit, pos) && !(unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+	if (!xf && DeathWalk(unit, pos) && !(unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 			&& (ComRaidF(unit, pos) < 1.f))) {
 		++gMexDeathWalk;
 		return w;
@@ -1230,7 +1256,13 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	// the trip costs the con's expected loss (TripRisk, coverage.as).
 	const bool isCom = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	// For him only what there can kill him counts (ComRaidF).
-	const float risk = TripRiskFrom(here, pos) * (isCom ? ComRaidF(unit, pos) : 1.f);
+	float risk = TripRiskFrom(here, pos);
+	if (xf) {
+		const float road = ExpandFarRoadRisk(here, pos);
+		if (road > risk)
+			risk = road;
+	}
+	risk *= isCom ? ComRaidF(unit, pos) : 1.f;
 	gMexRiskSum += risk;
 	// What the trip stakes: the hand's price -- or, for the commander,
 	// everything we own, because his death is the game.
@@ -1240,6 +1272,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	const float dist = here.distance2D(pos);
 	gAvgWalkDist = 0.8f * gAvgWalkDist + 0.2f * dist;
 	const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
+	const float pOpen = ExpandFarPOpen(spot, walkSec);
 	// Every extractor this builder can place, priced; the VALUE picks the
 	// def (a same-yield mex at 4.7x the cost lost the nomination it used to
 	// win on raw extraction -- measured: armamex over armmex).
@@ -1272,7 +1305,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// a home mex at half of a solar standing beside it. The trip risk
 		// is his distance-and-army-share model (docs/doctrine.md era directives).
 		const float surv = StreamSurvivalOver(pos, walkSec + Catalog::BuildSecondsAt(d, mxBP));
-		gain *= surv * (1.f - risk);
+		gain *= surv * (1.f - risk) * pOpen;
 		// Metal we cannot spend scales nothing, so it is not priced as though
 		// it did -- the twin of the share energy has always had to prove.
 		gain *= MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));

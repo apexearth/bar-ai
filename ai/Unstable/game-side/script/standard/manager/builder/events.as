@@ -96,6 +96,7 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 	}
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
+	Market::ExpandFarTaskGone(task, done);
 	if (gGoneOk.length() == 0) {
 		gGoneOk.resize(Catalog::gDefCount + 1);
 		gGoneBad.resize(Catalog::gDefCount + 1);

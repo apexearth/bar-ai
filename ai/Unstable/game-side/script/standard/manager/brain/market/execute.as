@@ -570,8 +570,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// spotId at -1 (measured: one decide, then a game-long freeze).
 		IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::MEX,
 				Task::Priority::NORMAL, w.def, w.pos, w.spotId));
-		if (t !is null)
+		if (t !is null) {
 			LedgerClaim(w.spotId, w.pos, aiEconomyMgr.GetMexSpotIncome(w.spotId));
+			const AIFloat3 uAt = unit.GetPos(ai.frame);
+			const float sp = Catalog::gSpeed[int(unit.circuitDef.id)];
+			ExpandFarNoteExec(w.pos, XfPOpen(w.spotId, (sp > 1.f) ? uAt.distance2D(w.pos) / sp : 60.f),
+					ExpandFarRoadRisk(uAt, w.pos));
+		}
 		return t;
 	}
 	if (w.kind == WK_MEXUP) {
