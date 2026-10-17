@@ -993,6 +993,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			}
 		}
 		CCircuitUnit@ lineAt = null;
+		string lineName = "wall";
 		if (!sited) {
 			AIFloat3 lp;
 			float ln = 0.f;
@@ -1001,6 +1002,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				slot = lp;
 				sited = true;
 				lineSited = true;
+				if (lineAt !is null)
+					lineName = lineAt.circuitDef.GetName();
+				else if (Catalog::Def(gGantryShortDef) !is null)
+					lineName = Catalog::Def(gGantryShortDef).GetName() + "(frame)";
 			}
 		}
 		// NEAR THE METAL SINKS (apexearth: "if we are not empty on metal...
@@ -1130,7 +1135,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (lineSited)
 			AiLog("apex: nano-to-line t=" + ai.teamId
-					+ " " + ((lineAt !is null) ? lineAt.circuitDef.GetName() : "wall")
+					+ " " + lineName
 					+ " net=" + formatFloat(worst, "", 0, 1)
 					+ " ring=" + formatFloat(RingBPAt(slot), "", 0, 0)
 					+ " src=" + w.spotId);
@@ -1236,8 +1241,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					// frame shape the frame budget forbids.
 					const double _tBatch = Perf::T0();
 					const uint nFacs = Factory::gFacUnits.length();
+					// A short gantry frame is one more line, after the standing ones.
+					const bool gFrame = GantryShortIsFrame();
+					const uint nLines = nFacs + (gFrame ? 1 : 0);
 					int left = wantN - 1;
-					const uint lines = (nFacs > 0) ? nFacs : 1;
+					const uint lines = (nLines > 0) ? nLines : 1;
 					string walkLog = "";
 					string lastRef = "";
 					// BY UNSERVED SPEND, NOT BY HEAD (apexearth 2026-09-13, on
@@ -1248,21 +1256,32 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					const float bFeed = FreeMetalFlow();
 					const float bFloor = LineSpend();
 					const float bCeil = LineCeilSum();
-					array<float> needK(nFacs, 0.f);
+					array<float> needK(nLines, 0.f);
 					float needSum = 0.f;
 					// A gantry under its 50 takes the whole batch.
-					CCircuitUnit@ gShort = GantryShort();
+					const bool gAny = GantryShortSite();
 					for (uint fk = 0; fk < nFacs; ++fk) {
-						needK[fk] = (gShort !is null)
-								? ((Factory::gFacUnits[fk] is gShort) ? 1.f : 0.f)
+						needK[fk] = gAny
+								? ((Factory::gFacUnits[fk] is gGantryShort) ? 1.f : 0.f)
 								: LineUnserved(Factory::gFacUnits[fk], bFeed, bFloor, bCeil);
 						needSum += needK[fk];
+					}
+					if (gFrame) {
+						needK[nFacs] = 1.f;
+						needSum += 1.f;
 					}
 					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
 						int anchorK = nAnchor;
 						int askK = left / int(lines - fi2);
-						if (nFacs > 0) {
+						if (fi2 >= nFacs) {
+							if (gFrame) {
+								baseK = gGantryShortPos;
+								anchorK = gGantryShortDef;
+							}
+							if (needSum > 0.f)
+								askK = left;
+						} else {
 							CCircuitUnit@ fK = Factory::gFacUnits[fi2];
 							if (fK is null)
 								continue;
@@ -1283,10 +1302,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 							askK = 1;
 						array<AIFloat3> packK;
 						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
-						if (nFacs > 0)
+						if (nLines > 0)
 							NoteNanoDry(anchorK, packK.length() == 0);
 						// No factory standing leaves the anchor at -1.
 						walkLog += " " + ((Catalog::Def(anchorK) !is null) ? Catalog::Def(anchorK).GetName() : "-")
+								+ ((fi2 >= nFacs) && gFrame ? "(frame)" : "")
 								+ ":ask" + askK + "/got" + packK.length()
 								+ "/taken" + gNPTaken + "/lane" + gNPLane
 								+ "/door" + gNPDoor + "/out" + gNPOut;

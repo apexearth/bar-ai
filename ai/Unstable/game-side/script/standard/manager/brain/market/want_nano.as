@@ -18,6 +18,7 @@ const int NS_YARD = 7;   // beside a yard, at the exact spot priced: the land pr
 // caretakers in reach for a T1 / T2 / T3 plant, as stock counts them. Returns
 // the worst shortfall and that factory; live nano requests in reach count.
 int gFloorYardLoss = 0, gFloorYardAssist = 0, gFloorYardShort = 0;
+int gFloorFrame = 0;   // 1 when the worst-short plant is still a frame
 
 int FactoryNanoShort(AIFloat3& out at)
 {
@@ -25,6 +26,7 @@ int FactoryNanoShort(AIFloat3& out at)
 	gFloorYardLoss = 0;
 	gFloorYardAssist = 0;
 	gFloorYardShort = 0;
+	gFloorFrame = 0;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if (f is null)
@@ -32,60 +34,75 @@ int FactoryNanoShort(AIFloat3& out at)
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		if (!OnMap(fp))
 			continue;
-		const int tier = PlantTier(int(f.circuitDef.id));
-		// A gantry keeps the lathe that spends our income (GantryNanoWant),
-		// whatever the bank reads.
-		const bool gantry = IsGantryDef(int(f.circuitDef.id));
-		const int want = gantry
-				? (NanoBlockFull(int(f.circuitDef.id)) ? 0 : GantryNanoWant(int(f.circuitDef.id)))
-				: ((tier >= 3) ? 9 : ((tier == 2) ? 4 : 2));
-		// A plant whose ground is being raided does not hoist its turret
-		// past the draw: the floor sent a nano to the same raided row 104
-		// times in one game, every frame killed (watched). Priced like any
-		// other want there, it waits for the gun the loss field is buying.
-		const bool yard = PlantClass(int(f.circuitDef.id)) == PC_WATER;
-		if (LossNearM(fp, NanoMaxReach()) > 200.f) {
-			if (yard)
-				++gFloorYardLoss;
-			continue;
-		}
-		int have = 0;
-		NanoNear(fp, NanoMaxReach());
-		for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
-			const uint i = uint(gNanoGrid.hit[q]);
-			const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
-			if (fp.distance2D(gOwnNanoPos[i]) < 0.9f * r)
-				++have;
-		}
-		for (uint li = 0; li < Requests::gLive.length(); ++li) {
-			IUnitTask@ lt = Requests::gLive[li];
-			if ((lt is null) || lt.IsDead() || (lt.buildDef is null)
-				|| (lt.GetBuildType() != Task::BuildType::NANO))
-				continue;
-			const AIFloat3 lp = lt.GetBuildPos();
-			if (OnMap(lp) && (fp.distance2D(lp)
-					< 0.9f * Catalog::gBuildDist[int(lt.buildDef.id)]))
-				++have;
-		}
-		// Stock's own gate on that count is its isAssistRequired -- the bank
-		// above a fifth of storage and no energy stall -- and its caretakers
-		// stand by minute 2 (0.4 per plant at 4 min, 1.7 at 8, measured
-		// 2026-09-22). The income arithmetic that stood here asked 26 m/s for
-		// the first turret and 44 for the second, which at 12-15 m/s per
-		// player held our first plant nano past minute 8.
-		if (!gantry && !aiFactoryMgr.isAssistRequired) {
-			if (yard)
-				++gFloorYardAssist;
-			continue;
-		}
-		if (yard && (want > have))
-			++gFloorYardShort;
-		if (want - have > worst) {
-			worst = want - have;
+		const int gap = FloorGapAt(fp, int(f.circuitDef.id));
+		if (gap > worst) {
+			worst = gap;
 			at = fp;
 		}
 	}
+	PlantFrames();
+	for (uint k = 0; k < gPlantFrameDef.length(); ++k) {
+		const int gap = FloorGapAt(gPlantFramePos[k], gPlantFrameDef[k]);
+		if (gap > worst) {
+			worst = gap;
+			at = gPlantFramePos[k];
+			gFloorFrame = 1;
+		}
+	}
 	return worst;
+}
+
+int FloorGapAt(const AIFloat3& in fp, int d)
+{
+	const int tier = PlantTier(d);
+	// A gantry keeps the lathe that spends our income (GantryNanoWant),
+	// whatever the bank reads.
+	const bool gantry = IsGantryDef(d);
+	const int want = gantry
+			? (NanoBlockFull(d) ? 0 : GantryNanoWant(d))
+			: ((tier >= 3) ? 9 : ((tier == 2) ? 4 : 2));
+	// A plant whose ground is being raided does not hoist its turret
+	// past the draw: the floor sent a nano to the same raided row 104
+	// times in one game, every frame killed (watched). Priced like any
+	// other want there, it waits for the gun the loss field is buying.
+	const bool yard = PlantClass(d) == PC_WATER;
+	if (LossNearM(fp, NanoMaxReach()) > 200.f) {
+		if (yard)
+			++gFloorYardLoss;
+		return 0;
+	}
+	int have = 0;
+	NanoNear(fp, NanoMaxReach());
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		if (fp.distance2D(gOwnNanoPos[i]) < 0.9f * r)
+			++have;
+	}
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || lt.IsDead() || (lt.buildDef is null)
+			|| (lt.GetBuildType() != Task::BuildType::NANO))
+			continue;
+		const AIFloat3 lp = lt.GetBuildPos();
+		if (OnMap(lp) && (fp.distance2D(lp)
+				< 0.9f * Catalog::gBuildDist[int(lt.buildDef.id)]))
+			++have;
+	}
+	// Stock's own gate on that count is its isAssistRequired -- the bank
+	// above a fifth of storage and no energy stall -- and its caretakers
+	// stand by minute 2 (0.4 per plant at 4 min, 1.7 at 8, measured
+	// 2026-09-22). The income arithmetic that stood here asked 26 m/s for
+	// the first turret and 44 for the second, which at 12-15 m/s per
+	// player held our first plant nano past minute 8.
+	if (!gantry && !aiFactoryMgr.isAssistRequired) {
+		if (yard)
+			++gFloorYardAssist;
+		return 0;
+	}
+	if (yard && (want > have))
+		++gFloorYardShort;
+	return want - have;
 }
 
 // A yard stands in water, so its turrets float beside it: a floating turret
@@ -453,7 +470,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		float lathe0 = 0.f;
 		AnyLineSite(lp0, lathe0);
 		AiLog(Factory::T() + "apex: nanowant " + unit.circuitDef.GetName()
-			+ " gantry=" + ((GantryShort() !is null) ? ("" + gGantryShortN + "/" + gGantryShortWant) : "ok")
+			+ " gantry=" + (GantryShortSite() ? ((GantryShortIsFrame() ? "frame:" : "")
+				+ gGantryShortN + "/" + gGantryShortWant) : "ok")
+			+ " frames=" + gPlantFrameDef.length() + " floorFrame=" + gFloorFrame
 			+ " feed=" + formatFloat(FreeMetalFlow(), "", 0, 1)
 			+ " spare=" + formatFloat(spareS, "", 0, 1)
 			+ " line=" + formatFloat(lineNeed, "", 0, 1)

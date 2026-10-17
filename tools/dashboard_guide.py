@@ -456,6 +456,10 @@ PANELS = [
             ("TUNE_FLOW_E_BILL", "ON: when metal is piling up, a factory still only builds something if it is "
              "worth the energy it costs; nothing worth it, and the factory waits. OFF: with spare metal a "
              "factory builds even a near-useless unit rather than sit idle."),
+            ("TUNE_NANO_EARLY", "ON: construction turrets go up around a gantry, an advanced lab or an "
+             "advanced air plant while it is still being built, as many as it will want once finished; they "
+             "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
+             "still short of turrets is unfinished. OFF: a factory gets turrets only once it is finished."),
             ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
              "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
              "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "
