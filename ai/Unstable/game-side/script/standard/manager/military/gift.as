@@ -31,6 +31,7 @@ int gGiftShipped = 0;
 int gGiftLastTo = -1;
 int gGiftLastAt = -1000000;
 int gGiftLogAt = 0;
+int gGiftWaveAt = 0;   // when the last wave given reaches the receiver
 
 // Enemy metal at home: groups inside the danger radius, and the metal they are
 // killing there when they cannot be seen. HoldNeedM without its stance clause,
@@ -96,6 +97,37 @@ float GiftSpareM()
 	return (spare > 0.f) ? spare : 0.f;
 }
 
+// How long the fight at our home lasts, s, from what it is doing: a need
+// falling ends when it reaches zero at that rate; otherwise the base holds as
+// long as what stands lasts at the rate it is dying. Published for donors.
+const string TV_GEND = "gend";
+const int GIFT_EVERY = 10 * SECOND;
+array<float> gGiftNeedHist;
+array<int> gGiftNeedAt;
+float GiftFightEndSec(float need)
+{
+	gGiftNeedHist.insertLast(need);
+	gGiftNeedAt.insertLast(ai.frame);
+	while ((gGiftNeedAt.length() > 1) && (ai.frame - gGiftNeedAt[0] > GIFT_EVERY)) {
+		gGiftNeedHist.removeAt(0);
+		gGiftNeedAt.removeAt(0);
+	}
+	if (need <= 0.f)
+		return 0.f;
+	const float dt = float(ai.frame - gGiftNeedAt[0]) / float(SECOND);
+	if (dt > 0.f) {
+		const float fall = (gGiftNeedHist[0] - need) / dt;
+		if (fall > 0.f)
+			return need / fall;
+	}
+	if (!Builder::gHomeSet)
+		return Requests::JaHorizon();
+	const float rate = Market::LossNearM(Builder::gHomePos, Builder::BASE_DANGER_DIST) / Market::LossTau();
+	if (rate <= 0.f)
+		return Requests::JaHorizon();
+	return Market::EconAssetsM() / rate;
+}
+
 bool GiftableDef(int d)
 {
 	return Catalog::gMobile[d] && !Catalog::gBuilder[d] && !Catalog::gFlyer[d]
@@ -107,13 +139,15 @@ void UpdateGifts()
 	if (ai.frame >= gGiftPubAt) {
 		gGiftPubAt = ai.frame + 2 * SECOND;
 		ai.PublishTeamValue(TV_GFOE, FoeAtHomeM());
-		ai.PublishTeamValue(TV_GNEED, GiftNeedM());
+		const float myNeed = GiftNeedM();
+		ai.PublishTeamValue(TV_GNEED, myNeed);
+		ai.PublishTeamValue(TV_GEND, GiftFightEndSec(myNeed));
 		ai.PublishTeamValue(TV_GSPARE, GiftSpareM());
 		ai.PublishTeamValue(TV_GAT, float(ai.frame));
 	}
 	if (ai.frame < gGiftNextAt)
 		return;
-	gGiftNextAt = ai.frame + 10 * SECOND;
+	gGiftNextAt = ai.frame + GIFT_EVERY;
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() < 2))
 		return;
@@ -142,6 +176,10 @@ void UpdateGifts()
 	// same seat is covered again.
 	if ((to == gGiftLastTo) && (ai.frame - gGiftLastAt < 30 * SECOND))
 		return;
+	// ...and the last wave has landed before the next one leaves.
+	if (Requests::JoinArriveOn() && (to == gGiftLastTo) && (ai.frame < gGiftWaveAt))
+		return;
+	const float fightEnd = ai.ReadTeamValue(to, TV_GEND, 0.f);
 
 	// Donors nearest the receiver first; the same order on every seat.
 	array<int> dId;
@@ -216,6 +254,8 @@ void UpdateGifts()
 				reachR = 200.f;
 			if (!ai.CanDefReachAt(cdef, p, toHome, reachR))
 				continue;
+			if (Requests::JoinArriveOn() && (Requests::JoinSlackSec(Requests::JA_GIFT, u, toHome, fightEnd) <= 0.f))
+				continue;   // the fight is over before it gets there
 			const float dd = p.distance2D(toHome);
 			uint at = 0;
 			while ((at < candD.length()) && (candD[at] < dd))
@@ -226,12 +266,28 @@ void UpdateGifts()
 	}
 	array<CCircuitUnit@> give;
 	float gave = 0.f;
+	float waveSec = 0.f;
 	for (uint i = 0; (i < cand.length()) && (gave < mine); ++i) {
 		give.insertLast(cand[i]);
 		gave += Catalog::gCostM[int(cand[i].circuitDef.id)];
+		const float a = Requests::JoinArriveSec(cand[i], toHome);
+		if (a > waveSec)
+			waveSec = a;
 	}
 	if (give.length() == 0)
 		return;
+	// One wave that covers our part, all there before the fight ends, or none.
+	if (Requests::JoinArriveOn() && (gave < mine)) {
+		Requests::JoinCountRefuse(Requests::JA_GIFT, Requests::JA_WHY_COST);
+		if (ai.frame >= gGiftLogAt) {
+			gGiftLogAt = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: gift none -- t=" + to + " mine=" + int(mine)
+				+ ", in time " + int(gave) + " (fight ends in " + int(fightEnd) + " s)");
+		}
+		return;
+	}
+	gGiftWaveAt = ai.frame + int(waveSec * float(SECOND));
+	Requests::gJaTaken[Requests::JA_GIFT] += int(give.length());
 	ai.GiveUnits(give, to);
 	gGiftShipped += int(give.length());
 	gGiftLastTo = to;
@@ -419,6 +475,7 @@ void UpdateSeatMerge()
 		if ((seat[s] != ai.teamId) || kept[s] || (com is null))
 			continue;
 		array<CCircuitUnit@> give = {com};
+		// join-arrive: a seat handing over its commander, not a join
 		ai.GiveUnits(give, giveTo[s]);
 		gMergedTo = giveTo[s];
 		ai.PublishTeamValue("seatout", 1.f);
@@ -529,6 +586,7 @@ void TeamTechGift(int mineN)
 	}
 	Market::gTtCredit[pick] -= total;
 	array<CCircuitUnit@> give = {best};
+	// join-arrive: a constructor handed over, not sent to a fight
 	ai.GiveUnits(give, pick);
 	Market::TeamTechNoteGift(pick);
 	++gConGiftShipped;
@@ -602,6 +660,7 @@ void UpdateConGift()
 		if (best is null)
 			continue;
 		array<CCircuitUnit@> give = {best};
+		// join-arrive: a constructor handed over, not sent to a fight
 		ai.GiveUnits(give, to);
 		++gConGiftShipped;
 		gConGiftTo = to;

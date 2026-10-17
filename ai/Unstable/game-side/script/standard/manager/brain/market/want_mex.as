@@ -491,12 +491,40 @@ float DisplacedStreamM()
 // speed on the standing frame -- instead of opening a parallel copy
 // (apexearth: "not too many of the same building in parallel; assist
 // should count the time saved").
-IUnitTask@ JoinBig(CCircuitDef@ def)
+IUnitTask@ JoinBig(CCircuitUnit@ unit, Want@ w)
 {
+	CCircuitDef@ def = w.def;
 	if ((def is null)
 		|| (def.costM < ai.GetTunable("apex_join_min_m", TUNE_JOIN_MIN_M)))
 		return null;
-	return Requests::LiveTaskOf(def);
+	IUnitTask@ best = null;
+	if (Requests::JoinArriveOn()) {
+		float bestNet = 0.f;
+		const uint cap = Requests::SiteWorkerCap(def);
+		for (uint i = 0; i < Requests::gLive.length(); ++i) {
+			IUnitTask@ t = Requests::gLive[i];
+			if ((t is null) || t.IsDead() || (t.buildDef !is def) || (t is unit.task))
+				continue;
+			const uint busy = Requests::Workers(t);
+			const float worth = Requests::JoinWorthTask(Requests::JA_BIG, unit, t, w.gain,
+					(busy > 0) && (busy + uint(GuardsOnJob(t)) >= cap));
+			if (worth <= 0.f)
+				continue;
+			const float net = worth - Requests::gJaWalkCost;
+			if (net <= 0.f) {
+				Requests::JoinCountRefuse(Requests::JA_BIG, Requests::JA_WHY_COST);
+				continue;
+			}
+			if ((best is null) || (net > bestNet)) {
+				@best = t;
+				bestNet = net;
+			}
+		}
+	} else
+		@best = Requests::LiveTaskOf(def);
+	if (best !is null)
+		Requests::JoinTaken(Requests::JA_BIG, unit, best, best, best.GetBuildPos());
+	return best;
 }
 
 // CROSS-TIER: the gate above reads the WANT's cost and LiveTaskOf matches

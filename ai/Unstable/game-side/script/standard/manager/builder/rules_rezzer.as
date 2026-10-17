@@ -1002,6 +1002,37 @@ int gNextComRezLog = 0;
 array<int> gComRezMates;
 bool gComRezMatesSet = false;
 
+// One rez bot per fallen commander, team-wide: the claimer publishes the frame
+// its corpse rots ("comrz<team>"), and a claim lapses with that frame or with
+// the bot leaving the job (Requests::JoinArriveTick).
+array<int> gComRzBot(256, -1);
+bool ComRezTaken(int t, CCircuitUnit@ unit)
+{
+	for (uint i = 0; i < gComRezMates.length(); ++i) {
+		const int m = gComRezMates[i];
+		if (ai.ReadTeamValue(m, "comrz" + t, -1.f) <= float(ai.frame))
+			continue;
+		if (m != ai.teamId)
+			return true;
+		if ((t < 0) || (t >= int(gComRzBot.length())) || (gComRzBot[t] < 0)
+			|| (gComRzBot[t] == int(unit.id)))
+			continue;
+		if (ai.GetTeamUnit(Id(gComRzBot[t])) !is null)
+			return true;
+	}
+	return false;
+}
+
+void ComRezRelease(int unitId)
+{
+	for (uint t = 0; t < gComRzBot.length(); ++t) {
+		if (gComRzBot[t] != unitId)
+			continue;
+		gComRzBot[t] = -1;
+		ai.PublishTeamValue("comrz" + t, -1.f);
+	}
+}
+
 IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 {
 	if (!IsRezzer(unit))
@@ -1025,9 +1056,19 @@ IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 			continue;
 		if ((RezThreat(unit, at) > CON_THREAT_VETO) || !RezSiteOk(unit, at))
 			continue;
+		const int endF = int(wf) + COM_WRECK_FRESH_S * SECOND;
+		if (Requests::JoinArriveOn()
+			&& (Requests::JoinSlackSec(Requests::JA_REZ, unit, at,
+				float(endF - ai.frame) / float(SECOND), ComRezTaken(t, unit)) <= 0.f))
+			continue;
 		IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 				Task::Priority::HIGH, at, 100.f, 120 * SECOND, WRECK_RADIUS));
 		if (rez !is null) {
+			if (Requests::JoinArriveOn() && (t >= 0) && (t < int(gComRzBot.length()))) {
+				gComRzBot[t] = int(unit.id);
+				ai.PublishTeamValue("comrz" + t, float(endF));
+			}
+			Requests::JoinTaken(Requests::JA_REZ, unit, null, rez, at, endF);
 			if (ai.frame >= gNextComRezLog) {
 				gNextComRezLog = ai.frame + 30 * SECOND;
 				AiLog("apex: com rescue t=" + ai.teamId + " "
@@ -1081,6 +1122,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		}
 		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH, floorM);
 		if ((rich.x >= 0.f) && (RezThreat(unit, rich) <= CON_THREAT_VETO) && RezRezSiteOk(unit, rich)) {
+			// join-arrive: a rez of the wreck this bot found, not a join
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
 			if (rr !is null) {

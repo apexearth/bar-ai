@@ -60,6 +60,7 @@ void ShareWing()
 	}
 	if (give.length() == 0)
 		return;
+	// join-arrive: row 18, the receiver's wave launches them (not routed here)
 	ai.GiveUnits(give, to);
 	gShareGiven += int(give.length());
 	AiLog(Factory::T() + "apex: air share " + give.length() + " bombers -> t=" + to

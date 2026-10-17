@@ -3193,11 +3193,19 @@ int DefJoinPrice(CCircuitUnit@ unit, array<Want@>@ ranked, Want@ w, CCircuitUnit
 		crewB = Catalog::gBuildPower[int(boss.circuitDef.id)];
 	if ((b <= 0.f) || (crewB <= 0.f))
 		return -1;
-	const float remSec = Catalog::BuildSecondsAt(td, crewB + b) * (1.f - prog);
+	float remSec = Catalog::BuildSecondsAt(td, crewB + b) * (1.f - prog);
 	const float spd = Catalog::gSpeed[uid];
-	const float walkSec = (spd > 1.f) ? (unit.GetPos(ai.frame).distance2D(w.pos) / spd) : 30.f;
+	float walkSec = (spd > 1.f) ? (unit.GetPos(ai.frame).distance2D(w.pos) / spd) : 30.f;
 	w.gain = towerG * b / crewB;
 	w.mCost = 1.f;
+	if (Requests::JoinArriveOn() && (job !is null)) {
+		// The hand's stint starts at its arrival; the tower may be up by then.
+		if (Requests::JoinWorthTask(-1, unit, job, towerG) <= 0.f)
+			return 0;
+		remSec = Requests::gJaOcc;
+		walkSec = Requests::gJaArrive;
+		w.mCost += Requests::gJaRisk;
+	}
 	w.tCost = (walkSec + remSec) * WageOf(unit) + w.gain * walkSec;
 	w.walkSec = walkSec;
 	w.value = w.gain / (w.mCost + w.tCost);

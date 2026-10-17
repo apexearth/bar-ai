@@ -549,6 +549,37 @@ def check_side_strength(script_root: Path, rep: Report) -> None:
                           f"'// seat-local: <why>' (09-26 fix lost twice, 10-10)")
 
 
+# A unit sent into work already under way: a guard or join onto a live build, a
+# rescue of a corpse, units handed to an ally's fight, a turret flown to a frame.
+# Nothing is fed in where it arrives too late to help, and every path goes
+# through one rule (TUNE_JOIN_ARRIVE, requests/joinarrive.as). The function must
+# ask that rule before the call, or say why not with '// join-arrive: <why>'.
+_JOIN_CALLS = ("TaskB::Guard(", "TaskB::GuardAlly(", "LiveTaskOf(", "TaskB::Resurrect(",
+               "CmdLoadUnit(", "GiveUnits(")
+_JOIN_TOKENS = ("JoinWorth", "JoinOk", "JoinSlackSec", "WorthJoiningSite", "join-arrive:")
+_JOIN_DEF = re.compile(r"\s*IUnitTask@\s+LiveTaskOf\s*\(")
+
+
+def check_join_arrive(script_root: Path, rep: Report) -> None:
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        lines = path.read_text(encoding="utf8", errors="replace").splitlines()
+        rel = path.relative_to(script_root.parent).as_posix()
+        for n, raw in enumerate(lines):
+            code = raw.split("//", 1)[0]
+            if not any(c in code for c in _JOIN_CALLS) or _JOIN_DEF.match(code):
+                continue
+            start = n
+            while start > 0 and lines[start] != "{":
+                start -= 1
+            body = "\n".join(lines[max(start - 3, 0):n + 1])
+            if not any(t in body for t in _JOIN_TOKENS):
+                rep.error(f"{rel}:{n + 1}: a unit sent into work under way without the arrival "
+                          f"test -- ask Requests::JoinWorth/JoinOk/JoinSlackSec first, or mark "
+                          f"'// join-arrive: <why>' (his 2026-10-16, TUNE_JOIN_ARRIVE)")
+
+
 _CPP_SIDE = re.compile(r"[Pp]ower\w*\)?\s*<=?\s*[\w.>()-]*influence")
 _CPP_SIDE_TOKENS = ("sideAt(", "GetAllySquadPowerAt", "GetAllyPowerAt", "seat-local:")
 
@@ -637,6 +668,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_lazy_caches(script_root, rep)
     check_spend_census(script_root, rep)
     check_side_strength(script_root, rep)
+    check_join_arrive(script_root, rep)
     check_cpp_side_strength(rep)
     if variant == "Unstable":
         check_join_window(rep)

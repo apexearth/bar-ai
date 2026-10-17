@@ -431,6 +431,7 @@ bool FerryDispatch(LiftJob@ jb)
 	jb.retried = false;
 	jb.deadline = ai.frame + int((bestD / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
 	best.stage = 2;
+	// join-arrive: a finished tower flown to an empty slot, not a join
 	jb.plane.CmdLoadUnit(best.tower);
 	AiLog("apex: ferry go t=" + ai.teamId + " " + jb.plane.circuitDef.GetName()
 			+ " #" + jb.plane.id + " takes " + best.tower.circuitDef.GetName()

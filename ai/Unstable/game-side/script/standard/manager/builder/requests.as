@@ -31,6 +31,7 @@
 #include "requests/take.as"      // Take(): the chokepoint itself
 #include "requests/join.as"      // cover, folds onto standing work, claims, in-flight
 #include "requests/peel.as"      // peeling surplus hands, energy consolidation
+#include "requests/joinarrive.as" // the one test for a hand joining work under way
 
 // Create() and Log() stay in THIS file rather than a part: tools/check.py's
 // spend census allowlists the request plumbing's own Enqueue by this exact

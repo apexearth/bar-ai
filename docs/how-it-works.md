@@ -77,6 +77,10 @@ update (S14), so an election that changes nothing must return the task it holds.
 **Crews** (`ai-builder-crew`): every build goes through the requests chokepoint
 (`builder/requests/`), which dedups, joins and adopts orphans. How many hands work one site and
 how many sites run at once are derived from income; surplus hands are peeled back to the auction.
+A hand joins live work only if it shortens it after arriving (`WorthJoiningSite`); under
+`TUNE_JOIN_ARRIVE` (off, `requests/joinarrive.as`) every join, assist, guard, commander rescue,
+army gift and nano lift asks one helper that counts only the work left at arrival, times the job's
+worth, less the trip's risk, and `check.py` holds those call sites to it.
 Roles (`market/roles.as`) shift how much a seat leans to energy, defence or upgrades, never
 whether it may.
 

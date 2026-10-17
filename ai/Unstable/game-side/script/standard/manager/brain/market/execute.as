@@ -440,6 +440,7 @@ IUnitTask@ StallDebtPay(CCircuitUnit@ unit)
 		done = 1.f;
 	const float left = frame.circuitDef.costM * (1.f - done);
 	const int hold = int(left / Requests::DRAIN) + 10;
+	// join-arrive: the frame this hand abandoned, nobody else on it
 	IUnitTask@ res = aiBuilderMgr.Enqueue(TaskB::Guard(
 			Task::Priority::NORMAL, frame, false, hold * SECOND));
 	if (res is null)
@@ -519,6 +520,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				done0 = 1.f;
 			const float left0 = w.def.costM * (1.f - done0);
 			const int hold0 = int(left0 / Requests::DRAIN) + 10;
+			// join-arrive: a standing frame with no request, nobody else on it
 			IUnitTask@ g0 = aiBuilderMgr.Enqueue(TaskB::Guard(
 					Task::Priority::NORMAL, pf0, false, hold0 * SECOND));
 			if (g0 !is null) {
@@ -587,7 +589,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return mu;
 	}
 	if (w.kind == WK_TECH) {
-		IUnitTask@ jt = JoinBig(w.def);
+		IUnitTask@ jt = JoinBig(unit, w);
 		if (jt !is null)
 			return jt;
 		// Probed last: the C++ reach-safe veto marks refused ground, and a
@@ -797,7 +799,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if ((w.spotId == SC_GANTRY) || (w.spotId == SC_AIRPLANT)) {
 			if (w.spotId == SC_GANTRY)
 				NotePlantAsk(int(w.def.id), w.gain, w.value);
-			IUnitTask@ jg = JoinBig(w.def);
+			IUnitTask@ jg = JoinBig(unit, w);
 			if (jg !is null)
 				return jg;
 			return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
@@ -816,6 +818,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_ASSIST) {
 		if ((gAssistTarget is null) && (gAssistAllyId >= 0) && (w.spotId == gAssistAllyId)) {
+			// join-arrive: priced by ProposeUnlockAssist
 			IUnitTask@ ga = aiBuilderMgr.Enqueue(TaskB::GuardAlly(Task::Priority::NORMAL,
 					gAssistAllyId, w.pos, gAssistGuardS * SECOND));
 			if (ga !is null) {
@@ -858,13 +861,22 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					+ " #" + unit.id + " -> " + w.def.GetName()
 					+ " at=" + int(w.pos.x) + "," + int(w.pos.z)
 					+ " workers=" + Requests::Workers(jt));
+				if (w.joinPath >= 0)
+					Requests::JoinTaken(w.joinPath, unit, jt, jt, w.pos);
 				return jt;
 			}
 		}
+		// join-arrive: priced by its proposer (ProposeUnlockAssist, DefJoinOffer, ProposeAssist, AssistEcoPick)
 		IUnitTask@ gt = aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
 				gAssistTarget, false, gAssistGuardS * SECOND));
-		if (gt !is null)
+		if (gt !is null) {
 			GuardNote(unit, gAssistTarget);
+			if (w.joinPath >= 0) {
+				IUnitTask@ bj = JobOfBoss(gAssistTarget);
+				if (bj !is null)
+					Requests::JoinTaken(w.joinPath, unit, bj, gt, bj.GetBuildPos());
+			}
+		}
 		return gt;
 	}
 	if ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT)) {
@@ -1556,7 +1568,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return null;
 	}
 	if (w.kind == WK_PLANT) {
-		IUnitTask@ jt = JoinBig(w.def);
+		IUnitTask@ jt = JoinBig(unit, w);
 		if (jt !is null)
 			return jt;
 		// A floating plant keeps the water it was priced against -- the

@@ -230,9 +230,11 @@ void LiftSample()
 // The big frame furthest short of lathe -- a fusion, an afus, a converter block
 // -- when no line wants a turret (apexearth 2026-10-02: idle turrets stood at
 // home while the build they could have fed rose with nobody beside it).
-bool SinkSiteFor(AIFloat3& out at, float& out gap)
+IUnitTask@ gSinkJob;
+bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 {
 	gap = 0.f;
+	@gSinkJob = null;
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
 		IUnitTask@ t = Requests::gLive[i];
 		if ((t is null) || t.IsDead() || (t.buildDef is null)
@@ -242,10 +244,19 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap)
 		if (!OnMap(p) || Builder::SiteHot(p))
 			continue;
 		const float g = NanoGap(p);
-		if (g > gap) {
-			gap = g;
-			at = p;
+		if (g <= gap)
+			continue;
+		// a frame the lathe on it finishes before the plane can reach it is no sink
+		if ((plane !is null) && Requests::JoinArriveOn()) {
+			uint arrived = 0;
+			const float crew = Requests::ArrivedLathe(t, arrived) + Requests::RingSeen(t);
+			if (Requests::JoinSavedSec(Catalog::gBuildTime[int(t.buildDef.id)] * (1.f - Requests::Progress(t)),
+					crew, 1.f, plane.GetPos(ai.frame).distance2D(p) / LiftSpeed(plane)) <= 0.f)
+				continue;
 		}
+		gap = g;
+		at = p;
+		@gSinkJob = t;
 	}
 	return gap > 0.f;
 }
@@ -295,7 +306,7 @@ void LiftRehome(LiftJob@ jb, CCircuitUnit@ held)
 	AIFloat3 to;
 	// a ferried tower's slot died with its job: it goes down near the plane
 	const bool lined = (NanoIndexOf(held.id) >= 0)
-			&& ((LineSiteFor(lp, net, line) && (net > 0.f)) || SinkSiteFor(lp, net));
+			&& ((LineSiteFor(lp, net, line) && (net > 0.f)) || SinkSiteFor(lp, net, jb.plane));
 	if (lined)
 		to = LiftSlotNear(cd, lp);
 	if (!lined || !OnMap(to) || Builder::SiteHot(to))
@@ -320,8 +331,15 @@ bool LiftDispatch(LiftJob@ jb)
 	AIFloat3 lp;
 	float net = 0.f;
 	CCircuitUnit@ line = null;
-	if ((!LineSiteFor(lp, net, line) || (net <= 0.f)) && !SinkSiteFor(lp, net))
-		return false;
+	bool sink = false;
+	if (!LineSiteFor(lp, net, line) || (net <= 0.f)) {
+		if (!SinkSiteFor(lp, net, jb.plane))
+			return false;
+		sink = true;
+	}
+	IUnitTask@ sinkJob = null;
+	if (sink)
+		@sinkJob = gSinkJob;
 	const int pd = int(jb.plane.circuitDef.id);
 	const float speed = LiftSpeed(jb.plane);
 	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
@@ -348,9 +366,15 @@ bool LiftDispatch(LiftJob@ jb)
 	if (best < 0)
 		return false;
 	CCircuitUnit@ cargo = gOwnNano[best];
+	if ((sinkJob !is null) && Requests::JoinArriveOn()
+		&& !Requests::JoinOkTask(Requests::JA_LIFT, jb.plane, sinkJob, JobGain(sinkJob), false,
+			bestSec, Catalog::gBuildPower[int(cargo.circuitDef.id)]))
+		return false;
 	const AIFloat3 to = LiftSlotNear(int(cargo.circuitDef.id), lp);
 	if (!OnMap(to) || Builder::SiteHot(to))
 		return false;
+	if (sinkJob !is null)
+		Requests::JoinTaken(Requests::JA_LIFT, cargo, sinkJob, null, lp);
 	@jb.cargo = cargo;
 	jb.src = cargo.GetPos(ai.frame);
 	jb.to = to;

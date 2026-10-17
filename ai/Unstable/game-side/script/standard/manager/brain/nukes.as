@@ -209,6 +209,7 @@ void ShareSilos()
 		if (r >= 0)
 			gNkRecv.removeAt(r);
 	}
+	// join-arrive: silos handed over where they stand, not a join
 	ai.GiveUnits(give, to);
 	gNkGiven += own;
 	AiLog(Factory::T() + "apex: nuke share " + give.length() + " silo(s) with " + stock

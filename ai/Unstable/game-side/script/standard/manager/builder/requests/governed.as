@@ -186,8 +186,17 @@ bool WorthJoiningSite(IUnitTask@ cand, float dist, float speed = 0.f,
 	if (lathe <= 0.f)
 		return true;
 	const float b = (handBP > 0.f) ? handBP : lathe / float((arrived > 0) ? arrived : 1);
-	const float saved = remainingBt * b / (lathe * (lathe + b));
 	const float v = (speed > 1.f) ? speed : ASSUMED_CON_SPEED;
+	if (JoinArriveOn()) {
+		JoinCountAsk(JA_SITE);
+		const float saved = JoinSavedSec(remainingBt, lathe, b, dist / v);
+		if ((saved <= 0.f) || ((dist / v) > saved)) {
+			JoinCountRefuse(JA_SITE, (saved <= 0.f) ? JA_WHY_LATE : JA_WHY_COST);
+			return false;
+		}
+		return true;
+	}
+	const float saved = remainingBt * b / (lathe * (lathe + b));
 	return (dist / v) <= saved;
 }
 
