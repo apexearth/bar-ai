@@ -1,5 +1,35 @@
 namespace Market {
 
+// apex: flowe-stat each minute: the picks the free-metal E bill held and passed, by def.
+dictionary gFlowEHeld;
+int gFlowEPass = 0;
+int gFlowELogAt = 0;
+
+void FlowENote(int d, bool held)
+{
+	if (held) {
+		const string k = Catalog::Def(d).GetName();
+		int n = 0;
+		gFlowEHeld.get(k, n);
+		gFlowEHeld.set(k, n + 1);
+	} else {
+		++gFlowEPass;
+	}
+	if (ai.frame < gFlowELogAt)
+		return;
+	gFlowELogAt = ai.frame + 60 * SECOND;
+	string s = "";
+	array<string>@ ks = gFlowEHeld.getKeys();
+	for (uint i = 0; i < ks.length(); ++i) {
+		int n = 0;
+		gFlowEHeld.get(ks[i], n);
+		s += " " + ks[i] + ":" + n;
+	}
+	AiLog(Factory::T() + "apex: flowe-stat t=" + ai.teamId + " pass=" + gFlowEPass + " held=" + s);
+	gFlowEHeld.deleteAll();
+	gFlowEPass = 0;
+}
+
 // The best power-per-metal a factory can field, tier fades included -- the
 // line's quality against the enemy it faces. 10 s memo per factory def.
 array<float> gFacPPC;
@@ -3413,7 +3443,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const float bSec = (bp > 0.f) ? (Catalog::gBuildTime[best] / bp) : 30.f;
 		const float eBill = Catalog::gCostE[best] * EPriceCostAt(bSec, Catalog::gCostE[best]);
 		const float vE = (eBill > 0.f) ? (bestGain / eBill) : bestV;
-		if (vE < gWantEmaV * ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)) {
+		const bool held = vE < gWantEmaV * ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR);
+		FlowENote(best, held);
+		if (held) {
 			gNoOrder = "line-floor-e v=" + formatFloat(vE * 1000.f, "", 0, 2)
 					+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
 			return null;
