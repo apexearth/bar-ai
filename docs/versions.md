@@ -26,3 +26,5 @@ x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size:
 | cal | (lane-c9 arm) | cand-13 + calibration fix only | vs BARb: Armada A +0.32, Armada B +0.52, Cortex A -2.31, Cortex B -2.06 (avg -0.88) | - | - |
 | cand-15 | `cand-0.2.7-15` | cal + focus fire (TUNE_FOCUS_FIRE) | vs BARb: -0.69 / -0.89 / -2.56 / -2.46 (avg -1.65) -- WORSE in every cell; off in the watch slot | - | - |
 | cand-15b | (lane-c9) | cal + focus fire, set-target only (no walks) | vs BARb: Armada A +0.28, Armada B +0.51, Cortex A -1.84, Cortex B -1.37 (avg -0.61 vs cal -0.88); our kills before min 10 67.3k vs 62.7k -- KEPT | - | - |
+| aa | (lane-c9 arm) | c15b + anti-air where their air hurts us (TUNE_AA_THREAT) | vs BARb avg -0.87 (c15b -0.61): no gain; off | - | - |
+| arrive | (lane-c9 arm) | c15b + builder joins arrive in time (TUNE_JOIN_ARRIVE) | vs BARb avg -1.28: worse; off | - | - |
