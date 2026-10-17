@@ -459,6 +459,98 @@ uint Workers(IUnitTask@ t)
 	return (busy is null) ? 0 : busy.length();
 }
 
+// AN ORDER NOBODY WALKS TO OR BUILDS holds nothing (his 10-17: a T2 lab order sat
+// five minutes with no worker after the con guard pulled its builder, and every
+// plant ask read it as coming). Only an order the market elected someone to, and
+// not in the frame it was placed: the asker is assigned when its election returns.
+int gOrderRelAt = -1;
+bool gOrderRelOn = false;
+bool gReleasing = false;   // an Abort below is a release, not a failed site
+// What a release line reports: a gate stopped counting the order, its electing hand
+// left it, or it was handed on / aborted. Rate-limited per def and kind.
+const int ORL_GATE = 0;
+const int ORL_LEFT = 1;
+const int ORL_ACT = 2;
+array<int> gOrderRelN(3, 0);
+array<int> gOrderRelLogAt(3 * (ai.GetDefCount() + 1), -30000);
+
+bool OrderReleaseOn()
+{
+	if (gOrderRelAt != ai.frame) {
+		gOrderRelAt = ai.frame;
+		gOrderRelOn = ai.GetTunable("apex_order_release", TUNE_ORDER_RELEASE) > 0.f;
+	}
+	return gOrderRelOn;
+}
+
+bool AbandonedOrder(IUnitTask@ t, int placedAt)
+{
+	return OrderReleaseOn() && (t !is null) && !t.IsDead() && (t.target is null)
+		&& (placedAt < ai.frame) && (Workers(t) == 0) && (Market::JobValue(t) >= 0.f);
+}
+
+bool AbandonedAt(uint i)
+{
+	return (i < gLive.length()) && (i < gLiveAt.length()) && AbandonedOrder(gLive[i], gLiveAt[i]);
+}
+
+int LiveIndex(IUnitTask@ t)
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] is t)
+			return int(i);
+	}
+	return -1;
+}
+
+void NoteOrderRelease(IUnitTask@ t, int placedAt, const string &in by, int kind)
+{
+	if ((kind < ORL_GATE) || (kind > ORL_ACT))
+		return;
+	if (kind != ORL_GATE)
+		++gOrderRelN[kind];
+	if ((t is null) || (t.buildDef is null))
+		return;
+	const int slot = kind * (ai.GetDefCount() + 1) + int(t.buildDef.id);
+	if ((slot < 0) || (slot >= int(gOrderRelLogAt.length())) || (ai.frame < gOrderRelLogAt[slot]))
+		return;
+	gOrderRelLogAt[slot] = ai.frame + 10 * SECOND;
+	const AIFloat3 at = t.GetBuildPos();
+	AiLog(Factory::T() + "apex: order-release t=" + ai.teamId + " " + t.buildDef.GetName()
+		+ " age=" + ((ai.frame - placedAt) / SECOND) + " by=" + by
+		+ " at=" + int(at.x) + "," + int(at.z)
+		+ " left=" + gOrderRelN[ORL_LEFT] + " acts=" + gOrderRelN[ORL_ACT]);
+}
+
+// Released orders of this def anywhere but `spot`'s ground are aborted so the ask
+// founds fresh; one on that ground is returned for the asker to adopt.
+IUnitTask@ ReleaseAbandonedOf(const CCircuitDef@ want, const AIFloat3& in spot, float radius)
+{
+	if (want is null)
+		return null;
+	const float same = (radius > 0.f) ? radius : SAME_SITE;
+	array<IUnitTask@> doomed;
+	array<int> doomedAt;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || (t.buildDef is null) || (t.buildDef.id != want.id) || !AbandonedAt(i))
+			continue;
+		if (OnMap(spot) && (spot.distance2D(t.GetBuildPos()) <= same)) {
+			NoteOrderRelease(t, gLiveAt[i], "adopt", ORL_ACT);
+			return t;
+		}
+		doomed.insertLast(t);
+		doomedAt.insertLast(gLiveAt[i]);
+	}
+	for (uint k = 0; k < doomed.length(); ++k) {
+		NoteOrderRelease(doomed[k], doomedAt[k], "refound", ORL_ACT);
+		gReleasing = true;
+		doomed[k].Abort();
+		gReleasing = false;
+	}
+	return null;
+}
+
 // Build power [BP] from the hands that have ARRIVED -- inside their own build
 // reach of the site -- with the count in `arrived`. A hand still walking is on
 // the roster and lathes nothing yet, so a remaining-time estimate that counts

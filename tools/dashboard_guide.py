@@ -464,6 +464,12 @@ PANELS = [
              "advanced air plant while it is still being built, as many as it will want once finished; they "
              "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
              "still short of turrets is unfinished. OFF: a factory gets turrets only once it is finished."),
+            ("TUNE_ORDER_RELEASE", "ON: when the constructor sent to start a lab, gantry or other big building "
+             "is pulled away before it starts and nobody else is on the way, the order no longer counts as "
+             "coming: the next constructor asked for it takes the same order, or starts a new one if the old "
+             "spot is under fire. `apex: order-release` names the building, how old the order was and what "
+             "freed it. OFF: the order keeps that building from being asked for again until it times out, "
+             "five minutes later."),
             ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
              "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
              "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "

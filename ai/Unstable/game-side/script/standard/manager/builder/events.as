@@ -191,7 +191,7 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 		gAbortAt.resize(Catalog::gDefCount + 1);
 	}
 	const int d = (task.buildDef !is null) ? int(task.buildDef.id) : 0;
-	if ((d > 0) && Market::LiveNotBan())
+	if ((d > 0) && Market::LiveNotBan() && !Requests::gReleasing)
 		AbortSiteNote(task, d, done);
 	if ((d >= 0) && (d < int(gGoneOk.length()))) {
 		if (done) {
@@ -204,7 +204,7 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 			// -- counting them crashed the script here on every third
 			// reclaim-task removal (his live game, 2026-08-28 19:0x:
 			// "Exception: Null pointer access ... TaskRemovedInner").
-			if (d > 0) {
+			if ((d > 0) && !Requests::gReleasing) {
 				gAbortStreak[d] = (ai.frame < gAbortAt[d] + 30 * SECOND)
 						? (gAbortStreak[d] + 1) : 1;
 				gAbortAt[d] = ai.frame;

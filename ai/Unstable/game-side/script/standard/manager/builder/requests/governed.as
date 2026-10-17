@@ -25,8 +25,13 @@ int LiveCountOf(int bt)
 	int n = 0;
 	for (uint i = 0; i < gLive.length(); ++i) {
 		if ((gLive[i] !is null) && !gLive[i].IsDead()
-			&& (gLive[i].GetBuildType() == Task::BuildType(bt)))
+			&& (gLive[i].GetBuildType() == Task::BuildType(bt))) {
+			if (AbandonedAt(i)) {
+				NoteOrderRelease(gLive[i], gLiveAt[i], "lines", ORL_GATE);
+				continue;
+			}
 			++n;
+		}
 	}
 	return n;
 }
@@ -64,15 +69,20 @@ IUnitTask@ LiveTaskOf(CCircuitDef@ def)
 	return null;
 }
 
-// Any live request (manned or not) for exactly this def.
+// Any live request (manned or not) for exactly this def, a released one aside.
 bool LiveOfDef(CCircuitDef@ def)
 {
 	if (def is null)
 		return false;
 	for (uint i = 0; i < gLive.length(); ++i) {
 		if ((gLive[i] !is null) && !gLive[i].IsDead()
-			&& (gLive[i].buildDef !is null) && (gLive[i].buildDef is def))
+			&& (gLive[i].buildDef !is null) && (gLive[i].buildDef is def)) {
+			if (AbandonedAt(i)) {
+				NoteOrderRelease(gLive[i], gLiveAt[i], "live", ORL_GATE);
+				continue;
+			}
 			return true;
+		}
 	}
 	return false;
 }

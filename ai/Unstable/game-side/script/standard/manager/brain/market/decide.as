@@ -2843,6 +2843,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				// of the cases and lost every game of an arm; see docs/tunables.md.
 				const bool dropped = !onCrew;
 				if (dropped) {
+					if (Requests::OrderReleaseOn()) {
+						const int li = Requests::LiveIndex(inc);
+						if ((li >= 0) && Requests::AbandonedAt(uint(li)))
+							Requests::NoteOrderRelease(inc, Requests::gLiveAt[li], "left", Requests::ORL_LEFT);
+					}
 					@gIncTask[uidk] = null;
 					++gOffCrewMin;
 				} else if (OnMap(ip)

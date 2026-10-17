@@ -114,6 +114,17 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			if ((unit !is null) && (cand.buildDef !is null)
 				&& !unit.circuitDef.CanBuild(cand.buildDef))
 				continue;
+			// A released order on ground the asker cannot work is founded afresh.
+			if ((unit !is null) && AbandonedAt(i)) {
+				if (Builder::ThreatFor(unit, cand.GetBuildPos()) > Builder::CON_THREAT_VETO) {
+					NoteOrderRelease(cand, gLiveAt[i], "refound", ORL_ACT);
+					gReleasing = true;
+					cand.Abort();
+					gReleasing = false;
+					return Take(unit, want, bt, prio, spot, radius, shake, created, parallel);
+				}
+				NoteOrderRelease(cand, gLiveAt[i], "adopt", ORL_ACT);
+			}
 			GateRef(G_FACFORK);
 			// Never a fork, and never a hand that lands after the lab is up.
 			if ((unit !is null) && JoinArriveOn() && (Workers(cand) > 0)
@@ -139,6 +150,16 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			++gJoined;
 			Log(want, "adopt-empty");
 			return empty;
+		}
+	}
+	if ((unit !is null) && OrderReleaseOn() && (bt != Task::BuildType::FACTORY)
+		&& (bt != Task::BuildType::MEX) && (bt != Task::BuildType::MEXUP) && !Positional(int(bt)))
+	{
+		IUnitTask@ left = ReleaseAbandonedOf(want, spot, radius);
+		if (left !is null) {
+			++gJoined;
+			Log(want, "adopt-orphan");
+			return left;
 		}
 	}
 

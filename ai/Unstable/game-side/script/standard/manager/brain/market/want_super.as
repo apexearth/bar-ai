@@ -250,6 +250,10 @@ void SuperCensus()
 		const int sc = SuperClassOf(gComDef[ci]);
 		if (sc < 0)
 			continue;
+		if (ComAbandoned(ci)) {
+			Requests::NoteOrderRelease(gComTask[ci], gComAt[ci], "super", Requests::ORL_GATE);
+			continue;
+		}
 		++gSuperHave[sc];
 		if ((gComState[ci] != CS_FINISHED) && !(ownSlot && (sc == SC_GANTRY)))
 			++gSuperFlight;

@@ -152,8 +152,13 @@ bool T2LabComing()
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
 		IUnitTask@ lt = Requests::gLive[li];
 		if ((lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
-			&& (TreeTier(int(lt.buildDef.id)) > OwnTopTier()))
+			&& (TreeTier(int(lt.buildDef.id)) > OwnTopTier())) {
+			if (Requests::AbandonedAt(li)) {
+				Requests::NoteOrderRelease(lt, Requests::gLiveAt[li], "t2lab", Requests::ORL_GATE);
+				continue;
+			}
 			return true;
+		}
 	}
 	return false;
 }

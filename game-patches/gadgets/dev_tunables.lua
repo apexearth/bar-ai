@@ -379,6 +379,7 @@ local NAMES = {
 	"apex_flow_e_bill",      -- production.as opportunity floor: with metal free, the pick still pays its E bill
 	"apex_gantry_own_slot",  -- want_super.as: the gantry neither takes nor waits for the strategic one-at-a-time slot
 	"apex_nano_early",       -- sites.as PlantFrames/GantryShortSite + want_nano.as FactoryNanoShort + execute.as nano batch: T2+ plant frames take their nanos while rising (0)
+	"apex_order_release",    -- requests/register.as + governed.as LiveOfDef/LiveCountOf + take.as + commit.as + want_super.as SuperCensus + want_plant.as unlocks + nntech.as: an order with no worker and no frame stops counting as coming (0)
 	"apex_live_not_ban",     -- liveban.as + sites.as NearBlockedFor/graves + execute.as gun grave + want_mex.as spot table + stuck.as + events.as/take.as abort streak + want_tech.as UpRefused: site judgements live or priced, no clock bans (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
