@@ -186,7 +186,8 @@ void UsNudgeOne()
 				++gUsPenned;
 			return;
 		}
-		u.CmdMoveTo(to);
+		if (!StockQuietUnit(u, "unstick"))
+			u.CmdMoveTo(to);
 		const bool bld = Catalog::gBuilder[int(u.circuitDef.id)];
 		if (bld)
 			++gUsBNudged;

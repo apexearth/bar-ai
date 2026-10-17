@@ -2134,8 +2134,64 @@ float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
 	return game->GetRulesParamFloat(key.c_str(), -1.f);
 }
 
+// apex_stock_army: the value at which each fight-code tunable runs stock BARb's code
+static const std::unordered_map<std::string, float>& StockArmyValues()
+{
+	static const std::unordered_map<std::string, float> vals = {
+		{"apex_gather", 0.f}, {"apex_com_fight", 0.f}, {"apex_focus_fire", 0.f}, {"apex_birth_defend", 0.f},
+		{"apex_target_value", 0.f}, {"apex_fight_travel", 0.f}, {"apex_pool_leash", 0.f}, {"apex_roam_front", 0.f},
+		{"apex_air_form", 0.f}, {"apex_squad_form", 0.f}, {"apex_side_with", 0.f}, {"apex_bomb_enroute", 0.f},
+		{"apex_raid_commit", 0.f}, {"apex_raid_first", 0.f}, {"apex_attack_share", 0.f}, {"apex_prefer_target", 0.f},
+		{"apex_retreat_stand", 0.f},
+	};
+	return vals;
+}
+
+bool CCircuitAI::IsStockArmy() const
+{
+	if (stockArmy < 0) {
+		stockArmy = (GetTunable("apex_stock_army", 0.f) > 0.f) ? 1 : 0;
+	}
+	return stockArmy > 0;
+}
+
+bool CCircuitAI::IsStockCtlDef(const CCircuitDef* cdef) const
+{
+	return (cdef != nullptr) && cdef->IsMobile() && !cdef->IsBuilder() && !cdef->IsRoleComm()
+		&& !cdef->IsRoleTrans() && (cdef->IsAttacker() || cdef->IsRoleScout() || !cdef->IsAbleToFly());
+}
+
+bool CCircuitAI::IsStockCtl(const CCircuitUnit* unit) const
+{
+	return IsStockArmy() && (unit != nullptr) && IsStockCtlDef(unit->GetCircuitDef());
+}
+
+void CCircuitAI::NoteStockLeak(const char* kind)
+{
+	++stockLeaks[kind];
+}
+
+std::string CCircuitAI::TakeStockLeaks()
+{
+	std::string s;
+	int n = 0;
+	for (const auto& kv : stockLeaks) {
+		s += " " + kv.first + "=" + utils::int_to_string(kv.second);
+		n += kv.second;
+	}
+	stockLeaks.clear();
+	return "leak=" + utils::int_to_string(n) + s;
+}
+
 float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 {
+	if ((stockArmy != 0) && (name != "apex_stock_army") && IsStockArmy()) {
+		const auto& sv = StockArmyValues();
+		auto st = sv.find(name);
+		if (st != sv.end()) {
+			return st->second;
+		}
+	}
 	auto it = tunables.find(name);
 	if (it != tunables.end()) {
 		return it->second;

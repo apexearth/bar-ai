@@ -8,6 +8,7 @@
 #include "script/MilitaryScript.h"
 #include "script/ScriptManager.h"
 #include "module/MilitaryManager.h"
+#include "CircuitAI.h"
 #include "unit/enemy/FortCensus.h"
 #include "util/Utils.h"
 #include "angelscript/include/angelscript.h"
@@ -15,6 +16,72 @@
 namespace circuit {
 
 using namespace springai;
+
+// apex_stock_army: script overrides of stock army control are dropped and counted (InitScript.cpp StockDropUnit)
+static bool StockDrop(CMilitaryManager* mgr, const char* kind)
+{
+	CCircuitAI* circuit = mgr->GetCircuit();
+	if (!circuit->IsStockArmy()) {
+		return false;
+	}
+	circuit->NoteStockLeak(kind);
+	return true;
+}
+
+static IFighterTask* CMilitaryManager_Enqueue(CMilitaryManager* mgr, const TaskF::SFightTask& ti)
+{
+	StockDrop(mgr, "enqueue");
+	return mgr->Enqueue(ti);
+}
+
+static unsigned int CMilitaryManager_ReleaseHoldPools(CMilitaryManager* mgr)
+{
+	return StockDrop(mgr, "holdpools") ? 0 : mgr->ReleaseHoldPools();
+}
+
+static unsigned int CMilitaryManager_HoldPools(CMilitaryManager* mgr)
+{
+	return StockDrop(mgr, "holdpools") ? 0 : mgr->HoldPools();
+}
+
+static float CMilitaryManager_HoldPoolsUpTo(CMilitaryManager* mgr, float needM)
+{
+	return StockDrop(mgr, "holdpools") ? 0.f : mgr->HoldPoolsUpTo(needM);
+}
+
+static void CMilitaryManager_ClearSupportSpots(CMilitaryManager* mgr)
+{
+	if (!StockDrop(mgr, "support")) {
+		mgr->ClearSupportSpots();
+	}
+}
+
+static void CMilitaryManager_AddSupportSpot(CMilitaryManager* mgr, const AIFloat3& pos, float worth)
+{
+	if (!StockDrop(mgr, "support")) {
+		mgr->AddSupportSpot(pos, worth);
+	}
+}
+
+static void CMilitaryManager_SetFocus(CMilitaryManager* mgr, const AIFloat3& pos, float radius, float teamPower, bool go, int until)
+{
+	if (!StockDrop(mgr, "focus")) {
+		mgr->SetFocus(pos, radius, teamPower, go, until);
+	}
+}
+
+static void CMilitaryManager_SetFocusHome(CMilitaryManager* mgr, const AIFloat3& pos)
+{
+	if (!StockDrop(mgr, "focus")) {
+		mgr->SetFocusHome(pos);
+	}
+}
+
+static void CMilitaryManager_NoteBirthScript(CMilitaryManager* mgr, int kind)
+{
+	StockDrop(mgr, "birth");
+	mgr->NoteBirthScript(kind);
+}
 
 CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 		: ITaskModuleScript(scr, mgr)
@@ -34,26 +101,27 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectType("CMilitaryManager", 0, asOBJ_REF | asOBJ_NOHANDLE); ASSERT(r >= 0);
 	r = engine->RegisterGlobalProperty("CMilitaryManager aiMilitaryMgr", manager); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ DefaultMakeTask(CCircuitUnit@)", asMETHOD(CMilitaryManager, DefaultMakeTask), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ Enqueue(const SFightTask& in)", asMETHODPR(CMilitaryManager, Enqueue, (const TaskF::SFightTask&), IFighterTask*), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ Enqueue(const SFightTask& in)", asFUNCTION(CMilitaryManager_Enqueue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ EnqueueRetreat()", asMETHOD(CMilitaryManager, EnqueueRetreat), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void DefaultMakeDefence(int, const AIFloat3& in)", asMETHOD(CMilitaryManager, DefaultMakeDefence), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void DefaultMakeSensors(int, const AIFloat3& in)", asMETHOD(CMilitaryManager, DefaultMakeSensors), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "uint GetGuardTaskNum() const", asMETHOD(CMilitaryManager, GetGuardTaskNum), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "uint ReleaseHoldPools()", asMETHOD(CMilitaryManager, ReleaseHoldPools), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "uint HoldPools()", asMETHOD(CMilitaryManager, HoldPools), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "float HoldPoolsUpTo(float)", asMETHOD(CMilitaryManager, HoldPoolsUpTo), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "uint ReleaseHoldPools()", asFUNCTION(CMilitaryManager_ReleaseHoldPools), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "uint HoldPools()", asFUNCTION(CMilitaryManager_HoldPools), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "float HoldPoolsUpTo(float)", asFUNCTION(CMilitaryManager_HoldPoolsUpTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "bool IsBirthDefender(CCircuitUnit@) const", asMETHOD(CMilitaryManager, IsBirthDefender), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float AssetHold(CCircuitUnit@, float, AIFloat3& out)", asMETHOD(CMilitaryManager, AssetHold), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "void NoteBirthScript(int)", asMETHOD(CMilitaryManager, NoteBirthScript), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void NoteBirthScript(int)", asFUNCTION(CMilitaryManager_NoteBirthScript), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void NoteJoinWin(int, int, int)", asMETHOD(CMilitaryManager, NoteJoinScript), asCALL_THISCALL); ASSERT(r >= 0);
 	// apex: the base-defence ring DefendTask's fight-at-any-odds boost and the
 	// defence builder both honor -- bound so the script can DRAW the zone.
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetBaseDefRange() const", asMETHOD(CMilitaryManager, GetBaseDefRange), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetBaseDefRange(float)", asMETHOD(CMilitaryManager, SetBaseDefRange), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "void ClearSupportSpots()", asMETHOD(CMilitaryManager, ClearSupportSpots), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "void AddSupportSpot(const AIFloat3& in, float)", asMETHOD(CMilitaryManager, AddSupportSpot), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocus(const AIFloat3& in, float, float, bool, int)", asMETHOD(CMilitaryManager, SetFocus), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocusHome(const AIFloat3& in)", asMETHOD(CMilitaryManager, SetFocusHome), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void ClearSupportSpots()", asFUNCTION(CMilitaryManager_ClearSupportSpots), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void AddSupportSpot(const AIFloat3& in, float)", asFUNCTION(CMilitaryManager_AddSupportSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocus(const AIFloat3& in, float, float, bool, int)", asFUNCTION(CMilitaryManager_SetFocus), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocusHome(const AIFloat3& in)", asFUNCTION(CMilitaryManager_SetFocusHome), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "string StockArmyStat()", asMETHOD(CMilitaryManager, StockArmyStat), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPower() const", asMETHOD(CMilitaryManager, GetAttackPower), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPowerNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetAttackPowerNear), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetGatheredPower() const", asMETHOD(CMilitaryManager, GetGatheredPower), asCALL_THISCALL); ASSERT(r >= 0);

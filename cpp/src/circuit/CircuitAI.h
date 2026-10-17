@@ -191,6 +191,13 @@ public:
 	// are cached on first read: this sits inside the per-unit attack loop.
 	float GetTunable(const char* name, float defVal) const { return GetTunable(std::string(name), defVal); }
 	float GetTunable(const std::string& name, float defVal) const;
+	// apex_stock_army: every combat unit runs stock BARb's fight code (docs/how-it-works.md, Army control layers)
+	bool IsStockArmy() const;
+	bool IsStockCtl(const CCircuitUnit* unit) const;
+	bool IsStockCtlDef(const CCircuitDef* cdef) const;
+	// a script call that would have ordered a combat unit under the switch, dropped and counted by kind
+	void NoteStockLeak(const char* kind);
+	std::string TakeStockLeaks();
 	const std::string& GetAiOption(const std::string& name) const;
 	// the floats in the file a lobby option names: the policy net's weights (tools/neuro.py),
 	// thousands of them, which no start script holds. -1 = no such option or file
@@ -475,6 +482,8 @@ public:
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
+	mutable int stockArmy = -1;
+	std::map<std::string, int> stockLeaks;
 	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options
 	mutable bool aiOptsRead = false;
 	void ReadAiOpts() const;

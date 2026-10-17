@@ -100,6 +100,8 @@ void MassOddsDecide()
 
 void UpdateMassOdds()
 {
+	if (StockQuiet("massodds"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	if (gMoNextAt < 0)

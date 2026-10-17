@@ -769,6 +769,8 @@ IUnitTask@ NaTask(CCircuitUnit@ unit)
 // wing thinks it is ready; they are an input to the decision now, not a release.
 void NaLegacy(const string why)
 {
+	if (Military::StockQuiet("air"))
+		return;
 	gNaLegacyFrame = ai.frame;
 	gNaLegacyWhy = why;
 	if (ai.frame >= gNaLegacyNext) {

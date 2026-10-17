@@ -111,6 +111,8 @@ void EscortSpareCensus()
 
 void EscortRecruit()
 {
+	if (Military::StockQuiet("escort"))
+		return;
 	EscortSpareCensus();
 	if (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f)
 		return;

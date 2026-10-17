@@ -897,6 +897,8 @@ void TairLog()
 
 void TairUpdate()
 {
+	if (Military::StockQuiet("air"))
+		return;
 	if (!TairSwitch() || !Builder::gHomeSet || (ai.frame < gTairNextAt))
 		return;
 	gTairNextAt = ai.frame + 4 * SECOND;

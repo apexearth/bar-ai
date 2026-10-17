@@ -276,6 +276,8 @@ void GthLog()
 
 void UpdateGather()
 {
+	if (StockQuiet("gather"))
+		return;
 	if (!ApexActive())
 		return;
 	if (GthOn() && (ai.frame >= gGthTickAt)) {

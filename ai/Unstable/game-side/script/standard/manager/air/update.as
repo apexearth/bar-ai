@@ -92,7 +92,7 @@ void Intercept()
 		ai.PublishTeamValue(TV_HOMEX, Builder::gHomePos.x);
 		ai.PublishTeamValue(TV_HOMEZ, Builder::gHomePos.z);
 	}
-	if (ai.frame < gNextInterceptCmd)
+	if ((ai.frame < gNextInterceptCmd) || Military::StockQuiet("air"))
 		return;
 	// The fighters HELD at home are the pool an ally can call on; the ones out
 	// with a strike are not, and a raid on an ally must not recall them.
@@ -250,6 +250,8 @@ void Release(const string& in why)
 // Release throws the whole thing at once.
 void ReArm()
 {
+	if (Military::StockQuiet("air"))
+		return;
 	if (!gStrike)
 		return;
 	ScanWave();
@@ -465,6 +467,8 @@ void SpotCensus()
 
 void ScoutOverflight()
 {
+	if (Military::StockQuiet("air"))
+		return;
 	const float per = ai.GetTunable("apex_scout_over_s", TUNE_SCOUT_OVER_S);
 	if (per <= 0.f)
 		return;
@@ -565,16 +569,21 @@ void Update()
 	{ double _tA = Perf::T0(); SettleStrike(); Perf::Add("air.SettleStrike", _tA); }
 	{ double _tA = Perf::T0(); ResolveDefs(); Perf::Add("air.ResolveDefs", _tA); }
 	{ double _tA = Perf::T0(); ReArm(); Perf::Add("air.ReArm", _tA); }
+	const bool airCtl = !Military::StockQuiet("air");   // apex_stock_army: the wing's control stands down
+	if (airCtl) {
 	{ double _tA = Perf::T0(); AtomicWatch(); Perf::Add("air.AtomicWatch", _tA); }
 	{ double _tA = Perf::T0(); AtomicLookWatch(); Perf::Add("air.AtomicLookWatch", _tA); }
 	{ double _tA = Perf::T0(); LookWatch(); Perf::Add("air.LookWatch", _tA); }
 	{ double _tA = Perf::T0(); FlightWatch(); Perf::Add("air.FlightWatch", _tA); }
 	{ double _tA = Perf::T0(); ShareWing(); Perf::Add("air.ShareWing", _tA); }
+	}
 	{ double _tA = Perf::T0(); Market::EnemyWetCount(); Perf::Add("air.EnemyWetCount", _tA); }
 	{ double _tA = Perf::T0(); Market::FoeHalfPoll(); Perf::Add("air.FoeHalfPoll", _tA); }
+	if (airCtl) {
 	{ double _tA = Perf::T0(); CoverWatch(); Perf::Add("air.CoverWatch", _tA); }
 	{ double _tA = Perf::T0(); StrikeScanStep(); Perf::Add("air.StrikeScanStep", _tA); }
 	{ double _tA = Perf::T0(); NaUpdate(); Perf::Add("air.NaUpdate", _tA); }
+	}
 	TairUpdate();
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
@@ -589,7 +598,7 @@ void Update()
 	// *only* an army during home base defense... its only if the enemy is
 	// getting really close and danger is high. We will certainly lose a lot
 	// of air if the enemy has flak trucks."
-	{
+	if (airCtl) {
 		const bool defendHome = Military::BaseContested()
 			&& (EnemyAACost() < ai.GetTunable("apex_bomb_defend_aa", TUNE_BOMB_DEFEND_AA));
 		gDefendHome = defendHome;

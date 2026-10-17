@@ -53,6 +53,8 @@ protected:
 private:
 	virtual void MergeFrom(ISquadTask* task) override;
 	bool FindTarget();
+	void StockUpdate();  // apex_stock_army (StockFight.inl)
+	bool StockFindTarget();
 	void ApplyTargetPath(const CQueryPathMulti* query);
 	void FallbackFrontPos();
 	void ApplyFrontPos(const CQueryPathMulti* query);

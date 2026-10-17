@@ -2041,6 +2041,8 @@ void CfLog()
 
 void UpdateComFight()
 {
+	if (StockQuiet("comfight"))
+		return;
 	if (!CfOn())
 		return;
 	const double t0 = ai.ClockUs();

@@ -169,6 +169,35 @@ anti-nuke accounting (`ai-nukes`). **Commander** (`market/comdecide.as`): WORK, 
 RETREAT from what can reach him before he reaches safety; the opening order is a decision
 (`opennet.as`) (`ai-commander`).
 
+## Army control layers
+
+Everything beyond stock BARb that takes, re-elects, orders or overrides a combat unit (mobile, no builder,
+no commander, no transport). `TUNE_STOCK_ARMY` (`apex_stock_army`, off) silences every row: script rows
+return at their entry through `Military::StockQuiet(tag)`, C++ rows take the stock branch
+(`CCircuitAI::IsStockArmy`/`IsStockCtl`), and the bindings that order a combat unit or override a fight task
+drop the call and count it (`apex: stockarmy-stat ... leak=`, 0 when this table is whole).
+
+| Layer | Files | What it overrides | Under the switch |
+|---|---|---|---|
+| Election | `military/hooks.as` `MakeTaskInner` (air hunt/hold/strike/cover, looks, late fighters, AA guard, rolling bomb, comfight eco, raid answer, flank, raid pull, siege, escort, cover pool, fodder/spam, charger, superguard, massing pool) | stock `DefaultMakeTask` | first line: `DefaultMakeTask` (`stock.army`) |
+| Posture, massing, holds | `posture.as`, `massing.as`, `nnpost.as`, `superguard.as`, `market/earlyball.as` bar | `quota.attack`/`raid.min`, hold pools, def retreat values, held supers | `UpdatePosture` returns after its analysis and publishes; `UpdateSpamPosture`, `UpdateNnPost`, `ReleaseHeldSupers` return; hold-pool bindings drop |
+| Decisions that move the army | `nnhunt.as`, `nnstrike.as`, `nnsiege.as`, `nnmassodds.as`, `nnarmy.as`, `market/armynet.as`, `market/plannet.as` `TeamPush` | `SetFocus`, siege tasks, board odds/mass/flank/split/commit/stage/retreat/one-army | update returns; C++ board multipliers 1, focus bindings drop |
+| Raids | `raid.as`, `nnraid.as`, `raidanswer.as`, `gather.as`, `joinwin.as` | raid tasks, goals, pulls, packs, join window | updates return; `SetRaidGoal`/`Join*` drop; `apex_gather` 0 |
+| Fights and pull-backs | `comfight.as`, `withdraw.as`, `joinfight.as`, `flankguard.as`, `guardposts.as`, `gift.as` | script moves, keep-out rings, aborts, flank guards, army gifts | updates return; `SetScriptMove`/`SetKeepOut`/`RemoveUnit`/`Abort`/`GiveUnits` drop |
+| Utilities on units | `unblock.as`, `unstick.as`, `brain/yard.as`, `lava.as`, `market/execute.as` reclaim move | per-unit moves, unit control | per-unit `StockQuietUnit` |
+| Escorts and support | `market/guards.as`, `market/escnet.as` | guard elections, escort recruit, support spots | sweeps return; support bindings drop |
+| Retreat tables | `catalog.as` curve, `market/army.as` `RetreatRefresh` | per-def retreat thresholds | skipped (JSON values stand) |
+| Air | `air/*` (`update.as` holds/release/doctrine/intercept, `nnair.as`, `wave.as`, `cover.as`, `flight.as`, `atomic.as`, `station.as`, `share.as`, `teamair.as`, `state.as` settle) | held wings, strikes, cover, ANTI_STAT/retreat on bomber defs, intercepts | control parts of `Air::Update` and the rest return; air plant election and team values still run |
+| C++ squads | `task/fighter/AttackTask.cpp` (team push, flank, hold forward, outgunned fall-back, one army, repair break, enemy box), `DefendTask.cpp` (detach, leash, birth, catch), `RaidTask.cpp` (commit, give-up, goal), `SquadTask.cpp` (front regroup, half-power wait, D-gun keep-out, long-gun ring, target value, focus fire, flier slots, never-split retreat), `FighterTask.cpp` (retreat-0, script move), `ScoutTask.cpp`, `RallyTask.cpp`, `GuardTask.cpp` | stock 7a1a9895 fight code | `Update`/`Attack` run `StockFight.inl`; climb split, air-hunter rule, catch off |
+| C++ air | `BombTask.cpp` (eco target scoring, spread aims, en-route drops, commit), `AntiAirTask.cpp` (mass gate, home raid) | fork-base bomber and AA code | `StockFight.inl` fork-base `Update`/`FindTarget`/`CanAssignTo` |
+| C++ unit orders | `CircuitUnit.cpp` `Attack` (move + set-target, sniper), wake split; `MoveAction.cpp` fight-travel | BARb's move, attack, fight | stock branch per unit; `apex_fight_travel` 0 |
+| C++ retreat | `RetreatTask.cpp` (rally, rear haven, heal post, line spread, threat mod 4, healed tunable) | BARb haven at 0.98 hp | stock branch per combat unit |
+| C++ manager | `MilitaryManager.cpp` (DEFEND stand, guard anchor / tower / front fallbacks, raid-first, attack share, birth defend, LOD, task rate) | stock positions and promotion bars | stock values (`StockArmyValues`), stock rate |
+
+Not switched: `behaviour.json` (retreat thresholds, `quota`, `thr_mod`), the threat kernels `main.as`
+sets on commanders and the Behemoth, `SetBaseDefRange` (builders path by it), the commander (`comdecide.as`,
+`comship.as`, `safety.as`), and production.
+
 ## The nets
 
 Every decision head goes through **one policy network** (`market/policy.as`). The live state (36

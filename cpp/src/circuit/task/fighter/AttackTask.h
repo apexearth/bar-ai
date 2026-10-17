@@ -50,6 +50,14 @@ private:
 	void FallbackBasePos();
 	void ApplyBasePos(const CQueryPathSingle* query);
 	void Fallback();
+	// apex_stock_army (StockFight.inl)
+	void StockUpdate();
+	void StockFindTarget();
+	void StockApplyTargetPath(const CQueryPathSingle* query);
+	void StockFallbackFrontPos();
+	void StockApplyFrontPos(const CQueryPathMulti* query);
+	void StockFallbackBasePos();
+	void StockApplyBasePos(const CQueryPathSingle* query);
 	void RepairBreak(int frame);
 	// apex: the one army (his 10-14) -- a squad walks to the main army and fights its target;
 	// the main army stages short of a new target until what walks to it has come

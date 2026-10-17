@@ -370,14 +370,91 @@ static CScriptArray* CCircuitAI_GetTeamIds(CCircuitAI* circuit)
 	return arr;
 }
 
+// apex_stock_army: a script order to a combat unit, or an override of a fight task, is dropped and counted
+static bool StockDropUnit(CCircuitUnit* unit, const char* kind)
+{
+	if ((unit == nullptr) || (unit->GetManager() == nullptr)) {
+		return false;
+	}
+	CCircuitAI* circuit = unit->GetManager()->GetCircuit();
+	if (!circuit->IsStockCtl(unit)) {
+		return false;
+	}
+	circuit->NoteStockLeak(kind);
+	return true;
+}
+
+static bool StockDropTask(IUnitTask* task, const char* kind)
+{
+	if ((task == nullptr) || (task->GetType() != IUnitTask::Type::FIGHTER)) {
+		return false;
+	}
+	CCircuitAI* circuit = task->GetManager()->GetCircuit();
+	if (!circuit->IsStockArmy()) {
+		return false;
+	}
+	circuit->NoteStockLeak(kind);
+	return true;
+}
+
 static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array, int newTeamId)
 {
 	std::vector<CCircuitUnit*> units;
 	units.reserve(array->GetSize());
 	for (asUINT i = 0; i < array->GetSize(); ++i) {
-		units.push_back(*static_cast<CCircuitUnit* const*>(array->At(i)));
+		CCircuitUnit* u = *static_cast<CCircuitUnit* const*>(array->At(i));
+		if (!StockDropUnit(u, "give")) {
+			units.push_back(u);
+		}
 	}
 	circuit->GiveUnits(std::move(units), newTeamId);
+}
+
+static bool CCircuitAI_UnitControl(CCircuitAI* circuit, CCircuitUnit* unit, bool release)
+{
+	return !StockDropUnit(unit, "control") && circuit->UnitControl(unit, release);
+}
+
+static void IUnitTask_RemoveUnit(IUnitTask* task, CCircuitUnit* unit)
+{
+	if ((task->GetType() != IUnitTask::Type::FIGHTER) || !StockDropUnit(unit, "remove")) {
+		task->RemoveAssignee(unit);
+	}
+}
+
+static void IUnitTask_Abort(IUnitTask* task)
+{
+	if (!StockDropTask(task, "abort")) {
+		task->Abort();
+	}
+}
+
+static void IUnitTask_Done(IUnitTask* task)
+{
+	if (!StockDropTask(task, "done")) {
+		task->Done();
+	}
+}
+
+static void CCircuitUnit_SetFireState(CCircuitUnit* unit, int state)
+{
+	if (!StockDropUnit(unit, "firestate")) {
+		unit->TrySetFireState(static_cast<CCircuitDef::FireT>(state));
+	}
+}
+
+static void CCircuitUnit_SetMoveState(CCircuitUnit* unit, int state)
+{
+	if (!StockDropUnit(unit, "movestate")) {
+		unit->TrySetMoveState(static_cast<CCircuitDef::MoveT>(state));
+	}
+}
+
+static void CCircuitUnit_SelfDestruct(CCircuitUnit* unit, bool state)
+{
+	if (!StockDropUnit(unit, "selfd")) {
+		unit->CmdSelfD(state);
+	}
 }
 
 // apex: guarded like CmdReclaimUnit below, and for the same reason. Unguarded,
@@ -387,6 +464,9 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
 // that follows the move (4 aborts in one hour-long run).
 static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 {
+	if (StockDropUnit(unit, "move")) {
+		return;
+	}
 	if ((unit == nullptr) || unit->IsDead()) {
 		return;
 	}
@@ -400,6 +480,9 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 // (held fighters covering a look or an overflight).
 static void CCircuitUnit_CmdGuard(CCircuitUnit* unit, CCircuitUnit* target)
 {
+	if (StockDropUnit(unit, "guard")) {
+		return;
+	}
 	if ((unit == nullptr) || unit->IsDead() || (target == nullptr) || target->IsDead()) {
 		return;
 	}
@@ -513,11 +596,17 @@ static bool CCircuitDef_CanLift(const CCircuitDef* transport, const CCircuitDef*
 // stockpile is an engine read on the host's own unit (safe).
 static void CCircuitUnit_CmdAttackGround(CCircuitUnit* unit, const AIFloat3& pos)
 {
+	if (StockDropUnit(unit, "attackground")) {
+		return;
+	}
 	unit->CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY);
 }
 
 static void CCircuitUnit_CmdStop(CCircuitUnit* unit)
 {
+	if (StockDropUnit(unit, "stop")) {
+		return;
+	}
 	try {
 		unit->CmdStop();
 	} catch (const std::exception& e) {
@@ -528,6 +617,9 @@ static void CCircuitUnit_CmdStop(CCircuitUnit* unit)
 // then assists/repairs/reclaims in range with no per-frame script election.
 static void CCircuitUnit_CmdPatrolTo(CCircuitUnit* unit, const AIFloat3& pos)
 {
+	if (StockDropUnit(unit, "patrol")) {
+		return;
+	}
 	try {
 		unit->CmdPatrolTo(pos);
 	} catch (const std::exception& e) {
@@ -870,6 +962,9 @@ static AIFloat3 CEnemyManager_GetEnemyGroupVelVec(CEnemyManager* mgr, int i)
 // this once; it does not need to pick or track a target itself.
 static void CCircuitUnit_CmdCloak(CCircuitUnit* unit, bool state)
 {
+	if (StockDropUnit(unit, "cloak")) {
+		return;
+	}
 	unit->CmdCloak(state);
 }
 
@@ -1840,6 +1935,9 @@ static int IUnitTask_GetFightType(IUnitTask* task)
 // apex: a RAID fight task is always a CRaidTask (MilitaryManager::Enqueue).
 static void IUnitTask_SetRaidGoal(IUnitTask* task, const AIFloat3& pos, float r)
 {
+	if (StockDropTask(task, "raidgoal")) {
+		return;
+	}
 	if ((task->GetType() == IUnitTask::Type::FIGHTER)
 		&& (static_cast<IFighterTask*>(task)->GetFightType() == IFighterTask::FightType::RAID))
 	{
@@ -1850,6 +1948,9 @@ static void IUnitTask_SetRaidGoal(IUnitTask* task, const AIFloat3& pos, float r)
 // apex: comfight.as -- read by RAID, ATTACK and DEFEND tasks (FighterTask.cpp ScriptMoveUpdate).
 static void IUnitTask_SetScriptMove(IUnitTask* task, const AIFloat3& pos, int until, bool fight)
 {
+	if (StockDropTask(task, "scriptmove")) {
+		return;
+	}
 	if (task->GetType() == IUnitTask::Type::FIGHTER) {
 		static_cast<IFighterTask*>(task)->SetScriptMove(pos, until, fight);
 	}
@@ -1864,6 +1965,9 @@ static bool IUnitTask_IsFocusFight(IUnitTask* task)
 
 static void IUnitTask_SetKeepOut(IUnitTask* task, const AIFloat3& pos, float r, int until)
 {
+	if (StockDropTask(task, "keepout")) {
+		return;
+	}
 	if (task->GetType() == IUnitTask::Type::FIGHTER) {
 		static_cast<IFighterTask*>(task)->SetKeepOut(pos, r, until);
 	}
@@ -1882,6 +1986,9 @@ static bool IUnitTask_IsJoinCommitted(IUnitTask* task)
 
 static void IUnitTask_JoinAdmit(IUnitTask* task, int unitId)
 {
+	if (StockDropTask(task, "joinadmit")) {
+		return;
+	}
 	if (task->GetType() == IUnitTask::Type::FIGHTER) {
 		static_cast<IFighterTask*>(task)->JoinAdmit(unitId);
 	}
@@ -1889,6 +1996,9 @@ static void IUnitTask_JoinAdmit(IUnitTask* task, int unitId)
 
 static void IUnitTask_JoinCommit(IUnitTask* task, int admitFrames)
 {
+	if (StockDropTask(task, "joincommit")) {
+		return;
+	}
 	if (task->GetType() == IUnitTask::Type::FIGHTER) {
 		static_cast<IFighterTask*>(task)->JoinCommit(admitFrames);
 	}
@@ -1896,6 +2006,9 @@ static void IUnitTask_JoinCommit(IUnitTask* task, int admitFrames)
 
 static void IUnitTask_JoinReopen(IUnitTask* task)
 {
+	if (StockDropTask(task, "joinreopen")) {
+		return;
+	}
 	if (task->GetType() == IUnitTask::Type::FIGHTER) {
 		static_cast<IFighterTask*>(task)->JoinReopen();
 	}
@@ -2198,7 +2311,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	engine->SetUserData(engine->GetTypeInfoByDecl("array<CCircuitUnit@>"),
 			UNIT_ARRAY_TYPE_UD);
 	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asMETHOD(IUnitTask, RemoveAssignee), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asFUNCTION(IUnitTask_RemoveUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "int GetFightType() const", asFUNCTION(IUnitTask_GetFightType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetRaidGoal(const AIFloat3& in, float)", asFUNCTION(IUnitTask_SetRaidGoal), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetScriptMove(const AIFloat3& in, int, bool)", asFUNCTION(IUnitTask_SetScriptMove), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2209,8 +2322,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "void JoinAdmit(int)", asFUNCTION(IUnitTask_JoinAdmit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void JoinCommit(int)", asFUNCTION(IUnitTask_JoinCommit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void JoinReopen()", asFUNCTION(IUnitTask_JoinReopen), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asFUNCTION(IUnitTask_Abort), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asFUNCTION(IUnitTask_Done), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 
 	r = engine->RegisterObjectProperty("CCircuitAI", "const int frame", asOFFSET(CCircuitAI, lastFrame)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitAI", "const int skirmishAIId", asOFFSET(CCircuitAI, skirmishAIId)); ASSERT(r >= 0);
@@ -2329,7 +2442,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void GetTerritoryBars(float &out, float &out)", asFUNCTION(CCircuitAI_GetTerritoryBars), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetWreckFieldVersion()", asFUNCTION(CCircuitAI_GetWreckFieldVersion), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asFUNCTION(CCircuitAI_UnitControl), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
 	// Lua<-->AI communications [in Spring 0.83+]
 	r = engine->RegisterObjectMethod("CCircuitAI", "string CallRules(const string& in)", asFUNCTION(CCircuitAI_CallRules), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2481,7 +2594,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asFUNCTION(CCircuitUnit_SetFireState), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Issue a move order DIRECTLY, bypassing the task system. Expressing commander
 	// retreat as a task returned from AiMakeTask lost 0-20 with metal at 6,631:
 	// AiMakeTask is the only place the commander gets work, so substituting a
@@ -2540,8 +2653,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// last plasma shots landing on a commander already running. Health loss is
 	// unambiguous and fires whether the shooter is adjacent or far away.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetHealthPercent()", asMETHOD(CCircuitUnit, GetHealthPercent), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asFUNCTION(CCircuitUnit_SetMoveState), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asFUNCTION(CCircuitUnit_SelfDestruct), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
 	// RulesParams accessor on Unit
 	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

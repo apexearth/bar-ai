@@ -437,6 +437,8 @@ void LookLog()
 
 void UpdateLooks()
 {
+	if (StockQuiet("looks"))
+		return;
 	if (!Builder::gHomeSet || (Catalog::gDefCount <= 0))
 		return;
 	if (ai.frame < gLkNextAt)

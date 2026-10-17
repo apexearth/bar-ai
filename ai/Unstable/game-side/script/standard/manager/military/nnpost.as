@@ -364,6 +364,8 @@ bool PostAnchor(AIFloat3& out at)
 
 void UpdateNnPost()
 {
+	if (StockQuiet("nnpost"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	const int rule = PostRule();

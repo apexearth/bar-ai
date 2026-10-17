@@ -545,6 +545,8 @@ void HuntNoteDeath(const AIFloat3& in pos, float m, bool ours, bool byUs)
 
 void UpdateHunt()
 {
+	if (StockQuiet("hunt"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	if (gHtNextAt < 0)

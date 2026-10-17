@@ -539,6 +539,8 @@ float SiegeSupportSlots()
 
 void UpdateSiege()
 {
+	if (StockQuiet("siege"))
+		return;
 	if (!Builder::gHomeSet)
 		return;
 	if (gSgNextAt < 0)

@@ -136,6 +136,8 @@ bool GiftableDef(int d)
 
 void UpdateGifts()
 {
+	if (StockQuiet("gift"))
+		return;
 	if (ai.frame >= gGiftPubAt) {
 		gGiftPubAt = ai.frame + 2 * SECOND;
 		ai.PublishTeamValue(TV_GFOE, FoeAtHomeM());

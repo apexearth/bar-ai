@@ -150,6 +150,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		}
 	}
 
+	const bool stock = circuit->IsStockCtl(unit);  // apex_stock_army: BARb's haven, no rally or heal post
 	bool isNoEndPos = true;
 	if (repairer != nullptr) {
 		endPos = repairer->GetPos(frame);
@@ -170,8 +171,10 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 				endPos = circuit->GetSetupManager()->GetBasePos();
 			}
 		}
-		const AIFloat3 rally = GetRallyPos(unit);
-		endPos = utils::is_valid(rally) ? rally : GetRearHaven(unit, endPos);
+		if (!stock) {
+			const AIFloat3 rally = GetRallyPos(unit);
+			endPos = utils::is_valid(rally) ? rally : GetRearHaven(unit, endPos);
+		}
 		range = factoryMgr->GetAssistRange() * 0.6f + pathfinder->GetSquareSize();
 
 		// apexearth: "sometimes our retreat logic takes us into new threats.
@@ -186,123 +189,125 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		// task assignment. Falls back to the base -- itself already
 		// threat-checked above -- rather than to nothing, so a rejected
 		// haven/rally never leaves endPos unvalidated.
-		if (circuit->GetInflMap()->GetEnemyInflAt(endPos) >= INFL_EPS) {
-			AIFloat3 fallback = circuit->GetSetupManager()->GetBasePos();
-			if (circuit->GetInflMap()->GetInfluenceAt(fallback) < INFL_SAFE) {
-				circuit->GetSetupManager()->FindNewBase(unit);
-				fallback = circuit->GetSetupManager()->GetBasePos();
+		if (!stock) {
+			if (circuit->GetInflMap()->GetEnemyInflAt(endPos) >= INFL_EPS) {
+				AIFloat3 fallback = circuit->GetSetupManager()->GetBasePos();
+				if (circuit->GetInflMap()->GetInfluenceAt(fallback) < INFL_SAFE) {
+					circuit->GetSetupManager()->FindNewBase(unit);
+					fallback = circuit->GetSetupManager()->GetBasePos();
+				}
+				endPos = fallback;
 			}
-			endPos = fallback;
-		}
 
-		// apexearth 2026-08-22: "our retreats are often ALL THE WAY BACK TO THE
-		// BASE, but if we have rezbots we can just step behind the main army's
-		// attack a little bit and get healed." Havens are only registered where
-		// assistants park next to factories, so a retreat without an assigned
-		// repairer is a walk across the map -- and the walk is what kills:
-		// measured 2026-08-22, 1062 units and 228k metal died a median 1s after
-		// switching to retreat. The medics hold station behind the lane, so a
-		// short step to the rear of the front lands the wounded in repair reach.
-		//
-		// Placed AFTER the threat re-check above on purpose: that check rewrites
-		// endPos to the base whenever it sees ANY enemy influence, so a heal post
-		// chosen before it was simply overwritten. And the test here is NET
-		// influence, not INFL_EPS -- ground 900 behind our own front nearly
-		// always carries some enemy influence, and demanding essentially zero
-		// rejected every candidate.
-		bool healPost = false;
-		const float behind = circuit->GetTunable("apex_retreat_behind", 600.f) * circuit->GetMilitaryManager()->GetRetreatMul();
-		if (behind > 0.f) {
-			const AIFloat3& front = circuit->GetFrontPos();
-			const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
-			if (utils::is_valid(front)) {
-				AIFloat3 dir = home - front;
-				dir.y = 0.f;
+			// apexearth 2026-08-22: "our retreats are often ALL THE WAY BACK TO THE
+			// BASE, but if we have rezbots we can just step behind the main army's
+			// attack a little bit and get healed." Havens are only registered where
+			// assistants park next to factories, so a retreat without an assigned
+			// repairer is a walk across the map -- and the walk is what kills:
+			// measured 2026-08-22, 1062 units and 228k metal died a median 1s after
+			// switching to retreat. The medics hold station behind the lane, so a
+			// short step to the rear of the front lands the wounded in repair reach.
+			//
+			// Placed AFTER the threat re-check above on purpose: that check rewrites
+			// endPos to the base whenever it sees ANY enemy influence, so a heal post
+			// chosen before it was simply overwritten. And the test here is NET
+			// influence, not INFL_EPS -- ground 900 behind our own front nearly
+			// always carries some enemy influence, and demanding essentially zero
+			// rejected every candidate.
+			bool healPost = false;
+			const float behind = circuit->GetTunable("apex_retreat_behind", 600.f) * circuit->GetMilitaryManager()->GetRetreatMul();
+			if (behind > 0.f) {
+				const AIFloat3& front = circuit->GetFrontPos();
+				const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+				if (utils::is_valid(front)) {
+					AIFloat3 dir = home - front;
+					dir.y = 0.f;
+					const float len = dir.Length2D();
+					if (len > 1.f) {
+						dir /= len;
+						// apex: the script's medic station when it has one: behind
+						// the army, out of the enemy's reach, where the medics stand.
+						// CONCENTRATE OPPOSITE THEIR ARMY, NEVER SPLIT OURS TO WALK
+						// HOME (apexearth 2026-10-03, docs/doctrine.md): a contested post sent
+						// a back seat's wounded to its corner base, across the map
+						// from the fight. Step back from the front toward home until
+						// the ground is ours; home only if none is within reach.
+						const AIFloat3& here = unit->GetPos(frame);
+						float ours = 0.f, foe = 0.f;
+						bool nearer = false;
+						for (float b = behind; b <= behind + 3000.f; b += 300.f) {
+							AIFloat3 spot = front + dir * b;
+							if ((b == behind) && utils::is_valid(circuit->GetHealPos())) {
+								spot = circuit->GetHealPos();
+							}
+							CTerrainManager::CorrectPosition(spot);
+							ours = circuit->GetInflMap()->GetInfluenceAt(spot);
+							foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
+							nearer = here.SqDistance2D(spot) < here.SqDistance2D(endPos);
+							if (!nearer) {
+								break;
+							}
+							if ((ours > foe)
+								&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
+							{
+								endPos = spot;
+								healPost = true;
+								break;
+							}
+						}
+						if (!healPost && (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f)) {
+							circuit->LOG("apex: heal-post refused ourInfl=%.2f foeInfl=%.2f nearer=%d",
+									ours, foe, (int)nearer);
+						}
+					}
+				}
+			}
+			// Retreats were the biggest source of unexplained movement on the map:
+			// every other mover pings its intent, so the wounded walk must too.
+			IntentPing(unit->GetPos(frame), healPost ? "RET heal" : "RET home");
+			{
+				// apex: per AI, how many wounded went to the heal post vs home
+				struct Tally { int heal = 0, home = 0, logAt = 0; };
+				static std::map<const CCircuitAI*, Tally> tally;
+				Tally& t = tally[circuit];
+				++(healPost ? t.heal : t.home);
+				if (frame >= t.logAt) {
+					t.logAt = frame + FRAMES_PER_SEC * 60;
+					circuit->LOG("apex: retreat-dest heal=%i home=%i", t.heal, t.home);
+				}
+			}
+
+			// apexearth: "when we're retreating to safe havens, it seems we
+			// clump up into a tight ball, which makes us even more likely to
+			// die... we should spread out more evenly, forming a line against
+			// the threat." Every unit on this task computes the same endPos
+			// independently and paths to that exact point -- a squad that
+			// pulled back healthy converges onto one AOE-sized spot, which is
+			// no safer than standing still once it arrives. Offset along the
+			// line perpendicular to the enemy direction, same idea as
+			// ISquadTask::Attack's row spacing, keyed by this unit's rank among
+			// the task's OTHER assignees so the line forms without any unit
+			// needing to know where the others are headed.
+			if (units.size() > 1) {
+				const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
+				AIFloat3 dir = endPos - foe;
 				const float len = dir.Length2D();
 				if (len > 1.f) {
-					dir /= len;
-					// apex: the script's medic station when it has one: behind
-					// the army, out of the enemy's reach, where the medics stand.
-					// CONCENTRATE OPPOSITE THEIR ARMY, NEVER SPLIT OURS TO WALK
-					// HOME (apexearth 2026-10-03, docs/doctrine.md): a contested post sent
-					// a back seat's wounded to its corner base, across the map
-					// from the fight. Step back from the front toward home until
-					// the ground is ours; home only if none is within reach.
-					const AIFloat3& here = unit->GetPos(frame);
-					float ours = 0.f, foe = 0.f;
-					bool nearer = false;
-					for (float b = behind; b <= behind + 3000.f; b += 300.f) {
-						AIFloat3 spot = front + dir * b;
-						if ((b == behind) && utils::is_valid(circuit->GetHealPos())) {
-							spot = circuit->GetHealPos();
-						}
-						CTerrainManager::CorrectPosition(spot);
-						ours = circuit->GetInflMap()->GetInfluenceAt(spot);
-						foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
-						nearer = here.SqDistance2D(spot) < here.SqDistance2D(endPos);
-						if (!nearer) {
+					const AIFloat3 perp(-dir.z / len, 0.f, dir.x / len);
+					int index = 0;
+					for (CCircuitUnit* u : units) {
+						if (u == unit) {
 							break;
 						}
-						if ((ours > foe)
-							&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
-						{
-							endPos = spot;
-							healPost = true;
-							break;
-						}
+						++index;
 					}
-					if (!healPost && (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f)) {
-						circuit->LOG("apex: heal-post refused ourInfl=%.2f foeInfl=%.2f nearer=%d",
-								ours, foe, (int)nearer);
+					const float spacing = SQUARE_SIZE * 24;
+					const float lineOffset = (index - (units.size() - 1) * 0.5f) * spacing;
+					AIFloat3 spread = endPos + perp * lineOffset;
+					CTerrainManager::CorrectPosition(spread);
+					if (circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spread)) {
+						endPos = spread;
 					}
-				}
-			}
-		}
-		// Retreats were the biggest source of unexplained movement on the map:
-		// every other mover pings its intent, so the wounded walk must too.
-		IntentPing(unit->GetPos(frame), healPost ? "RET heal" : "RET home");
-		{
-			// apex: per AI, how many wounded went to the heal post vs home
-			struct Tally { int heal = 0, home = 0, logAt = 0; };
-			static std::map<const CCircuitAI*, Tally> tally;
-			Tally& t = tally[circuit];
-			++(healPost ? t.heal : t.home);
-			if (frame >= t.logAt) {
-				t.logAt = frame + FRAMES_PER_SEC * 60;
-				circuit->LOG("apex: retreat-dest heal=%i home=%i", t.heal, t.home);
-			}
-		}
-
-		// apexearth: "when we're retreating to safe havens, it seems we
-		// clump up into a tight ball, which makes us even more likely to
-		// die... we should spread out more evenly, forming a line against
-		// the threat." Every unit on this task computes the same endPos
-		// independently and paths to that exact point -- a squad that
-		// pulled back healthy converges onto one AOE-sized spot, which is
-		// no safer than standing still once it arrives. Offset along the
-		// line perpendicular to the enemy direction, same idea as
-		// ISquadTask::Attack's row spacing, keyed by this unit's rank among
-		// the task's OTHER assignees so the line forms without any unit
-		// needing to know where the others are headed.
-		if (units.size() > 1) {
-			const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
-			AIFloat3 dir = endPos - foe;
-			const float len = dir.Length2D();
-			if (len > 1.f) {
-				const AIFloat3 perp(-dir.z / len, 0.f, dir.x / len);
-				int index = 0;
-				for (CCircuitUnit* u : units) {
-					if (u == unit) {
-						break;
-					}
-					++index;
-				}
-				const float spacing = SQUARE_SIZE * 24;
-				const float lineOffset = (index - (units.size() - 1) * 0.5f) * spacing;
-				AIFloat3 spread = endPos + perp * lineOffset;
-				CTerrainManager::CorrectPosition(spread);
-				if (circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spread)) {
-					endPos = spread;
 				}
 			}
 		}
@@ -319,7 +324,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 			unit, circuit->GetThreatMap(),
 			startPos, endPos, range, nullptr,
 			std::numeric_limits<float>::max(), false,
-			circuit->GetTunable("apex_retreat_threat_mod", 4.f));
+			stock ? 1.f : circuit->GetTunable("apex_retreat_threat_mod", 4.f));
 	pathQueries[unit] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -449,7 +454,7 @@ void CRetreatTask::Update()
 		// the fight until it is essentially new -- the walk home, the wait,
 		// and the walk back. A unit is combat-worthy well before 98%; the
 		// tunable lets it rejoin at a stated fraction instead.
-		const float healed = circuit->GetTunable("apex_retreat_healed", RETREAT_HEALED);
+		const float healed = circuit->IsStockCtl(unit) ? RETREAT_HEALED : circuit->GetTunable("apex_retreat_healed", RETREAT_HEALED);
 		bool isRepaired = unit->HasShield()
 				? (healthPerc > healed) && unit->IsShieldCharged(circuit->GetSetupManager()->GetFullShield())
 				: healthPerc > healed;
@@ -576,7 +581,7 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 	if (!utils::is_valid(haven)) {
 		haven = circuit->GetSetupManager()->GetBasePos();
 	}
-	if (repairer == nullptr) {  // nobody is waiting to repair it -- re-form instead
+	if ((repairer == nullptr) && !circuit->IsStockCtl(unit)) {  // nobody is waiting to repair it -- re-form instead
 		const AIFloat3 rally = GetRallyPos(unit);
 		haven = utils::is_valid(rally) ? rally : GetRearHaven(unit, haven);
 	}

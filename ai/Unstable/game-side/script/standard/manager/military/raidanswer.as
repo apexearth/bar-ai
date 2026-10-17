@@ -279,6 +279,8 @@ void EndAnswer(uint i, const string why)
 
 void UpdateRaidAnswer()
 {
+	if (StockQuiet("raidanswer"))
+		return;
 	for (int i = int(gAnsId.length()) - 1; i >= 0; --i) {
 		const uint u = uint(i);
 		const bool started = (gAnsTask[u] !is null);

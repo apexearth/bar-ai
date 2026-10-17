@@ -606,7 +606,8 @@ void CMilitaryManager::Init()
 		// apex: squads re-plan every second in contact, every two out of it
 		// (TaskModule lodQuiet); firing and damage retreats are engine reflexes.
 		updateRate = 30;
-		lodQuiet = true;
+		lodQuiet = !circuit->IsStockArmy();
+		stockRate = circuit->IsStockArmy();
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1, "milUpd");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2, "milDef");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommShipCloak, this), FRAMES_PER_SEC, offset + 3, "comShip");
@@ -816,7 +817,7 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
 			// every new assignee to it. At the base centre that is the whole army
 			// standing behind its own buildings; on the tower line it is the army
 			// standing with them.
-			AIFloat3 pos = GetDefenceStand();
+			AIFloat3 pos = circuit->IsStockArmy() ? -RgtVector : GetDefenceStand();
 			if (!utils::is_valid(pos)) {
 				pos = circuit->GetSetupManager()->GetBasePos();
 			}
@@ -1515,8 +1516,9 @@ void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 	const std::vector<float> none;
 	// GetThreatAt reads whichever layer was selected last; select this unit's.
 	circuit->GetThreatMap()->SetThreatType(unit);
-	const bool hasAnchor = GetGuardAnchor(unit->GetPos(circuit->GetLastFrame()), none, anchor, spot)
-			|| GetGuardAnchor(anchor);
+	const bool stock = circuit->IsStockCtl(unit);
+	const bool hasAnchor = !stock && (GetGuardAnchor(unit->GetPos(circuit->GetLastFrame()), none, anchor, spot)
+			|| GetGuardAnchor(anchor));
 	if (hasAnchor && terrainMgr->CanMoveToPos(area, anchor)) {
 		outPositions.push_back(anchor);
 		return;
@@ -1525,9 +1527,11 @@ void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 	// Then our own towers. Both callers reach here because the squad found no
 	// target it could beat, which is exactly the moment it should fall back onto
 	// static defence instead of onto whichever metal cluster is nearest the lane.
-	FillDefencePos(unit, outPositions);
-	if (!outPositions.empty()) {
-		return;
+	if (!stock) {
+		FillDefencePos(unit, outPositions);
+		if (!outPositions.empty()) {
+			return;
+		}
 	}
 
 	outPositions.clear();
@@ -1564,7 +1568,7 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
 	// "the edge of our territory". Script computes one now; it goes in ahead of
 	// the clusters so a squad rallies on the line and falls back to clusters only
 	// when the front is still unknown.
-	if (circuit->HasFrontPos()) {
+	if (circuit->HasFrontPos() && !circuit->IsStockCtl(unit)) {
 		outPositions.push_back(circuit->GetFrontPos());
 	}
 
@@ -1628,7 +1632,7 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
 	// "the edge of our territory". Script computes one now; it goes in ahead of
 	// the clusters so a squad rallies on the line and falls back to clusters only
 	// when the front is still unknown.
-	if (circuit->HasFrontPos()) {
+	if (circuit->HasFrontPos() && !circuit->IsStockCtl(unit)) {
 		outPositions.push_back(circuit->GetFrontPos());
 	}
 
@@ -1966,6 +1970,10 @@ void CMilitaryManager::UpdateDefenceTasks()
 			circuit->LOG("apex: army-board t=%i oneArmy=%i", tid, one ? 1 : 0);
 		}
 		oneArmy = one;
+		if (circuit->IsStockArmy()) {
+			oddsMul = massMul = flankMul = splitMul = commitMul = stageMul = retreatMul = 1.f;
+			oneArmy = false;
+		}
 		UpdateArmyBoard();
 	}
 
@@ -2601,6 +2609,39 @@ void CMilitaryManager::NoteBirthScript(int kind)
 		case 3: ++birthStat.ansSkip; break;
 		default: break;
 	}
+}
+
+std::string CMilitaryManager::StockArmyStat()
+{
+	std::map<std::string, int> by;
+	int combat = 0;
+	for (CCircuitUnit* unit : army) {
+		if (!circuit->IsStockCtlDef(unit->GetCircuitDef())) {
+			continue;
+		}
+		++combat;
+		IUnitTask* task = unit->GetTask();
+		std::string key;
+		if (task == nullptr) {
+			key = "none";
+		} else if (task->GetType() == IUnitTask::Type::FIGHTER) {
+			key = IFighterTask::FightTypeName(static_cast<int>(static_cast<IFighterTask*>(task)->GetFightType()));
+		} else if (task->GetType() == IUnitTask::Type::RETREAT) {
+			key = "RETREAT";
+		} else if (task->GetType() == IUnitTask::Type::IDLE) {
+			key = "IDLE";
+		} else {
+			key = "t" + utils::int_to_string(static_cast<int>(task->GetType()));
+		}
+		++by[key];
+	}
+	std::string s = "units=" + utils::int_to_string(combat) + " tasks=[";
+	bool first = true;
+	for (const auto& kv : by) {
+		s += (first ? "" : " ") + kv.first + "=" + utils::int_to_string(kv.second);
+		first = false;
+	}
+	return s + "] " + circuit->TakeStockLeaks();
 }
 
 void CMilitaryManager::LogBirthStat()

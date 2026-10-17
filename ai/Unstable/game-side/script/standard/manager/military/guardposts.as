@@ -508,6 +508,8 @@ void UpdateCoverNeed()
 
 void UpdateGuardPosts()
 {
+	if (StockQuiet("guardposts"))
+		return;
 	if (ai.GetTunable("apex_guard_posts", 1.f) <= 0.f)
 		return;
 	const float everyS = ai.GetTunable("apex_protect_field_s", TUNE_PROTECT_FIELD_S);

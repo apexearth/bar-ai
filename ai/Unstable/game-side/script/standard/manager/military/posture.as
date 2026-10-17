@@ -253,6 +253,8 @@ void ApplyRetreatPosture()
 
 void UpdateSpamPosture()
 {
+	if (StockQuiet("posture"))
+		return;
 	const bool spam = SpamPhase();
 	if (spam != gRaiderSuicidal) {
 		gRaiderSuicidal = spam;
@@ -604,6 +606,8 @@ void UpdatePosture()
 	{ double _t = Perf::T0(); Brain::BudgetLog(); Perf::Add("post.budgetlog", _t); }
 	{ double _t = Perf::T0(); IntelDiag(); Perf::Add("post.inteldiag", _t); }       // read-only: the enemy reading every gate above consumed
 	PublishArmy();
+	if (StockQuiet("posture"))
+		return;   // what follows sets the army's bars, holds and pushes
 	{ double _t = Perf::T0(); UpdateGifts(); Perf::Add("post.gifts", _t); }
 	{ double _t = Perf::T0(); UpdateRaidCaution(); Perf::Add("post.raidcaution", _t); }
 	{ double _t = Perf::T0(); UpdateMassing(); Perf::Add("post.massing", _t); }
