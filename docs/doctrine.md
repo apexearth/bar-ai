@@ -127,6 +127,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 **When to fight**
 - Push by default: with no significant threat in sight the army keeps going toward their base, even blind; there is no cooldown.
 - Army is worth only what it does: an army that is not fighting or taking ground is waste. Use it as soon as a group can win somewhere, against the target it can beat now, not the one it might beat later.
+- A pause in their aggression is time to spend: kill them if the army can, otherwise lower the army share and build economy. Army spend follows the threat that is actually arriving; floors that hold it up while nothing comes are a bug.
 - Decide once whether to fight a defended point: commit with enough to win, or keep out of its reach. Re-decide only when something real changes.
 - A unit never fights what kills it in one hit or what its class loses to; the units that win that matchup fight it, and production answers the army they field.
 - Split a group by matchup: units that beat a threat fight it, units it counters go around it to their economy.
