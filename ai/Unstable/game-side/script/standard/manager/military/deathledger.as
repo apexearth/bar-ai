@@ -146,14 +146,14 @@ bool TurretTarget(AIFloat3 &out at, float &out reach, float &out metal)
 			for (int i = 0; i < k; ++i) {
 				const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, i);
 				if ((d < 1) || (d > Catalog::gDefCount) || Catalog::gMobile[d]
-						|| (Catalog::gMaxRange[d] <= 1.f) || (Catalog::gSurfT[d] <= 0.f)
+						|| (Catalog::gLandRange[d] <= 1.f) || (Catalog::gSurfT[d] <= 0.f)
 						|| (Catalog::gBuildsList[d].length() > 0))
 					continue;
 				m += Catalog::gCostM[d];
-				if (Catalog::gMaxRange[d] > r)
-					r = Catalog::gMaxRange[d];
-				if (!Market::IsSuperWeapon(d) && !Catalog::gStock[d] && (Catalog::gMaxRange[d] > lr))
-					lr = Catalog::gMaxRange[d];
+				if (Catalog::gLandRange[d] > r)
+					r = Catalog::gLandRange[d];
+				if (!Market::IsSuperWeapon(d) && !Catalog::gStock[d] && (Catalog::gLandRange[d] > lr))
+					lr = Catalog::gLandRange[d];
 			}
 			if (m <= 0.f)
 				continue;

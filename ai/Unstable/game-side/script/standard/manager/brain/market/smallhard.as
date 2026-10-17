@@ -233,7 +233,7 @@ void ShPickTarget(const AIFloat3& in box)
 		const float prize = aiEnemyMgr.GetEnemyStructCostAt(p, Military::HUNT_R)
 				+ gAllSpotInc[s] * Catalog::gExtractsM[gMsFoeDef[s]] * H * gSmhHold;
 		float E = aiMilitaryMgr.GetEnemyInflNear(p, Military::HUNT_R + PUSH_STAND);
-		if ((cw > 0.f) && (cAt.distance2D(p) <= Military::HUNT_R + PUSH_STAND + Catalog::gMaxRange[cDef]))
+		if ((cw > 0.f) && (cAt.distance2D(p) <= Military::HUNT_R + PUSH_STAND + Catalog::gLandRange[cDef]))
 			E += cw * Catalog::gPower[cDef];
 		const float lossF = Military::NrLossFrac(E, F);
 		const float net = prize * (1.f - lossF) - lossF * teamM;

@@ -118,7 +118,7 @@ void CFGuardTask::Update()
 			continue;
 		}
 		const float d = pos.distance2D(ei->GetPos());
-		const float reach = ((ed != nullptr) ? ed->GetMaxRange() : 0.f) + 200.f;
+		const float reach = ((ed != nullptr) ? circuit->RangeVs(ed, airOnly) : 0.f) + 200.f;
 		if ((d > reach) || (d >= bestD)) {
 			continue;
 		}

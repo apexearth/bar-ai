@@ -85,7 +85,7 @@ float CfHeal(int d)
 		if (CfIsCom(d))
 			AiLog("apex: comfight-def " + Catalog::Def(d).GetName() + " heal/s=" + formatFloat(gCfHeal[d], "", 0, 2)
 				+ " dps=" + int(Catalog::gSurfDps[d]) + " alpha=" + int(Catalog::gSurfAlpha[d]) + " hp=" + int(Catalog::gHealth[d])
-				+ " aoe=" + int(Catalog::gAoe[d]) + " range=" + int(Catalog::gMaxRange[d]));
+				+ " aoe=" + int(Catalog::gAoe[d]) + " range=" + int(Catalog::gLandRange[d]));
 	}
 	return gCfHeal[d];
 }
@@ -104,7 +104,7 @@ void CfScanStep()
 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
 		if (!Catalog::ValidId(d) || Catalog::gFlyer[d] || Catalog::gKamikaze[d])
 			continue;
-		const bool armed = (Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f);
+		const bool armed = (Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f) && (Catalog::gLandRange[d] > 0.f);
 		const bool eco = (Catalog::gExtractsM[d] > 0.f)
 			|| (Catalog::gBuilder[d] && Catalog::gMobile[d] && !CfIsCom(d));
 		if (!armed && !eco)
@@ -115,7 +115,7 @@ void CfScanStep()
 		// out of sight, a mobile one is kept while it cannot have walked out of its own reach since
 		if (((los & 3) == 0) && Catalog::gMobile[d]) {
 			const float dt = float(ai.frame - aiEnemyMgr.GetEnemyUnitSeenAt(i)) / float(SECOND);
-			if (!armed || (Catalog::gSpeed[d] * dt > Catalog::gMaxRange[d]))
+			if (!armed || (Catalog::gSpeed[d] * dt > Catalog::gLandRange[d]))
 				continue;
 		}
 		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
@@ -132,7 +132,7 @@ void CfScanStep()
 		gCfNDef.insertLast(d);
 		gCfNX.insertLast(p.x);
 		gCfNZ.insertLast(p.z);
-		const float reach = Catalog::gMaxRange[d] + Catalog::gSpeed[d] * CF_REACT_S;
+		const float reach = Catalog::gLandRange[d] + Catalog::gSpeed[d] * CF_REACT_S;
 		if (reach > gCfNReach)
 			gCfNReach = reach;
 	}
@@ -183,7 +183,7 @@ void CfCluster()
 		const int di = gCfEDef[i];
 		if (!Catalog::gMobile[di])
 			continue;
-		const float ri = Catalog::gMaxRange[di], si = Catalog::gSpeed[di];
+		const float ri = Catalog::gLandRange[di], si = Catalog::gSpeed[di];
 		gCfEGrid.Query(gCfEX[i], gCfEZ[i], ri + si * CF_REACT_S + gCfEReach);
 		for (uint h = 0; h < gCfEGrid.hit.length(); ++h) {
 			const int j = gCfEGrid.hit[h];
@@ -192,7 +192,7 @@ void CfCluster()
 			const int dj = gCfEDef[j];
 			if (!Catalog::gMobile[dj])
 				continue;
-			const float rj = Catalog::gMaxRange[dj];
+			const float rj = Catalog::gLandRange[dj];
 			const float link = ((ri > rj) ? ri : rj) + (si + Catalog::gSpeed[dj]) * CF_REACT_S;
 			if (CfDist(gCfEX[i], gCfEZ[i], gCfEX[j], gCfEZ[j]) > link)
 				continue;
@@ -295,8 +295,8 @@ void CfReadGroups()
 			dps += Catalog::gSurfDps[d];
 			hp += Catalog::gHealth[d] * u.GetHealthPercent();
 			m += Catalog::gCostM[d];
-			if (Catalog::gMaxRange[d] > rng)
-				rng = Catalog::gMaxRange[d];
+			if (Catalog::gLandRange[d] > rng)
+				rng = Catalog::gLandRange[d];
 			if (Catalog::gSpeed[d] < spd)
 				spd = Catalog::gSpeed[d];
 			++n;
@@ -565,7 +565,7 @@ void CfDropFarStatics(array<int>& foe, float sx, float sz, float spr)
 		const int d = gCfEDef[k];
 		if (Catalog::gMobile[d])
 			continue;
-		if (CfDist(gCfEX[k], gCfEZ[k], sx, sz) > Catalog::gMaxRange[d] + spr)
+		if (CfDist(gCfEX[k], gCfEZ[k], sx, sz) > Catalog::gLandRange[d] + spr)
 			foe.removeAt(uint(i));
 	}
 }
@@ -771,7 +771,7 @@ bool CfContact(int g, const array<int>@ foe)
 {
 	for (uint i = 0; i < foe.length(); ++i) {
 		const int k = foe[i];
-		const float er = Catalog::gMaxRange[gCfEDef[k]];
+		const float er = Catalog::gLandRange[gCfEDef[k]];
 		const float rr = ((er > gCfGRng[g]) ? er : gCfGRng[g]) + gCfGSpr[g];
 		if (CfDist(gCfEX[k], gCfEZ[k], gCfGX[g], gCfGZ[g]) <= rr)
 			return true;
@@ -889,7 +889,7 @@ void CfFoesNear(float x, float z, float rng, float spd, float spr, array<int>& o
 	for (uint h = 0; h < gCfEGrid.hit.length(); ++h) {
 		const int k = gCfEGrid.hit[h];
 		const int d = gCfEDef[k];
-		const float er = Catalog::gMaxRange[d];
+		const float er = Catalog::gLandRange[d];
 		const float reach = ((er > rng) ? er : rng) + (Catalog::gSpeed[d] + spd) * CF_REACT_S + spr;
 		if (CfDist(gCfEX[k], gCfEZ[k], x, z) > reach)
 			continue;
@@ -997,8 +997,8 @@ void CfPackOf(array<CCircuitUnit@>@ us, float& out n, float& out dps, float& out
 		dps += Catalog::gSurfDps[d];
 		hp += Catalog::gHealth[d] * u.GetHealthPercent();
 		m += Catalog::gCostM[d];
-		if (Catalog::gMaxRange[d] > rng)
-			rng = Catalog::gMaxRange[d];
+		if (Catalog::gLandRange[d] > rng)
+			rng = Catalog::gLandRange[d];
 	}
 	if (n <= 0.f)
 		return;
@@ -1159,7 +1159,7 @@ void CfEcoRefresh()
 		if (!live)
 			continue;
 		const int kd = gCfEcoKDef[s];
-		const float walk = Catalog::gMaxRange[kd] + Catalog::gSpeed[kd] * CF_REACT_S;
+		const float walk = Catalog::gLandRange[kd] + Catalog::gSpeed[kd] * CF_REACT_S;
 		float best = -1.f;
 		for (uint k = 0; k < gCfEDef.length(); ++k) {
 			if (gCfEDef[k] != kd)
@@ -1196,7 +1196,7 @@ bool CfCounters(int k, int c, int n, float spr)
 	array<int> one(1, kd);
 	const float lo = gCfLostO, lt = gCfLostT, lm = gCfLostTMob, st = gCfSimT;
 	const bool r = !CfSim(float(n), Catalog::gSurfDps[c], Catalog::gHealth[c], Catalog::gCostM[c], spr,
-			Catalog::gMaxRange[c], 0.f, 0.f, one, 0.f);
+			Catalog::gLandRange[c], 0.f, 0.f, one, 0.f);
 	gCfLostO = lo;
 	gCfLostT = lt;
 	gCfLostTMob = lm;
@@ -1275,7 +1275,7 @@ bool CfSplit(int g, const array<int>@ foe)
 			const int k = by[j];
 			const int kd = gCfEDef[k];
 			clear = CfDist(gCfXX[e], gCfXZ[e], gCfEX[k], gCfEZ[k])
-				> Catalog::gMaxRange[kd] + Catalog::gSpeed[kd] * CF_REACT_S + gCfGSpr[g];
+				> Catalog::gLandRange[kd] + Catalog::gSpeed[kd] * CF_REACT_S + gCfGSpr[g];
 		}
 		if (!clear)
 			continue;
@@ -1300,7 +1300,7 @@ bool CfSplit(int g, const array<int>@ foe)
 		for (uint h = 0; h < gCfEGrid.hit.length(); ++h) {
 			const int k = gCfEGrid.hit[h];
 			const int kd = gCfEDef[k];
-			const float reach = Catalog::gMaxRange[kd] + Catalog::gSpeed[kd] * killS + ps;
+			const float reach = Catalog::gLandRange[kd] + Catalog::gSpeed[kd] * killS + ps;
 			if (CfDist(gCfEX[k], gCfEZ[k], gCfXX[e], gCfXZ[e]) > reach)
 				continue;
 			ed.insertLast(kd);
@@ -1327,7 +1327,7 @@ bool CfSplit(int g, const array<int>@ foe)
 		gCfEcoR.insertLast(Catalog::gLosR[defs[j]]);
 		gCfEcoKX.insertLast(gCfEX[k]);
 		gCfEcoKZ.insertLast(gCfEZ[k]);
-		gCfEcoKR.insertLast(Catalog::gMaxRange[kd] + Catalog::gSpeed[kd] * CF_REACT_S);
+		gCfEcoKR.insertLast(Catalog::gLandRange[kd] + Catalog::gSpeed[kd] * CF_REACT_S);
 		gCfEcoAt.insertLast(ai.frame);
 		gCfEcoKDef.insertLast(kd);
 		const int slot = int(gCfEcoT.length()) - 1;
@@ -1379,7 +1379,7 @@ void CfSetRing(int s, const array<int>@ foe, int ourN, float fbx, float fbz)
 	cz /= float(foe.length());
 	float r = 0.f;
 	for (uint i = 0; i < foe.length(); ++i) {
-		const float rr = CfDist(gCfEX[foe[i]], gCfEZ[foe[i]], cx, cz) + Catalog::gMaxRange[gCfEDef[foe[i]]];
+		const float rr = CfDist(gCfEX[foe[i]], gCfEZ[foe[i]], cx, cz) + Catalog::gLandRange[gCfEDef[foe[i]]];
 		if (rr > r)
 			r = rr;
 	}
@@ -1429,7 +1429,7 @@ float CfStake(const array<int>@ foe, float x, float z, float spr)
 		const int d = gCfEDef[foe[i]];
 		if (!Catalog::gMobile[d])
 			continue;
-		const float rr = Catalog::gMaxRange[d] + Catalog::gSpeed[d] * CF_REACT_S;
+		const float rr = Catalog::gLandRange[d] + Catalog::gSpeed[d] * CF_REACT_S;
 		if (rr > R)
 			R = rr;
 	}
@@ -1811,11 +1811,11 @@ void CfHunt(int g)
 				const float dk = CfDist(gCfEX[k], gCfEZ[k], cx, cz);
 				bool joins = false;
 				if (!Catalog::gMobile[d])
-					joins = dk <= Catalog::gMaxRange[d] + pS;
+					joins = dk <= Catalog::gLandRange[d] + pS;
 				else if ((k < gCfFcOf.length()) && (gCfFcOf[k] == bi))
 					joins = true;
 				else
-					joins = dk <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * within + pS;
+					joins = dk <= Catalog::gLandRange[d] + Catalog::gSpeed[d] * within + pS;
 				if (joins)
 					foe.insertLast(int(k));
 			}

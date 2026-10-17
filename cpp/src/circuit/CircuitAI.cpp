@@ -2185,6 +2185,14 @@ float CCircuitAI::DmgVs(const CCircuitDef* cdef, bool air) const
 	return air ? cdef->GetRawAirDmg() : std::max(cdef->GetRawSurfDmg(), cdef->GetRawWaterDmg());
 }
 
+float CCircuitAI::RangeVs(const CCircuitDef* cdef, bool air) const
+{
+	if (!IsSurfDps()) {
+		return cdef->GetMaxRange();
+	}
+	return air ? cdef->GetAirRange() : std::max(cdef->GetLandRange(), cdef->GetWaterRange());
+}
+
 bool CCircuitAI::IsOurAir() const
 {
 	if (ourAir < 0) {

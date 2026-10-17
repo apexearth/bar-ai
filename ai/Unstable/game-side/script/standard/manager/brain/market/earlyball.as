@@ -422,7 +422,7 @@ string EarlyBallPpcParts(int d, float linePPC)
 {
 	WorthMeans();
 	const float core = UnitCore(d);
-	const float rng = 1.f + ((gWMRng > 0.f) ? (Catalog::gMaxRange[d] / gWMRng) : 0.f)
+	const float rng = 1.f + ((gWMRng > 0.f) ? (Catalog::gLandRange[d] / gWMRng) : 0.f)
 			* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH) * ShieldShare();
 	float hpd = 1.f;
 	{

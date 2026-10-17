@@ -41,7 +41,7 @@ bool CmGround(int d)
 {
 	return Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d] && !Catalog::gBuilder[d]
 		&& !Catalog::gKamikaze[d] && (Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f)
-		&& (Catalog::gMaxRange[d] > 0.f) && (Catalog::gHealth[d] > 0.f) && (Catalog::gCostM[d] > 0.f)
+		&& (Catalog::gLandRange[d] > 0.f) && (Catalog::gHealth[d] > 0.f) && (Catalog::gCostM[d] > 0.f)
 		&& !Military::CfIsCom(d);
 }
 
@@ -95,7 +95,7 @@ float CmPairCalc(int a, int b)
 	if (eba <= 0.f)
 		return 2.f;
 	const float va = Catalog::gSpeed[a], vb = Catalog::gSpeed[b];
-	const float ra = Catalog::gMaxRange[a], rb = Catalog::gMaxRange[b];
+	const float ra = Catalog::gLandRange[a], rb = Catalog::gLandRange[b];
 	const float fa = CmClose(eba, rb - ra, va, ca, ha, cb);
 	const float fb = CmClose(eab, ra - rb, vb, cb, hb, ca);
 	const float na = (1.f - fa) / ca, nb = (1.f - fb) / cb;

@@ -69,12 +69,12 @@ float AatRadius()
 	float bestC = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || (ProtClassOf(d) != PROT_AA)
-			|| (Catalog::gMaxRange[d] <= 1.f))
+			|| (Catalog::gAirRange[d] <= 1.f))
 			continue;
 		const float c = TowerCostEq(d);
 		if ((bestC <= 0.f) || (c < bestC)) {
 			bestC = c;
-			gAatR = Catalog::gMaxRange[d];
+			gAatR = Catalog::gAirRange[d];
 		}
 	}
 	return (gAatR > 0.f) ? gAatR : 600.f;

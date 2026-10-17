@@ -31,7 +31,7 @@ bool SqDef(const CCircuitDef@ cd)
 		gSqDef.resize(d + 1);
 	if (gSqDef[d] == 0) {
 		const bool ok = Catalog::ValidId(d) && !Catalog::gFlyer[d] && !Catalog::gKamikaze[d] && !Catalog::gBuilder[d]
-			&& Catalog::gHitsLand[d] && (Catalog::gSurfDps[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f)
+			&& Catalog::gHitsLand[d] && (Catalog::gSurfDps[d] > 0.f) && (Catalog::gLandRange[d] > 0.f)
 			&& (!Catalog::gFloater[d] || Catalog::gAmphib[d])
 			&& (Catalog::gRole[d] != int(Unit::Role::SCOUT.type));   // main role: pawn/grunt carry "scout" as an attribute
 		gSqDef[d] = ok ? 1 : -1;
@@ -142,7 +142,7 @@ bool SqHomeThreat(float& out x, float& out z)
 	for (uint e = 0; e < gCfEDef.length(); ++e) {
 		const int d = gCfEDef[e];
 		const float dh = CfDist(gCfEX[e], gCfEZ[e], hx, hz);
-		if (dh > gBaseExtent + Catalog::gMaxRange[d] + Catalog::gSpeed[d] * CF_REACT_S)
+		if (dh > gBaseExtent + Catalog::gLandRange[d] + Catalog::gSpeed[d] * CF_REACT_S)
 			continue;
 		if ((best < 0.f) || (dh < best)) {
 			best = dh;

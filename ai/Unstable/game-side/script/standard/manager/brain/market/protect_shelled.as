@@ -72,7 +72,7 @@ float ShRefReach()
 	gShRefAt = ai.frame;
 	float r = Brain::LightTowerRange();
 	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i) {
-		const float g = Catalog::gMaxRange[gProtDefId[PROT_DEF][i]];
+		const float g = Catalog::gLandRange[gProtDefId[PROT_DEF][i]];
 		if (g > r)
 			r = g;
 	}
@@ -124,10 +124,10 @@ bool ShLongHit(int vd, const AIFloat3& in at, int weapon, int framesAgo,
 		float& out shooterR, int& out byDef)
 {
 	shooterR = -1.f;
-	const float refR = (Catalog::gMaxRange[vd] > 1.f) ? Catalog::gMaxRange[vd] : ShRefReach();
+	const float refR = (Catalog::gLandRange[vd] > 1.f) ? Catalog::gLandRange[vd] : ShRefReach();
 	byDef = ai.GetWeaponStaticOwner(weapon);
 	if (Catalog::ValidId(byDef)) {
-		shooterR = Catalog::gMaxRange[byDef];
+		shooterR = Catalog::gLandRange[byDef];
 		return shooterR > refR;
 	}
 	byDef = -1;
@@ -215,10 +215,10 @@ void ShelledNoteDeath(CCircuitUnit@ unit, const CCircuitDef@ attackerDef, bool a
 	int by = -1;
 	if ((attackerDef !is null) && Catalog::ValidId(int(attackerDef.id))) {
 		const int ad = int(attackerDef.id);
-		const float refR = (Catalog::gMaxRange[vd] > 1.f) ? Catalog::gMaxRange[vd] : ShRefReach();
-		if (Catalog::gFlyer[ad] || (Catalog::gMaxRange[ad] <= refR))
+		const float refR = (Catalog::gLandRange[vd] > 1.f) ? Catalog::gLandRange[vd] : ShRefReach();
+		if (Catalog::gFlyer[ad] || (Catalog::gLandRange[ad] <= refR))
 			return;
-		sR = Catalog::gMaxRange[ad];
+		sR = Catalog::gLandRange[ad];
 		by = ad;
 	} else if (!ShLongHit(vd, at, weapon, ai.frame - unit.GetDamagedFrame(), sR, by)) {
 		return;

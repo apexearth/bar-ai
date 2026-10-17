@@ -391,7 +391,7 @@ void SprContestPick(float F, float teamM, float H, float cw, const AIFloat3& in 
 		if (prize <= 0.f)
 			continue;
 		float E = aiMilitaryMgr.GetEnemyInflNear(p, reach);
-		if ((cw > 0.f) && (cAt.distance2D(p) <= reach + Catalog::gMaxRange[cDef]))
+		if ((cw > 0.f) && (cAt.distance2D(p) <= reach + Catalog::gLandRange[cDef]))
 			E += cw * Catalog::gPower[cDef];
 		const float L = Military::NrLossFrac(E, F);
 		const float net = prize * (1.f - L) - L * teamM;

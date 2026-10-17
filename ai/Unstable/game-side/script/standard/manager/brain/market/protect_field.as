@@ -294,9 +294,9 @@ void PfFoeRangeBuild()
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gMobile[d] || Catalog::gBuilder[d])
 			continue;
-		if ((Catalog::gMaxRange[d] <= 1.f) || (Catalog::gPower[d] <= 0.f))
+		if ((Catalog::gLandRange[d] <= 1.f) || (Catalog::gPower[d] <= 0.f))
 			continue;
-		gPfFoeRange.insertLast(Catalog::gMaxRange[d]);
+		gPfFoeRange.insertLast(Catalog::gLandRange[d]);
 	}
 	gPfFoeRange.sortAsc();
 	// The set is only as good as what Catalog holds, so it says so once:
@@ -318,7 +318,7 @@ float PfOutrangedFrac(int d)
 	const uint n = gPfFoeRange.length();
 	if (n == 0)
 		return 0.f;
-	const float r = Catalog::gMaxRange[d];
+	const float r = Catalog::gLandRange[d];
 	uint under = 0;
 	for (uint i = 0; i < n; ++i) {
 		if (gPfFoeRange[i] < r)
@@ -1050,7 +1050,7 @@ void PfRebuild()
 	array<float> tKill;
 	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
 		const int d = gProtDefId[PROT_DEF][i];
-		const float r = Catalog::gMaxRange[d];
+		const float r = Catalog::gLandRange[d];
 		if (r <= 1.f)
 			continue;
 		tPos.insertLast(gProtPos[PROT_DEF][i]);
@@ -1068,7 +1068,7 @@ void PfRebuild()
 				const int d = int(ad[k + 2]);
 				if ((d <= 0) || (d >= Catalog::gDefCount) || (ProtClassOf(d) != PROT_DEF))
 					continue;
-				const float r = Catalog::gMaxRange[d];
+				const float r = Catalog::gLandRange[d];
 				if (r <= 1.f)
 					continue;
 				tPos.insertLast(AIFloat3(ad[k], 0.f, ad[k + 1]));

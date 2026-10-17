@@ -89,7 +89,7 @@ void DangerUpdate()
 					continue;
 				s = DgStr(d);
 				spd = Catalog::gSpeed[d];
-				rng = Catalog::gMaxRange[d];
+				rng = Catalog::gLandRange[d];
 				seenM += Catalog::gCostM[d];
 				seenSpdM += Catalog::gCostM[d] * spd;
 			} else {

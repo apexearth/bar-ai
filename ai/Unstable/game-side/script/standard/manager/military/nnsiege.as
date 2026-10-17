@@ -47,7 +47,7 @@ bool SgCarry(int d, float reach)
 {
 	return Catalog::gMobile[d] && !Catalog::gFlyer[d] && !Catalog::gBuilder[d] && Catalog::gHitsLand[d]
 		&& !Catalog::gKamikaze[d] && (Catalog::gPower[d] > 1.f) && (Catalog::gSurfT[d] > 0.01f)
-		&& (Catalog::gMaxRange[d] > reach);
+		&& (Catalog::gLandRange[d] > reach);
 }
 
 bool SgSupportDef(int d, bool jam)
@@ -185,7 +185,7 @@ void SiegeDecide()
 		const float lackM = forceM * ((haveF < 1.f) ? (1.f - haveF) : 0.f);
 		// An outranging force is not spent by the siege -- it outlives the guns and rejoins the army --
 		// so the price is the part still to buy and what their army there can kill.
-		const float watchR = radius + reach + ((pick > 0) ? Catalog::gMaxRange[pick] : reach);
+		const float watchR = radius + reach + ((pick > 0) ? Catalog::gLandRange[pick] : reach);
 		const float foeM = SgFoeNearM(fp, watchR + reach);
 		const float cost = lackM + foeM;
 		const float ratio = worth / ((cost > 1.f) ? cost : 1.f);
@@ -215,7 +215,7 @@ void SiegeDecide()
 		bf.insertLast(lackM);
 		bf.insertLast(foeM);
 		bf.insertLast(ratio);
-		bf.insertLast((pick > 0) ? Catalog::gMaxRange[pick] : 0.f);
+		bf.insertLast((pick > 0) ? Catalog::gLandRange[pick] : 0.f);
 		bf.insertLast((pick > 0) ? Catalog::gCostM[pick] : 0.f);
 	}
 	if (best < 0) {
@@ -260,7 +260,7 @@ void SiegeStart(int i, int def, float worth, float forceM)
 	gSgPos = aiMilitaryMgr.GetFortPos(i);
 	gSgReach = aiMilitaryMgr.GetFortVal(i, FV_REACH);
 	gSgRadius = aiMilitaryMgr.GetFortVal(i, FV_RADIUS);
-	gSgWatchR = gSgRadius + gSgReach + ((def > 0) ? Catalog::gMaxRange[def] : gSgReach);
+	gSgWatchR = gSgRadius + gSgReach + ((def > 0) ? Catalog::gLandRange[def] : gSgReach);
 	gSgWorth = worth;
 	gSgForceM = forceM;
 	gSgNeedHD = SgNeedHD(i);

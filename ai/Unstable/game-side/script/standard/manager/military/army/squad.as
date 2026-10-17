@@ -102,7 +102,7 @@ void SqIssue(Squad@ s, uint i, int kind, float x, float z)
 	if (s.ordK[i] == kind) {
 		if (kind == SQ_O_STOP)
 			return;
-		if (CfDist(s.ordX[i], s.ordZ[i], x, z) <= 0.5f * Catalog::gMaxRange[d])
+		if (CfDist(s.ordX[i], s.ordZ[i], x, z) <= 0.5f * Catalog::gLandRange[d])
 			return;
 	}
 	SqClampToMap(x, z, x, z);
@@ -151,7 +151,7 @@ void SqRead(Squad@ s, float r, float cx, float cz)
 		p.dps += Catalog::gSurfDps[d];
 		p.hp += Catalog::gHealth[d] * un.GetHealthPercent();
 		p.m += Catalog::gCostM[d];
-		const float rg = Catalog::gMaxRange[d];
+		const float rg = Catalog::gLandRange[d];
 		if (rg > p.rng) p.rng = rg;
 		if (rg < p.minRng) p.minRng = rg;
 		if (Catalog::gSpeed[d] < p.spd) p.spd = Catalog::gSpeed[d];
