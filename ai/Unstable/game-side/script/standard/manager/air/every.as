@@ -114,10 +114,35 @@ float EveryFighterGainFor(int d, float fillSec)
 	return (want - have) / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
+// An escort is sized to the threat: the fighters that beat the fighters of theirs we know of, none while they have none.
+int EvEscortThreatN(int f)
+{
+	if ((f <= 0) || (f > Catalog::gDefCount))
+		return 0;
+	EvSnapFoeAir();
+	const float hp = Catalog::gHealth[f];
+	const float dps = NaAirDps(f);
+	if ((hp <= 0.f) || (dps <= 0.f) || (gEvFoeFtrHp <= 0.f))
+		return 0;
+	return int(ceil(sqrt(gEvFoeFtrHp * gEvFoeFtrDps / (hp * dps))));
+}
+
 // The escort the held wing waits for: its own bombers at the wing's ratio, not the wing it might grow into.
 int EvEscortWant()
 {
-	return (HeldBombers() * AIR_FIGHTERS + AIR_BOMBERS - 1) / AIR_BOMBERS;
+	return EvEscortCap((HeldBombers() * AIR_FIGHTERS + AIR_BOMBERS - 1) / AIR_BOMBERS);
+}
+
+// The wing's escort at most what their known fighters call for, read for the fighter we would build.
+int EvEscortCap(int want)
+{
+	if (!EveryOn())
+		return want;
+	CCircuitDef@ fd = (gFighter !is null && Have(gPlant2) > 0) ? gFighter : gFighter1;
+	if (fd is null)
+		return want;
+	const int nT = EvEscortThreatN(int(fd.id));
+	return (nT < want) ? nT : want;
 }
 
 // A hunt flight launches whole: the fighters at home past the escort go together once they beat the fighters
