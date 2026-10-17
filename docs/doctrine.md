@@ -134,6 +134,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Focus fire: a committed group shoots together, killing whatever deals the most damage first, armed targets before structures that do not shoot.
 - A raid is a group that goes around their army to their economy: gather to the size the target needs, launch whole, and strike their flanks -- targets their army cannot reach before the work is done, along a path that skirts it. Units never trickle in after it.
 - Every squad has a join window: open while it forms, closed the moment it commits -- raids, the main army's attacks, bombing runs, air wings, team strikes alike. Nothing joins a committed squad; a unit that missed it waits for the next one. Strict, no exceptions.
+- Defending and regrouping squads are open: a squad holding home, or one fallen back to re-form, takes joiners at its gathering point. A forming squad never waits indefinitely: when waiting no longer improves its odds (they grow as fast as it does), it commits now or takes a softer target -- the game must move to its next stage.
 - Some of the army is always on their half, and we want them chasing us on their side.
 - Default: attack their economy and defend against their army; sometimes seek out their army, destroy it and eat the wrecks.
 - Go in only with enough power in the area, judged on real health; after losses demand better odds and build more army.
