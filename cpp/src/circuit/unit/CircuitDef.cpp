@@ -542,6 +542,29 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 				reloadTime = wd->GetSalvoSize() / sweep;
 			}
 		}
+		// The game later renamed it (common/weapons.lua getBeamFiringCycle): the beam fires for
+		// sweepfire_firetime out of sweepfire_reloadtime (else reload), one shot per beam's frames.
+		// The old key went silent: legbastion read 52 dps again in a 10-17 game.
+		it = customParams.find("sweepfire_firetime");
+		if (it != customParams.end()) {
+			const float fireS = utils::string_to_float(it->second);
+			auto ir = customParams.find("sweepfire_reloadtime");
+			const float cycleS = (ir != customParams.end()) ? utils::string_to_float(ir->second) : wd->GetReload();
+			const int beamF = std::max(1, (int)std::floor(wd->GetBeamTime() * FRAMES_PER_SEC));
+			const int fireF = (int)std::floor(fireS * FRAMES_PER_SEC + 0.5f);
+			const float shots = (float)std::max(1, wd->GetProjectilesPerShot()) * fireF / beamF;
+			if ((shots > 0.f) && (cycleS > 0.f)) {
+				reloadTime = cycleS * wd->GetSalvoSize() / shots;
+			}
+			circuit->LOG("apex: sweepfire %s fire=%.2fs cycle=%.2fs shots=%.1f reloadEq=%.3fs",
+					def->GetName(), fireS, cycleS, shots, reloadTime);
+		}
+		for (const auto& kv : customParams) {
+			if ((kv.first.rfind("sweepfire", 0) == 0) && (kv.first != "sweepfire")
+				&& (kv.first != "sweepfire_firetime") && (kv.first != "sweepfire_reloadtime")) {
+				circuit->LOG("apex: sweepfire-unread %s %s=%s", def->GetName(), kv.first.c_str(), kv.second.c_str());
+			}
+		}
 		if (extraDmg > 0.1f) {
 			dmg += extraDmg;
 			dps += extraDmg * wd->GetSalvoSize() / reloadTime * scale;
