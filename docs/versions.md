@@ -32,3 +32,4 @@ x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size:
 | stock (mid) | lane-c9 | stock army + our production, Comet Catcher 4 games | stock 1W 1D 2L (-0.60) vs our layers 0W 2D 2L (-0.98) | | |
 | stock (large) | lane-c9 | same, Supreme Isthmus 4 games | stock 0-0-4 (-1.23) vs layers 0-0-4 (-1.13): both lose; our mexes stall at 30-33 from min 12 while BARb reaches 54 | | |
 | v0.2.7 vs v0.2.6 | | head-to-head, 40 min | Red Comet 4W 0L (all eliminations), Supreme Isthmus 2W 2L (wins by elimination, losses on end lead) | | |
+| **v0.2.8** | `v0.2.8` | v0.2.7 + economy return, expand far (+ no 3-min threat bans), lab nanos, our air control | large vs BARb (pre-ban-fix arm): 0W 2D 2L (-0.97) vs v0.2.7 0-0-4 (-1.23); our air untested in batches | | |
