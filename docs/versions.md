@@ -28,3 +28,4 @@ x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size:
 | cand-15b | (lane-c9) | cal + focus fire, set-target only (no walks) | vs BARb: Armada A +0.28, Armada B +0.51, Cortex A -1.84, Cortex B -1.37 (avg -0.61 vs cal -0.88); our kills before min 10 67.3k vs 62.7k -- KEPT | - | - |
 | aa | (lane-c9 arm) | c15b + anti-air where their air hurts us (TUNE_AA_THREAT) | vs BARb avg -0.87 (c15b -0.61): no gain; off | - | - |
 | arrive | (lane-c9 arm) | c15b + builder joins arrive in time (TUNE_JOIN_ARRIVE) | vs BARb avg -1.28: worse; off | - | - |
+| **stock** | (lane-c9; WATCH SLOT) | our economy and production (open race, early ball pricing, small_hard, budget hold, map share) + TUNE_STOCK_ARMY: every combat unit under stock BARb army control | vs BARb Red Comet, 8 games (seeds 700-703 x both faction layouts): **5W 2D 1L, mean +0.98** vs focus-fire-with-our-layers on the same seeds 2W 1D 5L, -0.73. Armada +1.48, Cortex +0.49 | - | - |
