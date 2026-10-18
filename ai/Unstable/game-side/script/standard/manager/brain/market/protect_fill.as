@@ -7,6 +7,41 @@ namespace Market {
 // PREVENTED loss at most once per def per two seconds; the election keeps
 // only the walk-weighted argmax. The arithmetic inside is unchanged.
 array<array<float>@> gDsPrev;
+// Per def, for the fill gDsPrev[d] holds: the slots with prev > 0 by prev, high first, and the
+// marked (prev < 0) slots in index order. Rebuilt when the fill hands over a new array.
+array<int> gDsOrdAt;
+array<array<int>@> gDsOrdOf;
+array<array<int>@> gDsNegOf;
+const array<int>@ DsOrder(int d, const array<float>@ prevs)
+{
+	if (int(gDsOrdAt.length()) <= d) {
+		gDsOrdAt.resize(uint(d) + 1);
+		gDsOrdOf.resize(uint(d) + 1);
+		gDsNegOf.resize(uint(d) + 1);
+	}
+	const int stamp = (d < int(gDsAt.length())) ? gDsAt[d] : -1;
+	if ((gDsOrdOf[d] !is null) && (gDsOrdAt[d] == stamp) && (gDsOrdOf[d].length() + gDsNegOf[d].length() <= prevs.length()))
+		return gDsOrdOf[d];
+	array<int> ord;
+	array<int> neg;
+	for (uint i = 0; i < prevs.length(); ++i) {
+		const float p = prevs[i];
+		if (p < 0.f) {
+			neg.insertLast(int(i));
+			continue;
+		}
+		if (p <= 0.f)
+			continue;
+		uint at = ord.length();
+		while ((at > 0) && (prevs[uint(ord[at - 1])] < p))
+			--at;
+		ord.insertAt(at, int(i));
+	}
+	gDsOrdAt[d] = stamp;
+	@gDsOrdOf[d] = ord;
+	@gDsNegOf[d] = neg;
+	return ord;
+}
 int gDsFirstN = 0;   // never-filled defs given the extra slot this frame
 array<array<float>@> gDsX;
 array<array<float>@> gDsZ;

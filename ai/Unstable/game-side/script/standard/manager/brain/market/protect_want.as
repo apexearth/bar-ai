@@ -545,7 +545,28 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				const array<float>@ dsSup = gDsSup[d];
 				const bool dsTerms = (dsKnot !is null) && (dsKappa !is null) && (dsFace !is null)
 						&& (dsSup !is null) && (dsKnot.length() == prevs.length());
-				for (uint si = 0; si < prevs.length(); ++si) {
+				// BEST FIRST, AND STOP WHEN NOTHING LEFT CAN WIN. A slot scores at most
+				// prev x hHorizPay / kCost (standS <= hHorizPay, the bill >= kCost), so the
+				// slots are walked by that ceiling and the walk ends below the best found.
+				const float ubK = (kCost > 0.f) ? (hHorizPay / kCost) : 1e30f;
+				const float negUb = wallPullP * ((hLineW > 1.f) ? hLineW : 1.f) * ubK;
+				const array<int>@ ord = DsOrder(d, prevs);
+				const array<int>@ negs = gDsNegOf[d];
+				uint qi = 0, ni = 0;
+				while (true) {
+					int pick = -1;
+					float ub = 0.f;
+					const float posUb = (qi < ord.length()) ? (prevs[uint(ord[qi])] * ubK) : -1.f;
+					if ((negs !is null) && (ni < negs.length()) && (negUb >= posUb)) {
+						pick = negs[ni++];
+						ub = negUb;
+					} else if (qi < ord.length()) {
+						pick = ord[qi++];
+						ub = posUb;
+					}
+					if ((pick < 0) || (ub <= bestScore))
+						break;
+					const uint si = uint(pick);
 					float prev = prevs[si];
 					if (prev < 0.f) {
 						if (Gate(GATE_SLOT_MARK,
