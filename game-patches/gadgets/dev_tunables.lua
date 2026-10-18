@@ -386,6 +386,7 @@ local NAMES = {
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
 	"apex_con_use", -- production.as: constructors sized by use (0)
 	"apex_hoist_waits", -- decide.as: hoists wait for a hand walking to a live job (0)
+	"apex_draw_waits", -- decide.as: the draw also waits for a hand walking to a live job (0)
 	"apex_unit_limit",       -- decide.as ProposeStep: TEST ONLY, drop wants for a def at its unit count limit (0)
 	"apex_hands_once",       -- want_plant.as HandKinOf: a plant's build-power half divided by plants of any domain already making builders of its tier (0)
 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)

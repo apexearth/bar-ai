@@ -55,6 +55,13 @@ void DecideIdGone(int id)
 int gKeepJob = 0;
 int gHoistWaitN = 0;   // hoists that waited for a hand walking to a live job (TUNE_HOIST_WAITS)
 int gHwOn = -1;
+int gDwOn = -1;
+bool DrawWaitsOn()
+{
+	if (gDwOn < 0)
+		gDwOn = (ai.GetTunable("apex_draw_waits", TUNE_DRAW_WAITS) > 0.f) ? 1 : 0;
+	return gDwOn > 0;
+}
 bool HoistWaitsOn()
 {
 	if (gHwOn < 0)
@@ -3058,8 +3065,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const float bdK = Catalog::gBuildDist[int(unit.circuitDef.id)];
 				const float remK = unit.GetPos(ai.frame).distance2D(ip);
 				const float incNow = gIncVal[uidk] * ((gIncWalk0[uidk] > remK) ? (gIncWalk0[uidk] / ((remK > bdK) ? remK : bdK)) : 1.f);
+				// TUNE_DRAW_WAITS: the draw too -- drawn once per job, not per election (roles off measured
+				// what a re-draw each election costs: -7% metal, +10-52% decisions).
+				const bool drawn = (why == "draw") || (why == "ladder") || (why.findFirst("held") == 0);
 				const bool hoistWaits = HoistWaitsOn() && OnMap(ip) && !Builder::SiteHot(ip)
-						&& (why != "draw") && (why != "ladder") && (why.findFirst("held") != 0)
+						&& (!drawn || DrawWaitsOn())
 						&& (remK > bdK + 64.f)
 						&& (top.value / ((top.nnMult > 0.f) ? top.nnMult : 1.f) <= incNow);
 				if (hoistWaits) {
