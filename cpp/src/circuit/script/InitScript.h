@@ -61,6 +61,7 @@ public:
 	bool Init() override;
 	// script hooks
 	void Update();
+	void Frame();
 	void LuaMessage(const char* inData);
 	void UnitFinished(CCircuitUnit* unit);
 	void UnitGiven(CCircuitUnit* unit);
@@ -108,6 +109,9 @@ private:
 		asIScriptFunction* unitDestroyedBy = nullptr;
 		asIScriptFunction* enemyDestroyed = nullptr;
 		asIScriptFunction* update = nullptr;
+		// apex: optional, every frame; lets the script spread its slow update over the frames
+		// between AiUpdate calls instead of running it all in one
+		asIScriptFunction* frame = nullptr;
 		asIScriptFunction* luaMessage = nullptr;
 		asIScriptFunction* receiveMessage = nullptr;
 	} mainInfo;

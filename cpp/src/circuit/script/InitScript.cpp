@@ -2879,6 +2879,7 @@ bool CInitScript::Init()
 	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
 	int r = mod->SetDefaultNamespace("Main"); ASSERT(r >= 0);
 	mainInfo.update = script->GetFunc(mod, "void AiUpdate()");
+	mainInfo.frame = mod->GetFunctionByDecl("void AiFrame()");   // optional: no "not found" line for older scripts
 	mainInfo.luaMessage = script->GetFunc(mod, "void AiLuaMessage(const string& in)");
 	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
 	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
@@ -2924,6 +2925,21 @@ void CInitScript::Update()
 		perfUpdateMaxUs = 0;
 		perfUpdateCalls = 0;
 	}
+}
+
+void CInitScript::Frame()
+{
+	if (mainInfo.frame == nullptr) {
+		return;
+	}
+	const auto t0 = std::chrono::steady_clock::now();
+	asIScriptContext* ctx = script->PrepareContext(mainInfo.frame);
+	script->Exec(ctx);
+	script->ReturnContext(ctx);
+	const uint64_t us = std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - t0).count();
+	perfUpdateUs += us;
+	perfUpdateMaxUs = std::max(perfUpdateMaxUs, us);
 }
 
 void CInitScript::LuaMessage(const char* inData)

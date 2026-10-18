@@ -1063,6 +1063,7 @@ int CCircuitAI::Update(int frame)
 		// scheduler->RunJobEvery(CScheduler::GameJob(&CInitScript::Update, script), TEAM_SLOWUPDATE_RATE, skirmishAIId);
 		script->Update();
 	}
+	script->Frame();
 	const auto tAct0 = std::chrono::steady_clock::now();
 	perfScrUs += std::chrono::duration_cast<std::chrono::microseconds>(tAct0 - tScr0).count();
 	UpdateActions();

@@ -148,99 +148,135 @@ bool UpEvery(int period, int phase)
 	return (gUpTick % period) == phase;
 }
 
+// THE SLOW UPDATE IN SLICES. Run whole, every pass landed on one frame per AI per second.
+// With the DLL's per-frame hook each slice runs on its own frame of the 30, in the same order
+// and on the same tick; an older DLL calls AiUpdate alone and gets them all at once, as before.
+const int UP_CHUNKS = 10;
+bool gFrameHook = false;
+
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
-	// Ahead of the ApexActive gate: a unit walled in by our own buildings is
-	// broken in a solo game exactly as it is in a team one, and freeing it is a
-	// fix rather than a piece of the team machinery that gate exists for.
-	{ double _t = Perf::T0(); Military::UpdateUnblock(); Perf::Add("up.unblock", _t); }
-	{ double _t = Perf::T0(); Military::UpdateMoveTests(); Perf::Add("up.movetests", _t); }
-	{ double _t = Perf::T0(); Military::UpdateUnstick(); Perf::Add("up.unstick", _t); }
-	{ double _t = Perf::T0(); Brain::YardWatch(); Perf::Add("up.yard", _t); }
+	if (gFrameHook)
+		return;
+	for (int c = 0; c < UP_CHUNKS; ++c)
+		UpdateChunk(c);
+}
 
+void AiFrame()
+{
+	gFrameHook = true;
+	const int span = 30 / UP_CHUNKS;
+	int ph = (ai.frame - ai.skirmishAIId) % 30;
+	if (ph < 0)
+		ph += 30;
+	if ((ph % span) == 0)
+		UpdateChunk(ph / span);
+}
+
+void UpdateChunk(int c)
+{
+	if (c == 0) {
+		// Ahead of the ApexActive gate: a unit walled in by our own buildings is
+		// broken in a solo game exactly as it is in a team one, and freeing it is a
+		// fix rather than a piece of the team machinery that gate exists for.
+		{ double _t = Perf::T0(); Military::UpdateUnblock(); Perf::Add("up.unblock", _t); }
+		{ double _t = Perf::T0(); Military::UpdateMoveTests(); Perf::Add("up.movetests", _t); }
+		{ double _t = Perf::T0(); Military::UpdateUnstick(); Perf::Add("up.unstick", _t); }
+		{ double _t = Perf::T0(); Brain::YardWatch(); Perf::Add("up.yard", _t); }
+	}
 	if (!ApexActive())
 		return;
-
-	Market::WantTestTick();
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
-	{ double _t = Perf::T0(); Requests::PeelSurplus(); Perf::Add("up.peel", _t); }
-	{ double _t = Perf::T0(); Requests::LatencySweep(); Perf::Add("up.latency", _t); }
-	{ double _t = Perf::T0(); Requests::StallSweep(); Perf::Add("up.stall", _t); }
-	{ double _t = Perf::T0(); Requests::JoinArriveTick(); Perf::Add("up.joinarrive", _t); }
-	{ double _t = Perf::T0(); Requests::ConsolidateEnergy(); Perf::Add("up.econsolidate", _t); }
-	{ double _t = Perf::T0(); Market::ComSweep(); Perf::Add("up.comsweep", _t); }
-	{ double _t = Perf::T0(); Market::CommWatch(); Perf::Add("up.commwatch", _t); }
-	{ double _t = Perf::T0(); Market::UpdateStuckBuilds(); Perf::Add("up.stuck", _t); }
-	if (UpEvery(4, 1)) { double _t = Perf::T0(); Role::Resolve(); Perf::Add("up.role", _t); }
-	{ double _t = Perf::T0(); Brain::UpdateFacQueues(); Perf::Add("up.facqueue", _t); }
-	if (UpEvery(4, 3)) { double _t = Perf::T0(); Brain::LogFacQueues(); Perf::Add("up.facqueuelog", _t); }
-	if (UpEvery(4, 0)) { double _t = Perf::T0(); Military::UpdateLanePos(); Perf::Add("up.lanepos", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::AatUpdate(); Perf::Add("up.aathreat", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
-	{ double _t = Perf::T0(); Military::UpdateComFight(); Perf::Add("up.comfight", _t); }
-	{ double _t = Perf::T0(); Military::UpdateSquads(); Perf::Add("up.squads", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }
-	{ double _t = Perf::T0(); Market::EscortCoverSweep(); Perf::Add("up.esccover", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Perf::Add("up.escortrecruit", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscNetDecide(); Market::EcoNetDecide(); Market::ArmyNetDecide(); Perf::Add("up.escecontnets", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::UpkeepTick(); Perf::Add("up.upkeep", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Market::PressUpdate(); Perf::Add("up.rush", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Market::ExpandFarUpdate(); Market::EcoReturnUpdate(); Market::LiveBanStat(); Perf::Add("up.mapshare", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::SmallHardUpdate(); Perf::Add("up.smallhard", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EarlyBallUpdate(); Market::OpenRaceUpdate(); Perf::Add("up.earlyball", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::CounterMixUpdate(); Perf::Add("up.countermix", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
-	{ double _t = Perf::T0(); Market::TeamTechTick(); Market::TeamTechStat(); Perf::Add("up.teamtech", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Air::UpdateFighterStations(); Perf::Add("up.airstations", _t); }
-	if (UpEvery(4, 3)) { double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
-	{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
-	{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
-	{ double _t = Perf::T0(); Market::LabNanoLog(); Market::T2EcoStat(); Perf::Add("up.labnano", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
-	{ double _t = Perf::T0(); Military::FoeMemStep(); Perf::Add("up.foemem", _t); }
-	{ double _t = Perf::T0(); Military::JsUpdate(); Perf::Add("up.jamsight", _t); }
-	{ double _t = Perf::T0(); Market::DefMeasuredStep(); Perf::Add("up.defmeas", _t); }
-	if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateHunt(); Perf::Add("up.hunt", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateStrike(); Perf::Add("up.strike", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateSiege(); Perf::Add("up.siege", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateArmyHeads(); Perf::Add("up.armyheads", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
-	{ double _t = Perf::T0(); Market::KeepOutUpdate(); Perf::Add("up.keepout", _t); }
-	{ double _t = Perf::T0(); Market::ShelledUpdate(); Perf::Add("up.shelled", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
-	if (UpEvery(4, 3)) { double _t = Perf::T0(); Market::ChokeUpdate(); Perf::Add("up.choke", _t); }
-	if (UpEvery(8, 5)) { double _t = Perf::T0(); Market::RehomeUpdate(); Perf::Add("up.rehome", _t); }
-	if (UpEvery(4, 3)) { double _t = Perf::T0(); Market::LogFrontTowers(); Perf::Add("up.fronttowers", _t); }
-	if (UpEvery(4, 2)) { double _t = Perf::T0(); Market::RoleCensus(); Perf::Add("up.rolemix", _t); }
-	Market::IncomeMultProbe();   // once, ~30s in: is the handicap binding real
-	if (UpEvery(4, 0)) { double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }
-	if (UpEvery(4, 1)) { double _t = Perf::T0(); Base::Update(); Perf::Add("up.base", _t); }
-	if (UpEvery(4, 1)) { double _t = Perf::T0(); Lattice::Update(); Perf::Add("up.lattice", _t); }
-	// The two instruments: which gates in the request chokepoint are ever
-	// reached, and what the live fighter pools actually are. Both self-rate to
-	// one line a game-minute, so the last one is the game-end census.
-	if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
-	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
-	{ double _t = Perf::T0(); Military::UpdateFlankGuard(); Perf::Add("up.flank", _t); }
-	{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
-	{ double _t = Perf::T0(); Military::UpdateGather(); Perf::Add("up.gather", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Military::StockArmyStat(); Perf::Add("up.fightcensus", _t); }
-	if (UpEvery(4, 3)) { double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
-	++gUpTick;
-	Perf::TickSpeed();
-	Perf::Flush();
+	if (c == 0) {
+		Market::WantTestTick();
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
+		{ double _t = Perf::T0(); Requests::PeelSurplus(); Perf::Add("up.peel", _t); }
+		{ double _t = Perf::T0(); Requests::LatencySweep(); Perf::Add("up.latency", _t); }
+		{ double _t = Perf::T0(); Requests::StallSweep(); Perf::Add("up.stall", _t); }
+		{ double _t = Perf::T0(); Requests::JoinArriveTick(); Perf::Add("up.joinarrive", _t); }
+		{ double _t = Perf::T0(); Requests::ConsolidateEnergy(); Perf::Add("up.econsolidate", _t); }
+		{ double _t = Perf::T0(); Market::ComSweep(); Perf::Add("up.comsweep", _t); }
+	} else if (c == 1) {
+		{ double _t = Perf::T0(); Market::CommWatch(); Perf::Add("up.commwatch", _t); }
+		{ double _t = Perf::T0(); Market::UpdateStuckBuilds(); Perf::Add("up.stuck", _t); }
+		if (UpEvery(4, 1)) { double _t = Perf::T0(); Role::Resolve(); Perf::Add("up.role", _t); }
+		{ double _t = Perf::T0(); Brain::UpdateFacQueues(); Perf::Add("up.facqueue", _t); }
+		if (UpEvery(4, 3)) { double _t = Perf::T0(); Brain::LogFacQueues(); Perf::Add("up.facqueuelog", _t); }
+		if (UpEvery(4, 0)) { double _t = Perf::T0(); Military::UpdateLanePos(); Perf::Add("up.lanepos", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::AatUpdate(); Perf::Add("up.aathreat", _t); }
+	} else if (c == 2) {
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
+		{ double _t = Perf::T0(); Military::UpdateComFight(); Perf::Add("up.comfight", _t); }
+		{ double _t = Perf::T0(); Military::UpdateSquads(); Perf::Add("up.squads", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }
+		{ double _t = Perf::T0(); Market::EscortCoverSweep(); Perf::Add("up.esccover", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Perf::Add("up.escortrecruit", _t); }
+	} else if (c == 3) {
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscNetDecide(); Market::EcoNetDecide(); Market::ArmyNetDecide(); Perf::Add("up.escecontnets", _t); }
+	} else if (c == 4) {
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::UpkeepTick(); Perf::Add("up.upkeep", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Market::PressUpdate(); Perf::Add("up.rush", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Market::ExpandFarUpdate(); Market::EcoReturnUpdate(); Market::LiveBanStat(); Perf::Add("up.mapshare", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::SmallHardUpdate(); Perf::Add("up.smallhard", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EarlyBallUpdate(); Market::OpenRaceUpdate(); Perf::Add("up.earlyball", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::CounterMixUpdate(); Perf::Add("up.countermix", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
+		{ double _t = Perf::T0(); Market::TeamTechTick(); Market::TeamTechStat(); Perf::Add("up.teamtech", _t); }
+	} else if (c == 5) {
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Air::UpdateFighterStations(); Perf::Add("up.airstations", _t); }
+		if (UpEvery(4, 3)) { double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
+		{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
+		{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
+		{ double _t = Perf::T0(); Market::LabNanoLog(); Market::T2EcoStat(); Perf::Add("up.labnano", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
+		{ double _t = Perf::T0(); Military::FoeMemStep(); Perf::Add("up.foemem", _t); }
+	} else if (c == 6) {
+		{ double _t = Perf::T0(); Military::JsUpdate(); Perf::Add("up.jamsight", _t); }
+		{ double _t = Perf::T0(); Market::DefMeasuredStep(); Perf::Add("up.defmeas", _t); }
+		if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateHunt(); Perf::Add("up.hunt", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateStrike(); Perf::Add("up.strike", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateSiege(); Perf::Add("up.siege", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateArmyHeads(); Perf::Add("up.armyheads", _t); }
+	} else if (c == 7) {
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
+		{ double _t = Perf::T0(); Market::KeepOutUpdate(); Perf::Add("up.keepout", _t); }
+		{ double _t = Perf::T0(); Market::ShelledUpdate(); Perf::Add("up.shelled", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
+	} else if (c == 8) {
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
+		if (UpEvery(4, 3)) { double _t = Perf::T0(); Market::ChokeUpdate(); Perf::Add("up.choke", _t); }
+		if (UpEvery(8, 5)) { double _t = Perf::T0(); Market::RehomeUpdate(); Perf::Add("up.rehome", _t); }
+		if (UpEvery(4, 3)) { double _t = Perf::T0(); Market::LogFrontTowers(); Perf::Add("up.fronttowers", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Market::RoleCensus(); Perf::Add("up.rolemix", _t); }
+		Market::IncomeMultProbe();   // once, ~30s in: is the handicap binding real
+		if (UpEvery(4, 0)) { double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }
+		if (UpEvery(4, 1)) { double _t = Perf::T0(); Base::Update(); Perf::Add("up.base", _t); }
+	} else if (c == 9) {
+		if (UpEvery(4, 1)) { double _t = Perf::T0(); Lattice::Update(); Perf::Add("up.lattice", _t); }
+		// The two instruments: which gates in the request chokepoint are ever
+		// reached, and what the live fighter pools actually are. Both self-rate to
+		// one line a game-minute, so the last one is the game-end census.
+		if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
+		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
+		{ double _t = Perf::T0(); Military::UpdateFlankGuard(); Perf::Add("up.flank", _t); }
+		{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
+		{ double _t = Perf::T0(); Military::UpdateGather(); Perf::Add("up.gather", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Military::StockArmyStat(); Perf::Add("up.fightcensus", _t); }
+		if (UpEvery(4, 3)) { double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
+		++gUpTick;
+		Perf::TickSpeed();
+		Perf::Flush();
+	}
 }
 
 // The per-unit FINISHED event, all managers -- unlike Builder::AiUnitAdded,
