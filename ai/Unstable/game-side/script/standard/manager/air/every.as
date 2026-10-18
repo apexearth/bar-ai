@@ -286,9 +286,14 @@ void EvDemandStep(float fillSec)
 	array<NaCand@> cs;
 	NaCands(r, cs);
 	const AIFloat3 from = Builder::gHomePos;
-	array<float> pAA(cs.length());
-	for (uint i = 0; i < cs.length(); ++i)
-		pAA[i] = NaPathAA(from, cs[i].at);
+	array<float> pAA;
+	if ((gNaPAAAt == ai.frame) && (gNaPAA.length() == cs.length()) && (gNaPAAFrom.distance2D(from) < 1.f)) {
+		pAA = gNaPAA;
+	} else {
+		pAA.resize(cs.length());
+		for (uint i = 0; i < cs.length(); ++i)
+			pAA[i] = NaPathAA(from, cs[i].at);
+	}
 	const float fs = (fillSec > 1.f) ? fillSec : 180.f;
 	for (int pk = 0; pk < 2; ++pk) {
 		CCircuitDef@ pd = (pk == 0) ? gPlant1 : gPlant2;

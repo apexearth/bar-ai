@@ -2022,15 +2022,19 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// a floating one stands at the water it was priced against. Priced
 		// against the walk THERE, not from where the asker happens to stand.
 		if (!OnMap(site) && !homeAnchorSet) {
+			const double _tA = Perf::T0();
 			homeAnchorSet = true;
 			homeAnchor = InteriorSite(EcoSiteFor(unit),
 					Catalog::Def(int(unit.circuitDef.id)));
 			upAnchorOk = UpgradeAnchor(Catalog::Def(int(unit.circuitDef.id)), upAnchor);
+			Perf::Add("plant.anchor", _tA);
 		}
 		// ...beside the lathe that will raise it, when any stands.
+		const double _tL = Perf::T0();
 		const AIFloat3 lands = OnMap(site) ? site
 				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)),
 					(upAnchorOk && MakesUpgradeHands(d)) ? upAnchor : homeAnchor);
+		Perf::Add("plant.lathesite", _tL);
 		Want c;
 		float plantG = dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]);
 		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)

@@ -366,9 +366,18 @@ float NaPathAA(const AIFloat3& in from, const AIFloat3& in to)
 		return 0.f;
 	const float seg = len / 6.f;
 	float sum = 0.f;
+	const float dx = to.x - from.x, dz = to.z - from.z;
+	const float len2 = dx * dx + dz * dz;
 	for (uint e = 0; e < gNaAAP.length(); ++e) {
 		// over the cell is the race's, not the path's
 		if (gNaAAP[e].distance2D(to) <= gNaAAR[e])
+			continue;
+		// farther from the whole segment than its reach: no sample point on it can be inside (the same sum, one
+		// distance instead of six; this pass was 72% of the demand step and grew 107x over an hour)
+		float u = ((gNaAAP[e].x - from.x) * dx + (gNaAAP[e].z - from.z) * dz) / len2;
+		u = (u < 0.f) ? 0.f : ((u > 1.f) ? 1.f : u);
+		const float cx = from.x + dx * u - gNaAAP[e].x, cz = from.z + dz * u - gNaAAP[e].z;
+		if (cx * cx + cz * cz > gNaAAR[e] * gNaAAR[e])
 			continue;
 		for (int k = 0; k < 6; ++k) {
 			const float f = (float(k) + 0.5f) / 6.f;
@@ -906,15 +915,26 @@ void NaDemandStep()
 	const AIFloat3 foe = NaFoe();
 	if (!OnMap(foe))
 		return;
+	const double _tS = Perf::T0();
 	NaSnapEnemy(foe);
+	Perf::Add("air.nd.snap", _tS);
+	const double _tC = Perf::T0();
 	const float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
 	array<NaCand@> cs;
 	gNaKeyD = 0.f;
 	NaCands(r, cs);
+	Perf::Add("air.nd.cands", _tC);
+	const double _tP = Perf::T0();
 	const AIFloat3 from = Builder::gHomePos;
 	array<float> pAA(cs.length());
 	for (uint i = 0; i < cs.length(); ++i)
 		pAA[i] = NaPathAA(from, cs[i].at);
+	gNaPAA = pAA;
+	gNaPAAAt = ai.frame;
+	gNaPAAFrom = from;
+	Perf::Add("air.nd.pathaa", _tP);
+	gNdCandsN += int(cs.length());
+	const double _tE = Perf::T0();
 	for (int k = 0; k < 3; ++k) {
 		CCircuitDef@ cd = StrikeDef(k);
 		gNaNeedDef[k] = (cd is null) ? -1 : int(cd.id);
@@ -965,7 +985,19 @@ void NaDemandStep()
 			}
 		}
 	}
+	Perf::Add("air.nd.eval", _tE);
+	if (ai.frame >= gNdLogAt) {
+		gNdLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: nademand-size t=" + ai.teamId + " cands=" + cs.length() + " candsSum=" + gNdCandsN);
+	}
 }
+int gNdCandsN = 0;
+int gNdLogAt = 0;
+// The route AA of NaDemandStep's candidates, reused by EvDemandStep on the same frame (the same cached NaCands list
+// and the same home): it was computed twice back to back.
+array<float> gNaPAA;
+int gNaPAAAt = -1;
+AIFloat3 gNaPAAFrom;
 
 // The best cell's net run, offered while the wing is short of the planes it
 // takes -- and, in the army's own currency, the army gap at the rate this run
@@ -1032,7 +1064,10 @@ void NaUpdate()
 		if (gNaPhase == 0) {
 			double _t = Perf::T0();
 			NaDemandStep();
+			Perf::Add("air.nademand", _t);
+			const double _t2 = Perf::T0();
 			EvDemandStep(ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S));
+			Perf::Add("air.evdemand", _t2);
 			Perf::Add("air.nnair.demand", _t);
 		} else if (gNaPhase == 1) {
 			NaDecide(1, "clock");
