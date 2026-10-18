@@ -537,6 +537,9 @@ Want@ ComSelfGun(CCircuitUnit@ unit, bool note = true)
 {
 	if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return null;
+	Want@ ag = ComAirGun(unit);
+	if (ag !is null)
+		return ag;
 	if (note) ++gComSelfAsk;
 	if (note && (ai.frame >= gComSelfSumAt)) {
 		gComSelfSumAt = ai.frame + 60 * SECOND;

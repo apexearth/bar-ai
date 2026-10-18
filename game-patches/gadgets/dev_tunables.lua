@@ -379,6 +379,7 @@ local NAMES = {
 	"apex_flow_e_bill",      -- production.as opportunity floor: with metal free, the pick still pays its E bill
 	"apex_gantry_own_slot",  -- want_super.as: the gantry neither takes nor waits for the strategic one-at-a-time slot
 	"apex_nano_early",       -- sites.as PlantFrames/GantryShortSite + want_nano.as FactoryNanoShort + execute.as nano batch: T2+ plant frames take their nanos while rising (0)
+	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)
 	"apex_ally_air",         -- air/update.as Intercept + aathreat.as AatRaidNow: interceptors fly to an ally's worst air-damage place, not only its home (0)
 	"apex_air_answer",       -- aathreat.as raid memory/AatReach/AatNoteLoss + air/every.as EvFighterMemM + state.as HuntFighterGainFor + production.as all-quiet: fighters against the raid that hurt us, AA priced by the reach it covers (0)
 	"apex_jam_sight",        -- military/jamsight.as + coverage.as ThreatAt/HazardWith/TripRiskWith + raid/raidanswer/guards ArmedNearM + jamsight_want.as: a suspected unseen force is priced, and sight over it bought (0)

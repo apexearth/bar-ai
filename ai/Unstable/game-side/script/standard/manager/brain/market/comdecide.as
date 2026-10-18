@@ -415,6 +415,7 @@ void ComAssess(CCircuitUnit@ u)
 	gCsSafeD = walk;
 	gCsSafeS = walk / spd;
 	gCsHorizon = (gCsSafeS > gCsTowerS) ? gCsSafeS : gCsTowerS;
+	ComAirAssess(u, here, hpMax);
 	gCsFoeHp = 0.f; gCsFoeM = 0.f; gCsFoeDps = 0.f; gCsFoeSpd = 0.f;
 	gCsTier = 0; gCsN = 0; gCsNearD = -1.f; gCsApp = 0.f; gCsArrive = -1.f;
 	int nClose = 0;
@@ -481,6 +482,7 @@ void ComAssess(CCircuitUnit@ u)
 			gCsRule = COM_RETREAT;
 		else if ((gComDec == COM_RETREAT) && !gCsHurtUnseen)
 			++gComRetCancelN;
+		ComAirApply();
 		return;
 	}
 	gComRetFoeD = gCsNearD;
@@ -532,6 +534,7 @@ void ComAssess(CCircuitUnit@ u)
 		gCsRule = COM_TURRET;
 	else
 		gCsRule = COM_RETREAT;
+	ComAirApply();
 }
 
 void ComFields(array<float>& out f)
@@ -626,7 +629,7 @@ bool ComCowerNote(CCircuitUnit@ u, const string& in action)
 
 // Nothing on him he does not beat (no T2, no fight lost, no unseen attacker),
 // and above his engine retreat line.
-bool ComStands() { return gCsWin && (gCsTier <= 1) && !gCsHurtUnseen && (gCsHp >= gCsBar); }
+bool ComStands() { return gCsWin && (gCsTier <= 1) && !gCsHurtUnseen && (gCsHp >= gCsBar) && (gCaVerdict < 0); }
 
 int ComDecision() { return gComDec; }
 bool ComRetreating() { return gComDec == COM_RETREAT; }
@@ -1125,6 +1128,155 @@ void ComDeathNote()
 		+ " decAgo=" + ((ai.frame - gComDecAt) / SECOND) + "s rule=" + ComOptName(gCsRule)
 		+ " home=" + int(gCsHomeD) + " job=" + gCsJob + " withdraw=" + gComWithdrawN
 		+ " " + ComSitText());
+}
+
+// THE COMMANDER UNDER STRIKE AIR (TUNE_COM_AIR; his 10-17: "commander retreats when he feels genuinely
+// threatened to dying, if it is air he can maybe make AA"). The ground fight never counts fliers, and he
+// cannot shoot them: he is in danger only when the strike air that reaches him inside the horizon kills
+// him before our AA standing at him kills it. Then a tower of his own that is up in time and turns it is
+// built where he stands; else he leaves.
+int gCaOn = -1;
+bool ComAirOn()
+{
+	if (gCaOn < 0)
+		gCaOn = (ai.GetTunable("apex_com_air", TUNE_COM_AIR) > 0.f) ? 1 : 0;
+	return gCaOn > 0;
+}
+array<int> gCaAADefs;
+bool gCaAADefsAt = false;
+int gCaVerdict = -1;
+CCircuitDef@ gCaTower = null;
+float gCaDps = 0.f, gCaHp = 0.f, gCaAA = 0.f, gCaTDie = 0.f, gCaTKill = 0.f;
+int gCaThreatN = 0, gCaTurretN = 0, gCaRetreatN = 0, gCaSafeN = 0, gCaLogAt = 0;
+
+float ComAAAt(const AIFloat3& in at)
+{
+	if (!gCaAADefsAt) {
+		gCaAADefsAt = true;
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (!Catalog::gAvailable[d] || Catalog::gFlyer[d] || (Air::NaAirDps(d) <= 0.f) || (Catalog::gAirRange[d] <= 1.f))
+				continue;
+			if ((!Catalog::gMobile[d] && (ProtClassOf(d) == PROT_AA)) || AatGroundAADef(d))
+				gCaAADefs.insertLast(d);
+		}
+	}
+	float dps = 0.f;
+	for (uint i = 0; i < gCaAADefs.length(); ++i) {
+		const int d = gCaAADefs[i];
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d), at, Catalog::gAirRange[d]);
+		if (us !is null)
+			dps += float(us.length()) * Air::NaAirDps(d);
+	}
+	return dps;
+}
+
+void ComAirAssess(CCircuitUnit@ u, const AIFloat3& in here, float hpMax)
+{
+	gCaVerdict = -1;
+	@gCaTower = null;
+	gCaDps = 0.f; gCaHp = 0.f; gCaAA = 0.f; gCaTDie = 0.f; gCaTKill = 0.f;
+	if (!ComAirOn())
+		return;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int gi = 0; gi < nG; ++gi) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
+		if (!OnMap(gp))
+			continue;
+		float dps = 0.f, hp = 0.f, vmax = 0.f;
+		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+		for (int k = 0; k < nU; ++k) {
+			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+			if (!Catalog::ValidId(d) || !Catalog::gFlyer[d] || Catalog::gBuilder[d] || (Catalog::gSurfDps[d] <= 0.f))
+				continue;
+			dps += Catalog::gSurfDps[d];
+			hp += Catalog::gHealth[d];
+			if (Catalog::gSpeed[d] > vmax)
+				vmax = Catalog::gSpeed[d];
+		}
+		if ((dps <= 0.f) || (vmax <= 0.f))
+			continue;
+		const float dd = gp.distance2D(here);
+		const float rng = aiEnemyMgr.GetEnemyGroupRange(gi);
+		const AIFloat3 vv = aiEnemyMgr.GetEnemyGroupVelVec(gi);
+		AIFloat3 toMe = here - gp;
+		toMe.SafeNormalize2D();
+		const float arr = (dd > rng) ? (dd - rng) / vmax : 0.f;
+		if (((vv.x * toMe.x + vv.z * toMe.z) < -1.f) && (arr > 0.f))
+			continue;
+		if (arr > gCsHorizon)
+			continue;
+		gCaDps += dps;
+		gCaHp += hp;
+	}
+	if (gCaDps <= 0.f)
+		return;
+	++gCaThreatN;
+	gCaAA = ComAAAt(here);
+	gCaTDie = gCsHp * hpMax / gCaDps;
+	gCaTKill = (gCaAA > 0.f) ? gCaHp / gCaAA : 1e9f;
+	if (gCaTKill <= gCaTDie) {
+		++gCaSafeN;
+		return;
+	}
+	const float bp = Catalog::gBuildPower[int(u.circuitDef.id)];
+	const array<int>@ opts = Catalog::BuildsOf(int(u.circuitDef.id));
+	float bestEnd = gCaTDie;
+	for (uint i = 0; (bp > 0.f) && (opts !is null) && (i < opts.length()); ++i) {
+		const int d = opts[i];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (ProtClassOf(d) != PROT_AA) || (Air::NaAirDps(d) <= 0.f))
+			continue;
+		const float tb = Catalog::gBuildTime[d] / bp;
+		if ((Catalog::gCostM[d] > Eco::MCur() + Eco::MInc() * tb) || (Catalog::gCostE[d] > Eco::ECur() + Eco::EInc() * tb))
+			continue;
+		const float end = tb + gCaHp / (gCaAA + Air::NaAirDps(d));
+		if (end < bestEnd) {
+			bestEnd = end;
+			@gCaTower = Catalog::Def(d);
+		}
+	}
+	if (gCaTower !is null) {
+		gCaVerdict = COM_TURRET;
+		++gCaTurretN;
+	} else {
+		gCaVerdict = COM_RETREAT;
+		++gCaRetreatN;
+	}
+	if (ai.frame >= gCaLogAt) {
+		gCaLogAt = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: com-air t=" + ai.teamId + " verdict=" + ComOptName(gCaVerdict)
+			+ " airDps=" + int(gCaDps) + " airHp=" + int(gCaHp) + " ourAA=" + int(gCaAA)
+			+ " tDie=" + formatFloat(gCaTDie, "", 0, 1) + " tKill=" + formatFloat(gCaTKill, "", 0, 1)
+			+ " tower=" + ((gCaTower is null) ? "-" : gCaTower.GetName())
+			+ " n=" + gCaThreatN + " safe=" + gCaSafeN + " turret=" + gCaTurretN + " retreat=" + gCaRetreatN);
+	}
+}
+
+// Overrides the ground rule only to save him: a retreat stands, a tower replaces work or a fight.
+void ComAirApply()
+{
+	if (gCaVerdict == COM_RETREAT)
+		gCsRule = COM_RETREAT;
+	else if ((gCaVerdict == COM_TURRET) && (gCsRule != COM_RETREAT))
+		gCsRule = COM_TURRET;
+}
+
+bool ComAirTurret() { return (gCaVerdict == COM_TURRET) && (gCaTower !is null); }
+
+Want@ ComAirGun(CCircuitUnit@ unit)
+{
+	if (!ComAirTurret())
+		return null;
+	const AIFloat3 site = ComGunAnchor(unit.GetPos(ai.frame));
+	if (!OnMap(site))
+		return null;
+	const int d = int(gCaTower.id);
+	Want@ cw = Want();
+	cw.kind = WK_AIRDEF;
+	cw.spotId = PROT_AA;
+	@cw.def = gCaTower;
+	cw.pos = site;
+	ValueOf(d, 1.f, 0.f, Catalog::gBuildPower[int(unit.circuitDef.id)], cw);
+	return cw;
 }
 
 }  // namespace Market

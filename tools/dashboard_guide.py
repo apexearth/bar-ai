@@ -464,6 +464,10 @@ PANELS = [
              "advanced air plant while it is still being built, as many as it will want once finished; they "
              "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
              "still short of turrets is unfinished. OFF: a factory gets turrets only once it is finished."),
+            ("TUNE_COM_AIR", "ON: the commander notices enemy bombers and gunships. When the ones that can reach "
+             "him would kill him before our anti-air near him kills them, he builds an anti-air tower where he "
+             "stands if it would be up in time to save him, otherwise he retreats. `apex: com-air` shows each "
+             "verdict. OFF: aircraft never change what the commander does."),
             ("TUNE_ALLY_AIR", "ON: when enemy aircraft are killing an ally's buildings or units anywhere, "
              "our spare fighters fly to that spot, not to the ally's main base. `apex: intercepting for ally` "
              "shows where they went. OFF: fighters help an ally only when enemy air is near its main base."),

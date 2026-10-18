@@ -182,6 +182,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Survival is paramount, and the base matters more: T1 attackers on the base are his to kill, with the D-gun spammed while energy lasts.
 - Early he leads to mid with the army, well protected; from T2 he stays home and is careful.
 - He takes the most dangerous extractors; in danger from T1 he builds towers round himself.
+- He retreats when he is genuinely threatened with dying; against air he can build AA where he stands (10-17).
 - He values himself and enemies by power (hp, range, dps, speed), not metal.
 - When only he can save the base he fights as a trap: cloaked where the attack is coming, D-gun from inside. In a team game only if he can win; hopeless, he runs.
 - Against enemy T3 he can wait cloaked under a jammer and surprise it.
