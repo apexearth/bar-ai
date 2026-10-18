@@ -267,6 +267,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
 	Want own;
+	const double _tPw = Perf::T0();
 	if (Gate(GATE_ASSETS, gAssetsM < 1.f))
 		return w;
 	// DEFENCE MUST NOT WAIT ON A NANO. This used to require gFarmSet, which
@@ -422,6 +423,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hLineW = ai.GetTunable("apex_wall_line_w", TUNE_WALL_LINE_W);
 		hTeamObs = ai.GetTunable("apex_def_team_obsolete", TUNE_DEF_TEAM_OBSOLETE) > 0.f;
 	}
+	if (isGround) Perf::Add("pw.prep", _tPw);
+	const double _tPc = Perf::T0();
 	for (uint i = 0; i < cand.length(); ++i) {
 		const int d = cand[i];
 		// A water-only gun on a land map: the wall pull prices the shortfall, not
@@ -491,7 +494,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				gDwT1[d] = 0.f;
 				continue;
 			}
-			DefSiteFill(d, reach, adds, hMexFloorWave, hSiteWave, hEnemyPrior);
+			{ const double _tF = Perf::T0(); DefSiteFill(d, reach, adds, hMexFloorWave, hSiteWave, hEnemyPrior); Perf::Add("pw.fill", _tF); }
 			const float kCost = Catalog::gCostM[d]
 					+ Catalog::BuildSecondsAt(d, hEffBP) * hWage;
 			AIFloat3 bestAt = at;
@@ -961,6 +964,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			own.spotId = cls;
 		}
 	}
+	if (isGround) Perf::Add("pw.cands", _tPc);
 	if ((half == HALF_AIRDEF) && (w.def !is null))
 		AansNoteWin(int(w.def.id));
 	if (rankNow && (gDefRankDef.length() > 0)) {
@@ -1172,7 +1176,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	if (half == HALF_SENSE)
 		JamSightPropose(unit, w);
 	if ((half == HALF_GROUND) && !defOff) {
+		const double _tRf = Perf::T0();
 		Want@ rf = RefillPropose(unit, hT1Out);
+		Perf::Add("pw.refill", _tRf);
 		if ((rf !is null) && ((w.def is null) || !unit.circuitDef.CanBuild(w.def) || (rf.value > w.value))) {
 			RefillNoteOffered();
 			if (ai.frame >= gRfOfferLogAt) {

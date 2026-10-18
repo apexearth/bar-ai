@@ -170,6 +170,7 @@ const uint NN_I_COMM = 47;
 const uint NN_I_HOMED = 48;
 array<float> gNnSt;
 int gNnStAt = -1;
+int gNnStTick = -1;
 
 // In NN_STATE order. A null unit is a team-level decision (a bomber strike):
 // it stands at home.
@@ -206,9 +207,12 @@ void NnState(CCircuitUnit@ unit, array<float>& out s)
 {
 	const AIFloat3 up = (unit !is null) ? unit.GetPos(ai.frame)
 			: (Builder::gHomeSet ? Builder::gHomePos : AIFloat3());
-	if (gNnStAt != ai.frame) {
+	// Once per slow-update tick: the team-level reads it is built from refresh on that tick, and a
+	// burst of elections rebuilt the whole vector on every frame between.
+	if ((gNnStAt < 0) || (gNnStTick != Main::gUpTick)) {
 		NnStateFull(up, gNnSt);
 		gNnStAt = ai.frame;
+		gNnStTick = Main::gUpTick;
 	}
 	s = gNnSt;
 	s[NN_I_COMM] = NnB((unit !is null) && unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask));

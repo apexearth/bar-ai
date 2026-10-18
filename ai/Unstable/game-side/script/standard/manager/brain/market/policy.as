@@ -76,6 +76,7 @@ bool PnOn()
 			gPnW[i] = 0.f;
 	}
 	gPnMode = 1;
+	gPnA1At = -1;
 	AiLog("apex: policy ON t=" + ai.teamId + " src=" + src + " n=" + n + " given=" + given
 		+ " in=" + N + " h1=" + PN_H1 + " h2=" + PN_H2 + " heads=" + PN_HEADS.length());
 	return true;
@@ -94,11 +95,21 @@ float PnNorm(float x, float m, float s)
 }
 
 // The shared layer, once a frame: its inputs are team-level.
+// Keyed on the state's rebuild: every caller's st comes from NnState. A net that reads the asker's
+// own two fields (commander, distance home) is recomputed per call instead.
+int gPnAskerIn = -1;
 void PnTrunk(const array<float>& in st)
 {
-	if (gPnA1At == ai.frame)
+	if (gPnAskerIn < 0) {
+		gPnAskerIn = 0;
+		for (uint i = 0; i < PN_IDX.length(); ++i)
+			if ((PN_IDX[i] == int(NN_I_COMM)) || (PN_IDX[i] == int(NN_I_HOMED)))
+				gPnAskerIn = 1;
+	}
+	const int key = (gPnAskerIn > 0) ? -2 : gNnStAt;
+	if ((key >= 0) && (gPnA1At == key))
 		return;
-	gPnA1At = ai.frame;
+	gPnA1At = key;
 	const int N = int(PN_IDX.length());
 	gPnZ.resize(N);
 	for (int i = 0; i < N; ++i) {

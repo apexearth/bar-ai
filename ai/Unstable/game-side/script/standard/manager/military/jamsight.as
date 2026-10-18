@@ -97,6 +97,18 @@ int JsPlaceIdx(int uid)
 	return -1;
 }
 
+array<int> gJsJamOf(32001, -1);     // enemy unit id -> its gJm slot, inside JsUpdate only
+array<int> gJsPlaceOf(32001, -1);   // enemy jammer id -> the place it lights, inside JsUpdate only
+void JsIdSet(array<int>@ a, int id, int v)
+{
+	if ((id >= 0) && (id < int(a.length())))
+		a[id] = v;
+}
+int JsIdGet(array<int>@ a, int id)
+{
+	return ((id >= 0) && (id < int(a.length()))) ? a[id] : -1;
+}
+
 int JsPlaceAdd(const AIFloat3& in p, float r, int jam)
 {
 	gJpUid.insertLast(gJpNext++);
@@ -465,36 +477,37 @@ void JsUpdate()
 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
 			JsJammerRemove(uint(j));
 	}
+	// Jammer and place by unit id for this call: set here, cleared before anything is removed.
+	for (uint j = 0; j < gJmId.length(); ++j)
+		JsIdSet(gJsJamOf, gJmId[j], int(j));
 	for (uint i = 0; i < gJpUid.length(); ++i) {
 		if (gJpJam[i] < 0)
 			continue;
-		bool alive = false;
-		for (uint j = 0; (j < gJmId.length()) && !alive; ++j)
-			alive = gJmId[j] == gJpJam[i];
-		if (!alive)
+		if (JsIdGet(gJsJamOf, gJpJam[i]) < 0)
 			gJpJam[i] = -1;
+		else
+			JsIdSet(gJsPlaceOf, gJpJam[i], int(i));
 	}
 	for (uint j = 0; j < gJmId.length(); ++j) {
 		const int d = gJmDef[j];
 		const float jr = Catalog::gJamR[d];
 		if (jr <= 1.f)
 			continue;
-		int k = -1;
-		for (uint i = 0; (i < gJpUid.length()) && (k < 0); ++i) {
-			if (gJpJam[i] == gJmId[j])
-				k = int(i);
-		}
+		int k = JsIdGet(gJsPlaceOf, gJmId[j]);
 		if (k < 0) {
 			for (uint i = 0; i < gJpUid.length(); ++i) {
 				if ((gJpJam[i] < 0) && (gJmPos[j].distance2D(AIFloat3(gJpX[i], 0.f, gJpZ[i])) < jr + gJpR[i])) {
 					k = int(i);
 					gJpJam[i] = gJmId[j];
+					JsIdSet(gJsPlaceOf, gJmId[j], k);
 					break;
 				}
 			}
 		}
-		if (k < 0)
+		if (k < 0) {
 			k = JsPlaceAdd(gJmPos[j], jr, gJmId[j]);
+			JsIdSet(gJsPlaceOf, gJmId[j], k);
+		}
 		gJpX[k] = gJmPos[j].x;
 		gJpZ[k] = gJmPos[j].z;
 		if (gJpR[k] < jr)
@@ -511,14 +524,16 @@ void JsUpdate()
 		seen[i] = JsSeenFrac(i);
 		if (gJpJam[i] < 0)
 			continue;
-		for (uint j = 0; j < gJmId.length(); ++j) {
-			if ((gJmId[j] == gJpJam[i]) && Catalog::gMobile[gJmDef[j]]) {
-				mob[i] = true;
-				break;
-			}
-		}
+		const int jj = JsIdGet(gJsJamOf, gJpJam[i]);
+		mob[i] = (jj >= 0) && Catalog::gMobile[gJmDef[jj]];
 		if (mob[i] && (seen[i] < 1.f))
 			++nMobDark;
+	}
+	for (uint j = 0; j < gJmId.length(); ++j)
+		JsIdSet(gJsJamOf, gJmId[j], -1);
+	for (uint i = 0; i < n; ++i) {
+		if (gJpJam[i] >= 0)
+			JsIdSet(gJsPlaceOf, gJpJam[i], -1);
 	}
 	float unseen = FoeBelievedM() - FoeLiveM();
 	if (unseen < 0.f)
