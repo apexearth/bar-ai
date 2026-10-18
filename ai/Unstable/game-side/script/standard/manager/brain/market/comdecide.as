@@ -241,7 +241,7 @@ AIFloat3 ComSafePoint(const AIFloat3& in here, const AIFloat3& in foe, bool have
 			AIFloat3 p = here + away * d;
 			if (!OnMap(p))
 				break;
-			if (ai.GetUnitThreatAt(u, p) <= 0.f) {
+			if ((ai.GetUnitThreatAt(u, p) <= 0.f) && ComWalks(u, here, p)) {
 				best = p;
 				bestD = d;
 				++gComStepN;
@@ -918,7 +918,20 @@ void ComEnforce(CCircuitUnit@ u)
 // Away from them when the back of the base is no refuge: the step of 8 that
 // puts the most ground between him and the nearest of them, the least
 // enemy influence breaking ties.
-AIFloat3 ComEvadePos(const AIFloat3& in here)
+// Inside the map is not ground: on a space or island map the point away from
+// them is void, and he stood at the edge walking into it (his 10-17, SD-129).
+int gComVoidN = 0;
+bool ComWalks(CCircuitUnit@ u, const AIFloat3& in from, const AIFloat3& in to)
+{
+	if (!OnMap(to))
+		return false;
+	if (ai.CanDefReachAt(Catalog::Def(int(u.circuitDef.id)), from, to, 0.f))
+		return true;
+	++gComVoidN;
+	return false;
+}
+
+AIFloat3 ComEvadePos(CCircuitUnit@ u, const AIFloat3& in here)
 {
 	AIFloat3 best = here;
 	float bestScore = -1e9f;
@@ -926,7 +939,7 @@ AIFloat3 ComEvadePos(const AIFloat3& in here)
 	for (int k = 0; k < 8; ++k) {
 		const float a = float(k) * 0.7853981634f;
 		AIFloat3 p(here.x + cos(a) * step, here.y, here.z + sin(a) * step);
-		if (!OnMap(p))
+		if (!ComWalks(u, here, p))
 			continue;
 		const float sc = p.distance2D(gCsFoeAt) - ai.GetEnemyInflAt(p);
 		if (sc > bestScore) {
@@ -955,7 +968,7 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			// once they are in reach.
 			if (!gCsThreat || !OnMap(gCsFoeAt) || (gCsArrive > gCsTowerS))
 				return null;
-			to = ComEvadePos(here);
+			to = ComEvadePos(u, here);
 			if (to.distance2D(here) < 1.f)
 				return null;
 			evade = true;
@@ -983,7 +996,8 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			ComGunAt(to, gd, gh);
 			AiLog(Factory::T() + "apex: com-retreat t=" + ai.teamId + (evade ? " evade" : "")
 				+ " to=" + int(to.x) + "," + int(to.z)
-				+ " d=" + int(here.distance2D(to)) + " gunDps=" + int(gd) + " evades=" + gComEvadeN + " keptRetreat=" + gComRetKeptN);
+				+ " d=" + int(here.distance2D(to)) + " gunDps=" + int(gd) + " evades=" + gComEvadeN + " keptRetreat=" + gComRetKeptN
+				+ " voids=" + gComVoidN);
 		}
 		return pt;
 	}
@@ -1005,7 +1019,7 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			AIFloat3 toHome = Builder::gHomePos - gShipAt;
 			toHome.SafeNormalize2D();
 			AIFloat3 trap = gShipAt + toHome * (u.DGunRange() * 0.9f);
-			if (!OnMap(trap) || (gCsHere.distance2D(gShipAt) <= gShipAt.distance2D(trap) + 100.f))
+			if (!ComWalks(u, gCsHere, trap) || (gCsHere.distance2D(gShipAt) <= gShipAt.distance2D(trap) + 100.f))
 				trap = gCsHere;   // already on their path, inside reach: hold here
 			if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
 				&& (held.GetBuildType() == Task::BuildType::PATROL) && (held.GetBuildPos().distance2D(trap) < 150.f))

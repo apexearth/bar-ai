@@ -83,12 +83,30 @@ bool HoldsUnit(CCircuitUnit@ unit)
 // Under apex_gather the intercept is a launch: the fighters held when it starts go, and one finished
 // while it lasts waits for the next.
 array<Id> gInterceptRoster;
+int gAllyAirOn = -1;
+bool AllyAirOn()
+{
+	if (gAllyAirOn < 0)
+		gAllyAirOn = (ai.GetTunable("apex_ally_air", TUNE_ALLY_AIR) > 0.f) ? 1 : 0;
+	return gAllyAirOn > 0;
+}
 void Intercept()
 {
 	if (Builder::gHomeSet && (ai.frame >= gNextRaidPub)) {
 		gNextRaidPub = ai.frame + 2 * SECOND;
-		ai.PublishTeamValue(TV_AIRRAID, ai.GetEnemyAirCostNear(Builder::gHomePos,
-				ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R)));
+		float raid = ai.GetEnemyAirCostNear(Builder::gHomePos, ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R));
+		AIFloat3 at = Builder::gHomePos;
+		if (AllyAirOn()) {
+			AIFloat3 hurt;
+			const float h = Market::AatRaidNow(hurt);
+			if ((h > raid) && OnMap(hurt)) {
+				raid = h;
+				at = hurt;
+			}
+			ai.PublishTeamValue(TV_AIRRAIDX, at.x);
+			ai.PublishTeamValue(TV_AIRRAIDZ, at.z);
+		}
+		ai.PublishTeamValue(TV_AIRRAID, raid);
 		ai.PublishTeamValue(TV_HOMEX, Builder::gHomePos.x);
 		ai.PublishTeamValue(TV_HOMEZ, Builder::gHomePos.z);
 	}
@@ -128,8 +146,12 @@ void Intercept()
 		return;
 	}
 	AIFloat3 to;
-	to.x = ai.ReadTeamValue(worst, TV_HOMEX, -1.f);
-	to.z = ai.ReadTeamValue(worst, TV_HOMEZ, -1.f);
+	to.x = ai.ReadTeamValue(worst, AllyAirOn() ? TV_AIRRAIDX : TV_HOMEX, -1.f);
+	to.z = ai.ReadTeamValue(worst, AllyAirOn() ? TV_AIRRAIDZ : TV_HOMEZ, -1.f);
+	if (to.x < 0.f) {
+		to.x = ai.ReadTeamValue(worst, TV_HOMEX, -1.f);
+		to.z = ai.ReadTeamValue(worst, TV_HOMEZ, -1.f);
+	}
 	if ((to.x < 0.f) || !OnMap(to))
 		return;
 	gNextInterceptCmd = ai.frame + 4 * SECOND;
@@ -171,7 +193,7 @@ void Intercept()
 		gInterceptTarget = worst;
 		AiLog(Factory::T() + "apex: intercepting for ally t" + worst
 			+ " raid=" + formatFloat(worstRaid, "", 0, 0)
-			+ " fighters=" + sent);
+			+ " fighters=" + sent + " at=" + int(to.x) + "," + int(to.z));
 	}
 }
 

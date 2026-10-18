@@ -235,6 +235,22 @@ bool AatRecent(int at)
 	return (at >= 0) && (float(ai.frame - at) < Military::BLEED_TAU * float(SECOND));
 }
 
+// Where their air is hurting us now: the most air seen at a place where it killed something of
+// ours inside the memory window, wherever that is (an ally's fighters fly there, not to our home).
+float AatRaidNow(AIFloat3& out at)
+{
+	float best = 0.f;
+	for (uint p = 0; p < gAatPos.length(); ++p) {
+		if (!AatRecent(gAatLastS[p]) && !AatRecent(gAatLastM[p]))
+			continue;
+		if (gAatSeen[p] > best) {
+			best = gAatSeen[p];
+			at = gAatPos[p];
+		}
+	}
+	return best;
+}
+
 // Static AA by place: finished, or ordered/framed with hands on it (an unmanned order is a
 // placeholder, the async-sim-orders law). Recomputed when the ledger changes.
 void AatCoverRefresh()

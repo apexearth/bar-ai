@@ -464,6 +464,9 @@ PANELS = [
              "advanced air plant while it is still being built, as many as it will want once finished; they "
              "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
              "still short of turrets is unfinished. OFF: a factory gets turrets only once it is finished."),
+            ("TUNE_ALLY_AIR", "ON: when enemy aircraft are killing an ally's buildings or units anywhere, "
+             "our spare fighters fly to that spot, not to the ally's main base. `apex: intercepting for ally` "
+             "shows where they went. OFF: fighters help an ally only when enemy air is near its main base."),
             ("TUNE_ORDER_RELEASE", "ON: when the constructor sent to start a lab, gantry or other big building "
              "is pulled away before it starts and nobody else is on the way, the order no longer counts as "
              "coming: the next constructor asked for it takes the same order, or starts a new one if the old "

@@ -1017,7 +1017,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 					away.SafeNormalize2D();
 					for (int step = 3; step >= 1; --step) {
 						const AIFloat3 to = here + away * (250.f * float(step));
-						if (OnMap(to)) {
+						if (ComWalks(unit, here, to)) {
 							unit.CmdMoveTo(to);
 							return null;
 						}

@@ -36,12 +36,16 @@ void EvSnapFoeAir()
 			continue;
 		const float m = Catalog::gCostM[d];
 		gEvFoeAirM += m;
+		// A plane is what it can hit: a gunship with one AA launcher (legfort) hits our ground AND our fighters,
+		// and read as a fighter alone it hid 57,000 m of strike air (his 10-17 SD-129 game).
 		const float a = NaAirDps(d);
+		const bool hitsGround = Catalog::gSurfDpsOn ? (Catalog::gSurfDps[d] > 0.f) : (Catalog::gSurfT[d] > 0.01f);
 		if (a > 0.f) {
 			gEvFoeFtrM += m;
 			gEvFoeFtrHp += Catalog::gHealth[d];
 			gEvFoeFtrDps += a;
-		} else {
+		}
+		if (hitsGround || (a <= 0.f)) {
 			gEvFoeStrM += m;
 			gEvFoeStrHp += Catalog::gHealth[d];
 		}
