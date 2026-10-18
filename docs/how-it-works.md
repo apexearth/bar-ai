@@ -121,7 +121,11 @@ mains, nano and shield support behind. Extractors outside the base earn guns by 
 reaches them. The defence target is a share of holdings and army; `defamt`, `mexg` and `gunp`
 heads scale it. Placement itself is the lattice (`lattice.as`, `baseplan/`): one per-def grid from
 the map corner, nano blocks, walkways the team shares; the DLL's `IBuilderTask::Execute` snaps to
-it.
+it. Under `TUNE_JAM_SIGHT` (off, `military/jamsight.as`) a force we cannot see is suspected where
+contacts drop off our radar inside its coverage, where an enemy jammer was seen, and where our things
+die to a shooter nobody saw; its metal joins the threat, hazard and trip reads and the enemy metal
+raids and escorts are sized against, and a sight post (the perimeter camera) or a scout look over it
+is priced as a sense want.
 
 ## Military
 

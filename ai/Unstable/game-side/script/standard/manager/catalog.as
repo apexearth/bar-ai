@@ -452,6 +452,65 @@ int WallDefFor(int builder)
 	return pick;
 }
 
+// A sight post: an unarmed static that does nothing but see (the perimeter
+// camera), by its stats. The wall piece and every economy, sensor or support
+// building are out; among the rest, the most ground seen per metal.
+bool IsSightPost(int d)
+{
+	if (!ValidId(d) || !gAvailable[d] || gMobile[d] || gBuilder[d] || (gCostM[d] <= 0.f) || (gLosR[d] <= 1.f))
+		return false;
+	if ((gSurfT[d] > 0.f) || (gAirT[d] > 0.f) || (gWaterT[d] > 0.f) || (gMaxRange[d] > 1.f))
+		return false;
+	if ((gBuildsList[d].length() > 0) || (gMakeE[d] > 0.f) || (gMakeM[d] > 0.f) || (gExtractsM[d] > 0.f)
+		|| (gConvCapacity[d] > 0.f) || (gStoreM[d] > 0.f) || (gStoreE[d] > 0.f))
+		return false;
+	if (gRadar[d] || gJammer[d] || gShield[d] || gTargFac[d] || gAntiNuke[d] || gNeedGeo[d] || gFloater[d] || gSub[d])
+		return false;
+	return gHealth[d] / gCostM[d] < 50.f;
+}
+
+array<int> gSightFor;
+int SightPostFor(int builder)
+{
+	if (!ValidId(builder))
+		return -1;
+	if (gSightFor.length() <= uint(builder))
+		gSightFor.resize(uint(builder) + 1);
+	const int c = gSightFor[builder];
+	if ((c > 0) && gAvailable[c])
+		return c;
+	int pick = -1;
+	float best = 0.f;
+	const array<int>@ b = gBuildsList[builder];
+	for (uint i = 0; i < b.length(); ++i) {
+		const int d = b[i];
+		if (!IsSightPost(d))
+			continue;
+		const float a = gLosR[d] * gLosR[d] / gCostM[d];
+		if (a > best) {
+			best = a;
+			pick = d;
+		}
+	}
+	gSightFor[builder] = (pick > 0) ? pick : 0;
+	if (pick > 0)
+		AiLog("apex: sightpost " + Def(builder).GetName() + " -> " + Def(pick).GetName()
+			+ " los=" + int(gLosR[pick]) + " m=" + int(gCostM[pick]));
+	return pick;
+}
+
+array<int> gSightPosts;
+const array<int>@ SightPosts()
+{
+	if (gSightPosts.length() == 0) {
+		for (int d = 1; d <= gDefCount; ++d) {
+			if (IsSightPost(d))
+				gSightPosts.insertLast(d);
+		}
+	}
+	return gSightPosts;
+}
+
 int WallDef()
 {
 	if ((gWallDef > 0) && gAvailable[gWallDef])

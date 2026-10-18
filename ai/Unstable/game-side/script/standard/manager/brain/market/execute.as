@@ -654,7 +654,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					+ " streak=" + gEcoDangerStreak);
 		const int bt = (w.spotId == PROT_RADAR) ? int(Task::BuildType::RADAR)
 				: ((w.spotId == PROT_DEF) || (w.spotId == PROT_SHIELD)
-					|| (w.spotId == PROT_AA))
+					|| (w.spotId == PROT_AA) || (w.spotId == SPOT_SIGHT))
 					? int(Task::BuildType::DEFENCE)
 				: (w.spotId == PROT_ANTINUKE) ? int(Task::BuildType::BIG_GUN)
 				: int(Task::BuildType::ENERGY);
@@ -818,6 +818,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					DefRefuseLog(w, sAt, hit, verdict, true, true);
 			}
 		}
+		if ((w.spotId == SPOT_SIGHT) && (sTask !is null) && sMade)
+			Military::JsNoteSightOrder(sAt);
 		if (fRoute == 1)
 			return sTask;
 		if (soleCover && (sTask !is null)) {

@@ -138,7 +138,7 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 		}
 	}
 	const float r = PostReach(kd);
-	float foeM = ai.GetEnemyArmedCostNear(at, r);
+	float foeM = ArmedNearM(at, r);
 	if (foeM < Catalog::gCostM[kd])
 		foeM = Catalog::gCostM[kd];
 	const float need = foeM * ANSWER_PARITY;
