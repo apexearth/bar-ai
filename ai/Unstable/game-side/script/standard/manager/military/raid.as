@@ -344,23 +344,21 @@ float RaidPowerLive()
 // sight, so a raid GO took the escort a median 17 s after it was assigned.
 bool EscortSpare(Id uid)
 {
-	for (uint e = 0; e < Market::gEscUnit.length(); ++e) {
-		if (Market::gEscUnit[e] != uid)
-			continue;
-		CCircuitUnit@ vip = ai.GetTeamUnit(Market::gEscWorker[e]);
-		CCircuitUnit@ me = ai.GetTeamUnit(uid);
-		if ((vip is null) || (me is null) || (me.circuitDef is null))
-			return true;
-		const float expo = Market::WorkerExposure(vip);
-		if (expo <= 0.f)
-			return true;
-		const int d = int(me.circuitDef.id);
-		const float mineM = Catalog::gCostM[d];
-		const float owedM = Market::EscortOwedM(vip, expo, mineM,
-			ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R), Catalog::gFlyer[d]);
-		return Market::EscortMetalOn(vip.id) - mineM >= owedM;
-	}
-	return true;   // guarding nobody in the registry: no worker to expose
+	const int vid = Market::EscortOf(uid);
+	if (vid < 0)
+		return true;   // guarding nobody in the registry: no worker to expose
+	CCircuitUnit@ vip = ai.GetTeamUnit(vid);
+	CCircuitUnit@ me = ai.GetTeamUnit(uid);
+	if ((vip is null) || (me is null) || (me.circuitDef is null))
+		return true;
+	const float expo = Market::WorkerExposure(vip);
+	if (expo <= 0.f)
+		return true;
+	const int d = int(me.circuitDef.id);
+	const float mineM = Catalog::gCostM[d];
+	const float owedM = Market::EscortOwedM(vip, expo, mineM,
+		ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R), Catalog::gFlyer[d]);
+	return Market::EscortMetalOn(vip.id) - mineM >= owedM;
 }
 
 void UpdateRaidAsk()

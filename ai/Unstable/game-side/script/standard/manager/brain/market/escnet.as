@@ -91,10 +91,7 @@ void EscortSpareCensus()
 			}
 			if (!EscortRecruitable(c) || (int(c.task.GetFightType()) == int(Task::FightType::ATTACK)))
 				continue;
-			bool paired = false;
-			for (uint e = 0; (e < gEscUnit.length()) && !paired; ++e)
-				paired = (gEscUnit[e] == c.id);
-			if (!paired)
+			if (EscortOf(c.id) < 0)
 				++n;
 		}
 	}
@@ -113,13 +110,18 @@ void EscortRecruit()
 {
 	if (Military::StockQuiet("escort"))
 		return;
-	EscortSpareCensus();
+	{ const double _t = Perf::T0(); EscortSpareCensus(); Perf::Add("esc.census", _t); }
 	if (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f)
 		return;
 	if (gEscWorker.length() >= EscortCap())
 		return;
-	if (EscortShortfall() <= 0)
-		return;
+	{
+		const double _t = Perf::T0();
+		const int sh = EscortShortfall();
+		Perf::Add("esc.short", _t);
+		if (sh <= 0)
+			return;
+	}
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	CCircuitUnit@ wk = null;
 	float wkExpo = 0.f;
@@ -159,10 +161,7 @@ void EscortRecruit()
 				continue;
 			if (ai.frame - c.GetDamagedFrame() < 10 * SECOND)
 				continue;
-			bool paired = false;
-			for (uint e = 0; (e < gEscUnit.length()) && !paired; ++e)
-				paired = (gEscUnit[e] == c.id);
-			if (paired)
+			if (EscortOf(c.id) >= 0)
 				continue;
 			const float dd = c.GetPos(ai.frame).distance2D(wAt);
 			if ((best is null) || (dd < bestD)) {

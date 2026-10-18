@@ -418,18 +418,42 @@ int RezScanPeriod()
 // and both of those grow all game. Same Spring 32k id cap as gRzDecideVer; an
 // id past it falls back to the walk and behaves exactly as before.
 array<int> gConSlotOf(32001, -1);
+array<int> gConSlotFree;
+
 int ConSlot(CCircuitUnit@ unit)
 {
 	const int id = int(unit.id);
 	const bool indexed = (id >= 0) && (id < int(gConSlotOf.length()));
 	if (indexed && (gConSlotOf[id] >= 0))
 		return gConSlotOf[id];
-	for (uint i = 0; i < gConSlotId.length(); ++i) {
-		if (gConSlotId[i] == id) {
-			if (indexed)
-				gConSlotOf[id] = int(i);
-			return int(i);
+	if (!indexed) {
+		for (uint i = 0; i < gConSlotId.length(); ++i) {
+			if (gConSlotId[i] == id)
+				return int(i);
 		}
+	}
+	if (gConSlotFree.length() > 0) {
+		const int s = gConSlotFree[gConSlotFree.length() - 1];
+		gConSlotFree.removeLast();
+		gConSlotId[s] = id;
+		gConHp[s] = unit.GetHealthPercent();
+		gConHitUntil[s] = 0;
+		gConNextRepair[s] = 0;
+		gConNextRetire[s] = 0;
+		gConNextWreck[s] = 0;
+		gConNextSweep[s] = 0;
+		if (s < int(gRzWantX.length())) {
+			ClearRezWant(s);
+			gRzWantZ[s] = -1.f;
+			gRzStageX[s] = -1.f;
+			gRzStageZ[s] = -1.f;
+			gRzStageCalcAt[s] = -30000;
+		}
+		if (s < int(gRzLastJobAt.length()))
+			gRzLastJobAt[s] = ai.frame;
+		if (indexed)
+			gConSlotOf[id] = s;
+		return s;
 	}
 	gConSlotId.insertLast(id);
 	gConHp.insertLast(unit.GetHealthPercent());
@@ -442,6 +466,17 @@ int ConSlot(CCircuitUnit@ unit)
 	if (indexed)
 		gConSlotOf[id] = slot;
 	return slot;
+}
+
+// A dead unit's row is reused, so the ledger is as long as the fleet alive and a recycled id starts clean.
+void ConSlotRelease(int id)
+{
+	if ((id < 0) || (id >= int(gConSlotOf.length())) || (gConSlotOf[id] < 0))
+		return;
+	const int s = gConSlotOf[id];
+	gConSlotOf[id] = -1;
+	gConSlotId[s] = -1;
+	gConSlotFree.insertLast(s);
 }
 
 // Refresh the bot's hit window from its health delta.

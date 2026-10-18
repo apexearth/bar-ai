@@ -308,6 +308,7 @@ const int PROT_AA = 6;
 const int PROT_SUPER = 7;
 const int PROT_N = 8;
 array<array<AIFloat3>> gProtPos(PROT_N);
+int gProtDefStamp = 0;   // bumped whenever a standing gun joins or leaves gProtPos[PROT_DEF]
 array<array<Id>> gProtIds(PROT_N);
 array<array<CCircuitUnit@>> gProtUnit(PROT_N);
 array<array<int>> gProtDefId(PROT_N);
@@ -470,6 +471,8 @@ void NoteFinished(CCircuitUnit@ unit)
 	const int pc = Catalog::gMobile[defId] ? -1 : ProtClassOf(defId);
 	if (pc >= 0) {
 		gProtPos[pc].insertLast(unit.GetPos(ai.frame));
+		if (pc == PROT_DEF)
+			++gProtDefStamp;
 		gProtIds[pc].insertLast(unit.id);
 		gProtUnit[pc].insertLast(unit);
 		gProtDefId[pc].insertLast(defId);
@@ -697,8 +700,10 @@ void NoteDead(CCircuitUnit@ unit)
 	for (int pcl = 0; pcl < PROT_N; ++pcl) {
 		for (uint pi = 0; pi < gProtIds[pcl].length(); ++pi) {
 			if (gProtIds[pcl][pi] == unit.id) {
-				if (pcl == PROT_DEF)
+				if (pcl == PROT_DEF) {
 					++gDfGone;
+					++gProtDefStamp;
+				}
 				gProtPos[pcl].removeAt(pi);
 				gProtIds[pcl].removeAt(pi);
 				gProtUnit[pcl].removeAt(pi);

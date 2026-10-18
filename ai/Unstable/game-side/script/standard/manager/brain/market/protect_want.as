@@ -878,8 +878,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " rimR=" + int(PfRimAt(bestAt))
 					+ " gain=" + formatFloat(bestGain, "", 0, 2));
 			}
-		} else if (!SenseGainOf(unit, d, cls, core, rate, at, gain)) {
-			continue;
+		} else {
+			const double _tS = Perf::T0();
+			const bool sOk = SenseGainOf(unit, d, cls, core, rate, at, gain);
+			Perf::Add((cls == PROT_RADAR) ? "sense.radar" : ((cls == PROT_JAM) ? "sense.jam"
+					: ((cls == PROT_AA) ? "sense.aa" : "sense.other")), _tS);
+			if (!sOk)
+				continue;
 		}
 		// GROUND THE C++ REACH VETO REFUSED IS NOT A SITE. Bought anyway, the
 		// executor's probe ring put the want on the base ring far from the

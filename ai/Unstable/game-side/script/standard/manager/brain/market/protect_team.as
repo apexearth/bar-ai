@@ -215,6 +215,30 @@ float TeamWave(float own)
 	return w;
 }
 
+// The hull's vertices and the map's spots by bearing, once per hull: every bearing of the gap walk
+// read both whole lists to keep its own.
+array<array<int>> gGapVBin;
+array<array<int>> gGapSBin;
+int gGapBinAt = -999999;
+uint gGapBinSpots = 0;
+void GapBins()
+{
+	if ((gGapBinAt == gThAt) && (gGapBinSpots == gAllSpots.length()) && (gGapVBin.length() == uint(PF_RAYS)))
+		return;
+	gGapBinAt = gThAt;
+	gGapBinSpots = gAllSpots.length();
+	gGapVBin.resize(PF_RAYS);
+	gGapSBin.resize(PF_RAYS);
+	for (int b = 0; b < PF_RAYS; ++b) {
+		gGapVBin[b].resize(0);
+		gGapSBin[b].resize(0);
+	}
+	for (uint i = 0; i < gThVX.length(); ++i)
+		gGapVBin[TeamRayOf(AIFloat3(gThVX[i], 0.f, gThVZ[i]))].insertLast(int(i));
+	for (uint i = 0; i < gAllSpots.length(); ++i)
+		gGapSBin[TeamRayOf(gAllSpots[i])].insertLast(int(i));
+}
+
 void GapsPrep(float wave0, float standoff)
 {
 	TeamHullPrep();
@@ -247,6 +271,8 @@ void GapsPrep(float wave0, float standoff)
 		}
 	}
 	const double _t = Perf::T0();
+	CacheSpots();
+	GapBins();
 	const float wedge = 6.2831853f / float(PF_RAYS);
 	const int bEnd = (gGapCursor + GAP_PER_CALL < PF_RAYS)
 			? (gGapCursor + GAP_PER_CALL) : PF_RAYS;
@@ -284,10 +310,10 @@ void GapsPrep(float wave0, float standoff)
 		gGapStopR[b] = stopR;
 		float behind = 0.f;
 		float inside = 0.f;
-		for (uint i = 0; i < gThVX.length(); ++i) {
+		const array<int>@ vb = gGapVBin[b];
+		for (uint q = 0; q < vb.length(); ++q) {
+			const uint i = uint(vb[q]);
 			const AIFloat3 v(gThVX[i], 0.f, gThVZ[i]);
-			if (TeamRayOf(v) != b)
-				continue;
 			if (v.distance2D(gThMid) < stopR)
 				inside += gThVW[i];
 			else if (gGapWalk[b] && (open > 0.f))
@@ -323,10 +349,10 @@ void GapsPrep(float wave0, float standoff)
 				}
 			}
 			const float rIn = gThR[b] + standoff + GAP_STEP;
-			for (uint i = 0; i < gAllSpots.length(); ++i) {
+			const array<int>@ sb = gGapSBin[b];
+			for (uint q = 0; q < sb.length(); ++q) {
+				const uint i = uint(sb[q]);
 				const AIFloat3 sp = gAllSpots[i];
-				if (TeamRayOf(sp) != b)
-					continue;
 				if (!OnMap(sp))
 					continue;
 				const bool ourSide = !gGapFoeOk

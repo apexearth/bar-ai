@@ -269,6 +269,8 @@ bool WasFinished(int id)
 void AiUnitFinished(CCircuitUnit@ unit)
 {
 	const double _t = Perf::T0();
+	if (unit !is null)
+		Requests::RingFrameGone(int(unit.id));
 	UnitFinishedInner(unit);
 	Perf::Add("hk.finished", _t);
 }
@@ -339,6 +341,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	Market::ComUnitDead(unit);
+	Builder::ConSlotRelease(int(unit.id));
+	Requests::RingFrameGone(int(unit.id));
 	Market::EarlyBallNoteLoss(unit);
 	Air::TairNoteDeath(unit);
 	Air::LifeNoteDead(unit);

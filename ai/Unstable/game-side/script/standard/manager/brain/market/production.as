@@ -1283,21 +1283,32 @@ float ConShare()
 		return gConShareVal;
 	gConShareAt = ai.frame;
 	int all = 0;
-	for (uint d = 1; d < gOwnCount.length(); ++d)
-		if (Catalog::gMobile[int(d)] && (gOwnCount[d] > 0))
-			all += gOwnCount[d];
+	const array<int>@ own = OwnedDefs();
+	for (uint k = 0; k < own.length(); ++k)
+		if (Catalog::gMobile[own[k]])
+			all += gOwnCount[own[k]];
 	gConShareVal = (all > 0) ? (float(ConFleetHave()) / float(all)) : 0.f;
 	return gConShareVal;
 }
+// The defs that count as the constructor fleet: properties of the def, read once.
+array<int> gConFleetDefs;
+bool gConFleetDefsSet = false;
 int ConFleetHave()
 {
+	if (!gConFleetDefsSet && (gOwnCount.length() > 1)) {
+		gConFleetDefsSet = true;
+		for (uint d = 1; d < gOwnCount.length(); ++d) {
+			const int di = int(d);
+			if (Catalog::gMobile[di] && Catalog::gBuilder[di] && !Catalog::gRezzer[di]
+				&& (Catalog::gCostM[di] > 1.f)
+				&& !Catalog::Def(di).IsRoleAny(Unit::Role::COMM.mask))
+				gConFleetDefs.insertLast(di);
+		}
+	}
 	int n = 0;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		const int di = int(d);
-		if (Catalog::gMobile[di] && Catalog::gBuilder[di] && !Catalog::gRezzer[di]
-			&& (Catalog::gCostM[di] > 1.f)
-			&& !Catalog::Def(di).IsRoleAny(Unit::Role::COMM.mask))
-			n += gOwnCount[d] + Brain::PendAnyOf(di);
+	for (uint k = 0; k < gConFleetDefs.length(); ++k) {
+		const int di = gConFleetDefs[k];
+		n += gOwnCount[di] + Brain::PendAnyOf(di);
 	}
 	return n;
 }

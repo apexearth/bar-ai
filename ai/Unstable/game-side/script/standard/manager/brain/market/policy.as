@@ -205,6 +205,8 @@ void PnBuilderTilt(int h, CCircuitUnit@ unit, array<Want@>@ ranked)
 	const double _t = Perf::T0();
 	array<float> s;
 	NnState(unit, s);
+	Perf::Add("nn.p.state", _t);
+	const double _tO = Perf::T0();
 	const uint n = (ranked.length() < NN_K) ? ranked.length() : NN_K;
 	const AIFloat3 up = unit.GetPos(ai.frame);
 	array<array<float>> opts(n);
@@ -214,6 +216,8 @@ void PnBuilderTilt(int h, CCircuitUnit@ unit, array<Want@>@ ranked)
 		best = (opts[r][0] > best) ? opts[r][0] : best;
 		bestEta = (opts[r][9] < bestEta) ? opts[r][9] : bestEta;
 	}
+	Perf::Add("nn.p.opt", _tO);
+	const double _tE = Perf::T0();
 	array<float> x(WK_TEETH + 1 + NN_ONUM + 3);
 	for (uint r = 0; r < n; ++r) {
 		if (ranked[r].value <= 0.f)
@@ -230,6 +234,7 @@ void PnBuilderTilt(int h, CCircuitUnit@ unit, array<Want@>@ ranked)
 		ranked[r].value *= m;
 		ranked[r].nnMult *= m;
 	}
+	Perf::Add("nn.p.eval", _tE);
 	// DrawWeights takes the first of each category as its argmax: the list stays sorted
 	for (uint r = 1; r < ranked.length(); ++r) {
 		Want@ w = ranked[r];

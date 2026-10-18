@@ -35,7 +35,14 @@ void Add(const string &in name, double t0)
 {
 	if (t0 <= 0.0)
 		return;
-	const double us = ai.ClockUs() - t0;
+	AddUs(name, ai.ClockUs() - t0);
+}
+
+// A duration summed by the caller over many short spans, booked as one call.
+void AddUs(const string &in name, double us)
+{
+	if (!On())
+		return;
 	int idx = -1;
 	int64 slot = 0;
 	if (gIndex.get(name, slot)) {

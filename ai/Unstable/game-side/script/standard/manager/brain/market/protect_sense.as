@@ -103,6 +103,10 @@ array<AIFloat3> gRcUnseenPos;
 array<float> gRcUnseenMet;
 float gRcUnseenM = 0.f, gRcTotalM = 0.f;
 int gRcAt = -1000;
+// The extractors on the same clock, with whether a mast watches each: RadarGap asked RadarSees
+// (every standing radar) of every extractor twice per sense price.
+array<AIFloat3> gRcMexPos;
+array<bool> gRcMexSeen;
 void RadarCoverRefresh()
 {
 	if (ai.frame - gRcAt < 5 * SECOND)
@@ -112,6 +116,14 @@ void RadarCoverRefresh()
 	gRcUnseenMet.resize(0);
 	gRcUnseenM = 0.f;
 	gRcTotalM = 0.f;
+	gRcMexPos.resize(0);
+	gRcMexSeen.resize(0);
+	const array<int>@ mexRows = MexRows();
+	for (uint q = 0; q < mexRows.length(); ++q) {
+		const AIFloat3 mp = gLPos[uint(mexRows[q])];
+		gRcMexPos.insertLast(mp);
+		gRcMexSeen.insertLast(OnMap(mp) && RadarSees(mp));
+	}
 	const bool foeKnown = Front::FoeKnown();
 	for (uint i = 0; i < ComLen(); ++i) {
 		const int d = gComDef[i];
@@ -137,19 +149,25 @@ float gRgNewM = 0.f;   // our structure metal the last RadarGap mast newly watch
 bool RadarGap(const AIFloat3& in from, float reach, AIFloat3& out at, float& out unseenFrac)
 {
 	array<AIFloat3> pts;
+	array<bool> seen;
 	RadarCoverRefresh();
-	for (uint i = 0; i < gRcUnseenPos.length(); ++i)
+	for (uint i = 0; i < gRcUnseenPos.length(); ++i) {
 		pts.insertLast(gRcUnseenPos[i]);
+		seen.insertLast(false);
+	}
 	if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
 		array<AIFloat3> line;
 		if (Military::FrontBuildSpots(line)) {
-			for (uint i = 0; i < line.length(); ++i)
+			for (uint i = 0; i < line.length(); ++i) {
 				pts.insertLast(line[i]);
+				seen.insertLast(OnMap(line[i]) && RadarSees(line[i]));
+			}
 		}
 	}
-	const array<int>@ mexRows = MexRows();
-	for (uint q = 0; q < mexRows.length(); ++q)
-		pts.insertLast(gLPos[uint(mexRows[q])]);
+	for (uint q = 0; q < gRcMexPos.length(); ++q) {
+		pts.insertLast(gRcMexPos[q]);
+		seen.insertLast(gRcMexSeen[q]);
+	}
 	if (pts.length() == 0)
 		return false;
 	int unseen = 0;
@@ -157,7 +175,7 @@ bool RadarGap(const AIFloat3& in from, float reach, AIFloat3& out at, float& out
 	bool found = false;
 	const bool foeKnown = Front::FoeKnown();
 	for (uint i = 0; i < pts.length(); ++i) {
-		if (!OnMap(pts[i]) || RadarSees(pts[i]))
+		if (!OnMap(pts[i]) || seen[i])
 			continue;
 		// A GAP WE MAY NOT SAFELY BUILD AT IS NOT DEMAND (apexearth,
 		// watching sense outbid nanos at v=108: "that seems a bit crazy...
@@ -182,7 +200,7 @@ bool RadarGap(const AIFloat3& in from, float reach, AIFloat3& out at, float& out
 	const float watch = reach * ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
 	int newly = 0;
 	for (uint i = 0; i < pts.length(); ++i)
-		if (OnMap(pts[i]) && (pts[i].distance2D(at) < watch) && !RadarSees(pts[i]))
+		if (OnMap(pts[i]) && (pts[i].distance2D(at) < watch) && !seen[i])
 			++newly;
 	float newM = 0.f;
 	for (uint i = 0; i < gRcUnseenPos.length(); ++i)

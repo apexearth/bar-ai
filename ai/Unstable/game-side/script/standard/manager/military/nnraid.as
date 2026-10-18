@@ -306,16 +306,12 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
 			float alt = ours ? 0.f : lossRate * s / (homeS + s);
 			if (guard) {
 				alt = 0.f;
-				for (uint e = 0; e < Market::gEscUnit.length(); ++e) {
-					if (Market::gEscUnit[e] != u.id)
-						continue;
-					CCircuitUnit@ vip = ai.GetTeamUnit(Market::gEscWorker[e]);
-					if ((vip !is null) && (vip.circuitDef !is null)) {
-						const AIFloat3 vp = vip.GetPos(ai.frame);
-						if (OnMap(vp))
-							alt = Market::ExpectedLossAt(vp, Catalog::gCostM[int(vip.circuitDef.id)]);
-					}
-					break;
+				const int vid = Market::EscortOf(u.id);
+				CCircuitUnit@ vip = (vid >= 0) ? ai.GetTeamUnit(vid) : null;
+				if ((vip !is null) && (vip.circuitDef !is null)) {
+					const AIFloat3 vp = vip.GetPos(ai.frame);
+					if (OnMap(vp))
+						alt = Market::ExpectedLossAt(vp, Catalog::gCostM[int(vip.circuitDef.id)]);
 				}
 			}
 			gNrAltRate.insertLast(alt);

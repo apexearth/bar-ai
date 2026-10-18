@@ -18,6 +18,8 @@ array<bool> gFmLive;                // in LOS/radar at the last sweep
 array<bool> gFmGone;                // the registry no longer holds it
 array<int> gFmSweep;
 array<int> gFmFree;
+array<int> gFmGoneHead;   // def -> first gone slot of that def, this publish
+array<int> gFmGoneNext;   // slot -> next gone slot of the same def
 int gFmIdx = 0;
 int gFmTotal = 0;
 int gFmChunk = 0;
@@ -219,6 +221,13 @@ void FmPublish()
 	if (baseRim < 0.f && OnMap(fb))
 		baseRim = 0.f;
 	const uint n = gFmId.length();
+	// The gone slots by def, linked as pass 1 finds them, so a death below walks its own def's gone units
+	// instead of every slot (deaths x slots in a big fight).
+	if (int(gFmGoneHead.length()) != Catalog::gDefCount + 1)
+		gFmGoneHead.resize(Catalog::gDefCount + 1);
+	for (uint q = 0; q < gFmGoneHead.length(); ++q)
+		gFmGoneHead[q] = -1;
+	gFmGoneNext.resize(n);
 	// Pass 1: who is still held, the deaths seen out of sight, the mean blip.
 	for (uint s = 0; s < n; ++s) {
 		if (gFmId[s] < 0)
@@ -251,18 +260,25 @@ void FmPublish()
 			knM += Catalog::gCostM[d];
 			++knN;
 			hpW[FmHpBin(Catalog::gHealth[d])] += Catalog::gHealth[d];
+			if (gFmGone[s] && (d < int(gFmGoneHead.length()))) {
+				gFmGoneNext[s] = gFmGoneHead[d];
+				gFmGoneHead[d] = int(s);
+			}
 		}
 	}
 	// a death we saw takes out the nearest unregistered unit of its def
 	for (uint k = 0; k < gFmDeathDef.length(); ++k) {
+		const int dk = gFmDeathDef[k];
+		if ((dk <= 0) || (dk >= int(gFmGoneHead.length())))
+			continue;
 		int best = -1;
 		float bestD = 0.f;
-		for (uint s = 0; s < n; ++s) {
-			if ((gFmId[s] < 0) || !gFmGone[s] || (gFmDef[s] != gFmDeathDef[k]))
+		for (int s = gFmGoneHead[dk]; s >= 0; s = gFmGoneNext[s]) {
+			if (gFmId[s] < 0)
 				continue;
 			const float dd = gFmDeathPos[k].distance2D(gFmPos[s]);
 			if ((best < 0) || (dd < bestD)) {
-				best = int(s);
+				best = s;
 				bestD = dd;
 			}
 		}

@@ -5,6 +5,59 @@ namespace Market {
 // arithmetic untouched; `false` is that loop's `continue`, and every one of
 // them is still counted by the same gate, so the census reads as before.
 int gNextShieldLog = 0;
+
+// Our guns with at least three within 300 elmos (themselves included), in gProtPos order. Rebuilt
+// when a gun joins or leaves: asked per jammer price it was guns squared on every sense election.
+array<AIFloat3> gJamCl;
+int gJamClStamp = -1;
+const array<AIFloat3>@ JamClusters()
+{
+	if (gJamClStamp == gProtDefStamp)
+		return gJamCl;
+	gJamClStamp = gProtDefStamp;
+	gJamCl.resize(0);
+	const array<AIFloat3>@ g = gProtPos[PROT_DEF];
+	for (uint jd = 0; jd < g.length(); ++jd) {
+		int nearDef = 0;
+		for (uint jk = 0; (jk < g.length()) && (nearDef < 3); ++jk) {
+			if (g[jd].distance2D(g[jk]) < 300.f)
+				++nearDef;
+		}
+		if (nearDef >= 3)
+			gJamCl.insertLast(g[jd]);
+	}
+	return gJamCl;
+}
+
+// The engine's site search for one jammer at one cluster, until the ledger moves: the answer does
+// not depend on who asks, and every sense election of every builder asked it again.
+array<int> gJsnStamp;
+array<float> gJsnX, gJsnZ, gJsnR;
+array<AIFloat3> gJsnSite;
+AIFloat3 JamSiteNear(int d, const AIFloat3& in at, float r)
+{
+	if (int(gJsnStamp.length()) <= Catalog::gDefCount) {
+		const uint n = uint(Catalog::gDefCount + 1);
+		gJsnStamp.resize(n);
+		gJsnX.resize(n);
+		gJsnZ.resize(n);
+		gJsnR.resize(n);
+		gJsnSite.resize(n);
+		for (uint i = 0; i < n; ++i)
+			gJsnStamp[i] = -1;
+	}
+	if ((d < 0) || (d > Catalog::gDefCount))
+		return ai.FindBuildSiteNear(Catalog::Def(d), at, r);
+	if ((gJsnStamp[d] == gComStamp) && (gJsnX[d] == at.x) && (gJsnZ[d] == at.z) && (gJsnR[d] == r))
+		return gJsnSite[d];
+	gJsnStamp[d] = gComStamp;
+	gJsnX[d] = at.x;
+	gJsnZ[d] = at.z;
+	gJsnR[d] = r;
+	gJsnSite[d] = ai.FindBuildSiteNear(Catalog::Def(d), at, r);
+	return gJsnSite[d];
+}
+
 bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		float rate, AIFloat3& out at, float& out gain)
 {
@@ -131,23 +184,17 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			found = true;
 			how = 2;
 		}
-		for (uint jd = 0; jd < gProtPos[PROT_DEF].length() && !found; ++jd) {
-			int nearDef = 0;
-			for (uint jk = 0; jk < gProtPos[PROT_DEF].length(); ++jk) {
-				if (gProtPos[PROT_DEF][jd].distance2D(gProtPos[PROT_DEF][jk]) < 300.f)
-					++nearDef;
-			}
-			if ((nearDef >= 3)
-				&& !ProtCovered(PROT_JAM, gProtPos[PROT_DEF][jd], jamR))
-			{
-				jat = gProtPos[PROT_DEF][jd];
+		const array<AIFloat3>@ clusters = JamClusters();
+		for (uint jd = 0; jd < clusters.length() && !found; ++jd) {
+			if (!ProtCovered(PROT_JAM, clusters[jd], jamR)) {
+				jat = clusters[jd];
 				found = true;
 				how = 1;
 			}
 		}
 		if (Gate(GATE_JAM_COVER, !found && ProtCovered(PROT_JAM, core, jamR)))
 			return false;
-		const AIFloat3 jsite = ai.FindBuildSiteNear(Catalog::Def(d), jat, jamR);
+		const AIFloat3 jsite = JamSiteNear(d, jat, jamR);
 		if (Gate(GATE_JAM_SITE, !OnMap(jsite) || (jsite.distance2D(jat) > jamR)))
 			return false;
 		// A SECOND JAMMER MUST CLEAR THE FIRST wherever it is going.

@@ -127,12 +127,22 @@ array<int> gWkExpoAt(32001, -30000);
 array<float> gWkExpoVal(32001, 0.f);
 // The most exposed unescorted worker of the last refresh, for escort-diag.
 float gExpoMax = 0.f;
-string gExpoMaxWhy = "";
+int gExpoMaxId = -1;
+string ExpoMaxWhy()
+{
+	CCircuitUnit@ w = (gExpoMaxId >= 0) ? ai.GetTeamUnit(gExpoMaxId) : null;
+	if (w is null)
+		return "";
+	return w.circuitDef.GetName() + "#" + w.id + " far="
+		+ int(w.GetPos(ai.frame).distance2D(Builder::gHomePos));
+}
 float WorkerExposureNow(CCircuitUnit@ wkr)
 {
 	const AIFloat3 p = wkr.GetPos(ai.frame);
 	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-	const float risk = HazardAt(p) * ShortfallAt(p) * ((T > 1.f) ? T : 300.f);
+	RiskFill();
+	const float cover = CoverAt(p);
+	const float risk = HazardWith(p, cover) * ShortWith(p, cover, ThreatAt(p)) * ((T > 1.f) ? T : 300.f);
 	const float foe = ai.GetEnemyInflAt(p);
 	float ground = 0.5f;
 	if (Base::Inside(p) || (CrewSplitOn() && !FieldSite(p) && (foe < 0.01f)))
@@ -199,12 +209,14 @@ void ExposeRefresh()
 	if (gExpoAt == ai.frame)
 		return;
 	gExpoAt = ai.frame;
-	ExposeReprice();
+	{ const double _tR = Perf::T0(); ExposeReprice(); Perf::Add("expo.reprice", _tR); }
+	const double _tX = Perf::T0();
 	gExpoN = 0;
 	gExpoWetN = 0;
 	gExpoM = 0.f;
 	gExpoLossM = 0.f;
 	gExpoMax = 0.f;
+	gExpoMaxId = -1;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
 		if (!EscortableWorker(wkr, false) || EscortedWorker(wkr.id))
@@ -212,8 +224,7 @@ void ExposeRefresh()
 		const float e = WorkerExposure(wkr);
 		if (e > gExpoMax) {
 			gExpoMax = e;
-			gExpoMaxWhy = wkr.circuitDef.GetName() + "#" + wkr.id + " far="
-				+ int(wkr.GetPos(ai.frame).distance2D(Builder::gHomePos));
+			gExpoMaxId = int(wkr.id);
 		}
 		if (e < 0.5f)
 			continue;
@@ -223,7 +234,8 @@ void ExposeRefresh()
 		gExpoM += e * Catalog::gCostM[int(wkr.circuitDef.id)];
 		gExpoLossM += e * WorkerLossM(wkr);
 	}
-	EscortDiag();
+	Perf::Add("expo.loop", _tX);
+	{ const double _tD = Perf::T0(); EscortDiag(); Perf::Add("expo.diag", _tD); }
 }
 
 // Escorts share the rez-bot cap (apexearth 2026-09-27: one player paired 346

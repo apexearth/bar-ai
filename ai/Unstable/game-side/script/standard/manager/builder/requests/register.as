@@ -652,13 +652,25 @@ IUnitTask@ EmptyFrameOf(const CCircuitDef@ want, const AIFloat3& in spot)
 	return best;
 }
 
+// By the frame's unit id: the ring is only ever sampled on a frame, and the job walks
+// that ask it once per candidate were jobs x live.
+array<float> gRingOfFrame(32001, 0.f);
+
 float RingSeen(IUnitTask@ t)
 {
-	for (uint i = 0; i < gLive.length(); ++i) {
-		if (gLive[i] is t)
-			return (i < gLiveRingBP.length()) ? gLiveRingBP[i] : 0.f;
-	}
-	return 0.f;
+	if (t is null)
+		return 0.f;
+	CCircuitUnit@ fr = t.target;
+	if (fr is null)
+		return 0.f;
+	const int id = int(fr.id);
+	return ((id >= 0) && (id < int(gRingOfFrame.length()))) ? gRingOfFrame[id] : 0.f;
+}
+
+void RingFrameGone(int id)
+{
+	if ((id >= 0) && (id < int(gRingOfFrame.length())))
+		gRingOfFrame[id] = 0.f;
 }
 
 const int RING_SAMPLE_S = 5;
@@ -681,6 +693,9 @@ void StallSweep()
 			const float crewBP = ArrivedLathe(t, arrived);
 			const float ring = (gotBP > crewBP) ? gotBP - crewBP : 0.f;
 			gLiveRingBP[i] = 0.5f * gLiveRingBP[i] + 0.5f * ring;
+			const int fid = int(t.target.id);
+			if ((fid >= 0) && (fid < int(gRingOfFrame.length())))
+				gRingOfFrame[fid] = gLiveRingBP[i];
 			gLiveSample[i] = p;
 			gLiveSampleAt[i] = ai.frame;
 		}

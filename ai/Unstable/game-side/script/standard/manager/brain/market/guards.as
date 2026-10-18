@@ -29,6 +29,7 @@ array<CCircuitUnit@> gGuardBoss;
 array<Id> gGuardUId;
 array<Id> gGuardBId;
 int gGuardStamp = 0;   // bumped on every insert and removal of the ledger
+array<int> gGuardOn(32001, 0);   // boss id -> guards following it
 void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 {
 	if ((u is null) || (boss is null))
@@ -37,7 +38,26 @@ void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 	gGuardBoss.insertLast(boss);
 	gGuardUId.insertLast(u.id);
 	gGuardBId.insertLast(boss.id);
+	if (int(boss.id) < int(gGuardOn.length()))
+		++gGuardOn[int(boss.id)];
 	++gGuardStamp;
+}
+
+void GuardRemoveAt(uint i)
+{
+	const int b = int(gGuardBId[i]);
+	if ((b >= 0) && (b < int(gGuardOn.length())) && (gGuardOn[b] > 0))
+		--gGuardOn[b];
+	gGuardUnit.removeAt(i);
+	gGuardBoss.removeAt(i);
+	gGuardUId.removeAt(i);
+	gGuardBId.removeAt(i);
+	++gGuardStamp;
+}
+
+int GuardsOn(Id bid)
+{
+	return ((int(bid) >= 0) && (int(bid) < int(gGuardOn.length()))) ? gGuardOn[int(bid)] : 0;
 }
 
 // How many guards follow the workers of this job. The assist want counts a
@@ -54,13 +74,8 @@ int GuardsOnJob(IUnitTask@ t)
 		return 0;
 	int n = 0;
 	for (uint c = 0; c < crew.length(); ++c) {
-		if (crew[c] is null)
-			continue;
-		const Id bid = crew[c].id;
-		for (uint g = 0; g < gGuardBId.length(); ++g) {
-			if (gGuardBId[g] == bid)
-				++n;
-		}
+		if (crew[c] !is null)
+			n += GuardsOn(crew[c].id);
 	}
 	return n;
 }
@@ -70,11 +85,7 @@ void GuardGone(Id id)
 {
 	for (uint i = 0; i < gGuardUId.length(); ) {
 		if ((gGuardUId[i] == id) || (gGuardBId[i] == id)) {
-			gGuardUnit.removeAt(i);
-			gGuardBoss.removeAt(i);
-			gGuardUId.removeAt(i);
-			gGuardBId.removeAt(i);
-			++gGuardStamp;
+			GuardRemoveAt(i);
 			continue;
 		}
 		++i;
@@ -98,9 +109,23 @@ array<int> gEscDef;
 array<float> gEscHaveM(32001, 0.f);
 array<int> gEscHaveN(32001, 0);
 
+array<int> gEscWorkerOf(32001, -1);   // escort id -> the worker it guards
+
 bool EscIdOk(Id id)
 {
 	return (int(id) >= 0) && (int(id) < int(gEscHaveN.length()));
+}
+
+// The worker this escort guards, -1 for none.
+int EscortOf(Id uid)
+{
+	if (EscIdOk(uid))
+		return gEscWorkerOf[int(uid)];
+	for (uint e = 0; e < gEscUnit.length(); ++e) {
+		if (gEscUnit[e] == uid)
+			return int(gEscWorker[e]);
+	}
+	return -1;
 }
 
 float EscortMetalOn(Id wid)
@@ -398,6 +423,8 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		gEscWorker.insertLast(wkr.id);
 		gEscUnit.insertLast(mil.id);
 		gEscDef.insertLast(int(mil.circuitDef.id));
+		if (EscIdOk(mil.id))
+			gEscWorkerOf[int(mil.id)] = int(wkr.id);
 		if (EscIdOk(wkr.id)) {
 			gEscHaveM[int(wkr.id)] += mineM;
 			++gEscHaveN[int(wkr.id)];
@@ -685,7 +712,7 @@ void EscortDiag()
 		+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0)
-		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy
+		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + ExpoMaxWhy()
 		+ " released=" + gEscReleased + " spare=" + gEscSpare
 		+ " foeMass=" + formatFloat(FoeRaidMassM(), "", 0, 0)
 		+ " pooled=" + gEscPooled + " spread=" + gEscSpread + " foePowMed=" + formatFloat(gFoePowMed, "", 0, 1) + " ownBest=" + formatFloat(gOwnEscPow, "", 0, 1));
@@ -752,6 +779,10 @@ void EscortSweep()
 
 void EscortGone(Id id)
 {
+	if (EscIdOk(id) && (gEscWorkerOf[int(id)] < 0) && (gEscHaveN[int(id)] <= 0)) {
+		ClearSupport(id);
+		return;   // neither an escort nor escorted: no row names it
+	}
 	for (uint e = 0; e < gEscWorker.length(); ) {
 		if ((gEscWorker[e] == id) || (gEscUnit[e] == id)) {
 			const Id w = gEscWorker[e];
@@ -763,6 +794,8 @@ void EscortGone(Id id)
 				if (gEscHaveN[int(w)] < 0)
 					gEscHaveN[int(w)] = 0;
 			}
+			if (EscIdOk(gEscUnit[e]))
+				gEscWorkerOf[int(gEscUnit[e])] = -1;
 			gEscWorker.removeAt(e);
 			gEscUnit.removeAt(e);
 			gEscDef.removeAt(e);
@@ -908,11 +941,7 @@ void GuardSweep()
 			}
 		}
 		if (drop) {
-			gGuardUnit.removeAt(i);
-			gGuardBoss.removeAt(i);
-			gGuardUId.removeAt(i);
-			gGuardBId.removeAt(i);
-			++gGuardStamp;
+			GuardRemoveAt(i);
 			continue;
 		}
 		++i;

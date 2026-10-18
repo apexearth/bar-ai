@@ -136,9 +136,26 @@ float CoverAddsAt(const AIFloat3& in pos, float reach, float adds)
 	return adds;   // no ray on the map: CoverWith falls back to the point path
 }
 
+// One frame's answers by exact point: hazard, shortfall and expected loss each ask the same
+// site, and every worker and want is priced through all three.
+const uint COVER_MEMO_N = 64;
+array<int> gCovMAt(COVER_MEMO_N, -1);
+array<int> gCovMStamp(COVER_MEMO_N, -1);
+array<float> gCovMX(COVER_MEMO_N, 0.f);
+array<float> gCovMZ(COVER_MEMO_N, 0.f);
+array<float> gCovMV(COVER_MEMO_N, 0.f);
 float CoverAt(const AIFloat3& in pos)
 {
-	return CoverWith(pos, pos, -1.f, 0.f);
+	const uint h = uint((int(pos.x) * 73856093) ^ (int(pos.z) * 19349663)) % COVER_MEMO_N;
+	if ((gCovMAt[h] == ai.frame) && (gCovMStamp[h] == gProtDefStamp) && (gCovMX[h] == pos.x) && (gCovMZ[h] == pos.z))
+		return gCovMV[h];
+	const float v = CoverWith(pos, pos, -1.f, 0.f);
+	gCovMAt[h] = ai.frame;
+	gCovMStamp[h] = gProtDefStamp;
+	gCovMX[h] = pos.x;
+	gCovMZ[h] = pos.z;
+	gCovMV[h] = v;
+	return v;
 }
 
 // THE STAKE AT A PLACE: our own metal standing within r, mexes counted at

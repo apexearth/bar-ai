@@ -188,11 +188,7 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 		CCircuitUnit@ fr = ai.GetTeamUnit(gComId[row]);
 		if (fr is null)
 			return w;
-		uint onFrame = 0;
-		for (uint g = 0; g < gGuardBId.length(); ++g) {
-			if (gGuardBId[g] == fr.id)
-				++onFrame;
-		}
+		const uint onFrame = uint(GuardsOn(fr.id));
 		if (onFrame >= Requests::SiteWorkerCap(Catalog::Def(gComDef[row])))
 			return w;
 		const AIFloat3 fp = fr.GetPos(ai.frame);
@@ -532,12 +528,8 @@ void AssistEcoList()
 		gAeR.insertLast(R);
 		gAeRing.insertLast(NanoLatheReaching(bp));
 		int hands = int(workers) + GuardsOnJob(t);
-		if (t.target !is null) {
-			for (uint g = 0; g < gGuardBId.length(); ++g) {
-				if (gGuardBId[g] == t.target.id)
-					++hands;
-			}
-		}
+		if (t.target !is null)
+			hands += GuardsOn(t.target.id);
 		gAeHands.insertLast(hands);
 		gAeCap.insertLast(int(Requests::SiteWorkerCap(t.buildDef)));
 		gAeBasicCan.insertLast(!ReachesCeiling(d) && BasicHandCan(d));

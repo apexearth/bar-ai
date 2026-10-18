@@ -290,18 +290,16 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// A unit back in the election is no longer guarding anyone (retreat,
 		// aborted task); its pairing dropped only on death, so its worker
 		// read escorted by nobody for the rest of the game.
-		for (uint e = 0; e < Market::gEscUnit.length(); ++e) {
-			if (Market::gEscUnit[e] != unit.id)
-				continue;
-			CCircuitUnit@ w = ai.GetTeamUnit(Market::gEscWorker[e]);
+		const int was = Market::EscortOf(unit.id);
+		if (was >= 0) {
+			CCircuitUnit@ w = ai.GetTeamUnit(was);
 			IUnitTask@ ot = unit.task;
 			AiLog(Factory::T() + "apex: escort-off " + cdef.GetName() + " #" + unit.id
-				+ " from #" + Market::gEscWorker[e]
+				+ " from #" + was
 				+ " task=" + ((ot is null) ? -1 : int(ot.GetType()))
 				+ " dist=" + ((w is null) ? -1 : int(unit.GetPos(ai.frame).distance2D(w.GetPos(ai.frame))))
 				+ " wTask=" + (((w is null) || (w.task is null)) ? -1 : int(w.task.GetType()))
 				+ " wBt=" + (((w is null) || (w.task is null) || (w.task.GetType() != Task::Type::BUILDER)) ? -1 : int(w.task.GetBuildType())));
-			break;
 		}
 		Market::EscortGone(unit.id);
 		CCircuitUnit@ vip = Market::EscortNeeded(unit);

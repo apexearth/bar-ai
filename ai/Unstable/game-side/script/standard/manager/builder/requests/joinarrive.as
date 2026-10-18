@@ -184,13 +184,8 @@ bool JoinOk(int path, CCircuitUnit@ unit, const AIFloat3& in site, float arriveS
 int JaGuards(IUnitTask@ job)
 {
 	int n = Market::GuardsOnJob(job);
-	if ((job !is null) && (job.target !is null)) {
-		const Id fid = job.target.id;
-		for (uint g = 0; g < Market::gGuardBId.length(); ++g) {
-			if (Market::gGuardBId[g] == fid)
-				++n;
-		}
-	}
+	if ((job !is null) && (job.target !is null))
+		n += Market::GuardsOn(job.target.id);
 	return n;
 }
 
