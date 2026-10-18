@@ -124,7 +124,8 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 ## Diagnostics and switches
 
 - `TUNE_MEMO_TTL` = 300. Ceiling on a memoised proposer answer: 45 expired before the next same-def builder asked (hit 593, miss 3,135); 45 -> 150 -> 300 on 10-01 for 8v8 cost.
-- `TUNE_ELEC_FRAME_US` = 8000. Microseconds one frame may spend on builder elections, sliced between proposer steps; trades hitch size for order latency. Unswept: read `apex: elec-slice` worstWaitS first.
+- `TUNE_REDECIDE_S` = 2. Cap on the wait after REPEATED young returns: the first young return re-decides at once, each further one doubles the wait from 0.25 s up to this. A flat 2 s bounced 15,591 asks a game and held the mean idle gap at 36.5 frames; the backoff bounced 1,616 and gave 27.2 (16-Apex 8v8, 10-18).
+- `TUNE_ELEC_FRAME_US` = 8000. The CEILING on what one frame may spend on builder elections; the frame itself spends what the queue needs (ElecSliceUs: each pending set's remaining step cost over the frames left before its builder's next visit, never less than one whole set). Measured 10-18 on the 16-Apex 8v8: a flat 2000 cut >10 ms elections from 120 to 2 player-minutes but raised the mean idle gap 36.5 -> 46.1 frames and queued 9; the derived slice gives 16 and 28.7 frames. `apex: elec-slice` needUs.
 - `TUNE_PERF` = 0. Per-section profiler and the lag governor's cuts; off by his ruling ("Default to 0, harness passes it explicitly"). No `frametime.py` output means this was off.
 - `TUNE_CATALOG_DUMP` = 0. Dump every def's catalog row at init for `check_catalog.py`; ~1,000 lines, so off.
 - `TUNE_DECIDE_LOG` = 1. The `apex: decide`/`exec` lines every harness tool parses; on. Costs a string build and a mutex per election, so 0 suits a live game nobody reads.

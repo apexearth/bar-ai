@@ -72,22 +72,24 @@ array<AIFloat3> gPenDir;    // the way out through it
 array<float> gPenFlow;      // metal/s a jammed plant gets back when it is cleared
 const int PEN_VERDICT_TTL = 120 * SECOND;
 
-array<Id> gPenEver;   // units penned at least once: a refilled pocket lets them shuffle
+array<bool> gPenEver(32001, false);   // by unit id, penned at least once: a refilled pocket lets them shuffle
 
 bool PennedBefore(Id id)
 {
-	for (uint i = 0; i < gPenEver.length(); ++i) {
-		if (gPenEver[i] == id)
-			return true;
-	}
-	return false;
+	return (int(id) >= 0) && (int(id) < int(gPenEver.length())) && gPenEver[int(id)];
+}
+
+void PenForget(Id id)
+{
+	if ((int(id) >= 0) && (int(id) < int(gPenEver.length())))
+		gPenEver[int(id)] = false;
 }
 
 void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3& in dir,
 	float flow = 0.f)
 {
-	if (!PennedBefore(victim))
-		gPenEver.insertLast(victim);
+	if ((int(victim) >= 0) && (int(victim) < int(gPenEver.length())))
+		gPenEver[int(victim)] = true;
 	for (uint i = 0; i < gPenVictim.length(); ++i) {
 		if (gPenVictim[i] == victim) {
 			gPenWall[i] = wall;

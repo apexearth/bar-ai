@@ -28,6 +28,18 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // hoists (estall, cover, role) still override.
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
+
+// A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
+void DecideIdGone(int id)
+{
+	if ((id < 0) || (id >= int(gIncTask.length())))
+		return;
+	@gIncTask[id] = null;
+	gIncVal[id] = 0.f;
+	gLastDecideAt[id] = -30000;
+	gYoungN[id] = 0;
+	gWkExpoAt[id] = -30000;
+}
 // The walk each incumbent job started with, for the sunk-walk hold below.
 
 // HOW MUCH OF THE WALK IS ALREADY SPENT. His ruling of 2026-09-02 is that a
@@ -430,6 +442,46 @@ double ElecFrameUs()
 // frames repay by electing nothing, so the average stays under the slice.
 double gElecCredit = 0.0;
 
+// THE FRAME SPENDS WHAT THE QUEUE NEEDS, NOT THE WHOLE SLICE. Each pending set is due by its
+// builder's next visit (gRevisitEma frames after it opened); a frame owes each set its
+// remaining step cost over the frames it has left, never less than one whole set, so a burst is
+// spread and an overdue set takes up to the slice. ElecFrameUs stays the ceiling and the credit.
+double gElecDemandUs = 0.0;
+double ElecRemainUs(Elec@ st)
+{
+	double r = 0.0;
+	for (int s = (st is null) ? 0 : st.step; s < ELEC_STEPS; ++s)
+		r += gStepEma[uint(s)];
+	return r;
+}
+double ElecWindow()
+{
+	return (gRevisitEma > 1.f) ? double(gRevisitEma) : 1.0;
+}
+void ElecDemandRefresh()
+{
+	const double w = ElecWindow();
+	gElecDemandUs = 0.0;
+	for (uint q = 0; q < gElecQ.length(); ++q) {
+		const int uid = gElecQ[q];
+		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length()))) ? gElecOf[uid] : null;
+		if (st is null)
+			continue;
+		double left = w - double(ai.frame - st.startFrame);
+		if (left < 1.0)
+			left = 1.0;
+		gElecDemandUs += ElecRemainUs(st) / left;
+	}
+}
+double ElecSliceUs()
+{
+	// At least one whole set: a hand alone still decides inside its own visit.
+	const double one = ElecRemainUs(null);
+	const double need = (gElecDemandUs > one) ? gElecDemandUs : one;
+	const double cap = ElecFrameUs();
+	return (need < cap) ? need : cap;
+}
+
 void ElecFrameRoll()
 {
 	if (gElecFrame != ai.frame) {
@@ -440,6 +492,7 @@ void ElecFrameRoll()
 		gElecFrame = ai.frame;
 		gElecSpentUs = 0.0;
 		gElecPumpUs = 0.0;
+		ElecDemandRefresh();
 	}
 }
 
@@ -484,7 +537,7 @@ bool ElecAfford(int step)
 	// on other sets' steps at the door of every hook call, and a whole set's
 	// own visit would otherwise find nothing left, every visit.
 	const double spent = (step == ELEC_STEPS - 1) ? (gElecSpentUs - gElecPumpUs) : gElecSpentUs;
-	return spent + gStepEma[uint(step)] <= ElecFrameUs();
+	return spent + gStepEma[uint(step)] <= ElecSliceUs();
 }
 
 void ElecCharge(int step, double us)
@@ -819,6 +872,17 @@ int RedecideFrames()
 	if (gRedecideFrames < 0)
 		gRedecideFrames = int(ai.GetTunable("apex_redecide_s", TUNE_REDECIDE_S) * SECOND);
 	return gRedecideFrames;
+}
+
+array<int> gYoungN(32001, 0);   // per unit id: young returns in a row
+int YoungWait(int n)
+{
+	if (n <= 0)
+		return 0;
+	int w = SECOND / 4;
+	for (int k = 1; (k < n) && (w < RedecideFrames()); ++k)
+		w *= 2;
+	return (w < RedecideFrames()) ? w : RedecideFrames();
 }
 
 // The nineteen proposers, one per step, IN THE ORDER THE ATOMIC STACK RAN THEM.
@@ -1193,6 +1257,7 @@ Elec@ ElecOpen(CCircuitUnit@ unit)
 			}
 		}
 		gElecQ.insertAt(at, uid);
+		gElecDemandUs += ElecRemainUs(st) / ElecWindow();
 	}
 	st.askedAt = ai.frame;
 	return st;
@@ -1244,7 +1309,7 @@ void ElecPump()
 	ElecFrameRoll();
 	uint i = 0;
 	while (i < gElecQ.length()) {
-		if ((gElecSpentUs > ElecFrameUs()) || (gElecCredit <= 0.0))
+		if ((gElecSpentUs > ElecSliceUs()) || (gElecCredit <= 0.0))
 			return;
 		const int uid = gElecQ[i];
 		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length())))
@@ -1289,7 +1354,7 @@ void ElecLog()
 		+ " task=" + gElecDropTask + ") queued=" + gElecQ.length()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
 		+ " revisitS=" + formatFloat(gRevisitEma / float(SECOND), "", 0, 2)
-		+ " sliceUs=" + int(ElecFrameUs())
+		+ " sliceUs=" + int(ElecFrameUs()) + " needUs=" + int(ElecSliceUs())
 		+ " credit=" + int(gElecCredit)
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
@@ -1734,15 +1799,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// gate is there to cap re-elections, and applying it to a resumption would
 	// stretch every sliced election by two seconds a step -- "delays of more
 	// than a second are unacceptable" (apexearth, maketask.as).
+	// ...but only a REPEATED young return waits: the first is a job that ended quickly and the hand
+	// is idle now, and each young return after it doubles the wait up to that cap.
 	if (!ElecPending(unit)
 		&& (int(unit.id) >= 0) && (int(unit.id) < int(gLastDecideAt.length()))) {
-		if (ai.frame - gLastDecideAt[int(unit.id)] < RedecideFrames()) {
+		const int uidG = int(unit.id);
+		const int since = ai.frame - gLastDecideAt[uidG];
+		if (since < YoungWait(gYoungN[uidG])) {
 			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 				++Builder::gComBounce;   // a task that died within 2 s of being handed out
 			++gDecBounce;
 			return null;
 		}
-		gLastDecideAt[int(unit.id)] = ai.frame;
+		gYoungN[uidG] = (since < RedecideFrames()) ? (gYoungN[uidG] + 1) : 0;
+		gLastDecideAt[uidG] = ai.frame;
 	}
 	{ double _t = Perf::T0(); WorkerSeen(unit); Perf::Add("dec.worker", _t); }
 	{ double _t = Perf::T0(); LedgerSweep(); Perf::Add("dec.sweep", _t); }

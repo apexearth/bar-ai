@@ -343,6 +343,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	Market::ComUnitDead(unit);
 	Builder::ConSlotRelease(int(unit.id));
 	Requests::RingFrameGone(int(unit.id));
+	Military::PenForget(unit.id);
+	Market::DecideIdGone(int(unit.id));
 	Market::EarlyBallNoteLoss(unit);
 	Air::TairNoteDeath(unit);
 	Air::LifeNoteDead(unit);

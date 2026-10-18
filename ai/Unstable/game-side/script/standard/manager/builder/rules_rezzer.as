@@ -471,6 +471,8 @@ int ConSlot(CCircuitUnit@ unit)
 // A dead unit's row is reused, so the ledger is as long as the fleet alive and a recycled id starts clean.
 void ConSlotRelease(int id)
 {
+	if ((id >= 0) && (id < int(gRzDecideVer.length())))
+		gRzDecideVer[id] = -1;
 	if ((id < 0) || (id >= int(gConSlotOf.length())) || (gConSlotOf[id] < 0))
 		return;
 	const int s = gConSlotOf[id];
