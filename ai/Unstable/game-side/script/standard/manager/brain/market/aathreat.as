@@ -38,6 +38,7 @@ float gAatOrdS = 0.f;
 float gAatOrdM = 0.f;
 float gAatKillAir = 0.f;
 float gAatGroundShort = 0.f;
+int gAatShortCapN = 0;
 float gAatOurAirFrac = 0.f;
 float gAatShare = 0.f;
 float gAatTradeS = 0.f;
@@ -695,6 +696,25 @@ void AatUpdate()
 				gAatGroundShort += need / tMob;
 		}
 	}
+	// THE WHOLE OF THEIR AIR IS THE MOST THERE IS TO ANSWER (his 10-17 online v0.3.0 game: mobile AA was 9-46% of
+	// every seat's production, 361,000 m ordered against at most 56,108 m of their air seen, t14's short a median
+	// 34,980 m). Each place counts only the mobile AA standing at it, and the AA walks off with the army, so every
+	// place stayed short and the sum over twelve of them ran away. The places' sum may say where; it may not exceed
+	// their remembered air less all our ground AA, wherever it stands, at the same exchange rate.
+	if (tMob > 0.f) {
+		float ownMob = 0.f;
+		for (uint q = 0; q < gAatGroundAA.length(); ++q) {
+			const int d = gAatGroundAA[q];
+			if ((d < int(gOwnCount.length())) && (gOwnCount[d] > 0))
+				ownMob += float(gOwnCount[d]) * TowerCostEq(d) * AatTrade(d);
+		}
+		float whole = (gAatAirMem - ownMob) / tMob;
+		whole = (whole > 0.f) ? whole : 0.f;
+		if (gAatGroundShort > whole) {
+			gAatGroundShort = whole;
+			++gAatShortCapN;
+		}
+	}
 	if (ai.frame >= gAatLogAt) {
 		gAatLogAt = ai.frame + 60 * SECOND;
 		AatLog(tMob);
@@ -730,7 +750,7 @@ void AatLog(float tMob)
 		+ " share=" + NnF(Brain::TargetShare(Brain::AIRDEF), 3) + "/" + NnF(Brain::ShareOf(Brain::AIRDEF), 3)
 		+ " ordered=" + int(gAatOrdS) + "/" + int(gAatOrdM)
 		+ " killAir=" + int(gAatKillAir)
-		+ " groundShort=" + int(AatGroundShortM())
+		+ " groundShort=" + int(AatGroundShortM()) + " shortCapped=" + gAatShortCapN
 		+ " panic=" + gAatPanicN + " priced=" + gAatPriceN + " lab=" + gAatLabN + " guard=" + gAatGuardN
 		+ " places=" + under + " withAA=" + withAA + " bare=" + bare + " manned=" + (gAatAnyManned ? 1 : 0)
 		+ " r=" + int(AatRadius())
