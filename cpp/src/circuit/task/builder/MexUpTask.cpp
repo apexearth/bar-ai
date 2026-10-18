@@ -49,26 +49,7 @@ void CBMexUpTask::Finish()
 	IBuilderTask::Finish();
 
 	CCircuitAI* circuit = manager->GetCircuit();
-	const float maxRange = buildDef->GetExtrRangeM();
-	CCircuitUnit* oldMex = nullptr;
-	const auto& unitIds = circuit->GetCallback()->GetFriendlyUnitIdsIn(buildPos, maxRange, false);
-	float curExtract = buildDef->GetExtractsM();
-	for (ICoreUnit::Id unitId : unitIds) {
-		CCircuitUnit* curMex = circuit->GetTeamUnit(unitId);
-		if ((curMex == nullptr) || !curMex->GetCircuitDef()->IsMex()) {
-			continue;
-		}
-		const float extract = curMex->GetCircuitDef()->GetExtractsM();
-		if (curExtract > extract) {
-			oldMex = curMex;
-			break;
-		}
-	}
-	if (oldMex != nullptr) {
-		circuit->GetBuilderManager()->Enqueue(TaskB::Reclaim(priority, oldMex));
-	}
-
-	// FIXME: Won't work with EnqueueReclaim
+	// apex: no reclaim of the old extractor; the game removes and refunds it on completion.
 	circuit->GetEconomyManager()->SetUpgradingMexSpot(spotId, false);
 	circuit->GetBuilderManager()->UnregisterReclaim(reclaimMex);
 }
@@ -122,31 +103,23 @@ bool CBMexUpTask::Execute(CCircuitUnit* unit)
 		return true;
 	}
 
-	CCircuitUnit* oldMex = nullptr;
+	// apex: never reclaim the extractor being upgraded. The game builds the new one on top, keeps the old
+	// one extracting until it finishes, then removes it and refunds it (unit_mex_upgrade_reclaimer). A site
+	// that will not place is our own frame already rising there: help build it.
 	const auto& unitIds = circuit->GetCallback()->GetFriendlyUnitIdsIn(position, searchRadius, false);
 	for (ICoreUnit::Id unitId : unitIds) {
-		CCircuitUnit* curMex = circuit->GetTeamUnit(unitId);
-		if (curMex == nullptr) {
-			continue;
-		}
-		const float curExtract = curMex->GetCircuitDef()->GetExtractsM();
-		if ((0.f < curExtract) && (curExtract < buildDef->GetExtractsM())) {
-			oldMex = curMex;
-			break;
+		CCircuitUnit* cur = circuit->GetTeamUnit(unitId);
+		if ((cur != nullptr) && !cur->IsFinished()
+			&& (cur->GetCircuitDef()->GetExtractsM() >= buildDef->GetExtractsM()))
+		{
+			TRY_UNIT(circuit, unit,
+				unit->CmdRepair(cur, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
+			)
+			return true;
 		}
 	}
-	if ((oldMex != nullptr) && !circuit->GetBuilderManager()->IsReclaimUnit(oldMex)) {
-		state = State::ENGAGE;  // reclaim finished => UnitIdle => build on 2nd try
-		reclaimMex = oldMex;
-		circuit->GetBuilderManager()->RegisterReclaim(reclaimMex);
-		TRY_UNIT(circuit, unit,
-			unit->CmdReclaimUnit(oldMex, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
-		)
-	} else {
-		manager->AbortTask(this);
-		return false;
-	}
-	return true;
+	manager->AbortTask(this);
+	return false;
 }
 
 void CBMexUpTask::OnUnitIdle(CCircuitUnit* unit)
