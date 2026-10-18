@@ -183,6 +183,10 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Early he leads to mid with the army, well protected; from T2 he stays home and is careful.
 - He takes the most dangerous extractors; in danger from T1 he builds towers round himself.
 - He retreats when he is genuinely threatened with dying; against air he can build AA where he stands (10-17).
+
+**Tech order** (10-17)
+- No second advanced lab before the metal extractors are upgraded. Which advanced lab comes first is the AI's to decide; an advanced air lab first is usually not a good idea, but it can be.
+- What goes first should come through a proper valuation, not an override.
 - He values himself and enemies by power (hp, range, dps, speed), not metal.
 - When only he can save the base he fights as a trap: cloaked where the attack is coming, D-gun from inside. In a team game only if he can win; hopeless, he runs.
 - Against enemy T3 he can wait cloaked under a jammer and surprise it.

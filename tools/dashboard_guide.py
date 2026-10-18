@@ -471,6 +471,10 @@ PANELS = [
              "goes first). `apex: t2eco-stat` every minute shows the T2 constructors, the fusion and upgrade "
              "jobs they were offered and won, what beat them, and the lab evidence. OFF: the lab waits for the "
              "market price and the strategic hoist outranks the upgrades."),
+            ("TUNE_ADV_LAB_WAIT", "ON: once one advanced (T2) lab stands or is being built, no second advanced lab "
+             "is started until every extractor we hold is upgraded. Which advanced lab comes first is still the "
+             "AI's choice. `apex: second-lab-wait` shows when one waited. OFF: a second advanced lab can go up "
+             "before any extractor is upgraded."),
             ("TUNE_UNIT_LIMIT", "TEST ONLY. ON: builders stop choosing a building once its unit limit is reached, "
              "for test games where every team may own only a few extractors. It also applies the old BARb "
              "config's count limits (one energy storage, three Guardians), so leave it OFF for normal play."),

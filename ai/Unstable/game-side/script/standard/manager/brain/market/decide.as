@@ -955,10 +955,51 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 		}
 		return null;
 	}
+	if (SecondAdvLabWaits(w)) {
+		++gSalDropN;
+		if (ai.frame >= gSalLogAt) {
+			gSalLogAt = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: second-lab-wait t=" + ai.teamId + " " + w.def.GetName() + " backlog=" + gUpHandsB
+				+ " drops=" + gSalDropN);
+		}
+		return null;
+	}
 	ChargeTrip(w, unit);
 	if (w !is null)
 		w.src = step;
 	return w;
+}
+
+// NO SECOND ADVANCED LAB BEFORE THE EXTRACTORS ARE UPGRADED (TUNE_ADV_LAB_WAIT; his 10-17 ruling: making two
+// advanced labs when we have not upgraded our metal extractors is an absolute issue; which comes first is the
+// AI's). v0.3.0 on Glacier Pass s242: advanced air plant 17.2 min, T2 lab 18.8, no moho until after 20. A plant
+// want of T2 that is not the advanced plant already standing or under way is dropped while one stands or is
+// under way and any extractor we hold is below the best extraction.
+int gSalOn = -1, gSalDropN = 0, gSalLogAt = 0;
+bool SecondAdvLabWaits(Want@ w)
+{
+	if (gSalOn < 0)
+		gSalOn = (ai.GetTunable("apex_adv_lab_wait", TUNE_ADV_LAB_WAIT) > 0.f) ? 1 : 0;
+	if ((gSalOn <= 0) || (w is null) || (w.def is null) || ((w.kind != WK_PLANT) && (w.kind != WK_TECH)))
+		return false;
+	const int d = int(w.def.id);
+	if (!Catalog::ValidId(d) || Catalog::gMobile[d] || ((Factory::userData[d].attr & Factory::Attr::T2) == 0))
+		return false;
+	bool have = false;
+	for (uint fi = 0; (fi < Factory::gFacUnits.length()) && !have; ++fi) {
+		CCircuitUnit@ fu = Factory::gFacUnits[fi];
+		have = (fu !is null) && (fu.circuitDef !is null)
+			&& ((Factory::userData[int(fu.circuitDef.id)].attr & Factory::Attr::T2) != 0);
+	}
+	if (!have && AdvPlantInFlight()) {
+		if ((gAdvInFlightRow >= 0) && (gComDef[gAdvInFlightRow] == d))
+			return false;
+		have = true;
+	}
+	if (!have)
+		return false;
+	UpgradeHandsWant();
+	return gUpHandsB > 0;
 }
 
 // The exposure Decide charges an immobile want's gain at `at`.
