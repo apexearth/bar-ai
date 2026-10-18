@@ -692,7 +692,7 @@ void ValMixNote(const array<Want@>@ ranked, Want@ top)
 			continue;
 		const float n = float(gVmOff[k]);
 		s += " " + KindName(k) + ":" + gVmOff[k] + "/" + gVmWin[k]
-			+ "/v" + formatFloat(exp(gVmLogV[k] / n) * 1000.f, "", 0, 2)
+			+ "/v" + formatFloat(pow(2.7182818f, gVmLogV[k] / n) * 1000.f, "", 0, 2)
 			+ "/r" + formatFloat((gVmLost[k] > 0) ? gVmRel[k] / float(gVmLost[k]) : 0.f, "", 0, 2)
 			+ "/g" + formatFloat(gVmGain[k] / n, "", 0, 2)
 			+ "/c" + formatFloat(gVmCost[k] / n, "", 0, 0)
