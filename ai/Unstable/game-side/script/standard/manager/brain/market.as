@@ -93,6 +93,7 @@
 #include "market/comship.as"        // the base dying with its defence beaten: he steps in, never runs
 #include "market/comhome.as"        // small maps: his time away from the lab priced as army, the base he defends, his walk-ins
 #include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net
+#include "market/t2eco.as"          // apex_t2_eco: the ladder's evidence for the next tier; upgrades before the strategic hoists
 #include "market/protect_nn.as"     // leaks, and static defence's amount and site as recorded draws
 #include "market/protect_nntype.as" // which gun class a ground-defence want builds, as a recorded draw
 #include "market/protect_keepout.as" // keep-out census: the alliance perimeter's gaps, and who closes each

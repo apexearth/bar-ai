@@ -136,6 +136,7 @@ int gTechExpTier = -1, gTechExpAt = 0;   // discovery: the tier being timed and 
 int gTechDecN = 0, gTechDevN = 0, gTechHoistN = 0, gTechHeldN = 0;
 // what the market did since the last decision
 float gTwLabM = 0.f, gTwSeen = 0.f, gTwTop = 0.f, gTwPick = 0.f, gTwEl = 0.f, gTwV = 0.f, gTwTopV = 0.f;
+float gTwEta = 0.f;   // elections whose ladder reached the target sooner through the plant, each at its funded share
 int gTwNext = 0;   // the lowest tier above ours on offer
 int gTechSkipN = 0;
 
@@ -176,7 +177,10 @@ float NnTechScore(const array<float>& in st, const array<float>& in f, array<flo
 
 void NnTechDecide()
 {
-	const int rule = ((gTwTop > 0.f) || (gTwPick > 0.f)) ? TECH_NOW : TECH_WAIT;
+	const bool mktNow = (gTwTop > 0.f) || (gTwPick > 0.f);
+	const bool etaNow = gTwEta >= 1.f;
+	T2EcoNoteWindow(mktNow, etaNow);
+	const int rule = (mktNow || (etaNow && T2EcoOn())) ? TECH_NOW : TECH_WAIT;
 	array<float> st;
 	NnState(null, st);
 	const float techV = (gTwSeen > 0.f) ? gTwV / gTwSeen : 0.f;
@@ -252,7 +256,7 @@ void NnTechDecide()
 		ln += ((o == 0) ? " | " : " ; ") + TechName(o) + "," + NnF(w[o], 4) + "," + NnF(p[o], 6);
 	ln += " | chosen=" + chosen;
 	AiLog(ln);
-	gTwLabM = gTwSeen = gTwTop = gTwPick = gTwEl = gTwV = gTwTopV = 0.f;
+	gTwLabM = gTwSeen = gTwTop = gTwPick = gTwEl = gTwV = gTwTopV = gTwEta = 0.f;
 	gTwNext = 0;
 }
 
@@ -293,7 +297,7 @@ void NnTechNote(array<Want@>@ ranked)
 				AiLog("apex: nntech-skip t=" + ai.teamId + " el=" + int(gTwEl) + " own=" + OwnTopTier()
 					+ " max=" + gMaxTier + " top=" + ((ranked[0].def is null) ? "-" : ranked[0].def.GetName())
 					+ " topTier=" + ((ranked[0].def is null) ? -1 : TreeTier(int(ranked[0].def.id))));
-			gTwLabM = gTwSeen = gTwTop = gTwPick = gTwEl = gTwV = gTwTopV = 0.f;
+			gTwLabM = gTwSeen = gTwTop = gTwPick = gTwEl = gTwV = gTwTopV = gTwEta = 0.f;
 			gTwNext = 0;
 		}
 		if (ai.frame >= gTechLogAt) {
