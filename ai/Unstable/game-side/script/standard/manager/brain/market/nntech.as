@@ -142,6 +142,73 @@ int gTechSkipN = 0;
 
 string TechName(int o) { return (o == TECH_NOW) ? "NOW" : "WAIT"; }
 
+// THE TEAM'S NEXT TIER (TUNE_TECH_PICK; his 10-17: an air lab is expensive, and quadrupling our metal
+// income before making it is more economically efficient). The hoist moved ANY plant above our tier, so the
+// T1 air con that asked first made the advanced air plant the T2 step at v=0.12 against a tower's 233
+// (t2eco t1-comet-s145, why=nntech). The step is the next-tier plant we can start whose upgrade-capable
+// builder brings build power for the least metal: the plant plus that builder, energy at our best
+// conversion ratio. An air plant ordered first no longer counts as the next tier coming (T2LabComing).
+int gTpOn = -1;
+bool TechPickOn()
+{
+	if (gTpOn < 0)
+		gTpOn = (ai.GetTunable("apex_tech_pick", TUNE_TECH_PICK) > 0.f) ? 1 : 0;
+	return gTpOn > 0;
+}
+int gTpDef = -1, gTpAt = -1;
+float TpCostEq(int d, float r)
+{
+	return Catalog::gCostM[d] + ((r > 0.f) ? Catalog::gCostE[d] * r : 0.f);
+}
+int TechPickDef()
+{
+	if (ai.frame < gTpAt)
+		return gTpDef;
+	gTpAt = ai.frame + 10 * SECOND;
+	gTpDef = -1;
+	const int next = OwnTopTier() + 1;
+	const float r = BestConvRatio();
+	float bestS = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !IsPlantDef(d) || (TreeTier(d) != next))
+			continue;
+		bool startable = false;
+		const array<int>@ by = Catalog::gBuiltBy[d];
+		for (uint i = 0; (i < by.length()) && !startable; ++i)
+			startable = (by[i] < int(gOwnCount.length())) && (gOwnCount[by[i]] > 0);
+		if (!startable)
+			continue;
+		const array<int>@ prods = Catalog::gBuildsList[d];
+		for (uint p = 0; p < prods.length(); ++p) {
+			const int b = prods[p];
+			if (!Catalog::gAvailable[b] || !Catalog::gMobile[b] || !Catalog::gBuilder[b] || (Catalog::gBuildPower[b] <= 0.f))
+				continue;
+			bool upgrades = false;
+			const array<int>@ bs = Catalog::gBuildsList[b];
+			for (uint q = 0; (q < bs.length()) && !upgrades; ++q)
+				upgrades = (Catalog::gExtractsM[bs[q]] > 0.f) && (TreeTier(bs[q]) >= next);
+			if (!upgrades)
+				continue;
+			const float s = Catalog::gBuildPower[b] / (TpCostEq(d, r) + TpCostEq(b, r));
+			if (s > bestS) {
+				bestS = s;
+				gTpDef = d;
+			}
+		}
+	}
+	return gTpDef;
+}
+
+bool IsTechPick(Want@ w)
+{
+	if (!IsT2Lab(w))
+		return false;
+	if (!TechPickOn())
+		return true;
+	const int pick = TechPickDef();
+	return (pick < 0) || (int(w.def.id) == pick);
+}
+
 // the option this decision is about: a plant above every tier we own
 bool IsT2Lab(Want@ w)
 {
@@ -153,7 +220,8 @@ bool T2LabComing()
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
 		IUnitTask@ lt = Requests::gLive[li];
 		if ((lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
-			&& (TreeTier(int(lt.buildDef.id)) > OwnTopTier())) {
+			&& (TreeTier(int(lt.buildDef.id)) > OwnTopTier())
+			&& (!TechPickOn() || (TechPickDef() < 0) || (int(lt.buildDef.id) == TechPickDef()))) {
 			if (Requests::AbandonedAt(li)) {
 				Requests::NoteOrderRelease(lt, Requests::gLiveAt[li], "t2lab", Requests::ORL_GATE);
 				continue;
@@ -334,14 +402,14 @@ bool NnTechHoist(array<Want@>@ ranked)
 {
 	if (!TechOpen() || (ranked.length() == 0) || (gTechCur != TECH_NOW))
 		return false;
-	if (IsT2Lab(ranked[0]))
+	if (IsTechPick(ranked[0]))
 		return true;
 	if (T2LabComing()) {
 		gTechCur = -1;
 		return false;
 	}
 	for (uint r = 1; r < ranked.length(); ++r) {
-		if (IsT2Lab(ranked[r])) {
+		if (IsTechPick(ranked[r])) {
 			Want@ tw = ranked[r];
 			ranked.removeAt(r);
 			ranked.insertAt(0, tw);
