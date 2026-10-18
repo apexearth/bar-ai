@@ -826,6 +826,8 @@ void StepWon(CCircuitUnit@ unit, Want@ w)
 	}
 }
 
+int gLimitDropN = 0;
+int gLimitLogAt = 0;
 Want@ ProposeStep(int step, CCircuitUnit@ unit)
 {
 	if (step == 0) {
@@ -877,6 +879,17 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 17) { if (!EcoOnly()) @w = MemoPropose(9, unit);   Perf::Add("want.airdef", _t); }
 	else if (step == 18) { if (!EcoOnly()) @w = MemoPropose(12, unit);  Perf::Add("want.super", _t); }
 	else                 { @w = ProposeReclaimMetal(unit);    Perf::Add("want.reclmetal", _t); }
+	// A def at its unit limit cannot be built (a lobby restriction, or the def's own maxthisunit): his 10-17
+	// 3-extractor games elected mex 400-665 times after the cap, every walk refused by the engine.
+	if ((w !is null) && (w.def !is null) && !w.def.IsAvailable(ai.frame)) {
+		++gLimitDropN;
+		if (ai.frame >= gLimitLogAt) {
+			gLimitLogAt = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: unit-limit t=" + ai.teamId + " drops=" + gLimitDropN + " last=" + w.def.GetName()
+				+ " max=" + w.def.GetMaxThisUnit());
+		}
+		return null;
+	}
 	ChargeTrip(w, unit);
 	if (w !is null)
 		w.src = step;

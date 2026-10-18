@@ -318,6 +318,7 @@ def build_script(
     ai_options: dict | None = None,
     ai_options_b: dict | None = None,
     extras: list | None = None,
+    restrictions: dict[str, int] | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
 
@@ -482,6 +483,15 @@ def build_script(
         modoptions["experimentallegionfaction"] = 1
     modoptions.update(extra_modoptions or {})
     body.append(_script_section("MODOPTIONS", modoptions))
+    # Per-def unit limits for every team (StartScriptFormat [RESTRICT]): his 10-17 low-resource test,
+    # "both teams only get five mexes" -- --restrict armmex=5 etc.
+    if restrictions:
+        body.append("\tNumRestrictions=%d;" % len(restrictions))
+        rs = {}
+        for i, (unit, limit) in enumerate(restrictions.items()):
+            rs["Unit%d" % i] = unit
+            rs["Limit%d" % i] = int(limit)
+        body.append(_script_section("RESTRICT", rs))
 
     return "[GAME]\n{\n" + "\n".join(body) + "\n}\n"
 
@@ -656,6 +666,7 @@ def run(args) -> int:
         drop_ai_version=args.drop_ai_version,
         extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
         extras=extras,
+        restrictions={k: int(v) for k, v in (r.split('=', 1) for r in args.restrict)} or None,
         ai_options={**(json.loads(Path(args.ai_options_file).read_text(encoding="utf-8")) if args.ai_options_file else {}),
                     **dict(o.split('=', 1) for o in args.ai_option)},
         ai_options_b=dict(o.split('=', 1) for o in args.ai_option_b),
@@ -1054,6 +1065,11 @@ def main() -> int:
                          "(off by default: it collapsed army spend, see ISSUES.md)")
     ap.add_argument("--no-record-seed", action="store_true",
                     help=argparse.SUPPRESS)
+    ap.add_argument("--restrict", action="append", default=[], metavar="UNIT=N",
+                    help="per-def unit limit for every team, repeatable (e.g. armmex=5); "
+                         "--restrict-mex N limits every extractor def to N")
+    ap.add_argument("--restrict-mex", type=int, default=None, metavar="N",
+                    help="limit every metal extractor (T1 and T2, all factions) to N per team")
     ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
                     help="extra start-script modoption, repeatable. The one that "
                          "matters for reproducing a hosted game is "
@@ -1073,6 +1089,13 @@ def main() -> int:
         args.handicap = 50 if args.watch else 0
     if args.watch:
         args.replay = True
+    if args.restrict_mex is not None:
+        units = bar_env.load(args.engine).game_sdd / "units"
+        for p in sorted(units.rglob("*.lua")):
+            s = p.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"extractsmetal\s*=\s*([\d.]+)", s, re.I)
+            if m and float(m.group(1)) > 0:
+                args.restrict.append(f"{p.stem}={args.restrict_mex}")
     return run(args)
 
 
