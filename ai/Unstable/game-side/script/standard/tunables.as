@@ -988,11 +988,11 @@ const float TUNE_FLOW_E_BILL = 0.f;   // [toggle 0/1] with metal spilling, a fac
 const float TUNE_GANTRY_OWN_SLOT = 0.f;   // [toggle 0/1] the gantry does not take or wait for the one-at-a-time strategic slot (a production line, not a gun) -- his 10-17 ruling: "let the gantry go up alongside them"
 const float TUNE_T2_ECO = 0.f;   // [toggle 0/1] the next-tier rule also says NOW when the ETA ladder took the plant over the best economy rung (each such election counted at the plant's funded share, NOW at one whole), and the super push and next-tier hoist yield a ceiling hand to the upgrades its list offers, an anti-nuke against a seen silo excepted (his 2026-10-17: "focus on getting the fusions and upgrading the mexes")
 const float TUNE_ADV_LAB_WAIT = 0.f;   // [toggle 0/1] no second advanced (T2) lab while one stands or is under way and any extractor we hold is below the best extraction; which comes first stays the market's (his 2026-10-17 ruling)
-const float TUNE_INFLIGHT_HOLD = 0.f;   // [toggle 0/1] every build pays for the returns of the projects in progress it holds up, for the share of its metal free flow cannot pay (price.as displacedM; his 2026-10-18: every simultaneous build slows the ones in progress)
+const float TUNE_INFLIGHT_HOLD = 1.f;   // [toggle 0/1] every build pays for the returns of the projects in progress it holds up, for the share of its metal free flow cannot pay (price.as displacedM; his 2026-10-18: every simultaneous build slows the ones in progress)
 const float TUNE_LATHE_CONCENTRATE = 0.f;   // [toggle 0/1] LatheSite takes the richest lathe whatever is rising there, not one build beside each block (sites.as; his 2026-10-18: concentrate on what is important; we waste a lot of room)
-const float TUNE_FLUSH_PLACE = 0.f;   // [toggle 0/1] (C++ apex_flush_place; needs the rebuilt DLL) a farm build takes the nearest free site flush against an edge of one of our buildings before the lattice rings (BuilderTask.cpp; his 2026-10-18: "build up down left right off one of the existing types when you can")
+const float TUNE_FLUSH_PLACE = 1.f;   // [toggle 0/1] (C++ apex_flush_place; needs the rebuilt DLL) a farm build takes the nearest free site flush against an edge of one of our buildings before the lattice rings (BuilderTask.cpp; his 2026-10-18: "build up down left right off one of the existing types when you can")
 const float TUNE_CON_USE = 0.f;   // [toggle 0/1] constructors sized by use: the con floors honour the idle ruling, a hand on the only job offered counts as idle, spot hands never exceed open spots (production.as; his 2026-10-18: con counts too high, walking all over)
-const float TUNE_HOIST_WAITS = 0.f;   // [toggle 0/1] a hoist (floor, role, field, defjoin, metalfirst...) waits while the hand is still walking to a live job; the draw and the emergencies still move it (decide.as; his 2026-10-18: cons walk far, work 2 s, walk back)
+const float TUNE_HOIST_WAITS = 1.f;   // [toggle 0/1] a hoist (floor, role, field, defjoin, metalfirst...) waits while the hand is still walking to a live job; the draw and the emergencies still move it (decide.as; his 2026-10-18: cons walk far, work 2 s, walk back)
 const float TUNE_UNIT_LIMIT = 0.f;   // [toggle 0/1] TEST ONLY: drop a want whose def is at its unit count limit (maxThisUnit, which folds a lobby restriction with behaviour.json's limit) -- for run_match --restrict-mex games; off in play because the JSON caps are BARb's, not ours (2026-10-17)
 const float TUNE_HANDS_ONCE = 0.f;   // [toggle 0/1] a plant's build-power half is divided by the finished or manned plants of ANY domain that already make a builder of at least its builder's tier: an advanced air plant beside a T2 lab making T2 cons is bought for its planes, not as second hands (his 2026-10-17)
 const float TUNE_COM_AIR = 0.f;   // [toggle 0/1] the commander counts strike air: when what reaches him kills him before our AA at him kills it, he builds an AA tower where he stands if it is up in time and turns it, else he retreats (his 2026-10-17)
@@ -2086,10 +2086,10 @@ const float TUNE_COVER_PUSH_S = 10.f;
 
 // [toggle 0/1] x5 -- Defence as a crutch (his 10-14): each prices one rule that
 //   bypassed the draw. 0 = before. See docs/tunables.md; counted on `apex: ecodef-stat`.
-const float TUNE_RADAR_PRICE = 0.f;    // radar worth what the eyes give our army and the ground it holds
-const float TUNE_DEFJOIN_PRICE = 0.f;  // the defence assist offered to the draw at its price, not hoisted
-const float TUNE_FIELD_PRICED = 0.f;   // the field crew's towers and radar go to the draw
-const float TUNE_COVER_PRICED = 0.f;   // the coverall and base-front towers go to the draw
+const float TUNE_RADAR_PRICE = 1.f;    // radar worth what the eyes give our army and the ground it holds
+const float TUNE_DEFJOIN_PRICE = 1.f;  // the defence assist offered to the draw at its price, not hoisted
+const float TUNE_FIELD_PRICED = 1.f;   // the field crew's towers and radar go to the draw
+const float TUNE_COVER_PRICED = 1.f;   // the coverall and base-front towers go to the draw
 const float TUNE_DEF_DANGER = 0.f;     // the defence target follows the danger our army cannot meet
 const float TUNE_DEF_MEASURED = 0.f;   // [toggle 0/1] defence demand on the measured attack rate, not the 1/120 s prior (his 10-15); docs/tunables.md
 

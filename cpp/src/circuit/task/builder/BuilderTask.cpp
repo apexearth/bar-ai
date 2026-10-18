@@ -682,7 +682,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		// apex_flush_place (his 10-18: "build up down left right off one of the existing types when
 		// you can"): the sites flush against an edge of one of our buildings, aligned to one of its
 		// corners, nearest the ask first. The lattice rings remain the fallback.
-		if (circuit->GetTunable("apex_flush_place", 0.f) > 0.f) {
+		if (circuit->GetTunable("apex_flush_place", 1.f) > 0.f) {
 			const bool ew = (facing & 1) != 0;
 			const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
 			const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
