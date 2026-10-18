@@ -320,6 +320,19 @@ bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
 	return true;
 }
 
+// The hand UpgradesFirst would strip for its upgrades, asked before the hoists above it run.
+bool UpgradeOwed(CCircuitUnit@ unit, array<Want@>@ ranked)
+{
+	if (!ReachesCeiling(int(unit.circuitDef.id)) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return false;
+	if (CrewSplitOn() && !CrewIsField(unit))
+		return false;
+	bool up = false;
+	for (uint i = 0; (i < ranked.length()) && !up; ++i)
+		up = (ranked[i].kind == WK_MEXUP);
+	return up && !Military::BaseContested() && !FoeGroupAtHome();
+}
+
 // ONE ADVANCED HAND STAYS HOME (apexearth 2026-09-30: "one stays home and makes
 // the fusion, the Tier 1 cons help that guy; send more of them out to upgrade").
 // While upgrades wait, a ceiling hand is not offered generators, converters or

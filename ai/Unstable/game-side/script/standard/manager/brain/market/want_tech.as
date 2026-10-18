@@ -1056,6 +1056,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			}
 		}
 		PlantExpApply(d, c);
+		c.funded = fundedMul;
 		if (c.value > w.value) {
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).

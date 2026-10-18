@@ -212,6 +212,7 @@ Want@ WantCopy(Want@ s)
 	c.walkSec = s.walkSec;
 	c.wfDelta = s.wfDelta;
 	c.src = s.src;
+	c.funded = s.funded;
 	return c;
 }
 
@@ -1380,6 +1381,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 					+ " over " + KindName(ranked[pick].kind)
 					+ " eta=" + int(EtaOfWant(ranked[pick]))
 					+ " P=" + formatFloat(EcoPowerM(), "", 0, 1));
+				T2EcoLadderNote(ranked[techPick]);
 				pick = techPick;
 				pc = CategoryOf(ranked[pick].kind);
 				gDrawLadderTech = pick;
@@ -1830,6 +1832,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	NnScore(unit, ranked);
 	WalkForgoneStat(unit, ranked);
 	NnTechNote(ranked);
+	T2EcoNoteOffer(unit, ranked);
 	LabNanoNoteRanked(ranked);
 	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
@@ -2116,12 +2119,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// own (eta.as EtaEcoWeight). The flag stays so the chain below reads.
 	const bool convertPush = false;
 	bool superPush = false;
+	const bool upOwed = !aaPanic && T2EcoOn() && UpgradeOwed(unit, ranked);
 	if (!aaPanic && !convertPush && (ai.GetTunable("apex_super_push", TUNE_SUPER_PUSH) > 0.f)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_SUPER)
 				continue;
 			if (!SuperPushable(ranked[ri].def))
 				continue;
+			if (upOwed && !T2EcoSuperGuards(ranked[ri].def)) {
+				T2EcoNoteYield();
+				continue;
+			}
 			if (ri > 0) {
 				Want@ sw = ranked[ri];
 				ranked.removeAt(ri);
@@ -2157,7 +2165,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// "mexes/energy -> T1 lab -> more energy -> 1 or 2 turrets to guard";
 	// the commander's first-gun rule below covers the lab the moment it is
 	// ordered.
-	if (!aaPanic && !superPush && !convertPush && NnTechHoist(ranked)) {
+	if (!aaPanic && !superPush && !convertPush && !upOwed && NnTechHoist(ranked)) {
 		why = "nntech";
 		coverPush = true;
 	}
@@ -3003,6 +3011,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				Perf::Add("xk." + KindName(ranked[i].kind), _tExec);
 		}
 		if (t !is null) {
+			T2EcoNoteExec(unit, ranked[i], (depth == 0) ? why : "fall");
 			if (ranked[i].kind == WK_MEXUP)
 				++gMuStarted;
 			// The execution just changed the counts that priced this kind --

@@ -56,6 +56,7 @@ final class Want {
 	float nnDrawP = -1.f;   // its category's odds in the roulette that drew it; -1 never drawn
 	int assistEcoS = 0;     // > 0: an eco assist (AssistEcoPick) and its guard stint, s
 	int joinPath = -1;      // Requests::JA_*: the join path that proposed this assist
+	float funded = 1.f;     // a tech want's army share of its T2-switch defence (want_tech.as fundedMul)
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a
