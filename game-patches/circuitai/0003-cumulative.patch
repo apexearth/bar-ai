@@ -15542,7 +15542,7 @@ index 275db3ae..5249e8a7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..6c4217e7 100644
+index bc8ff11b..4c4817b3 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -15553,13 +15553,15 @@ index bc8ff11b..6c4217e7 100644
  #include "module/MilitaryManager.h"
  #include "resource/MetalManager.h"
  #include "resource/EnergyGrid.h"
-@@ -31,11 +32,228 @@
+@@ -31,11 +32,232 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
 +#include "Log.h"
++#include <algorithm>
 +#include <cstdlib>
 +#include <limits>
++#include <vector>
  
  namespace circuit {
  
@@ -15568,6 +15570,8 @@ index bc8ff11b..6c4217e7 100644
 +// a probe is one build-square mask test plus the site predicate.
 +static constexpr int LATTICE_RINGS = 8;
 +static constexpr int LATTICE_PROBES = 200;
++static constexpr int FLUSH_PROBES = 64;
++static constexpr float FLUSH_REACH = 800.f;
 +
 +
  using namespace springai;
@@ -15782,7 +15786,7 @@ index bc8ff11b..6c4217e7 100644
  IBuilderTask::BuildName IBuilderTask::buildNames = {
  	{"factory", IBuilderTask::BuildType::FACTORY},
  	{"nano",    IBuilderTask::BuildType::NANO},
-@@ -69,11 +287,30 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
+@@ -69,11 +291,30 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
  		, nextTask(nullptr)
  		, initiator(nullptr)
  		, buildFails(0)
@@ -15814,7 +15818,7 @@ index bc8ff11b..6c4217e7 100644
  }
  
  IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
-@@ -91,13 +328,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
+@@ -91,13 +332,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
  		, initiator(nullptr)
  		, savedIncome({0.f, 0.f})
  		, buildFails(0)
@@ -15836,7 +15840,7 @@ index bc8ff11b..6c4217e7 100644
  }
  
  bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
-@@ -134,8 +377,14 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -134,8 +381,14 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	}
  
  	if (unit->HasDGun()) {
@@ -15853,7 +15857,7 @@ index bc8ff11b..6c4217e7 100644
  	}
  	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  		unit->PushBack(new CCaptureAction(unit, 500.f));
-@@ -155,24 +404,53 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -155,24 +408,53 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
  }
  
@@ -15910,7 +15914,7 @@ index bc8ff11b..6c4217e7 100644
  	Update(unit);
  }
  
-@@ -246,6 +524,11 @@ void IBuilderTask::Cancel()
+@@ -246,6 +528,11 @@ void IBuilderTask::Cancel()
  bool IBuilderTask::Execute(CCircuitUnit* unit)
  {
  	executors.insert(unit);
@@ -15922,7 +15926,7 @@ index bc8ff11b..6c4217e7 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	TRY_UNIT(circuit, unit,
-@@ -285,14 +568,275 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,14 +572,327 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -16037,6 +16041,58 @@ index bc8ff11b..6c4217e7 100644
 +		bool searched = false;
 +		int budget = LATTICE_PROBES;
 +		int ringTaken = 0, ringExit = 0;
++		// apex_flush_place (his 10-18: "build up down left right off one of the existing types when
++		// you can"): the sites flush against an edge of one of our buildings, aligned to one of its
++		// corners, nearest the ask first. The lattice rings remain the fallback.
++		if (circuit->GetTunable("apex_flush_place", 0.f) > 0.f) {
++			const bool ew = (facing & 1) != 0;
++			const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
++			const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
++			std::vector<AIFloat3> cands;
++			const auto& ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(snapped, FLUSH_REACH, false);
++			for (ICoreUnit::Id id : ids) {
++				CCircuitUnit* nu = circuit->GetTeamUnit(id);
++				if ((nu == nullptr) || nu->GetCircuitDef()->IsMobile() || nu->GetCircuitDef()->IsMex()) {
++					continue;
++				}
++				CCircuitDef* nd = nu->GetCircuitDef();
++				const bool nEw = (nu->GetUnit()->GetBuildingFacing() & 1) != 0;
++				const float nhx = float(nEw ? nd->GetFootZ() : nd->GetFootX()) * SQUARE_SIZE;
++				const float nhz = float(nEw ? nd->GetFootX() : nd->GetFootZ()) * SQUARE_SIZE;
++				const AIFloat3 np = nu->GetPos(frame);
++				for (float s : {-1.f, 1.f}) {
++					cands.emplace_back(np.x + s * (nhx + hx), np.y, np.z - nhz + hz);
++					cands.emplace_back(np.x + s * (nhx + hx), np.y, np.z + nhz - hz);
++					cands.emplace_back(np.x - nhx + hx, np.y, np.z + s * (nhz + hz));
++					cands.emplace_back(np.x + nhx - hx, np.y, np.z + s * (nhz + hz));
++				}
++			}
++			std::sort(cands.begin(), cands.end(), [&snapped](const AIFloat3& a, const AIFloat3& b) {
++				return a.SqDistance2D(snapped) < b.SqDistance2D(snapped);
++			});
++			int probes = FLUSH_PROBES;
++			for (const AIFloat3& c : cands) {
++				if ((c.x < hx) || (c.z < hz) || (c.x > float(CTerrainManager::GetTerrainWidth()) - hx)
++					|| (c.z > float(CTerrainManager::GetTerrainHeight()) - hz))
++				{
++					continue;
++				}
++				if (--probes < 0) {
++					break;
++				}
++				const AIFloat3 p = terrainMgr->FindBuildSite(buildDef, c, SQUARE_SIZE * 2, facing, pred);
++				if (!utils::is_valid(p) || (p.SqDistance2D(c) > SQUARE(SQUARE_SIZE))) {
++					continue;
++				}
++				if (!KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, p)) {
++					continue;
++				}
++				pos = p;
++				searchRadius = SQUARE_SIZE * 2;
++				found = true;
++				break;
++			}
++		}
 +		for (int ring = 0; (ring <= LATTICE_RINGS) && !found && (budget > 0); ++ring) {
 +			float bestSq = -1.f;
 +			AIFloat3 best;
@@ -16202,7 +16258,7 @@ index bc8ff11b..6c4217e7 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
  		)
-@@ -302,6 +846,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -302,6 +902,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  
  		// Fallback to Guard/Assist/Patrol
@@ -16210,7 +16266,7 @@ index bc8ff11b..6c4217e7 100644
  		manager->FallbackTask(unit);
  		return false;
  	}
-@@ -310,13 +855,34 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -310,13 +911,34 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  
  void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  {
@@ -16246,7 +16302,7 @@ index bc8ff11b..6c4217e7 100644
  	}
  }
  
-@@ -333,10 +899,97 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +955,97 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -16344,7 +16400,7 @@ index bc8ff11b..6c4217e7 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +999,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +1055,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -16352,7 +16408,7 @@ index bc8ff11b..6c4217e7 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +1081,56 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +1137,56 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -16416,7 +16472,7 @@ index bc8ff11b..6c4217e7 100644
  	}
  }
  
-@@ -447,13 +1139,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +1195,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -16439,7 +16495,7 @@ index bc8ff11b..6c4217e7 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -483,7 +1183,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -483,7 +1239,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  				TRY_UNIT(circuit, unit,
  					AIFloat3 awayPos = utils::get_radial_pos(pos, 64.f);
  					CTerrainManager::CorrectPosition(awayPos);
@@ -16448,7 +16504,7 @@ index bc8ff11b..6c4217e7 100644
  				)
  			}
  			return true;
-@@ -492,12 +1192,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +1248,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -16472,7 +16528,7 @@ index bc8ff11b..6c4217e7 100644
  				}
  			)
  			return true;
-@@ -508,8 +1216,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -508,8 +1272,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  			unit->CmdWait(false);
  		)
  	}
@@ -16517,7 +16573,7 @@ index bc8ff11b..6c4217e7 100644
  	ShowAssignee(unit);
  	if ((task != nullptr)
  		&& ((task->GetType() != IUnitTask::Type::BUILDER)
-@@ -527,22 +1271,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -527,22 +1327,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	// TODO: Check IsForceUpdate, shield charge and retreat
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -16656,7 +16712,7 @@ index bc8ff11b..6c4217e7 100644
  		return;
  	}
  
-@@ -550,10 +1403,24 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -550,10 +1459,24 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		return;
  	}
  
@@ -16682,7 +16738,7 @@ index bc8ff11b..6c4217e7 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -565,10 +1432,150 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,10 +1488,150 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -16835,21 +16891,15 @@ index bc8ff11b..6c4217e7 100644
  		unit->GetTravelAct()->StateFinish();
  	}
  }
-@@ -632,232 +1639,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
+@@ -632,232 +1695,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
  	return nullptr;
  }
  
 -void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, float searchRadius)
-+// The one test of a site, shared by the lattice walk and the wide search so
-+// a cell the walk accepts is a cell the commit accepts (a walk without it
-+// took a cell the commit's reach test refused, and the commit stepped one
-+// build square off the row).
-+CTerrainManager::TerrainPredicate IBuilderTask::SitePredicate(CCircuitUnit* builder,
-+		float selfBar, bool aboveCrest)
- {
+-{
 -	FindFacing(pos);
 -
- 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
+-	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
 -	CTerrainManager::TerrainPredicate predicate = [terrainMgr, builder](const AIFloat3& p) {
 -		return terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
 -	};
@@ -16857,8 +16907,14 @@ index bc8ff11b..6c4217e7 100644
 -}
 -
 -void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
--{
--	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
++// The one test of a site, shared by the lattice walk and the wide search so
++// a cell the walk accepts is a cell the commit accepts (a walk without it
++// took a cell the commit's reach test refused, and the commit stepped one
++// build square off the row).
++CTerrainManager::TerrainPredicate IBuilderTask::SitePredicate(CCircuitUnit* builder,
++		float selfBar, bool aboveCrest)
+ {
+ 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
 -
 -//	facing = UNIT_NO_FACING;
 -	float terWidth = terrainMgr->GetTerrainWidth();

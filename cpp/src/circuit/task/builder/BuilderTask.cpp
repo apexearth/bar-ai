@@ -33,8 +33,10 @@
 
 #include "AISCommands.h"
 #include "Log.h"
+#include <algorithm>
 #include <cstdlib>
 #include <limits>
+#include <vector>
 
 namespace circuit {
 
@@ -43,6 +45,8 @@ namespace circuit {
 // a probe is one build-square mask test plus the site predicate.
 static constexpr int LATTICE_RINGS = 8;
 static constexpr int LATTICE_PROBES = 200;
+static constexpr int FLUSH_PROBES = 64;
+static constexpr float FLUSH_REACH = 800.f;
 
 
 using namespace springai;
@@ -675,6 +679,58 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		bool searched = false;
 		int budget = LATTICE_PROBES;
 		int ringTaken = 0, ringExit = 0;
+		// apex_flush_place (his 10-18: "build up down left right off one of the existing types when
+		// you can"): the sites flush against an edge of one of our buildings, aligned to one of its
+		// corners, nearest the ask first. The lattice rings remain the fallback.
+		if (circuit->GetTunable("apex_flush_place", 0.f) > 0.f) {
+			const bool ew = (facing & 1) != 0;
+			const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
+			const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
+			std::vector<AIFloat3> cands;
+			const auto& ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(snapped, FLUSH_REACH, false);
+			for (ICoreUnit::Id id : ids) {
+				CCircuitUnit* nu = circuit->GetTeamUnit(id);
+				if ((nu == nullptr) || nu->GetCircuitDef()->IsMobile() || nu->GetCircuitDef()->IsMex()) {
+					continue;
+				}
+				CCircuitDef* nd = nu->GetCircuitDef();
+				const bool nEw = (nu->GetUnit()->GetBuildingFacing() & 1) != 0;
+				const float nhx = float(nEw ? nd->GetFootZ() : nd->GetFootX()) * SQUARE_SIZE;
+				const float nhz = float(nEw ? nd->GetFootX() : nd->GetFootZ()) * SQUARE_SIZE;
+				const AIFloat3 np = nu->GetPos(frame);
+				for (float s : {-1.f, 1.f}) {
+					cands.emplace_back(np.x + s * (nhx + hx), np.y, np.z - nhz + hz);
+					cands.emplace_back(np.x + s * (nhx + hx), np.y, np.z + nhz - hz);
+					cands.emplace_back(np.x - nhx + hx, np.y, np.z + s * (nhz + hz));
+					cands.emplace_back(np.x + nhx - hx, np.y, np.z + s * (nhz + hz));
+				}
+			}
+			std::sort(cands.begin(), cands.end(), [&snapped](const AIFloat3& a, const AIFloat3& b) {
+				return a.SqDistance2D(snapped) < b.SqDistance2D(snapped);
+			});
+			int probes = FLUSH_PROBES;
+			for (const AIFloat3& c : cands) {
+				if ((c.x < hx) || (c.z < hz) || (c.x > float(CTerrainManager::GetTerrainWidth()) - hx)
+					|| (c.z > float(CTerrainManager::GetTerrainHeight()) - hz))
+				{
+					continue;
+				}
+				if (--probes < 0) {
+					break;
+				}
+				const AIFloat3 p = terrainMgr->FindBuildSite(buildDef, c, SQUARE_SIZE * 2, facing, pred);
+				if (!utils::is_valid(p) || (p.SqDistance2D(c) > SQUARE(SQUARE_SIZE))) {
+					continue;
+				}
+				if (!KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, p)) {
+					continue;
+				}
+				pos = p;
+				searchRadius = SQUARE_SIZE * 2;
+				found = true;
+				break;
+			}
+		}
 		for (int ring = 0; (ring <= LATTICE_RINGS) && !found && (budget > 0); ++ring) {
 			float bestSq = -1.f;
 			AIFloat3 best;

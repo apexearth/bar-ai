@@ -637,6 +637,10 @@ int SpotHandsOwed()
 	int k = int(floor(sqrt(float(n) * cycS * pw / costC) + 0.5f));
 	if (k < 1)
 		k = 1;
+	// A spot takes one hand: past k = N every spot is claimed in one cycle and each further hand adds only its
+	// cost, so the least time never asks more hands than open spots (his 10-18 game: k=34-50 for 7-11 open).
+	if (ConUseOn() && (k > int(n)))
+		k = int(n);
 	gSpotHandsVal = k;
 	if (ai.frame >= gNextSpotHandsLog) {
 		gNextSpotHandsLog = ai.frame + 30 * SECOND;
@@ -1334,8 +1338,21 @@ bool ConStandsIdle(bool flyer, int tier = 1)
 		IUnitTask@ t = w.task;
 		if ((t is null) || (t.GetType() == Task::Type::IDLE))
 			return true;
+		// ...or on the only job the market offered it (his 10-18 c9 game: 892 field reclaims at ~0
+		// "over nothing" while the floors ordered 473 more cons).
+		const int wid = int(w.id);
+		if (ConUseOn() && (wid >= 0) && (wid < int(gIncAlone.length())) && gIncAlone[wid] && (gIncTask[wid] is t))
+			return true;
 	}
 	return false;
+}
+
+int gConUseOn = -1;
+bool ConUseOn()
+{
+	if (gConUseOn < 0)
+		gConUseOn = (ai.GetTunable("apex_con_use", TUNE_CON_USE) > 0.f) ? 1 : 0;
+	return gConUseOn > 0;
 }
 
 // Constructors of this tier (2 = advanced and above), standing plus queued.
@@ -2953,13 +2970,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool walker = !Catalog::gFlyer[d];
 		if (consNeedA < 0)
 			consNeedA = ConsNeedAny(walker);
+		// TUNE_CON_USE: the floors honour "no new constructor while one of ours stands idle" as the priced path does.
+		const bool idleHeld = ConUseOn() && ConStandsIdle(Catalog::gFlyer[d], Catalog::gAdvHand[d] ? 2 : 1);
 		// THE T1 AIR CON FLOOR (his ruling 2026-09-15): once an air lab
 		// stands, keep making basic air cons until ten fly -- they are the
 		// hands that raise nano turrets -- but never the whole lab: one in
 		// the queue at a time, so the other air keeps coming.
 		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
 		// the moment the last one flew, and the lab made nothing else.
-		if (!walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
+		if (!idleHeld && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
 			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_AIRCON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
 		{
@@ -2997,7 +3016,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
-		if ((consNeedA > 0) && floorOn && walker && OpenRaceOn()) {
+		if (!idleHeld && (consNeedA > 0) && floorOn && walker && OpenRaceOn()) {
 			const int orcF = OpenRacePick(fac, fid, prods, d, slot);
 			if (orcF > 0) {
 				AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
@@ -3006,7 +3025,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				return Catalog::Def(orcF);
 			}
 		}
-		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
+		if (!idleHeld && (consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -3020,7 +3039,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			return Catalog::Def(d);
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
-		if ((ceilNeed > 0) && !foeOutguns && ReachesCeiling(d) && !(walker && FlyingConLab(true))
+		if (!idleHeld && (ceilNeed > 0) && !foeOutguns && ReachesCeiling(d) && !(walker && FlyingConLab(true))
 			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_T2CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()

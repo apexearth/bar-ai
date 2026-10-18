@@ -28,6 +28,7 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // hoists (estall, cover, role) still override.
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
+array<bool> gIncAlone(32001, false);   // the job was the only want offered: the market had no work for this hand
 
 // A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
 void DecideIdGone(int id)
@@ -36,6 +37,7 @@ void DecideIdGone(int id)
 		return;
 	@gIncTask[id] = null;
 	gIncVal[id] = 0.f;
+	gIncAlone[id] = false;
 	gLastDecideAt[id] = -30000;
 	gYoungN[id] = 0;
 	gWkExpoAt[id] = -30000;
@@ -3246,6 +3248,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
+				gIncAlone[int(unit.id)] = (ranked.length() <= 1);
 				gIncGain[int(unit.id)] = ranked[i].gain;
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
