@@ -471,6 +471,9 @@ PANELS = [
              "goes first). `apex: t2eco-stat` every minute shows the T2 constructors, the fusion and upgrade "
              "jobs they were offered and won, what beat them, and the lab evidence. OFF: the lab waits for the "
              "market price and the strategic hoist outranks the upgrades."),
+            ("TUNE_UNIT_LIMIT", "TEST ONLY. ON: builders stop choosing a building once its unit limit is reached, "
+             "for test games where every team may own only a few extractors. It also applies the old BARb "
+             "config's count limits (one energy storage, three Guardians), so leave it OFF for normal play."),
             ("TUNE_HANDS_ONCE", "ON: a new factory is not bought as extra constructors when another factory of any "
              "kind already makes constructors as good: an advanced air plant next to a T2 lab that is making T2 "
              "constructors is worth only what its aircraft are worth, so the economy (fusions, upgraded "

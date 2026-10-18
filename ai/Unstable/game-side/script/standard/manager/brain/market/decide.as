@@ -883,6 +883,13 @@ void StepWon(CCircuitUnit@ unit, Want@ w)
 
 int gLimitDropN = 0;
 int gLimitLogAt = 0;
+int gUlOn = -1;
+bool UnitLimitOn()
+{
+	if (gUlOn < 0)
+		gUlOn = (ai.GetTunable("apex_unit_limit", TUNE_UNIT_LIMIT) > 0.f) ? 1 : 0;
+	return gUlOn > 0;
+}
 Want@ ProposeStep(int step, CCircuitUnit@ unit)
 {
 	if (step == 0) {
@@ -936,7 +943,10 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else                 { @w = ProposeReclaimMetal(unit);    Perf::Add("want.reclmetal", _t); }
 	// A def at its unit limit cannot be built (a lobby restriction, or the def's own maxthisunit): his 10-17
 	// 3-extractor games elected mex 400-665 times after the cap, every walk refused by the engine.
-	if ((w !is null) && (w.def !is null) && !w.def.IsAvailable(ai.frame)) {
+	// IsAvailable(frame) also carries behaviour.json's since/cooldown/limit -- BARb's timers and caps (converters
+	// banned to 5 min, LLTs to 70 s, storage capped at 1) -- so only the count against maxThisUnit, and only under
+	// the switch: maxThisUnit is the JSON limit folded with the game's, and the JSON caps are not ours.
+	if (UnitLimitOn() && (w !is null) && (w.def !is null) && (w.def.maxThisUnit <= w.def.count)) {
 		++gLimitDropN;
 		if (ai.frame >= gLimitLogAt) {
 			gLimitLogAt = ai.frame + 60 * SECOND;
