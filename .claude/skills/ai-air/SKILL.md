@@ -105,6 +105,7 @@ ground parity and lets the commitment gate open.
 `apex: bomb spread units= aims= surv= primary= need= got= width= depth= rest=def:got/need` (C++ `CBombTask::PlanSpread`: each bomber of a focused wave gets its own aim; `need` = bombers to kill it at `strike_s` survival, published by `Release()` from `Throughput`) ·
 `apex: intercepting for ally t<n>` · `apex: fighters spread -- ...` ·
 `apex: nnair t= ... | chosen=` (docs/how-it-works.md) · `apex: nnair-stat` (60 s: decisions, GO by kind, gunships home/out, the wing each bomber type needs for the best cell) · `apex: nnair-go gunships` ·
+`apex: airanswer-stat` (60 s, both arms of `apex_air_answer`: the remembered raid hp/m/speed, air loss m/s, the fighter want's terms sq/now/mem, tau now/mem, the gain the line sees, fighters held/ordered, their stand-off and each AA def priced as `def:v/g/c/tr/re/st/sat/at/n/top`, `sat1` = every candidate stops the whole place so the cheapest wins on cost) ·
 `apex: airevery-stat` (60 s, on or off: seats with a plant, plant value vs the winner, yield parts, aircraft by role, idle, wing go/hold why, their air, fighters wanted/ordered, hunts) · `airevery hunt` ·
 `apex: teamair-stat` (60 s, every seat: vAir/vNorm and their terms, gathered wing, target, need, ledger) · `teamair-plan` · `teamair-go` · `teamair-launch` · `teamair-gun-home` · `teamair-settled` ·
 `python tools/airaudit.py <match|tournament> [--minutes]` -- planes built, what our air killed, air losses

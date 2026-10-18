@@ -1602,7 +1602,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	if ((ceilNeed <= 0) && !gMexOpen && (upD <= 0.5f) && (bpGap <= 0.5f)
 		&& (armyT0 - armyHave <= 0.5f)
 		&& (AARoleGap(false, armyT0) <= 0.5f) && (AARoleGap(true, armyT0) <= 0.5f)
-		&& (richGap <= 0.5f) && (waterGap <= 0.5f))
+		&& (richGap <= 0.5f) && (waterGap <= 0.5f)
+		&& !Air::AnswerFighterOwed(Catalog::BuildsOf(int(fac.circuitDef.id))))
 	{
 		gNoOrder = "all-quiet";
 		return null;

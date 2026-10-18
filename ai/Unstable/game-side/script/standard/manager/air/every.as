@@ -58,19 +58,29 @@ void EvSnapFoeAir()
 // Their strike planes' flight from their side to our home: the time our fighters have to kill them.
 float EvFoeFlightS()
 {
-	if (!Builder::gHomeSet || (gEvFoeSpd <= 0.f))
+	return EvFoeFlightAt(gEvFoeSpd);
+}
+
+float EvFoeFlightAt(float spd)
+{
+	if (!Builder::gHomeSet || (spd <= 0.f))
 		return 0.f;
 	const AIFloat3 foe = NaFoe();
 	if (!OnMap(foe))
 		return 0.f;
-	return foe.distance2D(Builder::gHomePos) / gEvFoeSpd;
+	return foe.distance2D(Builder::gHomePos) / spd;
 }
 
 // The time our fighters get at their bombers: from where our radar first shows them to the base, not their
 // whole flight from home, which only lengthens on a big map.
 float EvInterceptS(int f)
 {
-	if (gEvFoeSpd <= 0.f)
+	return EvInterceptAt(f, gEvFoeSpd);
+}
+
+float EvInterceptAt(int f, float spd)
+{
+	if (spd <= 0.f)
 		return 0.f;
 	float r = Catalog::gLosR[f];
 	const array<int>@ own = Market::OwnedDefs();
@@ -78,9 +88,31 @@ float EvInterceptS(int f)
 		if (!Catalog::gMobile[own[i]] && (Catalog::gRadarR[own[i]] > r))
 			r = Catalog::gRadarR[own[i]];
 	}
-	const float t = r / gEvFoeSpd;
-	const float fl = EvFoeFlightS();
+	const float t = r / spd;
+	const float fl = EvFoeFlightAt(spd);
 	return ((fl > 0.f) && (fl < t)) ? fl : t;
+}
+
+// apex_air_answer: the fighter metal that kills, inside that time, the strike raid remembered over our own
+// ground (the most seen there at once, or one plane that killed ours, over BLEED_TAU). Ours alone, so no
+// team share: an ally's raid is its own.
+float EvFighterMemM(int f)
+{
+	return Market::AirAnswerOn() ? EvFighterMemRaw(f) : 0.f;
+}
+
+float EvFighterMemRaw(int f)
+{
+	if ((f <= 0) || (f > Catalog::gDefCount))
+		return 0.f;
+	const float hp = Market::AatRaidHp();
+	const float dps = NaAirDps(f);
+	if ((hp <= 0.f) || (dps <= 0.f))
+		return 0.f;
+	const float tau = EvInterceptAt(f, Market::AatRaidSpd());
+	if (tau <= 0.f)
+		return 0.f;
+	return hp / (tau * dps) * Catalog::gCostM[f];
 }
 
 // The metal of fighter f that answers their air: enough to win the square-law fight against their fighters,
@@ -128,7 +160,10 @@ float EveryFighterGainFor(int d, float fillSec)
 {
 	if (!IsFighterDef(d))
 		return 0.f;
-	const float want = EvFighterWantM(d) * EvFighterShare();
+	float want = EvFighterWantM(d) * EvFighterShare();
+	const float mem = EvFighterMemM(d);
+	if (mem > want)
+		want = mem;
 	const float have = EvFighterHaveM();
 	if (want <= have)
 		return 0.f;
@@ -551,6 +586,79 @@ void EveryStat()
 	gEvPlantDefBest = -1;
 	gEvOffers = 0;
 	gEvWins = 0;
+}
+
+// apex_air_answer: a plant whose fighters the line would price is not quiet (the all-quiet gate ran before them).
+bool AnswerFighterOwed(const array<int>@ prods)
+{
+	if (!Market::AirAnswerOn() || (prods is null))
+		return false;
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int d = prods[i];
+		if (!IsFighterDef(d) || !Catalog::gAvailable[d])
+			continue;
+		const float g = EscortFighterGainFor(d, fill)
+				+ (EveryOn() ? EveryFighterGainFor(d, fill) : HuntFighterGainFor(d, fill));
+		if (g > 0.f)
+			return true;
+	}
+	return false;
+}
+
+int gAnsOrdered = 0;
+void AnsNoteOrder(const CCircuitDef@ o)
+{
+	if ((o !is null) && IsFighterDef(int(o.id)))
+		++gAnsOrdered;
+}
+
+// apex: airanswer-stat, both arms: the fighter want's terms, what we hold and ordered, the AA defs priced.
+int gAnsStatAt = 0;
+void AnswerStat()
+{
+	if (ai.frame < gAnsStatAt)
+		return;
+	gAnsStatAt = ai.frame + 60 * SECOND;
+	ResolveDefs();
+	EvSnapFoeAir();
+	CCircuitDef@ wf = (gFighter !is null && Have(gPlant2) > 0) ? gFighter : gFighter1;
+	const int f = (wf is null) ? -1 : int(wf.id);
+	float nSq = 0.f, nNow = 0.f, tauNow = 0.f, tauMem = 0.f, mem = 0.f, gain = 0.f;
+	if (f > 0) {
+		const float hp = Catalog::gHealth[f];
+		const float dps = NaAirDps(f);
+		const float c = Catalog::gCostM[f];
+		if ((hp > 0.f) && (dps > 0.f)) {
+			nSq = sqrt(gEvFoeFtrHp * gEvFoeFtrDps / (hp * dps)) * c;
+			tauNow = EvInterceptS(f);
+			if (tauNow > 0.f)
+				nNow = gEvFoeStrHp / (tauNow * dps) * c;
+		}
+		tauMem = EvInterceptAt(f, Market::AatRaidSpd());
+		mem = EvFighterMemRaw(f);
+		const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+		gain = EveryOn() ? EveryFighterGainFor(f, fill) : HuntFighterGainFor(f, fill);
+	}
+	int pend = 0;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd !is null)
+			pend += Brain::PendAnyOf(int(fd.id));
+	}
+	AiLog(Factory::T() + "apex: airanswer-stat t=" + ai.teamId + " on=" + (Market::AirAnswerOn() ? 1 : 0)
+		+ " every=" + (EveryOn() ? 1 : 0)
+		+ " raid=" + int(Market::AatRaidHp()) + "hp/" + int(Market::AatRaidM()) + "m/" + int(Market::AatRaidSpd()) + "spd"
+		+ " lossAir=" + Market::NnF(Market::AatLossAirRate(), 2)
+		+ " ftr=" + ((wf is null) ? "-" : wf.GetName())
+		+ " want=[sq " + int(nSq) + " now " + int(nNow) + " mem " + int(mem) + " share " + Market::NnF(EvFighterShare(), 2)
+		+ " fresh " + int(aiEnemyMgr.GetEnemyCostFresh(RT::AIR)) + "]"
+		+ " tau=" + int(tauNow) + "/" + int(tauMem)
+		+ " gain=" + Market::NnF(gain, 3)
+		+ " have=" + int(EvFighterHaveM()) + " held=" + HeldFighters() + "/" + Fighters() + " pend=" + pend
+		+ " ordered=" + gAnsOrdered + " hunters=" + gHunters.length()
+		+ Market::AansAAPart());
+	gAnsOrdered = 0;
 }
 
 }  // namespace Air

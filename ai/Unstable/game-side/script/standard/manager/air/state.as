@@ -678,8 +678,11 @@ float HuntFighterGainFor(int d, float fillSec)
 	const float team = Military::TeamArmyCost();
 	const float mine = aiMilitaryMgr.armyCost;
 	const float share = (team > mine && team > 1.f) ? (mine / team) : 1.f;
-	const float want = aiEnemyMgr.GetEnemyCostFresh(RT::AIR)
+	float want = aiEnemyMgr.GetEnemyCostFresh(RT::AIR)
 			* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share;
+	const float mem = EvFighterMemM(d);
+	if (mem > want)
+		want = mem;
 	float have = FighterMetalHeld();
 	for (int pass = 0; pass < 2; ++pass) {
 		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;

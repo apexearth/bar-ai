@@ -467,6 +467,13 @@ PANELS = [
             ("TUNE_ALLY_AIR", "ON: when enemy aircraft are killing an ally's buildings or units anywhere, "
              "our spare fighters fly to that spot, not to the ally's main base. `apex: intercepting for ally` "
              "shows where they went. OFF: fighters help an ally only when enemy air is near its main base."),
+            ("TUNE_AIR_ANSWER", "ON: we build fighters against the enemy air that has been hitting our "
+             "buildings and units over the last few minutes, not only the planes we can see right now, and "
+             "anti-air towers are chosen by how much of the attacking planes they can reach: a tower an enemy "
+             "gunship outranges counts for less, and a place still losing things to air under its anti-air "
+             "gets more. `apex: airanswer-stat` every minute shows the fighter want, fighters held and "
+             "ordered, and each anti-air tower's price. OFF: fighters answer only the planes in sight, and "
+             "the cheapest tower usually wins."),
             ("TUNE_ORDER_RELEASE", "ON: when the constructor sent to start a lab, gantry or other big building "
              "is pulled away before it starts and nobody else is on the way, the order no longer counts as "
              "coming: the next constructor asked for it takes the same order, or starts a new one if the old "
