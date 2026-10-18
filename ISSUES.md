@@ -284,22 +284,23 @@ Viper 2.8, Pit Bull 1.8, Toaster 1.9, Ambusher 1.7. Wins 12.0 T2 guns, losses
 
 ### WHERE PERFORMANCE STANDS, AND WHAT IS LEFT (2026-10-18)
 
-16-Apex 8v8 (Delta Siege Dry, 40 min, seed 1, idle machine bar ComfyUI): 0.345-0.368
-ms/AI/frame at the worst minute (budget 0.417) after 2299f05f, b44e8dd2, 6f7b8bcb; typical
-minutes 0.29-0.36. Canonical Greenest Fields vs 8 BARb: median minute 0.292, p90 0.367
-(was 0.455), worst 0.486 -- one election burst, unchanged. No single section over 10 ms in
-a player-minute except bld.decide (16 of 619). Open:
-- The AiFrame hook (6f7b8bcb) is C++: it reaches his games only when the fork carries it.
-  The lane shares the shared tree's gitdir, so the fork commit is made from the shared
-  slot (his); `sync_cpp.py pull` finds no merge base between barbarian-apex and
-  apex/barbarian since the 10-16 restore, and 0003-cumulative.patch is stale.
-- Per election ~3.5 ms: want.protect ~0.8, nn.policy ~0.7 (state build 0.34: EtaHandsShare
-  0.14, ConShare), want.sense 0.4-0.8, want.mex 0.4. Bursts after big fights set the worst
-  minute; the derived slice spreads them but the sum is the per-election cost.
-- C++ `work:areas` (TerrainData::UpdateAreas, every 10 s) 46-70 ms on the worker pool;
-  off the sim thread in these runs, competes for CPU on his machine.
-- Benchmarks on this machine read machine stalls as AI cost: c9-ds16-frame min 35 doubled
-  every section, C++ jobs included. Read the C++ job rows before believing a FAIL.
+16-Apex 8v8 (Delta Siege Dry, 40 min, seed 1): 0.404 ms/AI/frame at the worst minute with
+~3,000 units (c9-ds16-final2, ce0bd570; session start 0.433 at 2,500). Slow update over
+10 ms in 0 of 641 player-minutes (was 155); elections over 10 ms 40 of 620 (was 210); idle
+builder gap 36.5 -> 29 frames. Canonical Greenest Fields vs 8 BARb: 0.298 PASS, but those
+games end at 30-32 min (lost), so equal-unit minutes are the comparison (10-25% lower). Open:
+- The AiFrame hook is in the fork (d8b9b93a on barbarian-apex) and in release/v0.3.2
+  (worktree ../bar-ai-rel032, not merged, pushed or tagged): it reaches his games only when
+  that release ships. The shared slot's BARb tree is behind the fork by that commit.
+- `sync_cpp.py pull` finds no merge base between barbarian-apex and apex/barbarian since the
+  10-16 restore, and 0003-cumulative.patch is stale.
+- Per election ~2.7 ms in the late game: want.protect, want.sense (the jammer price is ~0.3 ms,
+  its coverage checks and engine site search), nn.policy ~0.55. The young-return backoff makes
+  ~20% more elections than the flat 2 s gate did; that is the responsiveness bought.
+- Every allied seat walks the same enemy registry in FoeMemStep (~0.45 ms a tick, 1,500
+  enemies); sharing it within an ally team is the next large cut.
+- Benchmarks here read machine stalls as AI cost (c9-ds16-frame min 35 doubled every section,
+  C++ jobs included). Read the C++ job rows before believing a FAIL.
 
 ### GATE RED "HOME GROUND IS NOT DISCOUNTED" COMES FROM THE SIEGE PRIOR (2026-10-07)
 
