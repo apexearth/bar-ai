@@ -151,9 +151,7 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 				&& (JamReach(int(bestJam.id)) > JamReach(d))))
 			return false;
 		AIFloat3 shAt;
-		const double _tJh = Perf::T0();
 		const float shG = JamShelledGain(d, shAt);
-		Perf::Add("jam.shelled", _tJh);
 		if (shG > 0.f) {
 			JamSiteLog(d, shAt, 3, JamReach(d));
 			at = shAt;
@@ -186,7 +184,6 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			found = true;
 			how = 2;
 		}
-		const double _tJc = Perf::T0();
 		const array<AIFloat3>@ clusters = JamClusters();
 		for (uint jd = 0; jd < clusters.length() && !found; ++jd) {
 			if (!ProtCovered(PROT_JAM, clusters[jd], jamR)) {
@@ -195,12 +192,9 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 				how = 1;
 			}
 		}
-		Perf::Add("jam.cluster", _tJc);
 		if (Gate(GATE_JAM_COVER, !found && ProtCovered(PROT_JAM, core, jamR)))
 			return false;
-		const double _tJs = Perf::T0();
 		const AIFloat3 jsite = JamSiteNear(d, jat, jamR);
-		Perf::Add("jam.site", _tJs);
 		if (Gate(GATE_JAM_SITE, !OnMap(jsite) || (jsite.distance2D(jat) > jamR)))
 			return false;
 		// A SECOND JAMMER MUST CLEAR THE FIRST wherever it is going.
