@@ -29,6 +29,7 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
 array<bool> gIncAlone(32001, false);   // the job was the only want offered: the market had no work for this hand
+array<float> gIncWalk0(32001, 0.f);   // the walk the job started with (TUNE_HOIST_WAITS prices what is already paid)
 
 // A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
 void DecideIdGone(int id)
@@ -38,6 +39,7 @@ void DecideIdGone(int id)
 	@gIncTask[id] = null;
 	gIncVal[id] = 0.f;
 	gIncAlone[id] = false;
+	gIncWalk0[id] = 0.f;
 	gLastDecideAt[id] = -30000;
 	gYoungN[id] = 0;
 	gWkExpoAt[id] = -30000;
@@ -51,6 +53,14 @@ void DecideIdGone(int id)
 // this answers. A bar on the fraction of the original walk already paid, not
 // an exemption from the ruling.
 int gKeepJob = 0;
+int gHoistWaitN = 0;   // hoists that waited for a hand walking to a live job (TUNE_HOIST_WAITS)
+int gHwOn = -1;
+bool HoistWaitsOn()
+{
+	if (gHwOn < 0)
+		gHwOn = (ai.GetTunable("apex_hoist_waits", TUNE_HOIST_WAITS) > 0.f) ? 1 : 0;
+	return gHwOn > 0;
+}
 int gKeepMin = 0;      // keeps this minute
 int gOffCrewMin = 0;   // incumbents forgotten because the hand was taken off them
 int gNextKeepLog = 0;
@@ -3041,7 +3051,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				// too, so onCrew is false every time and this hold has never
 				// once fired. Testing our own removals instead reached only 7%
 				// of the cases and lost every game of an arm; see docs/tunables.md.
-				const bool dropped = !onCrew;
+				// TUNE_HOIST_WAITS: a hoist (floor, role, field, join...) waits for a free hand while this one
+				// is still walking to a live job -- the rule above, which the crew test never let fire. The draw
+				// still moves it. His 10-18: 56% of the trips that walked > 800 elmos and held < 15 s ended on a hoist.
+				// ...unless it outbids the job in hand, whose value has risen with the share of its walk paid.
+				const float bdK = Catalog::gBuildDist[int(unit.circuitDef.id)];
+				const float remK = unit.GetPos(ai.frame).distance2D(ip);
+				const float incNow = gIncVal[uidk] * ((gIncWalk0[uidk] > remK) ? (gIncWalk0[uidk] / ((remK > bdK) ? remK : bdK)) : 1.f);
+				const bool hoistWaits = HoistWaitsOn() && OnMap(ip) && !Builder::SiteHot(ip)
+						&& (why != "draw") && (why != "ladder") && (why.findFirst("held") != 0)
+						&& (remK > bdK + 64.f)
+						&& (top.value / ((top.nnMult > 0.f) ? top.nnMult : 1.f) <= incNow);
+				if (hoistWaits) {
+					++gHoistWaitN;
+				}
+				const bool dropped = !onCrew && !hoistWaits;
 				if (dropped) {
 					if (Requests::OrderReleaseOn()) {
 						const int li = Requests::LiveIndex(inc);
@@ -3059,7 +3083,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						AiLog("apex: keep-job t=" + ai.teamId + " " + unit.circuitDef.GetName()
 							+ " #" + unit.id + " v=" + formatFloat(gIncVal[uidk] * 1000.f, "", 0, 2)
 							+ " over " + KindName(top.kind) + " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
-							+ " kept=" + gKeepJob);
+							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN);
 					}
 					return inc;
 				}
@@ -3253,6 +3277,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
 				const AIFloat3 tp0 = t.GetBuildPos();
+				gIncWalk0[int(unit.id)] = OnMap(tp0) ? unit.GetPos(ai.frame).distance2D(tp0) : 0.f;
 			}
 			// A category that could not be executed is not a job this hand
 			// can do: the role goes with the fall-through.

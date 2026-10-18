@@ -981,7 +981,9 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			if (!SiegeSite(unit, d, at))
 				continue;
 		} else {
+			const double _tSs = Perf::T0();
 			at = SuperSite(unit, sc, Catalog::Def(d));
+			Perf::Add("super.site", _tSs);
 			// The cannon moves up only when its home site cannot reach the
 			// turrets our army dies to.
 			AIFloat3 foe, siege;
@@ -991,7 +993,9 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					&& SiegeSite(unit, d, siege))
 				at = HighGroundNear(Catalog::Def(d), siege, 600.f);
 		}
+		const double _tSp = Perf::T0();
 		at = ProbedSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), at);
+		Perf::Add("super.probe", _tSp);
 		if (!OnMap(at))
 			{ GantryWhy(sc, "offmap"); continue; }
 		// AFFORDABILITY IS THE GAIN. What is left of the budget once the bill

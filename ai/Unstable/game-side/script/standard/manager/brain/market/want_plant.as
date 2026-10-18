@@ -1654,6 +1654,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	bool homeAnchorSet = false;
 	AIFloat3 upAnchor;
 	bool upAnchorOk = false;
+	AIFloat3 winAsk(-1.f, 0.f, -1.f);
 	// The opening plant, term by term: the decide line names only the winner.
 	const bool candLog = (Factory::gFactoryCount == 0)
 			&& (ai.frame >= gNextPlantCandLog);
@@ -2029,12 +2030,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			upAnchorOk = UpgradeAnchor(Catalog::Def(int(unit.circuitDef.id)), upAnchor);
 			Perf::Add("plant.anchor", _tA);
 		}
-		// ...beside the lathe that will raise it, when any stands.
-		const double _tL = Perf::T0();
-		const AIFloat3 lands = OnMap(site) ? site
-				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)),
-					(upAnchorOk && MakesUpgradeHands(d)) ? upAnchor : homeAnchor);
-		Perf::Add("plant.lathesite", _tL);
+		// ...beside the lathe that will raise it, when any stands: searched for the winner only, below.
+		// Every candidate searched its own (7.6 ms a call, 56 ms worst in an 8v8) to price a walk
+		// the anchor already prices.
+		const AIFloat3 askAt = (upAnchorOk && MakesUpgradeHands(d)) ? upAnchor : homeAnchor;
+		const AIFloat3 lands = OnMap(site) ? site : askAt;
 		Want c;
 		float plantG = dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]);
 		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
@@ -2073,7 +2073,13 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
 			w.pos = lands;
+			winAsk = OnMap(site) ? AIFloat3(-1.f, 0.f, -1.f) : askAt;
 		}
+	}
+	if ((w.def !is null) && OnMap(winAsk)) {
+		const double _tL = Perf::T0();
+		w.pos = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), winAsk);
+		Perf::Add("plant.lathesite", _tL);
 	}
 	if (candLog && (cand.length() > 0)) {
 		gNextPlantCandLog = ai.frame + 20 * SECOND;
