@@ -27,7 +27,14 @@ bool IsMetalUnlock(const CCircuitDef@ d)
 		return false;
 	if ((Catalog::gBuildsList[id].length() > 0)
 		&& ((Factory::userData[id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
+	{
+		// TUNE_UNLOCK_ONCE, the extractor rule's sibling below: a plant is the unlock only while no
+		// plant of ours makes upgrade hands, and only if its own do (his 10-18: every hand was sent to
+		// an advanced air plant at v=1000 while an advanced lab stood -- "we have every factory").
+		if (Market::UnlockOnceOn())
+			return Market::MakesUpgradeHands(id) && !Market::UpgradeHandPlantStanding();
 		return true;
+	}
 	// An extractor upgrade is the unlock until the first one stands; after that
 	// every moho in flight pulled the whole builder pool out to it, all game.
 	if ((Catalog::gExtractsM[id] <= 0.f) || (Market::MohoStanding() > 0))

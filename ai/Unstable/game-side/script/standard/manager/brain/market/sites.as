@@ -1218,6 +1218,25 @@ bool UpgradeAnchor(CCircuitDef@ mover, AIFloat3 &out at)
 	return true;
 }
 
+int gUoOn = -1;
+bool UnlockOnceOn()
+{
+	if (gUoOn < 0)
+		gUoOn = (ai.GetTunable("apex_unlock_once", TUNE_UNLOCK_ONCE) > 0.f) ? 1 : 0;
+	return gUoOn > 0;
+}
+
+// A plant of ours (gFacUnits holds finished ones) whose units can upgrade extractors.
+bool UpgradeHandPlantStanding()
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && MakesUpgradeHands(int(f.circuitDef.id)))
+			return true;
+	}
+	return false;
+}
+
 bool MakesUpgradeHands(int plant)
 {
 	const array<int>@ b = Catalog::gBuildsList[plant];

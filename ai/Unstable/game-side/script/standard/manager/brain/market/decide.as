@@ -3007,6 +3007,25 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	Perf::Add("dec.draw", _tDraw);
 	NnTechPicked(ranked);
+	if (ReserveOn() && (ranked.length() > 0) && !aaPanic && (why != "estall") && (why != "aa")
+		&& (why != "defpanic") && (why != "penned") && (why != "cover"))
+	{
+		const float rv = ReserveValue();
+		if (rv > 0.f) {
+			if (ranked[0].value / ((ranked[0].nnMult > 0.f) ? ranked[0].nnMult : 1.f) < rv) {
+				Want@ rw = ReserveWant(unit, rv);
+				if (rw !is null) {
+					ranked.insertAt(0, rw);
+					why = "reserve";
+				} else {
+					++gRsNoFac;
+				}
+			} else {
+				++gRsBeaten;
+			}
+		}
+		ReserveLog();
+	}
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Only an emergency takes a hand off a job it is on: the stall, the

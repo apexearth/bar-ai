@@ -1348,6 +1348,13 @@ bool ConStandsIdle(bool flyer, int tier = 1)
 }
 
 int gConUseOn = -1;
+int gCpOn = -1;
+bool ConPricedOn()
+{
+	if (gCpOn < 0)
+		gCpOn = (ai.GetTunable("apex_con_priced", TUNE_CON_PRICED) > 0.f) ? 1 : 0;
+	return gCpOn > 0;
+}
 bool ConUseOn()
 {
 	if (gConUseOn < 0)
@@ -3009,10 +3016,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// the only way to close their lead, and yielding starved the cons for a
 		// whole game (Comet 40 min: 4-11 extractors against their 59).
 		const bool foeOutguns = ArmyShortOfFoe() && WeOutEarnThem();
+		// TUNE_CON_PRICED: the army is held at its share (doctrine), so past the first con the floors yield to
+		// an army under its target share as measured -- the con multiplier sizes the floor, it does not discount
+		// the army's share (at 5x the lab yielded only below a fifth of it; his 10-18: a third of their army).
+		const bool cpOn = ConPricedOn();
+		const float yieldMul = cpOn ? 1.f : ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f);
+		const float yieldCons = cpOn ? 1.f : ((gConFloorMul > 1.f) ? gConFloorMul : 1.f);
 		const bool armyBehind = foeOutguns || ((Brain::gSpentTotal > 1.f)
-			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= ((gConFloorMul > 1.f) ? gConFloorMul : 1.f))
-			&& (Brain::ShareOf(Brain::ARMY) * ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f)
-				< Brain::TargetShare(Brain::ARMY)));
+			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= yieldCons)
+			&& (Brain::ShareOf(Brain::ARMY) * yieldMul < Brain::TargetShare(Brain::ARMY)));
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;

@@ -815,6 +815,82 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	return g;
 }
 
+// HOLDING BACK IS AN OPTION (TUNE_RESERVE; his 10-18: "sometimes doing nothing is the right choice, or
+// assisting the efforts towards the T2 constructors getting created"). While the army is short of its
+// target and the bank is not overflowing, a metal not spent here is a metal the factories turn into army: worth
+// the army gap's stream per metal of gap, 1/fill a second -- the same currency as ValueOf. A drawn job
+// worth less than that leaves the metal to the factories, and the hand lathes one that is producing.
+int gRsOn = -1;
+int gReserveN = 0;
+int gRsAsk = 0, gRsSpare = 0, gRsNoGap = 0, gRsBeaten = 0, gRsNoFac = 0, gRsLogAt = 0;
+void ReserveLog()
+{
+	if (ai.frame < gRsLogAt)
+		return;
+	gRsLogAt = ai.frame + 60 * SECOND;
+	AiLog("apex: reserve-stat t=" + ai.teamId + " ask=" + gRsAsk + " spare=" + gRsSpare + " noGap=" + gRsNoGap
+		+ " beaten=" + gRsBeaten + " noFac=" + gRsNoFac + " held=" + gReserveN
+		+ " gapS=" + formatFloat(ArmyGapStream(), "", 0, 1) + " bank=" + int(Eco::MCur()) + "/" + int(Eco::MStor()));
+}
+bool ReserveOn()
+{
+	if (gRsOn < 0)
+		gRsOn = (ai.GetTunable("apex_reserve", TUNE_RESERVE) > 0.f) ? 1 : 0;
+	return gRsOn > 0;
+}
 
+float ReserveValue()
+{
+	// Spare metal is metal the bank cannot hold another second of: holding it back saves nothing.
+	++gRsAsk;
+	if (Eco::MCur() + Eco::MInc() >= Eco::MStor()) {
+		++gRsSpare;
+		return 0.f;
+	}
+	if (ArmyGapStream() <= 0.f) {
+		++gRsNoGap;
+		return 0.f;
+	}
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return 1.f / ((fill > 1.f) ? fill : 180.f);
+}
+
+Want@ ReserveWant(CCircuitUnit@ unit, float rv)
+{
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	CCircuitUnit@ best = null;
+	float bestS = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || !LineWorkingArmy(f))
+			continue;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		if (Builder::SiteHot(fp))
+			continue;
+		const float s = (speed > 1.f) ? (here.distance2D(fp) / speed) : 60.f;
+		if ((best is null) || (s < bestS)) {
+			@best = f;
+			bestS = s;
+		}
+	}
+	if (best is null)
+		return null;
+	Want w;
+	w.kind = WK_ASSIST;
+	w.value = rv;
+	w.nnMult = 1.f;
+	w.pos = best.GetPos(ai.frame);
+	w.spotId = int(best.id);
+	// As long as my lathe takes to spend the army's gap, never past the horizon the gap is priced over.
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float myM = Catalog::gBuildPower[int(unit.circuitDef.id)] * (7.f / 80.f);
+	float stint = (myM > 0.01f) ? ((ArmyTarget() - ArmyValue()) / myM) : fill;
+	if (stint > fill)
+		stint = fill;
+	w.assistEcoS = int(stint) + 1;
+	++gReserveN;
+	return w;
+}
 
 }  // namespace Market
