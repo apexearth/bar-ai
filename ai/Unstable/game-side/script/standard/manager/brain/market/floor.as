@@ -245,6 +245,16 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			continue;
 		}
 		const uint busy = Requests::Workers(cand);
+		// The score needs nothing the gates below compute, so a job that could not raise any of
+		// the three bests it is eligible for is passed over before them: the gates only remove.
+		const float dist = me.distance2D(where);
+		const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
+		const float hands = float(busy) + float(gJcGuards[i])
+				+ gJcRing[i] * (NANO_ABSORB / 200.f) / Requests::DRAIN;
+		const float score = val / (hands + 1.f) / (1.f + walkSec / 60.f);
+		if ((score <= bestScore) && (far || (score <= nearScore))
+			&& ((dist >= HERE_R) || (score <= hereScore)))
+			continue;
 		// THE CREW CAP IS A CLAIM ABOUT THE ECONOMY, NOT ABOUT THIS SITE:
 		// SiteWorkerCap splits the income's hands EVENLY over live sites, so
 		// with thirteen of them every one reads "full" at a single lathe --
@@ -259,7 +269,6 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			++gJobFull;
 			continue;   // the income genuinely cannot feed another hand
 		}
-		const float dist = me.distance2D(where);
 		if (Requests::JoinArriveOn()) {
 			if (!Requests::JoinOkTask(requireFeed ? Requests::JA_FLOOR : Requests::JA_ASSIST,
 					unit, cand, gJcGain[i])) {
@@ -287,10 +296,6 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 				continue;
 			}
 		}
-		const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
-		const float hands = float(busy) + float(gJcGuards[i])
-				+ gJcRing[i] * (NANO_ABSORB / 200.f) / Requests::DRAIN;
-		const float score = val / (hands + 1.f) / (1.f + walkSec / 60.f);
 		if (!far && (score > nearScore)) {
 			nearScore = score;
 			@gJobNearBest = cand;

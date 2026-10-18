@@ -453,6 +453,16 @@ float JamShelledGain(int d, AIFloat3& out at)
 	if (nOpen == 0)
 		return 0.f;
 	const AIFloat3 mid = gPfRimOk ? gPfMid : Builder::gHomePos;
+	// The open points sorted by x: each site sums only the run inside its x-window.
+	array<uint> ox;
+	for (uint i = 0; i < n; ++i) {
+		if (!open[i])
+			continue;
+		uint pos = ox.length();
+		while ((pos > 0) && (px[ox[pos - 1]] > px[i]))
+			--pos;
+		ox.insertAt(pos, i);
+	}
 	float bestSum = 0.f;
 	int bestA = -1;
 	AIFloat3 bestSite;
@@ -466,10 +476,17 @@ float JamShelledGain(int d, AIFloat3& out at)
 			const float pull = (bl < 0.5f * R) ? bl : (0.5f * R);
 			site = site + back * (pull / bl);
 		}
+		uint lo = 0, hi = ox.length();
+		while (lo < hi) {
+			const uint m = (lo + hi) / 2;
+			if (px[ox[m]] < site.x - R)
+				lo = m + 1;
+			else
+				hi = m;
+		}
 		float sum = 0.f;
-		for (uint j = 0; j < n; ++j) {
-			if (!open[j])
-				continue;
+		for (uint q = lo; (q < ox.length()) && (px[ox[q]] <= site.x + R); ++q) {
+			const uint j = ox[q];
 			const float dx = px[j] - site.x;
 			const float dz = pz[j] - site.z;
 			if (dx * dx + dz * dz < R * R)
