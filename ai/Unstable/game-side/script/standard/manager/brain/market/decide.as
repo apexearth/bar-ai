@@ -649,6 +649,61 @@ void ComFlipNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, const string& in why
 // It replaced the 45-s far-hand rule.
 int gOppRepriced = 0;
 int gOppFlips = 0;
+// THE VALUE MIX (his 10-17: "how balanced our values are for what we can build"). Per want kind per
+// minute: elections that offered it (its best in each), wins, geometric mean value, mean value over the
+// winner's when it lost, mean gain and cost. Log only.
+const int VM_K = 17;
+array<int> gVmOff(VM_K, 0), gVmWin(VM_K, 0), gVmLost(VM_K, 0);
+array<float> gVmLogV(VM_K, 0.f), gVmRel(VM_K, 0.f), gVmGain(VM_K, 0.f), gVmCost(VM_K, 0.f);
+array<string> gVmTop(VM_K, "");
+int gVmN = 0, gVmAt = 0;
+void ValMixNote(const array<Want@>@ ranked, Want@ top)
+{
+	if ((ranked is null) || (top is null))
+		return;
+	array<bool> seen(VM_K, false);
+	for (uint i = 0; i < ranked.length(); ++i) {
+		Want@ w = ranked[i];
+		if (w is null)
+			continue;
+		const int k = w.kind;
+		if ((k < 0) || (k >= VM_K) || seen[k])
+			continue;
+		seen[k] = true;
+		++gVmOff[k];
+		gVmLogV[k] += log((w.value > 1e-9f) ? w.value : 1e-9f);
+		gVmGain[k] += w.gain;
+		gVmCost[k] += w.mCost + w.tCost;
+		if (w is top) {
+			++gVmWin[k];
+			gVmTop[k] = (w.def is null) ? "-" : w.def.GetName();
+		} else {
+			++gVmLost[k];
+			gVmRel[k] += w.value / ((top.value > 1e-9f) ? top.value : 1e-9f);
+		}
+	}
+	++gVmN;
+	if (ai.frame < gVmAt)
+		return;
+	gVmAt = ai.frame + 60 * SECOND;
+	string s = "";
+	for (int k = 1; k < VM_K; ++k) {
+		if (gVmOff[k] == 0)
+			continue;
+		const float n = float(gVmOff[k]);
+		s += " " + KindName(k) + ":" + gVmOff[k] + "/" + gVmWin[k]
+			+ "/v" + formatFloat(exp(gVmLogV[k] / n) * 1000.f, "", 0, 2)
+			+ "/r" + formatFloat((gVmLost[k] > 0) ? gVmRel[k] / float(gVmLost[k]) : 0.f, "", 0, 2)
+			+ "/g" + formatFloat(gVmGain[k] / n, "", 0, 2)
+			+ "/c" + formatFloat(gVmCost[k] / n, "", 0, 0)
+			+ ((gVmTop[k] != "") ? ("/" + gVmTop[k]) : "");
+		gVmOff[k] = 0; gVmWin[k] = 0; gVmLost[k] = 0;
+		gVmLogV[k] = 0.f; gVmRel[k] = 0.f; gVmGain[k] = 0.f; gVmCost[k] = 0.f; gVmTop[k] = "";
+	}
+	AiLog(Factory::T() + "apex: valmix t=" + ai.teamId + " elections=" + gVmN + s);
+	gVmN = 0;
+}
+
 void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	if (ranked.length() < 2)
@@ -2944,6 +2999,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			(top.kind == WK_PLANT) && (top.def !is null) && AirPlant(int(top.def.id)));
 	}
 	ComHomeNoteElection(unit, top);
+	ValMixNote(ranked, top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.
 	const double _tLog = Perf::T0();
