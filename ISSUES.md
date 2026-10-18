@@ -282,18 +282,24 @@ Viper 2.8, Pit Bull 1.8, Toaster 1.9, Ambusher 1.7. Wins 12.0 T2 guns, losses
 
 ## PERFORMANCE
 
-### 8V8 BUILDER ELECTIONS AT 3x THE 16-AI BUDGET, MEASURED UNDER LOAD (2026-10-07)
+### WHERE PERFORMANCE STANDS, AND WHAT IS LEFT (2026-10-18)
 
-`matches/20261007-8v8-mass` (Comet Catcher 8v8, +100%, MASS forced, 30 min)
-read 1.237 ms/AI/frame at minute 28 -- but on a machine running 8 other engines
-and the trainer, and the sections are wall time. hk.maketask.builder 197.7 s
-total (1352 us avg, 56.6 ms max), bld.decide 2624 us avg; up.escortrecruit
-1345 us avg / 17.6 ms max; up.escecontnets max 26.3 ms; up.planpush 14 us;
-dec.nn 4 us (the no-trust skip, was 2.4 ms). Needs the same game on an idle
-machine before any verdict, then the perf-review agent on bld.decide.
-From ~07:00 the builder net earned trust on two kinds (reclaim 0.33, convert
-0.14), so NnScore runs again on every election (dec.nn ~2.4 ms): it scores
-all up to 24 options although only trusted kinds are tilted.
+16-Apex 8v8 (Delta Siege Dry, 40 min, seed 1, idle machine bar ComfyUI): 0.345-0.368
+ms/AI/frame at the worst minute (budget 0.417) after 2299f05f, b44e8dd2, 6f7b8bcb; typical
+minutes 0.29-0.36. Canonical Greenest Fields vs 8 BARb: median minute 0.292, p90 0.367
+(was 0.455), worst 0.486 -- one election burst, unchanged. No single section over 10 ms in
+a player-minute except bld.decide (16 of 619). Open:
+- The AiFrame hook (6f7b8bcb) is C++: it reaches his games only when the fork carries it.
+  The lane shares the shared tree's gitdir, so the fork commit is made from the shared
+  slot (his); `sync_cpp.py pull` finds no merge base between barbarian-apex and
+  apex/barbarian since the 10-16 restore, and 0003-cumulative.patch is stale.
+- Per election ~3.5 ms: want.protect ~0.8, nn.policy ~0.7 (state build 0.34: EtaHandsShare
+  0.14, ConShare), want.sense 0.4-0.8, want.mex 0.4. Bursts after big fights set the worst
+  minute; the derived slice spreads them but the sum is the per-election cost.
+- C++ `work:areas` (TerrainData::UpdateAreas, every 10 s) 46-70 ms on the worker pool;
+  off the sim thread in these runs, competes for CPU on his machine.
+- Benchmarks on this machine read machine stalls as AI cost: c9-ds16-frame min 35 doubled
+  every section, C++ jobs included. Read the C++ job rows before believing a FAIL.
 
 ### GATE RED "HOME GROUND IS NOT DISCOUNTED" COMES FROM THE SIEGE PRIOR (2026-10-07)
 
