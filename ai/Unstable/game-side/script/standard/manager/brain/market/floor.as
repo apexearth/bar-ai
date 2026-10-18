@@ -26,6 +26,40 @@ array<int> gJobKind;
 IUnitTask@ gBossJob;
 int gJobStamp = 0;   // bumped whenever a job record is added, repriced or dropped
 
+// EVERY BUILD STARTED SLOWS EVERY PROJECT IN PROGRESS (his 10-18): the returns of the jobs we are
+// building now, per second, which wait while a new build takes the metal they need. TUNE_INFLIGHT_HOLD.
+int gIfhOn = -1, gIfhAt = -1, gIfhStamp = -1, gIfhLogAt = 0;
+float gIfhGain = 0.f;
+bool InFlightHoldOn()
+{
+	if (gIfhOn < 0)
+		gIfhOn = (ai.GetTunable("apex_inflight_hold", TUNE_INFLIGHT_HOLD) > 0.f) ? 1 : 0;
+	return gIfhOn > 0;
+}
+float InFlightGainM()
+{
+	if (!InFlightHoldOn())
+		return 0.f;
+	if ((gIfhAt != ai.frame) || (gIfhStamp != gJobStamp)) {
+		gIfhAt = ai.frame;
+		gIfhStamp = gJobStamp;
+		gIfhGain = 0.f;
+		for (uint i = 0; i < gJobTask.length(); ++i) {
+			IUnitTask@ t = gJobTask[i];
+			if ((t is null) || t.IsDead() || (t.buildDef is null) || (gJobGain[i] <= 0.f)
+				|| (Requests::Progress(t) >= 1.f))
+				continue;
+			gIfhGain += gJobGain[i];
+		}
+		if (ai.frame >= gIfhLogAt) {
+			gIfhLogAt = ai.frame + 60 * SECOND;
+			AiLog("apex: inflight-hold t=" + ai.teamId + " gain=" + NnF(gIfhGain, 1) + " jobs=" + gJobTask.length()
+				+ " free=" + NnF(FreeMetalFlow(), 1) + " mInc=" + NnF(Eco::MInc(), 1));
+		}
+	}
+	return gIfhGain;
+}
+
 void NoteJob(IUnitTask@ t, Want@ w)
 {
 	if ((t is null) || (w is null))

@@ -144,25 +144,29 @@ void FoeMemStep()
 		gFmChunk = gFmTotal / 5 + 1;
 	}
 	const int end = (gFmIdx + gFmChunk < gFmTotal) ? gFmIdx + gFmChunk : gFmTotal;
-	for (int i = gFmIdx; i < end; ++i) {
-		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+	// One binding for the whole chunk: id, def, los, x, z, vx, vz per entry.
+	const array<float>@ sl = aiEnemyMgr.GetEnemyUnitsSlice(gFmIdx, end - gFmIdx);
+	const int got = (sl is null) ? 0 : int(sl.length()) / 7;
+	for (int k = 0; k < got; ++k) {
+		const uint b = uint(k) * 7;
+		const int i = gFmIdx + k;
+		const int d = int(sl[b + 1]);
 		if ((d > 0) && !FmArmedGround(d)) {
 			if (Catalog::ValidId(d) && Catalog::gJammer[d])
 				JsNoteJammer(i, d);
 			continue;
 		}
-		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		const int los = int(sl[b + 2]);
 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
 			continue;
-		const int id = aiEnemyMgr.GetEnemyUnitIdAt(i);
+		const int id = int(sl[b]);
 		const bool live = (los & 3) != 0;
 		int s = ((id >= 0) && (id < int(gFmSlotOf.length()))) ? gFmSlotOf[id] - 1 : -1;
 		if ((d == 0) && (s < 0)) {
 			// a blip never seen in LOS: an army only once it moves
 			if (!live)
 				continue;
-			const AIFloat3 bv = aiEnemyMgr.GetEnemyUnitVelAt(i);
-			if (bv.x * bv.x + bv.z * bv.z <= 1.f)
+			if (sl[b + 5] * sl[b + 5] + sl[b + 6] * sl[b + 6] <= 1.f)
 				continue;
 		}
 		if (s < 0) {
@@ -184,8 +188,8 @@ void FoeMemStep()
 			JsUncredit(id);
 		gFmLive[s] = live;
 		if (live) {
-			gFmPos[s] = aiEnemyMgr.GetEnemyUnitPosAt(i);
-			gFmVel[s] = aiEnemyMgr.GetEnemyUnitVelAt(i);
+			gFmPos[s] = AIFloat3(sl[b + 3], 0.f, sl[b + 4]);
+			gFmVel[s] = AIFloat3(sl[b + 5], 0.f, sl[b + 6]);
 			gFmSeen[s] = ai.frame;
 		}
 	}

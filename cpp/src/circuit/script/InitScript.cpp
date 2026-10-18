@@ -1766,6 +1766,41 @@ static bool CCircuitAI_GroundConnected(CCircuitAI* circuit, const AIFloat3& a, c
 }
 
 // Sites a builder refused as unsafe in the last ten minutes: [x, z, frame, ...].
+// apex: registry entries [start, start + count) in one call (foemem.as walks a fifth of the registry a
+// tick, five bindings an entry): seven floats each -- id, def (0 unknown), los mask (-1 gone), x, z,
+// vx, vz (per second). Ids and defs are far below 2^24, so a float holds them exactly.
+static CScriptArray* CEnemyManager_GetEnemyUnitsSlice(CEnemyManager* mgr, int start, int count)
+{
+	const int total = mgr->GetEnemyUnitTotal();
+	const int s = std::max(0, start);
+	const int e = std::min(total, s + std::max(0, count));
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, (asUINT)(std::max(0, e - s) * 7));
+	asUINT k = 0;
+	for (int i = s; i < e; ++i) {
+		CEnemyUnit* u = mgr->GetEnemyUnitAt(i);
+		float v[7] = {-1.f, 0.f, -1.f, -1.f, -1.f, 0.f, 0.f};
+		if (u != nullptr) {
+			const AIFloat3& p = u->GetPos();
+			const AIFloat3 vel = u->GetVel() * FRAMES_PER_SEC;
+			v[0] = float(u->GetId());
+			v[1] = (u->GetCircuitDef() != nullptr) ? float(u->GetCircuitDef()->GetId()) : 0.f;
+			v[2] = float((int)u->GetData().losStatus);
+			v[3] = p.x;
+			v[4] = p.z;
+			v[5] = vel.x;
+			v[6] = vel.z;
+		}
+		for (int j = 0; j < 7; ++j) {
+			arr->SetValue(k++, &v[j]);
+		}
+	}
+	return arr;
+}
+
 static CScriptArray* CCircuitAI_GetUnsafeSites(CCircuitAI* circuit)
 {
 	std::vector<float> out;
@@ -2861,6 +2896,7 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyUnitPosAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitPosAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyUnitVelAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitVelAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitSeenAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitSeenAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "array<float>@ GetEnemyUnitsSlice(int, int) const", asFUNCTION(CEnemyManager_GetEnemyUnitsSlice), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitLos(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitLos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
 

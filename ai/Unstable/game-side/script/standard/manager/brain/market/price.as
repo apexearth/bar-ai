@@ -817,7 +817,15 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 				// own metal would fund, and priced below them while 5k E/s
 				// was thrown away on a metal-starved map.
 				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f)) {
-					float held = DisplacedStreamM() - ((gain > 0.f) ? gain : 0.f);
+					// ...and every project in progress (TUNE_INFLIGHT_HOLD, his 10-18: each thing we start
+					// slows the ones already started), for the share of this build's metal that free
+					// flow cannot pay over its own duration -- what overflows holds nobody up.
+					float hold = 0.f;
+					if (InFlightHoldOn()) {
+						float paid = FreeMetalFlow() * dur / ((Catalog::gCostM[defId] > 1.f) ? Catalog::gCostM[defId] : 1.f);
+						hold = InFlightGainM() * (1.f - ((paid < 1.f) ? paid : 1.f));
+					}
+					float held = DisplacedStreamM() + hold - ((gain > 0.f) ? gain : 0.f);
 					if (held < 0.f)
 						held = 0.f;
 					displacedM = held * dur * share;

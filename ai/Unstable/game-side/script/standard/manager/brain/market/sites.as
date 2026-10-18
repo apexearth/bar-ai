@@ -716,6 +716,14 @@ bool LatheDepthOk(int did, bool plant, const AIFloat3& in s)
 }
 
 int gLatheDepthRefused = 0;
+int gLcOn = -1;
+bool LatheConcentrate()
+{
+	if (gLcOn < 0)
+		gLcOn = (ai.GetTunable("apex_lathe_concentrate", TUNE_LATHE_CONCENTRATE) > 0.f) ? 1 : 0;
+	return gLcOn > 0;
+}
+
 AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
 {
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
@@ -815,7 +823,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			best = s0;
 			bestStand = RingBPAt(s0);
 			bestRoom = RoomBPAt(did, nanoDef, due, s0);
-			bestBP = (bestStand + bestRoom) / float(1 + RisingNear(s0, NanoRange()));
+			bestBP = (bestStand + bestRoom) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s0, NanoRange())));
 			interiorBP = bestBP;
 		}
 	}
@@ -865,10 +873,11 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			continue;
 		}
 		// The ring's lathe over the frames already rising in it: several
-		// groups, one build beside each.
+		// groups, one build beside each -- or, concentrated (TUNE_LATHE_CONCENTRATE, his 10-18: build what is
+		// important, not many things at once; we waste a lot of room), the richest lathe whatever rises there.
 		const float stand = RingBPAt(s);
 		const float room = RoomBPAt(did, nanoDef, due, s);
-		const float bp = (stand + room) / float(1 + RisingNear(s, r));
+		const float bp = (stand + room) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s, r)));
 		if (fromBlock)
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z) + ":block-fit@"
 				+ int(s.x) + "," + int(s.z) + "/" + int(bp);

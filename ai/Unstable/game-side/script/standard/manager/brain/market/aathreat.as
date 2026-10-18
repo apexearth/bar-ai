@@ -708,7 +708,10 @@ void AatUpdate()
 			if ((d < int(gOwnCount.length())) && (gOwnCount[d] > 0))
 				ownMob += float(gOwnCount[d]) * TowerCostEq(d) * AatTrade(d);
 		}
-		float whole = (gAatAirMem - ownMob) / tMob;
+		// ...AND OUR SHARE OF IT, as the defence target takes (RiskFill): each seat sized the team's whole answer
+		// against their whole air, so eight seats built eight answers (his 10-18 8v8: 131 AA bots against
+		// 2,200-2,900 m of their air).
+		float whole = (gAatAirMem * AnswerShare() - ownMob) / tMob;
 		whole = (whole > 0.f) ? whole : 0.f;
 		if (gAatGroundShort > whole) {
 			gAatGroundShort = whole;
