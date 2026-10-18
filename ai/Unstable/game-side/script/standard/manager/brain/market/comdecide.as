@@ -1148,6 +1148,9 @@ int gCaVerdict = -1;
 CCircuitDef@ gCaTower = null;
 float gCaDps = 0.f, gCaHp = 0.f, gCaAA = 0.f, gCaTDie = 0.f, gCaTKill = 0.f;
 int gCaThreatN = 0, gCaTurretN = 0, gCaRetreatN = 0, gCaSafeN = 0, gCaLogAt = 0;
+const float COM_AIR_TAU = 3.f;   // seconds the health-loss rate is smoothed over: the decision's own 1 s clock x 3 ticks
+float gCaHpPrev = 0.f, gCaLoss = 0.f;
+int gCaHpAt = -1;
 
 float ComAAAt(const AIFloat3& in at)
 {
@@ -1208,11 +1211,24 @@ void ComAirAssess(CCircuitUnit@ u, const AIFloat3& in here, float hpMax)
 		gCaDps += dps;
 		gCaHp += hp;
 	}
-	if (gCaDps <= 0.f)
+	// Genuinely threatened is health actually falling with their strike air on him: a few planes passing
+	// read 40 s to death at full health and pulled four commanders off work at 4.5 min (s144, all lost).
+	const float hpAbs = gCsHp * hpMax;
+	float lossRate = 0.f;
+	if ((gCaHpAt >= 0) && (ai.frame > gCaHpAt)) {
+		const float dt = float(ai.frame - gCaHpAt) / float(SECOND);
+		const float drop = (gCaHpPrev - hpAbs) / dt;
+		const float k = (dt < COM_AIR_TAU) ? dt / COM_AIR_TAU : 1.f;
+		gCaLoss += (((drop > 0.f) ? drop : 0.f) - gCaLoss) * k;
+	}
+	gCaHpPrev = hpAbs;
+	gCaHpAt = ai.frame;
+	lossRate = gCaLoss;
+	if ((gCaDps <= 0.f) || (lossRate <= 0.f))
 		return;
 	++gCaThreatN;
 	gCaAA = ComAAAt(here);
-	gCaTDie = gCsHp * hpMax / gCaDps;
+	gCaTDie = hpAbs / lossRate;
 	gCaTKill = (gCaAA > 0.f) ? gCaHp / gCaAA : 1e9f;
 	if (gCaTKill <= gCaTDie) {
 		++gCaSafeN;
@@ -1223,7 +1239,8 @@ void ComAirAssess(CCircuitUnit@ u, const AIFloat3& in here, float hpMax)
 	float bestEnd = gCaTDie;
 	for (uint i = 0; (bp > 0.f) && (opts !is null) && (i < opts.length()); ++i) {
 		const int d = opts[i];
-		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (ProtClassOf(d) != PROT_AA) || (Air::NaAirDps(d) <= 0.f))
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (ProtClassOf(d) != PROT_AA) || (Air::NaAirDps(d) <= 0.f)
+			|| Catalog::gFloater[d] || !ai.CanBeBuiltAt(Catalog::Def(d), here))
 			continue;
 		const float tb = Catalog::gBuildTime[d] / bp;
 		if ((Catalog::gCostM[d] > Eco::MCur() + Eco::MInc() * tb) || (Catalog::gCostE[d] > Eco::ECur() + Eco::EInc() * tb))
