@@ -926,6 +926,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				? (hUPos.distance2D(at) / hUSpeed) : 60.f;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c,
 				cls != PROT_DEF);
+		if (cls == PROT_AA)
+			AansNoteAA(d, gain, c.value, c.mCost + c.tCost);
 		if (rankNow && (cls == PROT_DEF) && (gDefRankDef.length() > 0))
 			gDefRankV[gDefRankV.length() - 1] = c.value;
 		if (cls == PROT_DEF) {
@@ -954,6 +956,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			own.spotId = cls;
 		}
 	}
+	if ((half == HALF_AIRDEF) && (w.def !is null))
+		AansNoteWin(int(w.def.id));
 	if (rankNow && (gDefRankDef.length() > 0)) {
 		gNextDefRankOf[ruid] = ai.frame + 60 * SECOND;
 		string r = "";

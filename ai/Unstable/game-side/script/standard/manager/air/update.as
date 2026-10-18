@@ -608,6 +608,7 @@ void Update()
 	}
 	TairUpdate();
 	EveryStat();
+	AnswerStat();
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
 		{ double _tA = Perf::T0(); RunElection(); Perf::Add("air.RunElection", _tA); }

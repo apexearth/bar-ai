@@ -49,6 +49,11 @@ int gAatGuardN = 0;
 int gAatPriceN = 0;
 array<int> gAatGroundAA;
 bool gAatGroundAAAt = false;
+float gAatRefR2M = 0.f;     // their armed air's stand-off reach squared, metal-weighted
+float gAatRaidHp = 0.f;     // the most strike air over our ground at once, or one that killed ours, decayed
+float gAatRaidM = 0.f;
+float gAatRaidSpd = 0.f;
+array<float> gAatOff;
 
 bool AatOn()
 {
@@ -57,6 +62,60 @@ bool AatOn()
 		gAatOnV = ai.GetTunable("apex_aa_threat", TUNE_AA_THREAT) > 0.f;
 	}
 	return gAatOnV;
+}
+
+// TUNE_AIR_ANSWER (docs/tunables.md)
+int gAansOn = -1;
+bool AirAnswerOn()
+{
+	if (gAansOn < 0)
+		gAansOn = (ai.GetTunable("apex_air_answer", TUNE_AIR_ANSWER) > 0.f) ? 1 : 0;
+	return gAansOn > 0;
+}
+
+// The reach an aircraft hits the ground from: none for what it drops or crashes onto its target.
+float AatStandOff(int d)
+{
+	if (gAatOff.length() == 0) {
+		gAatOff.resize(Catalog::gDefCount + 1);
+		for (int i = 1; i <= Catalog::gDefCount; ++i) {
+			const bool over = Catalog::gKamikaze[i] || Catalog::Def(i).IsRoleAny(Unit::Role::BOMBER.mask);
+			gAatOff[i] = over ? 0.f : Catalog::gLandRange[i];
+		}
+	}
+	return Catalog::ValidId(d) ? gAatOff[d] : 0.f;
+}
+
+float AatStandOffMean()
+{
+	return (gAatRefM > 1.f) ? sqrt(gAatRefR2M / gAatRefM) : 0.f;
+}
+
+// The share of their firing positions over a place that d, standing in it, reaches: they hit
+// what stands within the place's radius from their own stand-off, so a tower they outrange
+// shoots only at the planes that come closer.
+float AatReach(int d)
+{
+	const float r = Catalog::gAirRange[d];
+	if ((r <= 1.f) || (gAatRefM <= 1.f))
+		return 1.f;
+	const float rho = AatRadius();
+	const float f = r * r / (rho * rho + gAatRefR2M / gAatRefM);
+	return (f < 1.f) ? f : 1.f;
+}
+
+float AatRaidHp() { return gAatRaidHp; }
+float AatRaidM() { return gAatRaidM; }
+float AatRaidSpd() { return gAatRaidSpd; }
+float AatLossAirRate() { return gAatLossAir / Military::BLEED_TAU; }
+
+void AatNoteRaid(float hp, float m, float spd)
+{
+	if ((hp > gAatRaidHp) && (spd > 0.f)) {
+		gAatRaidHp = hp;
+		gAatRaidM = m;
+		gAatRaidSpd = spd;
+	}
 }
 
 float AatRadius()
@@ -97,7 +156,9 @@ float AatQ(int d, bool vsAir)
 // The metal of their aircraft one metal of `d` answers.
 float AatTrade(int d)
 {
-	const float q = AatQ(d, true);
+	float q = AatQ(d, true);
+	if (AirAnswerOn())
+		q *= AatReach(d);
 	const float ref = (gAatRefM > 1.f) ? (gAatRefQM / gAatRefM) : 0.f;
 	if ((q <= 0.f) || (ref <= 0.f))
 		return 1.f / AACoverFrac();
@@ -203,7 +264,23 @@ void AatNoteLoss(const AIFloat3& in at, const CCircuitDef@ mine, const CCircuitD
 		gAatHurtS[s] += mine.costM;
 		gAatLastS[s] = ai.frame;
 	}
-	const float am = TowerCostEq(int(atk.id));
+	const int ad = int(atk.id);
+	const float am = TowerCostEq(ad);
+	const bool strikeGround = !mine.IsAbleToFly() && (Catalog::gSurfT[ad] > 0.01f);
+	if (strikeGround)
+		AatNoteRaid(Catalog::gHealth[ad], am, Catalog::gSpeed[ad]);
+	if (strikeGround && AirAnswerOn()) {
+		// what hurt us is their air as much as what we saw, and air that kills under the AA standing
+		// here is air that AA did not answer
+		const float off = AatStandOff(ad);
+		gAatRefQM += AatQ(ad, false) * am;
+		gAatRefM += am;
+		gAatRefR2M += off * off * am;
+		AatCoverRefresh();
+		const float cov = gAatCover[s] + gAatMob[s];
+		if ((cov > 0.f) && (gAatSeen[s] < cov + am))
+			gAatSeen[s] = cov + am;
+	}
 	if (gAatSeen[s] < am)
 		gAatSeen[s] = am;
 	if (gAatHurtAt[s] < 0) {
@@ -297,6 +374,8 @@ bool AatStaticPrice(int d, AIFloat3& out at, float& out gain)
 	const float horiz = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
 	const float anchor = 1.f / ((horiz > 1.f) ? horiz : 120.f);
 	int best = -1;
+	float bestStop = 0.f;
+	bool bestSat = false;
 	for (uint p = 0; p < gAatPos.length(); ++p) {
 		const float seen = gAatSeen[p];
 		if ((seen <= 0.f) || (gAatStake[p] <= 0.f))
@@ -315,13 +394,90 @@ bool AatStaticPrice(int d, AIFloat3& out at, float& out gain)
 		if (g > gain) {
 			gain = g;
 			best = int(p);
+			bestStop = stopped;
+			bestSat = (s1 <= 0.f);
 		}
 	}
 	if (best < 0)
 		return false;
 	at = gAatPos[best];
 	++gAatPriceN;
+	AansNoteStatic(d, at, bestStop, bestSat);
 	return true;
+}
+
+// airanswer-stat: the AA defs priced since the last line, with the terms that ranked them.
+array<int> gAnsDef;
+array<float> gAnsV, gAnsG, gAnsC, gAnsSt;
+array<int> gAnsAtX, gAnsAtZ, gAnsSat, gAnsWin, gAnsN;
+
+int AansSlot(int d)
+{
+	for (uint i = 0; i < gAnsDef.length(); ++i) {
+		if (gAnsDef[i] == d)
+			return int(i);
+	}
+	gAnsDef.insertLast(d);
+	gAnsV.insertLast(0.f);
+	gAnsG.insertLast(0.f);
+	gAnsC.insertLast(0.f);
+	gAnsSt.insertLast(-1.f);
+	gAnsAtX.insertLast(-1);
+	gAnsAtZ.insertLast(-1);
+	gAnsSat.insertLast(-1);
+	gAnsWin.insertLast(0);
+	gAnsN.insertLast(0);
+	return int(gAnsDef.length()) - 1;
+}
+
+void AansNoteStatic(int d, const AIFloat3& in place, float stopped, bool sat)
+{
+	const int s = AansSlot(d);
+	gAnsSt[s] = stopped;
+	gAnsAtX[s] = int(place.x);
+	gAnsAtZ[s] = int(place.z);
+	gAnsSat[s] = sat ? 1 : 0;
+}
+
+void AansNoteAA(int d, float gain, float value, float cost)
+{
+	const int s = AansSlot(d);
+	gAnsV[s] = value;
+	gAnsG[s] = gain;
+	gAnsC[s] = cost;
+	++gAnsN[s];
+}
+
+void AansNoteWin(int d)
+{
+	++gAnsWin[AansSlot(d)];
+}
+
+string AansAAPart()
+{
+	string s = " off=" + int(AatStandOffMean()) + " rho=" + int(AatRadius()) + " aa=[";
+	for (uint i = 0; i < gAnsDef.length(); ++i) {
+		const int d = gAnsDef[i];
+		if (i > 0)
+			s += " ";
+		s += Catalog::Def(d).GetName() + ":v" + NnF(gAnsV[i] * 1000.f, 3)
+			+ "/g" + NnF(gAnsG[i], 2) + "/c" + int(gAnsC[i])
+			+ "/tr" + NnF(AatTrade(d), 2) + "/re" + NnF(AatReach(d), 2)
+			+ "/st" + NnF(gAnsSt[i], 2) + "/sat" + gAnsSat[i]
+			+ "/at" + gAnsAtX[i] + "," + gAnsAtZ[i]
+			+ "/n" + gAnsN[i] + "/top" + gAnsWin[i];
+	}
+	gAnsDef.resize(0);
+	gAnsV.resize(0);
+	gAnsG.resize(0);
+	gAnsC.resize(0);
+	gAnsSt.resize(0);
+	gAnsAtX.resize(0);
+	gAnsAtZ.resize(0);
+	gAnsSat.resize(0);
+	gAnsWin.resize(0);
+	gAnsN.resize(0);
+	return s + "]";
 }
 
 // Their air has seen us with nothing that shoots up, or a place where it killed a building
@@ -453,6 +609,9 @@ void AatUpdate()
 	gAatLossAll *= k;
 	gAatRefQM *= k;
 	gAatRefM *= k;
+	gAatRefR2M *= k;
+	gAatRaidHp *= k;
+	gAatRaidM *= k;
 	for (uint p = 0; p < gAatPos.length(); ) {
 		gAatHurtS[p] *= k;
 		gAatHurtM[p] *= k;
@@ -466,16 +625,20 @@ void AatUpdate()
 	float airNow = 0.f;
 	const int n = aiEnemyMgr.GetEnemyGroupCount();
 	for (int g = 0; g < n; ++g) {
-		float airM = 0.f;
+		float airM = 0.f, airHp = 0.f, airSpd = 0.f;
 		const int kc = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 		for (int i = 0; i < kc; ++i) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, i);
 			if (!Catalog::ValidId(d) || !Catalog::gFlyer[d] || Catalog::gBuilder[d] || (Catalog::gSurfT[d] <= 0.01f))
 				continue;
 			const float m = TowerCostEq(d);
+			const float off = AatStandOff(d);
 			airM += m;
+			airHp += Catalog::gHealth[d];
+			airSpd += Catalog::gSpeed[d] * Catalog::gHealth[d];
 			gAatRefQM += AatQ(d, false) * m;
 			gAatRefM += m;
+			gAatRefR2M += off * off * m;
 		}
 		if (airM <= 0.f)
 			continue;
@@ -483,6 +646,8 @@ void AatUpdate()
 		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
 		if (StakeAt(gp, r) <= 0.f)
 			continue;
+		if (airHp > 0.f)
+			AatNoteRaid(airHp, airM, airSpd / airHp);
 		const int s = AatSlot(gp);
 		if (gAatSeen[s] < airM)
 			gAatSeen[s] = airM;

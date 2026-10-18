@@ -407,6 +407,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		Market::EarlyBallNoteOrder(o);
 		Market::OpenRaceNoteOrder(o);
 		Market::CounterMixNoteOrder(o);
+		Air::AnsNoteOrder(o);
 		if (lineHave > 0)
 			lineSec += Catalog::BuildSecondsAt(int(o.id), lineBp);
 		++lineHave;
