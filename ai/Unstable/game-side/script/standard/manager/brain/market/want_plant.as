@@ -1516,6 +1516,44 @@ void PlantExpApply(int d, Want& c)
 	c.nnMult *= gPlantExpMult[d];
 }
 
+// HANDS ARE HANDS (TUNE_HANDS_ONCE; his 10-17: the T2 lab starts its T2 cons and an advanced air
+// plant goes up beside it -- fusions and upgraded mexes first, air once the economy carries it).
+// reachKin counts copies within a domain, so a T2 lab already making T2 cons left an advanced air
+// plant's build-power half at full price. Here every finished or manned plant of any domain that
+// makes a builder of at least this plant's builder tier is the same hands.
+int gHoOn = -1;
+bool HandsOnceOn()
+{
+	if (gHoOn < 0)
+		gHoOn = (ai.GetTunable("apex_hands_once", TUNE_HANDS_ONCE) > 0.f) ? 1 : 0;
+	return gHoOn > 0;
+}
+
+int HandKinOf(int d, int con)
+{
+	if (!Catalog::ValidId(con))
+		return 0;
+	const int tier = DefTier(con);
+	int n = 0;
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		const int rd = gComDef[ci];
+		if ((rd == d) || (Catalog::gBuildsList[rd].length() == 0))
+			continue;
+		if ((gComState[ci] != CS_FINISHED)
+			&& ((gComTask[ci] is null) || (Requests::Workers(gComTask[ci]) == 0)))
+			continue;
+		const array<int>@ ps = Catalog::gBuildsList[rd];
+		for (uint p = 0; p < ps.length(); ++p) {
+			const int pd = ps[p];
+			if (Catalog::gAvailable[pd] && Catalog::gMobile[pd] && Catalog::gBuilder[pd] && (DefTier(pd) >= tier)) {
+				++n;
+				break;
+			}
+		}
+	}
+	return n;
+}
+
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
@@ -1777,7 +1815,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// production -- see the duplicate block. Expansion is not substitutable
 		// (a nano claims no ground), so only pipeTerm is.
 		const float rateMul = PipeRateMul(d, uid);
-		const float pipeT = evAir ? Air::EvHandsTerm(pipeTerm, pipe) * Air::EvConEff(bestCon) : pipeTerm;
+		float pipeT = evAir ? Air::EvHandsTerm(pipeTerm, pipe) * Air::EvConEff(bestCon) : pipeTerm;
+		const int handKin = HandsOnceOn() ? HandKinOf(d, bestCon) : 0;
+		if (handKin > 0)
+			pipeT /= float(1 + handKin);
 		const float conHalf = (pipeT + expTerm) * rateMul;
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
@@ -1950,11 +1991,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		dupGain *= LineMul(d);
 		// The duplicate decision, in one line, so the audit can assert it
 		// rather than infer it from two labs standing.
-		if ((reachKin > 0) && (ai.frame >= gNextPlantDupLog)) {
+		if (((reachKin > 0) || (handKin > 0)) && (ai.frame >= gNextPlantDupLog)) {
 			gNextPlantDupLog = ai.frame + 30 * SECOND;
 			AIFloat3 nlp2;
 			AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
-				+ " kin=" + reachKin
+				+ " kin=" + reachKin + " handKin=" + handKin
 				+ " dupKin=" + dupKin
 				+ " unlocks=" + (unlockCap ? 1 : 0)
 				+ " unlockW=" + formatFloat(unlockW, "", 0, 2)

@@ -464,6 +464,11 @@ PANELS = [
              "advanced air plant while it is still being built, as many as it will want once finished; they "
              "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
              "still short of turrets is unfinished. OFF: a factory gets turrets only once it is finished."),
+            ("TUNE_HANDS_ONCE", "ON: a new factory is not bought as extra constructors when another factory of any "
+             "kind already makes constructors as good: an advanced air plant next to a T2 lab that is making T2 "
+             "constructors is worth only what its aircraft are worth, so the economy (fusions, upgraded "
+             "extractors) comes first. `apex: plantdup ... handKin=` shows the count. OFF: an air plant counts "
+             "its air constructors as new build power even beside a T2 lab."),
             ("TUNE_COM_AIR", "ON: the commander notices enemy bombers and gunships. When the ones that can reach "
              "him would kill him before our anti-air near him kills them, he builds an anti-air tower where he "
              "stands if it would be up in time to save him, otherwise he retreats. `apex: com-air` shows each "
