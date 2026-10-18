@@ -4,7 +4,7 @@ namespace Military {
 // cannot see registers a look: a place, and the metal its expected outcome
 // moves by if it knew. Scouts are bought and sent on the trips those looks
 // make; how many is an output of the looks, not a rule.
-const int LOOK_SIEGE = 0, LOOK_RAID = 1, LOOK_HUNT = 2, LOOK_WING = 3, LOOK_SILENCE = 4, LOOK_KINDS = 5;
+const int LOOK_SIEGE = 0, LOOK_RAID = 1, LOOK_HUNT = 2, LOOK_WING = 3, LOOK_SILENCE = 4, LOOK_JAM = 5, LOOK_KINDS = 6;
 const int LOOK_MAX = 32;          // memory: the cheapest look is evicted
 const float LOOK_MERGE_R = 500.f; // the DLL's spot-wanted merge radius
 const float LOOK_TRIP_R = 600.f;  // one cheap scout's sight, near enough
@@ -42,6 +42,7 @@ string LookKindName(int k)
 	if (k == LOOK_RAID) return "raid";
 	if (k == LOOK_HUNT) return "hunt";
 	if (k == LOOK_WING) return "wing";
+	if (k == LOOK_JAM) return "jam";
 	return "silence";
 }
 

@@ -1160,6 +1160,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			}
 		}
 	}
+	if (half == HALF_SENSE)
+		JamSightPropose(unit, w);
 	if ((half == HALF_GROUND) && !defOff) {
 		Want@ rf = RefillPropose(unit, hT1Out);
 		if ((rf !is null) && ((w.def is null) || !unit.circuitDef.CanBuild(w.def) || (rf.value > w.value))) {

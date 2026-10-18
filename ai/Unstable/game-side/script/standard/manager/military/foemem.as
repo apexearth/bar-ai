@@ -32,6 +32,7 @@ float gFmLiveS = 0.f, gFmLiveM = 0.f;
 float gFmMemS = 0.f, gFmMemM = 0.f;            // out of sight, certainty-weighted
 float gFmLostS = 0.f, gFmLostM = 0.f;          // out of sight, the uncertain rest
 float gFmMemEtaS = -1.f;                       // strength-weighted, out of sight
+float gFmBlipM = 0.f;                          // a blip's metal: the mean known armed unit
 float gFmMemCert = 0.f;
 float gFmNearLive = -1.f;
 int gFmNLos = 0, gFmNRadar = 0, gFmNGhost = 0, gFmNGone = 0, gFmNBlip = 0;
@@ -90,6 +91,7 @@ int FmSlot(int id)
 void FmDrop(int s)
 {
 	const int id = gFmId[s];
+	JsUncredit(id);
 	if ((id >= 0) && (id < int(gFmSlotOf.length())))
 		gFmSlotOf[id] = 0;
 	gFmId[s] = -1;
@@ -142,8 +144,11 @@ void FoeMemStep()
 	const int end = (gFmIdx + gFmChunk < gFmTotal) ? gFmIdx + gFmChunk : gFmTotal;
 	for (int i = gFmIdx; i < end; ++i) {
 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
-		if ((d > 0) && !FmArmedGround(d))
+		if ((d > 0) && !FmArmedGround(d)) {
+			if (Catalog::ValidId(d) && Catalog::gJammer[d])
+				JsNoteJammer(i, d);
 			continue;
+		}
 		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
 			continue;
@@ -171,6 +176,10 @@ void FoeMemStep()
 			gFmDef[s] = d;
 		gFmSweep[s] = gFmSweepN;
 		gFmGone[s] = false;
+		if (gFmLive[s] && !live)
+			JsNoteVanish(s);
+		else if (live && !gFmLive[s])
+			JsUncredit(id);
 		gFmLive[s] = live;
 		if (live) {
 			gFmPos[s] = aiEnemyMgr.GetEnemyUnitPosAt(i);
@@ -264,6 +273,7 @@ void FmPublish()
 	gFmDeathPos.resize(0);
 	const float blipS = (knN > 0) ? knS / float(knN) : 0.f;
 	const float blipM = (knN > 0) ? knM / float(knN) : 0.f;
+	gFmBlipM = blipM;
 	const float blipSpd = (gDgFoeSpd > 1.f) ? gDgFoeSpd : Market::FoeSpeedCap();
 	// Pass 2: bin every held unit by its arrival.
 	for (uint s = 0; s < n; ++s) {

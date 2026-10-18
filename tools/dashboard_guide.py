@@ -467,6 +467,13 @@ PANELS = [
             ("TUNE_ALLY_AIR", "ON: when enemy aircraft are killing an ally's buildings or units anywhere, "
              "our spare fighters fly to that spot, not to the ally's main base. `apex: intercepting for ally` "
              "shows where they went. OFF: fighters help an ally only when enemy air is near its main base."),
+            ("TUNE_JAM_SIGHT", "ON: where enemy units drop off our radar inside its coverage, where we saw a "
+             "radar jammer, or where our things die to something we never saw, the AI believes an army is "
+             "hiding there: constructors, new buildings, raids and escorts treat that ground as dangerous, and "
+             "it buys eyes on it -- a cheap camera tower at our side of the spot, or a scout sent over it. "
+             "Seeing the spot clears the doubt. `apex: jamsight-stat` (every minute, ON or OFF) lists the "
+             "suspected spots, what they were worth, the cameras ordered and what they found. OFF: only what "
+             "is on radar or in sight counts."),
             ("TUNE_ORDER_RELEASE", "ON: when the constructor sent to start a lab, gantry or other big building "
              "is pulled away before it starts and nobody else is on the way, the order no longer counts as "
              "coming: the next constructor asked for it takes the same order, or starts a new one if the old "

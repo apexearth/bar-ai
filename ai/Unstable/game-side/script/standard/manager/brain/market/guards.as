@@ -188,7 +188,7 @@ float EscortOdds(CCircuitUnit@ wkr, const AIFloat3& in where)
 	}
 	if (gEcvM <= 1.f)
 		return 1e6f;
-	const float byM = StrRatio(ai.GetEnemyArmedCostNear(where, gEcvR), gEcvM);
+	const float byM = StrRatio(Military::ArmedNearM(where, gEcvR), gEcvM);
 	const float foeT = ai.GetUnitThreatAt(wkr, where);
 	const float byT = (foeT <= 0.f) ? 0.f : ((gEcvT > 0.f) ? (foeT / gEcvT) : 1e6f);
 	return (byM > byT) ? byM : byT;
@@ -251,11 +251,11 @@ float WorkerEnemyM(CCircuitUnit@ wkr, float r)
 {
 	const int id = int(wkr.id);
 	if ((id < 0) || (id >= int(gEnMFrame.length())))
-		return ai.GetEnemyArmedCostNear(wkr.GetPos(ai.frame), r);
+		return Military::ArmedNearM(wkr.GetPos(ai.frame), r);
 	if (gEnMFrame[id] == ai.frame)
 		return gEnMVal[id];
 	gEnMFrame[id] = ai.frame;
-	gEnMVal[id] = ai.GetEnemyArmedCostNear(wkr.GetPos(ai.frame), r);   // metal, not the count GetEnemyCostAt gives (S28)
+	gEnMVal[id] = Military::ArmedNearM(wkr.GetPos(ai.frame), r);   // metal, not the count GetEnemyCostAt gives (S28)
 	return gEnMVal[id];
 }
 

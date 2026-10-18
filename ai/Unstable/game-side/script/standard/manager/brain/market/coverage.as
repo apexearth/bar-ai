@@ -717,6 +717,9 @@ float ThreatAt(const AIFloat3& in pos)
 	const float implied = LossRateAt(pos) * gRkTau;
 	if (implied > t)
 		t = implied;
+	const float suspected = Military::JsSuspectM(pos, gRkThreatR);
+	if (suspected > t)
+		t = suspected;
 	const float baseline = gRkRaid + (gRkHost - gRkRaid) * GradAt(pos);
 	return (baseline > t) ? baseline : t;
 }
@@ -801,6 +804,13 @@ float HazardWith(const AIFloat3& in pos, float cover)
 		if (appr > p)
 			p = appr;
 	}
+	// a force we suspect here is presence without the gradient: the evidence places it
+	const float sM = Military::JsSuspectM(pos, gRkThreatR);
+	if (sM > 0.f) {
+		const float sp = sM / (sM + ((defended > 0.f) ? defended : 0.f));
+		if (sp > p)
+			p = sp;
+	}
 	if (p < gRkFloorP)
 		p = gRkFloorP;
 	if (p > 1.f)
@@ -877,7 +887,12 @@ float TripShare()
 float TripRiskWith(const AIFloat3& in pos, float share)
 {
 	RiskFill();
-	return GradAt(pos) * (1.f - share);
+	const float g = GradAt(pos) * (1.f - share);
+	const float sM = Military::JsSuspectM(pos, Military::FoeReach());
+	if (sM <= 0.f)
+		return g;
+	const float sp = sM / (sM + ((gRkOurArmy > 0.f) ? gRkOurArmy : 0.f));
+	return (sp > g) ? sp : g;
 }
 
 float TripRisk(const AIFloat3& in pos)

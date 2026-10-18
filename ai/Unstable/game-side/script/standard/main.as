@@ -203,6 +203,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Market::LabNanoLog(); Perf::Add("up.labnano", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
 	{ double _t = Perf::T0(); Military::FoeMemStep(); Perf::Add("up.foemem", _t); }
+	{ double _t = Perf::T0(); Military::JsUpdate(); Perf::Add("up.jamsight", _t); }
 	{ double _t = Perf::T0(); Market::DefMeasuredStep(); Perf::Add("up.defmeas", _t); }
 	if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
@@ -353,6 +354,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	double hkT = Perf::T0();
 	const CCircuitDef@ cdef = unit.circuitDef;
 	const AIFloat3 at = unit.GetPos(ai.frame);
+	if (cdef !is null)
+		Military::JsNoteOwnBlast(int(unit.id), at, int(cdef.id));
 	// A yard sunk where it stood is not rebuilt there while the mark lives.
 	if ((cdef !is null) && !cdef.IsMobile()
 		&& (Market::PlantClass(int(cdef.id)) == Market::PC_WATER)
@@ -460,6 +463,8 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 			if ((gShotUnseen % 20) == 1)
 				AiLog(Factory::T() + "apex: shot-unseen t=" + ai.teamId + " " + unit.circuitDef.GetName()
 					+ " by " + attackerDef.GetName() + " n=" + gShotUnseen);
+		} else if ((unit.circuitDef !is null) && WasFinished(int(unit.id))) {
+			Military::JsNoteUnseenLoss(unit, unit.circuitDef.costM);
 		}
 	}
 	if (WasFinished(int(unit.id))) {
