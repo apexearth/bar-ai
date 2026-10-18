@@ -1046,18 +1046,23 @@ bool SecondAdvLabWaits(Want@ w)
 		gSalOn = (ai.GetTunable("apex_adv_lab_wait", TUNE_ADV_LAB_WAIT) > 0.f) ? 1 : 0;
 	if ((gSalOn <= 0) || (w is null) || (w.def is null) || ((w.kind != WK_PLANT) && (w.kind != WK_TECH)))
 		return false;
+	// The tier is the build tree's (TreeTier), so a gantry, an experimental plant or a modded one counts
+	// with the T2 labs -- the config's T2 attribute did not know the scav plants (his 10-18 game).
 	const int d = int(w.def.id);
-	if (!Catalog::ValidId(d) || Catalog::gMobile[d] || ((Factory::userData[d].attr & Factory::Attr::T2) == 0))
+	if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (TreeTier(d) < 2))
 		return false;
 	bool have = false;
 	for (uint fi = 0; (fi < Factory::gFacUnits.length()) && !have; ++fi) {
 		CCircuitUnit@ fu = Factory::gFacUnits[fi];
-		have = (fu !is null) && (fu.circuitDef !is null)
-			&& ((Factory::userData[int(fu.circuitDef.id)].attr & Factory::Attr::T2) != 0);
+		have = (fu !is null) && (fu.circuitDef !is null) && (TreeTier(int(fu.circuitDef.id)) >= 2);
 	}
-	if (!have && AdvPlantInFlight()) {
-		if ((gAdvInFlightRow >= 0) && (gComDef[gAdvInFlightRow] == d))
-			return false;
+	for (uint ci = 0; (ci < ComLen()) && !have; ++ci) {
+		const int cd = gComDef[ci];
+		if ((gComState[ci] == CS_FINISHED) || (cd == d) || !Catalog::ValidId(cd) || Catalog::gMobile[cd]
+			|| (TreeTier(cd) < 2))
+			continue;
+		if ((gComState[ci] == CS_ORDERED) && (gComTask[ci] !is null) && (Requests::Workers(gComTask[ci]) == 0))
+			continue;   // an order nobody walks to is not in flight (AdvPlantInFlight's clause)
 		have = true;
 	}
 	if (!have)
@@ -2354,10 +2359,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// "mexes/energy -> T1 lab -> more energy -> 1 or 2 turrets to guard";
 	// the commander's first-gun rule below covers the lab the moment it is
 	// ordered.
-	if (!aaPanic && !superPush && !convertPush && !upOwed && NnTechHoist(ranked)) {
-		why = "nntech";
-		coverPush = true;
-	}
 	// The job a self-gun was put up beside comes next, or the gun guards nothing.
 	if (!aaPanic && !superPush && !convertPush && !coverPush && (gComStayUntil > ai.frame)
 		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))

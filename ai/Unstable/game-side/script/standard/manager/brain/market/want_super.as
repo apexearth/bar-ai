@@ -303,6 +303,10 @@ bool SuperPushable(const CCircuitDef@ d)
 	// push took a Juno 16 times on one seat of his no-T2 8v8.
 	if ((d !is null) && (Catalog::LauncherKind(int(d.id)) != Catalog::LK_NONE))
 		return false;
+	// A gantry is a factory: built only when what it makes is wanted, on its price (his 10-18).
+	if ((d !is null) && Catalog::ValidId(int(d.id)) && !Catalog::gMobile[int(d.id)]
+		&& (Catalog::gBuildsList[int(d.id)].length() > 0) && (Catalog::gBuildPower[int(d.id)] > 0.f))
+		return false;
 	if ((d is null) || !Catalog::gAntiNuke[int(d.id)])
 		return true;
 	if (Brain::EnemyNukeSilos() > 0)

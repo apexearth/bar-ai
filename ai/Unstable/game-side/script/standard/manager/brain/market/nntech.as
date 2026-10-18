@@ -4,8 +4,10 @@
 // T2, T3, air -- one decision. The rule's pick is what the market did in the
 // window (such a plant at the top of an election, or picked); the net (NNT_*)
 // moves it once it has earned trust, and discovery games mix in a per-game
-// share of the other answer so both timings get seen in similar states. NOW
-// hoists the plant until one is under way; WAIT takes it off the table.
+// share of the other answer so both timings get seen in similar states. WAIT
+// takes it off the table; NOW leaves it to its own price (his 10-18: no
+// market-value override for a plant -- we build one only when we strongly
+// want what it makes).
 namespace Market {
 
 const string NNT_TECH = "labM,techSeen,techTop,techPick,elN,techV,topV,minute,ownTier,nextTier";
@@ -133,7 +135,7 @@ int gTechNextAt = -1;
 bool gTechHeader = false;
 float gTechFlat = -1.f;      // discovery games: the head flat last applied (NnHeadFlat)
 int gTechExpTier = -1, gTechExpAt = 0;   // discovery: the tier being timed and the moment drawn for it
-int gTechDecN = 0, gTechDevN = 0, gTechHoistN = 0, gTechHeldN = 0;
+int gTechDecN = 0, gTechDevN = 0, gTechHeldN = 0;
 // what the market did since the last decision
 float gTwLabM = 0.f, gTwSeen = 0.f, gTwTop = 0.f, gTwPick = 0.f, gTwEl = 0.f, gTwV = 0.f, gTwTopV = 0.f;
 float gTwEta = 0.f;   // elections whose ladder reached the target sooner through the plant, each at its funded share
@@ -303,7 +305,7 @@ void NnTechNote(array<Want@>@ ranked)
 		if (ai.frame >= gTechLogAt) {
 			gTechLogAt = ai.frame + 60 * SECOND;
 			AiLog("apex: nntech-stat t=" + ai.teamId + " dec=" + gTechDecN + " dev=" + gTechDevN
-				+ " cur=" + gTechCur + " hoist=" + gTechHoistN + " held=" + gTechHeldN
+				+ " cur=" + gTechCur + " held=" + gTechHeldN
 				+ " flat=" + NnF(gTechFlat, 2));
 		}
 	}
@@ -326,30 +328,6 @@ void NnTechPicked(array<Want@>@ ranked)
 			++gTechHeldN;
 		}
 	}
-}
-
-// Ahead of the draw: NOW puts the lab first until one is under way. Returns
-// true when it did, so the draw keeps it.
-bool NnTechHoist(array<Want@>@ ranked)
-{
-	if (!TechOpen() || (ranked.length() == 0) || (gTechCur != TECH_NOW))
-		return false;
-	if (IsT2Lab(ranked[0]))
-		return true;
-	if (T2LabComing()) {
-		gTechCur = -1;
-		return false;
-	}
-	for (uint r = 1; r < ranked.length(); ++r) {
-		if (IsT2Lab(ranked[r])) {
-			Want@ tw = ranked[r];
-			ranked.removeAt(r);
-			ranked.insertAt(0, tw);
-			++gTechHoistN;
-			return true;
-		}
-	}
-	return false;
 }
 
 }  // namespace Market
