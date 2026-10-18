@@ -79,6 +79,17 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 56 | Less AA bots, more AA static when they have little air (10-18) | mobile AA answer x AnswerShare() (bcd454c0) | aacount.py aaBots/aaTowers | FIRES -- lane seeds 31-33: bots 88/125/57 -> 18/50/16, towers 32/22/17 -> 47/40/26; not yet in his game |
 | 57 | Buildings too spread out, we waste room (10-18) | TUNE_LATHE_CONCENTRATE (bcd454c0, off) | layout.py clusters/seat, ground used | UNTESTED -- A/B running; baseline ~35-37 clusters/seat, 29% ground used at min 15 |
 
+## HIS +100 SCAV 8v8 FAILS THE FRAME BUDGET 4.3x (2026-10-18)
+
+Solo run, nothing else on the machine (matches/perfsolo/base-s32; 8 Apex vs 8 BARb hard, Comet Catcher
+Remake, +100, income x2, scav units, flush placement on): 1.771 ms per AI per frame at min 20, 4,537
+units. The 16-Apex Greenest Fields benchmark passes (0.403); this setup does not. Builder elections are
+~55%: hk.maketask.builder 155 s, job:bldIdle 143 s, bld.decide 40,581 decisions at 2.6 ms; elec-slice
+asks 3-4 ms a frame (sliceUs) for 50-60 constructors a seat, oppFlips ~1,000 a minute on one seat.
+Levers measured so far: TUNE_CON_USE (a third fewer cons, eco not better, off); TUNE_HOIST_WAITS and the
+four price switches in A/B (matches/hpab). Next: fewer flips per con, cheaper decisions (memo misses:
+mc.protect 7,878 of 15,561 asks).
+
 ## A SITE MOVED AFTER PRICING IS A WALK NOBODY PRICED (2026-10-15)
 
 His watch game (army-smoke wdwatch1, t0, home 7600,4897): at 8.51 min `com-selfgun` hoisted an
