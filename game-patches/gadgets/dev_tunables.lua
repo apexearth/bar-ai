@@ -380,7 +380,6 @@ local NAMES = {
 	"apex_gantry_own_slot",  -- want_super.as: the gantry neither takes nor waits for the strategic one-at-a-time slot
 	"apex_nano_early",       -- sites.as PlantFrames/GantryShortSite + want_nano.as FactoryNanoShort + execute.as nano batch: T2+ plant frames take their nanos while rising (0)
 	"apex_t2_eco",           -- t2eco.as + nntech.as rule + decide.as super push/next-tier hoist: the ladder's evidence for the next tier; upgrades before the strategic hoists (0)
-	"apex_tech_pick",        -- nntech.as TechPickDef/IsTechPick/T2LabComing: the tech hoist moves only the team's chosen next-tier plant (0)
 	"apex_unit_limit",       -- decide.as ProposeStep: TEST ONLY, drop wants for a def at its unit count limit (0)
 	"apex_hands_once",       -- want_plant.as HandKinOf: a plant's build-power half divided by plants of any domain already making builders of its tier (0)
 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)

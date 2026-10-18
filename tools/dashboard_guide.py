@@ -471,11 +471,6 @@ PANELS = [
              "goes first). `apex: t2eco-stat` every minute shows the T2 constructors, the fusion and upgrade "
              "jobs they were offered and won, what beat them, and the lab evidence. OFF: the lab waits for the "
              "market price and the strategic hoist outranks the upgrades."),
-            ("TUNE_TECH_PICK", "ON: when the AI decides it is time for the next tier, it picks one factory for the "
-             "team: the one whose constructors can upgrade extractors and give the most build power for the "
-             "metal (usually the T2 bot or vehicle lab). A builder that cannot build that factory is not sent to "
-             "build another next-tier factory instead, so an air constructor no longer makes the advanced air "
-             "plant the T2 step. OFF: whichever builder asks first builds its own next-tier factory."),
             ("TUNE_UNIT_LIMIT", "TEST ONLY. ON: builders stop choosing a building once its unit limit is reached, "
              "for test games where every team may own only a few extractors. It also applies the old BARb "
              "config's count limits (one energy storage, three Guardians), so leave it OFF for normal play."),
