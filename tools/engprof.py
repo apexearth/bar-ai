@@ -53,7 +53,14 @@ def main():
         print("\n%5.1f min  wall %.0f ms (%.1fx)" % (f / 1800.0, wall, wall / med_wall))
         for k, v in rows[:top]:
             print("    %-58s %9.1f ms  (median %8.1f)" % (k[:58], v, med.get(k, 0.0)))
-    ai = {k: sum(v) for k, v in per.items() if k.startswith("AI::{")}
+    ai = defaultdict(float)
+    with open(log, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "ENGPROF-AI " in line:
+                for k, v in re.findall(r" (AI::{[^ ]*})=([0-9.]+)", line):
+                    ai[k] += float(v)
+    if not ai:
+        ai = {k: sum(v) for k, v in per.items() if k.startswith("AI::{")}
     if ai:
         print("\nper-AI engine timer over the game (ms):")
         for k, v in sorted(ai.items(), key=lambda kv: -kv[1]):

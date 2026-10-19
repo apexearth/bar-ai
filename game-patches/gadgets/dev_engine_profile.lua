@@ -68,8 +68,20 @@ function gadget:GameFrame(n)
 	end
 	table.sort(rows, function(a, b) return a[2] > b[2] end)
 	local parts = { string.format("ENGPROF f=%d wallMs=%.0f", n, wallMs) }
-	for i = 1, math.min(TOP, #rows) do
-		parts[#parts + 1] = string.format("%s=%.1f", rows[i][1], rows[i][2])
+	local ais = { string.format("ENGPROF-AI f=%d", n) }
+	local shown = 0
+	for i = 1, #rows do
+		local name = rows[i][1]
+		if name:find("^AI::{") then
+			-- every AI each window: the top-N cut hid most of them from the per-AI totals
+			ais[#ais + 1] = string.format("%s=%.1f", name:gsub(" ", "_"), rows[i][2])
+		elseif shown < TOP then
+			parts[#parts + 1] = string.format("%s=%.1f", name, rows[i][2])
+			shown = shown + 1
+		end
 	end
 	Spring.Echo(table.concat(parts, " "))
+	if #ais > 1 then
+		Spring.Echo(table.concat(ais, " "))
+	end
 end
