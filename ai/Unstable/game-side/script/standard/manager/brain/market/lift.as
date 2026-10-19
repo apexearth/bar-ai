@@ -150,6 +150,8 @@ void LiftNoteDead(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
+	if ((int(unit.id) >= 0) && (int(unit.id) < int(gNpSent.length())))
+		gNpSent[int(unit.id)] = -1;   // the id is reused: its next owner has had no priority sent
 	for (uint i = 0; i < gLiftSettle.length(); ++i) {
 		if (gLiftSettle[i] is unit) {
 			gLiftSettle.removeAt(i);
@@ -208,15 +210,15 @@ bool LiftIdleEnough(uint i, float flightSec)
 	return float(ai.frame - gOwnNanoWorkAt[i]) / float(SECOND) >= flightSec;
 }
 
-// AiUpdate runs once a second; a fifth of the turrets per call reads each one
-// every five seconds.
+// AiUpdate runs once a second; a tenth of the turrets per call reads each one every ten seconds (a fifth
+// was 0.8 ms a second per seat late in the 16-AI benchmark, hundreds of engine reads for a census).
 uint gLiftSampleI = 0;
 void LiftSample()
 {
 	const uint n = gOwnNano.length();
 	if (n == 0)
 		return;
-	const uint per = (n + 4) / 5;
+	const uint per = (n + 9) / 10;
 	for (uint k = 0; k < per; ++k) {
 		const uint i = (gLiftSampleI++) % n;
 		CCircuitUnit@ u = gOwnNano[i];
@@ -583,6 +585,19 @@ void LiftSettleStep()
 uint gNpNext = 0;
 int gNpAt = -999999;
 bool gNpOver = false;
+// The priority last sent per unit id: CmdBARPriority is a network command, and the pass re-sent every turret's
+// and every factory's each cycle whether it changed or not (his 10-18: our orders lag the online game).
+array<int8> gNpSent(32001, -1);
+void NpSend(CCircuitUnit@ u, bool low)
+{
+	const int id = int(u.id);
+	const int8 v = low ? 0 : 1;
+	if ((id >= 0) && (id < int(gNpSent.length())) && (gNpSent[id] == v))
+		return;
+	u.CmdBARPriority(low ? 0.f : 1.f);
+	if ((id >= 0) && (id < int(gNpSent.length())))
+		gNpSent[id] = v;
+}
 int gNpLow = 0, gNpHigh = 0;
 int gNpLogAt = 0;
 bool NanoEcoFrameNear(const AIFloat3& in p, float r)
@@ -612,7 +627,7 @@ void NanoPriorityPass()
 		for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
 			CCircuitUnit@ fac = Factory::gFacUnits[f];
 			if (fac !is null)
-				fac.CmdBARPriority(gNpOver ? 0.f : 1.f);
+				NpSend(fac, gNpOver);
 		}
 	}
 	const uint n = gOwnNano.length();
@@ -629,7 +644,7 @@ void NanoPriorityPass()
 				low = (fac !is null) && (fac.GetPos(ai.frame).distance2D(p) < r + 64.f);
 			}
 		}
-		u.CmdBARPriority(low ? 0.f : 1.f);
+		NpSend(u, low);
 		if (low)
 			++gNpLow;
 		else
