@@ -83,6 +83,13 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 
 ## HIS +100 SCAV 8v8 FAILS THE FRAME BUDGET 4.3x (2026-10-18)
 
+**10-19: the 16-AI benchmark passes again** (Greenest Fields, 8 Apex per side, +100, seed 1, solo, his watch-lane
+switches): 0.334 ms per AI per frame at the worst minute (34), peaking at 3,363 units (matches/perfbench-1019c).
+Earlier the same day it failed at 0.528 ms (min 35, 3,200-3,400 units, 4.1-4.2 ms per unit-minute); now 2.5-2.9
+at the same size. The late cost was elections ending in aborts: radar sites an ally covers (2,111 aborts) and
+reclaim under threat (683), fixed in 1dfb106f. His +100 scav 8v8 (income x2, ~4,500 units) still fails, 1.5-1.7
+ms; the engine is 75-85% of the late frame there and in the benchmark (34-51 ms a frame at ~3,000 units).
+
 Solo run, nothing else on the machine (matches/perfsolo/base-s32; 8 Apex vs 8 BARb hard, Comet Catcher
 Remake, +100, income x2, scav units, flush placement on): 1.771 ms per AI per frame at min 20, 4,537
 units. The 16-Apex Greenest Fields benchmark passes (0.403); this setup does not. Builder elections are
