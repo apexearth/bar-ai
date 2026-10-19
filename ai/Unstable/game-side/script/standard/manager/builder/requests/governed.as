@@ -44,17 +44,34 @@ IUnitTask@ OrphanOf(CCircuitDef@ def)
 {
 	if (def is null)
 		return null;
-	for (uint i = 0; i < gLive.length(); ++i) {
+	// A STALE CLAIM IS CLEANED UP, NOT ADOPTED: an orphaned extractor request on a spot an ally has since
+	// taken is closed by CBMexTask::Reevaluate the moment a hand arrives, its spot re-opened, and the next
+	// asker adopted it again (his scav 8v8: 152 of 207 unexplained claim deaths, the ally's extractor
+	// standing a median 176 s, ~1,200 elmos walked for each). Collected, aborted after the walk.
+	const bool claimDef = Catalog::ValidId(int(def.id)) && (Catalog::gExtractsM[int(def.id)] > 0.f);
+	array<IUnitTask@> stale;
+	IUnitTask@ found = null;
+	for (uint i = 0; (i < gLive.length()) && (found is null); ++i) {
 		IUnitTask@ t = gLive[i];
 		if ((t is null) || t.IsDead())
 			continue;
 		if ((t.buildDef is null) || (t.buildDef !is def))
 			continue;
-		if (Workers(t) == 0)
-			return t;
+		if (Workers(t) != 0)
+			continue;
+		if (claimDef && (t.target is null) && ai.MexAllyBlocked(def, t.GetBuildPos())) {
+			stale.insertLast(t);
+			continue;
+		}
+		@found = t;
 	}
-	return null;
+	for (uint s = 0; s < stale.length(); ++s) {
+		++gStaleClaimN;
+		stale[s].Abort();
+	}
+	return found;
 }
+int gStaleClaimN = 0;   // orphaned extractor claims on ally-held spots, aborted instead of adopted
 
 // The live task itself, for joining an in-progress build of this def.
 IUnitTask@ LiveTaskOf(CCircuitDef@ def)

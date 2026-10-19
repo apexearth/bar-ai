@@ -941,13 +941,16 @@ const int PT_OPEN = 0, PT_BLOCKED = 2, PT_HOT = 4, PT_NONE = 5, PT_ALLY = 6;
 // allied spot offered as a claim is refused at the site.
 array<bool> gAllyHeld;
 int gAllyHeldAt = -1;
+int gAllyHeldFrame = -100000;
 const array<bool>@ AllyHeldSpots()
 {
 	AllyStaticsSync();
 	CacheSpots();
-	if ((gAllyHeldAt == gAllyStAt) && (gAllyHeld.length() == gAllSpots.length()))
+	// ...or the prices' lifetime has passed: an ally's frame or zone moves without a statics change.
+	if ((gAllyHeldAt == gAllyStAt) && (gAllyHeld.length() == gAllSpots.length()) && (ai.frame - gAllyHeldFrame < MemoTtl()))
 		return gAllyHeld;
 	gAllyHeldAt = gAllyStAt;
+	gAllyHeldFrame = ai.frame;
 	gAllyHeld.resize(gAllSpots.length());
 	for (uint s = 0; s < gAllyHeld.length(); ++s)
 		gAllyHeld[s] = false;
@@ -960,6 +963,15 @@ const array<bool>@ AllyHeldSpots()
 			if ((si < gAllyHeld.length()) && (gAllSpots[si].distance2D(gAllyStPos[i]) < 64.f))
 				gAllyHeld[si] = true;
 		}
+	}
+	// ...and every spot CBMexTask::Reevaluate would close a claim on the moment it is assigned (an ally's zone, or
+	// another team's extractor or frame in extraction range): it re-opens the spot and we offered it again
+	// (86-158 claims a game in his scav 8v8, a re-election each).
+	const int mexId = LnbMexDef();
+	CCircuitDef@ mexDef = (mexId > 0) ? Catalog::Def(mexId) : null;
+	for (uint s = 0; (mexDef !is null) && (s < gAllyHeld.length()); ++s) {
+		if (!gAllyHeld[s] && ai.MexAllyBlocked(mexDef, gAllSpots[s]))
+			gAllyHeld[s] = true;
 	}
 	return gAllyHeld;
 }

@@ -1281,10 +1281,15 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 	// update (their safety check lives inside the election) and so do rez
 	// bots (their flee does too).
 	{
-		constexpr int REELECT_FRAMES = 3 * FRAMES_PER_SEC;
+		// apex_reelect_ttl: no more often than the script's prices refresh (apex_memo_ttl) -- a confirmation
+		// inside a price's lifetime reads the same prices; 18% of executed jobs only re-confirmed (his scav 8v8).
+		const int REELECT_FRAMES = (circuit->GetTunable("apex_reelect_ttl", 1.f) > 0.f)
+				? std::max(3 * FRAMES_PER_SEC, int(circuit->GetTunable("apex_memo_ttl", 300.f)))
+				: 3 * FRAMES_PER_SEC;
 		CCircuitDef* rdef = unit->GetCircuitDef();
 		if ((rdef != nullptr) && !rdef->IsRoleComm() && !rdef->IsAbleToResurrect()
-			&& (frame - unit->GetElectFrame() < REELECT_FRAMES))
+			&& (frame - unit->GetElectFrame() < REELECT_FRAMES)
+			&& (circuit->GetInflMap()->GetEnemyInflAt(pos) < INFL_EPS || (frame - unit->GetElectFrame() < 3 * FRAMES_PER_SEC)))
 		{
 			return true;
 		}

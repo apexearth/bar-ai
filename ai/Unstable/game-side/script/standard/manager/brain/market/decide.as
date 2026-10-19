@@ -54,6 +54,7 @@ void DecideIdGone(int id)
 // an exemption from the ruling.
 int gKeepJob = 0;
 int gHoistWaitN = 0;   // hoists that waited for a hand walking to a live job (TUNE_HOIST_WAITS)
+int gSameTypeKeep = 0;   // confirmations whose same-type answer was dropped for the job in hand
 int gHwOn = -1;
 int gDwOn = -1;
 bool DrawWaitsOn()
@@ -785,6 +786,63 @@ array<int> gVmOff(VM_K, 0), gVmWin(VM_K, 0), gVmLost(VM_K, 0);
 array<float> gVmLogV(VM_K, 0.f), gVmRel(VM_K, 0.f), gVmGain(VM_K, 0.f), gVmCost(VM_K, 0.f);
 array<string> gVmTop(VM_K, "");
 int gVmN = 0, gVmAt = 0;
+// THE VALUE OF EACH ITEM (his 10-18: "all of our valuations by item showing min/max/avg ... minute by
+// minute"): every want offered in an election, by kind and def -- count, min, mean, max of its value
+// (x1000, as the decide line prints it). Indexed kind x def, so a note is O(1). Log only.
+array<int> gViSlot;   // (kind, def) -> slot, -1 none
+array<int> gViKind, gViDef, gViN;
+array<float> gViMin, gViMax, gViSum;
+void ValItemNote(const array<Want@>@ ranked)
+{
+	const int D = Catalog::gDefCount + 1;
+	if (gViSlot.length() == 0)
+		gViSlot.resize(uint(VM_K * D));
+	if (gViKind.length() == 0) {
+		for (uint i = 0; i < gViSlot.length(); ++i)
+			gViSlot[i] = -1;
+	}
+	for (uint i = 0; i < ranked.length(); ++i) {
+		Want@ w = ranked[i];
+		if ((w is null) || (w.kind < 0) || (w.kind >= VM_K))
+			continue;
+		const int d = (w.def is null) ? 0 : int(w.def.id);
+		if ((d < 0) || (d >= D))
+			continue;
+		const uint key = uint(w.kind * D + d);
+		int s = gViSlot[key];
+		if (s < 0) {
+			s = int(gViKind.length());
+			gViSlot[key] = s;
+			gViKind.insertLast(w.kind);
+			gViDef.insertLast(d);
+			gViN.insertLast(0);
+			gViMin.insertLast(0.f);
+			gViMax.insertLast(0.f);
+			gViSum.insertLast(0.f);
+		}
+		const float v = w.value * 1000.f;
+		if ((gViN[s] == 0) || (v < gViMin[s]))
+			gViMin[s] = v;
+		if ((gViN[s] == 0) || (v > gViMax[s]))
+			gViMax[s] = v;
+		gViSum[s] += v;
+		++gViN[s];
+	}
+}
+void ValItemLog()
+{
+	string s = "";
+	for (uint i = 0; i < gViKind.length(); ++i) {
+		if (gViN[i] == 0)
+			continue;
+		s += " " + KindName(gViKind[i]) + ":" + ((gViDef[i] > 0) ? Catalog::Def(gViDef[i]).GetName() : "-")
+			+ ":" + gViN[i] + ":" + formatFloat(gViMin[i], "", 0, 3) + ":" + formatFloat(gViSum[i] / float(gViN[i]), "", 0, 3)
+			+ ":" + formatFloat(gViMax[i], "", 0, 3);
+		gViN[i] = 0;
+	}
+	if (s.length() > 0)
+		AiLog(Factory::T() + "apex: valitem t=" + ai.teamId + s);
+}
 void ValMixNote(const array<Want@>@ ranked, Want@ top)
 {
 	if ((ranked is null) || (top is null))
@@ -810,10 +868,12 @@ void ValMixNote(const array<Want@>@ ranked, Want@ top)
 			gVmRel[k] += w.value / ((top.value > 1e-9f) ? top.value : 1e-9f);
 		}
 	}
+	ValItemNote(ranked);
 	++gVmN;
 	if (ai.frame < gVmAt)
 		return;
 	gVmAt = ai.frame + 60 * SECOND;
+	ValItemLog();
 	string s = "";
 	for (int k = 1; k < VM_K; ++k) {
 		if (gVmOff[k] == 0)
@@ -2897,7 +2957,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// yields and the election falls through to the priced draw.
 	const bool bpShort = (ai.GetTunable("apex_floor_yield", TUNE_FLOOR_YIELD) <= 0.f)
 			|| (Brain::BudgetMult(Brain::BUILDPOWER) > 1.f);
-	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && bpShort) {
+	// TUNE_NANO_PRICED (his 10-18): a nano justifies itself by the build power it adds to what is in its reach, at
+	// what the economy can feed -- the priced want; the 2/4/9-per-plant count stands down.
+	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && bpShort && !NanoPricedOn()) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
 				continue;
@@ -2972,7 +3034,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
 		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)
 		) {
+		const double _tRa = Perf::T0();
 		roled = ConRoleApply(unit, ranked);
+		Perf::Add("dr.roleapply", _tRa);
 		if (roled)
 			why = "role";
 	}
@@ -3001,14 +3065,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& (ranked.length() > 0) && (ranked[0].kind != WK_MEX)
 		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))
 	{
+		const double _tUa = Perf::T0();
 		Want@ ua = ProposeUnlockAssist(unit, false);
+		Perf::Add("dr.unlock", _tUa);
 		string uaWhy = "metalfirst";
 		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
 			if (DefJoinPriceOn()) {
 				@ua = null;
+				const double _tDj = Perf::T0();
 				@edDj = DefJoinOffer(unit, ranked);
+				Perf::Add("dr.defjoin", _tDj);
 			} else {
+				const double _tUj = Perf::T0();
 				@ua = ProposeUnlockAssist(unit, true);
+				Perf::Add("dr.unlockdef", _tUj);
 				uaWhy = "defjoin";
 				if ((ua !is null) && (ua.kind == WK_ASSIST))
 					DefJoinShadow(unit, ranked, ua);
@@ -3168,7 +3238,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						AiLog("apex: keep-job t=" + ai.teamId + " " + unit.circuitDef.GetName()
 							+ " #" + unit.id + " v=" + formatFloat(gIncVal[uidk] * 1000.f, "", 0, 2)
 							+ " over " + KindName(top.kind) + " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
-							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN);
+							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN + " sameType=" + gSameTypeKeep);
 					}
 					return inc;
 				}
@@ -3306,6 +3376,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			@t = ExecuteWant(unit, ranked[i]);
 			gExecRunnerV = -1.f;
 			gExecWantV = -1.f;
+			// A CONFIRMATION THAT ANSWERS THE SAME BUILD TYPE KEEPS THE JOB IN HAND. IBuilderTask::Reevaluate
+			// keeps the current task whenever the answer is a builder task of its own type, so the new one was
+			// never assigned and died as an orphan (his scav 8v8: ~580 radar tasks a game, why=?). Dropped here.
+			IUnitTask@ curT = unit.task;
+			if ((t !is null) && (curT !is null) && (curT !is t) && !curT.IsDead()
+				&& (curT.GetType() == Task::Type::BUILDER) && (t.GetType() == Task::Type::BUILDER)
+				&& (curT.GetBuildType() == t.GetBuildType()))
+			{
+				if ((Requests::Workers(t) == 0) && (t.target is null))
+					t.Abort();
+				@t = curT;
+				++gSameTypeKeep;
+			}
 			Perf::Add("exec.want", _tExec);
 			// The name is built whether or not anyone is profiling, and the
 			// concat plus KindName ran on every execution at apex_perf=0.

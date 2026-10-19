@@ -391,6 +391,8 @@ local NAMES = {
 	"apex_unlock_once", -- register.as: a plant is the metal unlock only once (0)
 	"apex_con_priced", -- production.as: cons on their price, not the floors (0)
 	"apex_memo_reprice", -- decide.as: memo answers shared by region, walk re-priced (0)
+	"apex_reelect_ttl", -- C++ BuilderTask: re-confirm a walking builder at the price refresh, not 3 s (0)
+	"apex_nano_priced", -- want_nano.as: no nanos-per-plant floor, nanos on price (0)
 	"apex_unit_limit",       -- decide.as ProposeStep: TEST ONLY, drop wants for a def at its unit count limit (0)
 	"apex_hands_once",       -- want_plant.as HandKinOf: a plant's build-power half divided by plants of any domain already making builders of its tier (0)
 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)

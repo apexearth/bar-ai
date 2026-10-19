@@ -54,6 +54,7 @@
 #include "AISCommands.h"
 
 #include <limits>
+#include <cstdint>
 #include <cmath>
 
 #include "Log.h"
@@ -826,6 +827,8 @@ IUnitTask* CBuilderManager::AssignTask(CCircuitUnit* unit)
 	return task;
 }
 
+extern "C" const char __ImageBase;
+
 void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 {
 	switch (task->GetType()) {
@@ -844,14 +847,17 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 					|| !taskB->GetAssignees().empty()))
 			{
 				const springai::AIFloat3& tp = taskB->GetPosition();
-				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i why=%s id=%p",
+				// An unnoted death names its caller as an offset into this DLL (addr2line at ImageBase+from).
+				const unsigned long long from = (unsigned long long)(uintptr_t)__builtin_return_address(0)
+						- (unsigned long long)(uintptr_t)&__ImageBase;
+				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i why=%s id=%p from=%llx",
 						circuit->GetTeamId(), taskB->GetBuildDef()->GetDef()->GetName(),
 						static_cast<int>(taskB->GetBuildType()), tp.x, tp.z,
 						taskB->GetBuildFails(),
 						static_cast<int>(taskB->GetAssignees().size()),
 						(taskB->GetTarget() != nullptr) ? 1 : 0,
 						taskB->GetDeathNote(),
-						static_cast<void*>(taskB));
+						static_cast<void*>(taskB), from);
 			}
 			// The target-keyed maps are erased UNCONDITIONALLY, before the
 			// buildTasks membership branch: a task dequeued while not listed

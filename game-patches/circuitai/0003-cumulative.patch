@@ -5130,21 +5130,22 @@ index 0d94321d..823588c4 100644
  	void ApplyRange(CCircuitDef* cdef);
  
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
-index a62be4f3..30eaac6a 100644
+index a62be4f3..9e6bfb51 100644
 --- a/src/circuit/module/BuilderManager.cpp
 +++ b/src/circuit/module/BuilderManager.cpp
-@@ -51,6 +51,10 @@
+@@ -51,6 +51,11 @@
  #include "json/json.h"
  
  #include "spring/SpringCallback.h"
 +#include "AISCommands.h"
 +
 +#include <limits>
++#include <cstdint>
 +#include <cmath>
  
  #include "Log.h"
  
-@@ -183,6 +187,7 @@ void CBuilderManager::InitHandlers()
+@@ -183,6 +188,7 @@ void CBuilderManager::InitHandlers()
  		militaryMgr->AddResponse(unit);
  
  		workers.insert(unit);
@@ -5152,7 +5153,7 @@ index a62be4f3..30eaac6a 100644
  
  		UnitAdded(unit, UseAs::REZZER);
  	};
-@@ -198,6 +203,8 @@ void CBuilderManager::InitHandlers()
+@@ -198,6 +204,8 @@ void CBuilderManager::InitHandlers()
  		militaryMgr->DelResponse(unit);
  
  		workers.erase(unit);
@@ -5161,7 +5162,7 @@ index a62be4f3..30eaac6a 100644
  		costQueries.erase(unit);
  
  		UnitRemoved(unit, UseAs::REZZER);
-@@ -461,12 +468,18 @@ void CBuilderManager::Init()
+@@ -461,12 +469,18 @@ void CBuilderManager::Init()
  		CScheduler* scheduler = circuit->GetScheduler().get();
  		const int interval = 8;
  		const int offset = circuit->GetSkirmishAIId() % interval;
@@ -5183,7 +5184,7 @@ index a62be4f3..30eaac6a 100644
  	};
  
  	circuit->GetSetupManager()->ExecOnFindStart(subinit);
-@@ -536,6 +549,15 @@ int CBuilderManager::UnitCreated(CCircuitUnit* unit, CCircuitUnit* builder)
+@@ -536,6 +550,15 @@ int CBuilderManager::UnitCreated(CCircuitUnit* unit, CCircuitUnit* builder)
  	return 0; //signaling: OK
  }
  
@@ -5199,7 +5200,7 @@ index a62be4f3..30eaac6a 100644
  int CBuilderManager::UnitFinished(CCircuitUnit* unit)
  {
  	auto iter = unfinishedUnits.find(unit);
-@@ -548,6 +570,7 @@ int CBuilderManager::UnitFinished(CCircuitUnit* unit)
+@@ -548,6 +571,7 @@ int CBuilderManager::UnitFinished(CCircuitUnit* unit)
  	}
  	auto itcl = reclaimUnits.find(unit);
  	if ((itcl != reclaimUnits.end()) && (itcl->second != nullptr)) {
@@ -5207,7 +5208,7 @@ index a62be4f3..30eaac6a 100644
  		AbortTask(itcl->second);
  	}
  
-@@ -583,16 +606,19 @@ int CBuilderManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -583,16 +607,19 @@ int CBuilderManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	auto iter = unfinishedUnits.find(unit);
  	if (iter != unfinishedUnits.end()) {
@@ -5227,7 +5228,7 @@ index a62be4f3..30eaac6a 100644
  
  	auto search = destroyedHandler.find(unit->GetCircuitDef()->GetId());
  	if (search != destroyedHandler.end()) {
-@@ -621,10 +647,16 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
+@@ -621,10 +648,16 @@ const std::set<IBuilderTask*>& CBuilderManager::GetTasks(IBuilderTask::BuildType
  void CBuilderManager::ActivateTask(IBuilderTask* task)
  {
  	if ((task->GetType() == IUnitTask::Type::BUILDER) && (task->GetBuildType() < IBuilderTask::BuildType::_SIZE_)) {
@@ -5245,7 +5246,7 @@ index a62be4f3..30eaac6a 100644
  	task->Activate();
  }
  
-@@ -733,8 +765,9 @@ IBuilderTask* CBuilderManager::Enqueue(const TaskB::SBuildTask& ti)
+@@ -733,8 +766,9 @@ IBuilderTask* CBuilderManager::Enqueue(const TaskB::SBuildTask& ti)
  
  	if (ti.isActive) {
  		buildTasks[static_cast<IBuilderTask::BT>(ti.type)].insert(task);
@@ -5256,7 +5257,7 @@ index a62be4f3..30eaac6a 100644
  	} else {
  		task->Deactivate();
  	}
-@@ -748,10 +781,15 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
+@@ -748,10 +782,15 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
  
  	switch (ti.type) {
  		case IBuilderTask::BuildType::PATROL: {
@@ -5274,7 +5275,7 @@ index a62be4f3..30eaac6a 100644
  		} break;
  		case IBuilderTask::BuildType::COMBAT: {
  			task = new CCombatTask(this, ti.powerMod);
-@@ -762,7 +800,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
+@@ -762,7 +801,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
  		} break;
  	}
  
@@ -5283,7 +5284,7 @@ index a62be4f3..30eaac6a 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -770,7 +808,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
+@@ -770,7 +809,7 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
  CRetreatTask* CBuilderManager::EnqueueRetreat()
  {
  	CRetreatTask* task = new CRetreatTask(this);
@@ -5292,7 +5293,7 @@ index a62be4f3..30eaac6a 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -781,10 +819,11 @@ void CBuilderManager::AssignTask(CCircuitUnit* unit, IUnitTask* task)
+@@ -781,12 +820,15 @@ void CBuilderManager::AssignTask(CCircuitUnit* unit, IUnitTask* task)
  	static_cast<CBuilderScript*>(script)->TaskAssigned(unit);
  }
  
@@ -5305,8 +5306,12 @@ index a62be4f3..30eaac6a 100644
 +	return task;
  }
  
++extern "C" const char __ImageBase;
++
  void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
-@@ -795,26 +834,67 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
+ {
+ 	switch (task->GetType()) {
+@@ -795,26 +837,70 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
  			if (taskB->GetBuildType() >= IBuilderTask::BuildType::_SIZE_) {
  				break;
  			}
@@ -5324,14 +5329,17 @@ index a62be4f3..30eaac6a 100644
 +					|| !taskB->GetAssignees().empty()))
 +			{
 +				const springai::AIFloat3& tp = taskB->GetPosition();
-+				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i why=%s id=%p",
++				// An unnoted death names its caller as an offset into this DLL (addr2line at ImageBase+from).
++				const unsigned long long from = (unsigned long long)(uintptr_t)__builtin_return_address(0)
++						- (unsigned long long)(uintptr_t)&__ImageBase;
++				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i why=%s id=%p from=%llx",
 +						circuit->GetTeamId(), taskB->GetBuildDef()->GetDef()->GetName(),
 +						static_cast<int>(taskB->GetBuildType()), tp.x, tp.z,
 +						taskB->GetBuildFails(),
 +						static_cast<int>(taskB->GetAssignees().size()),
 +						(taskB->GetTarget() != nullptr) ? 1 : 0,
 +						taskB->GetDeathNote(),
-+						static_cast<void*>(taskB));
++						static_cast<void*>(taskB), from);
  			}
 +			// The target-keyed maps are erased UNCONDITIONALLY, before the
 +			// buildTasks membership branch: a task dequeued while not listed
@@ -5381,7 +5389,7 @@ index a62be4f3..30eaac6a 100644
  		} break;
  		default: break;
  	}
-@@ -860,6 +940,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
+@@ -860,6 +946,42 @@ bool CBuilderManager::HasFreeAssists(CCircuitUnit* builder) const
  			&& (!conDef->IsRoleComm() || ((int)assistCount <= circuit->GetSetupManager()->GetAssistFac()));
  }
  
@@ -5424,7 +5432,7 @@ index a62be4f3..30eaac6a 100644
  SBuildChain* CBuilderManager::GetBuildChain(IBuilderTask::BuildType buildType, CCircuitDef* cdef) const
  {
  	auto it1 = buildChains.find(static_cast<IBuilderTask::BT>(buildType));
-@@ -934,60 +1050,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
+@@ -934,60 +1056,9 @@ bool CBuilderManager::CanUpGeo(CCircuitDef* cdef) const
  
  IUnitTask* CBuilderManager::DefaultMakeTask(CCircuitUnit* unit)
  {
@@ -5488,7 +5496,7 @@ index a62be4f3..30eaac6a 100644
  }
  
  IBuilderTask* CBuilderManager::MakeEnergizerTask(CCircuitUnit* unit, const CQueryCostMap* query)
-@@ -1574,6 +1639,169 @@ void CBuilderManager::RemoveBuildList(CCircuitUnit* unit, int hiddenDefs)
+@@ -1574,6 +1645,169 @@ void CBuilderManager::RemoveBuildList(CCircuitUnit* unit, int hiddenDefs)
  	}
  }
  
@@ -5658,7 +5666,7 @@ index a62be4f3..30eaac6a 100644
  void CBuilderManager::Watchdog()
  {
  	ZoneScopedN(__PRETTY_FUNCTION__);
-@@ -1624,9 +1852,8 @@ void CBuilderManager::Watchdog()
+@@ -1624,9 +1858,8 @@ void CBuilderManager::Watchdog()
  				CCircuitDef* cdef = unit->GetCircuitDef();
  				if ((cdef->GetBuildTime() * buildPercent < maxCost) || cdef->IsMex() || (*cdef == *terraDef)) {
  					Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
@@ -5669,7 +5677,7 @@ index a62be4f3..30eaac6a 100644
  //			} else if (u->GetHealth() < u->GetMaxHealth()) {
  //				Enqueue(TaskB::Repair(IBuilderTask::Priority::NORMAL, unit));
  			}
-@@ -1662,6 +1889,7 @@ void CBuilderManager::UpdateAreaUsers()
+@@ -1662,6 +1895,7 @@ void CBuilderManager::UpdateAreaUsers()
  		}
  	}
  	for (IBuilderTask* task : removeTasks) {
@@ -5677,7 +5685,7 @@ index a62be4f3..30eaac6a 100644
  		AbortTask(task);
  	}
  }
-@@ -1745,8 +1973,9 @@ void CBuilderManager::Load(std::istream& is)
+@@ -1745,8 +1979,9 @@ void CBuilderManager::Load(std::istream& is)
  			if (task != nullptr) {
  				const bool isValid = is >> *task;
  				buildTasks[i].insert(task);
@@ -10864,10 +10872,10 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..a1a74255 100644
+index 2839b72e..e78c4dea 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -10,11 +10,20 @@
+@@ -10,11 +10,22 @@
  #include "script/ScriptManager.h"
  #include "script/RefCounter.h"
  #include "map/ThreatMap.h"
@@ -10883,12 +10891,14 @@ index 2839b72e..a1a74255 100644
 +#include "task/fighter/FighterTask.h"
 +#include "task/fighter/RaidTask.h"
  #include "unit/CircuitUnit.h"
++#include "unit/ally/AllyUnit.h"
++#include "spring/SpringCallback.h"
 +#include "unit/action/DGunAction.h"
 +#include "unit/CircuitWDef.h"
  #include "CircuitAI.h"
  #include "util/GameAttribute.h"
  #include "util/MaskHandler.h"
-@@ -34,165 +43,1877 @@
+@@ -34,165 +45,1903 @@
  #include "Game.h"
  #include "Team.h"
  #include "Lua.h"
@@ -11643,6 +11653,32 @@ index 2839b72e..a1a74255 100644
 +static bool CCircuitAI_IsNoPath(CCircuitAI* circuit, CCircuitDef* cdef, const AIFloat3& pos)
 +{
 +	return circuit->IsNoPath(cdef, pos);
++}
++
++// apex: the zone test CBMexTask::Reevaluate closes a claim on, so the script stops offering the spot.
++static bool CCircuitAI_IsZoneAlly(CCircuitAI* circuit, const AIFloat3& pos)
++{
++	return circuit->IsAllyAware() && circuit->GetTerrainManager()->IsZoneAlly(pos);
++}
++
++// apex: CBMexTask::Reevaluate's whole test -- an ally's zone, or another team's extractor (frames too)
++// within extraction range -- so the script stops offering a spot the task would close on assignment.
++static bool CCircuitAI_MexAllyBlocked(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
++{
++	if ((def == nullptr) || !circuit->IsAllyAware()) {
++		return false;
++	}
++	if (circuit->GetTerrainManager()->IsZoneAlly(pos)) {
++		return true;
++	}
++	const auto& ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, def->GetExtrRangeM(), false);
++	for (ICoreUnit::Id id : ids) {
++		CAllyUnit* au = circuit->GetFriendlyUnit(id);
++		if ((au != nullptr) && au->GetCircuitDef()->IsMex() && (au->GetUnit()->GetTeam() != circuit->GetTeamId())) {
++			return true;
++		}
++	}
++	return false;
 +}
 +
 +static bool CCircuitAI_CanDefReachAt(CCircuitAI* circuit, CCircuitDef* cdef,
@@ -12841,7 +12877,7 @@ index 2839b72e..a1a74255 100644
  }
  
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
-@@ -205,6 +1926,33 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
+@@ -205,6 +1954,33 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
  	return circuit->GetLua()->CallUI(data.c_str(), data.size());
  }
  
@@ -12875,7 +12911,7 @@ index 2839b72e..a1a74255 100644
  static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
  {
  	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
-@@ -240,12 +1988,158 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,12 +2016,158 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -13035,7 +13071,7 @@ index 2839b72e..a1a74255 100644
  	asUINT i = 0;
  	for (CCircuitUnit* unit : task->GetAssignees()) {
  		arr->SetValue(i++, &unit);
-@@ -472,14 +2366,32 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,14 +2394,32 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13075,7 +13111,7 @@ index 2839b72e..a1a74255 100644
  
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int frame", asOFFSET(CCircuitAI, lastFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int skirmishAIId", asOFFSET(CCircuitAI, skirmishAIId)); ASSERT(r >= 0);
-@@ -490,21 +2402,126 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,21 +2430,128 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13086,6 +13122,8 @@ index 2839b72e..a1a74255 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReach(CCircuitDef@, const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanDefReach), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float DefMapCoverage(CCircuitDef@)", asFUNCTION(CCircuitAI_DefMapCoverage), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReachAt(CCircuitDef@, const AIFloat3& in, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CanDefReachAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsZoneAlly(const AIFloat3& in)", asFUNCTION(CCircuitAI_IsZoneAlly), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool MexAllyBlocked(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_MexAllyBlocked), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsNoPath(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_IsNoPath), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanBeBuiltAt(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanBeBuiltAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13204,7 +13242,7 @@ index 2839b72e..a1a74255 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -549,6 +2566,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -549,6 +2596,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectProperty("CCircuitDef", "const float minRange", asOFFSET(CCircuitDef, minRange)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange(Type) const", asMETHODPR(CCircuitDef, GetMaxRange, (CCircuitDef::RangeType) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange() const", asMETHODPR(CCircuitDef, GetMaxRange, () const, float), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13214,7 +13252,7 @@ index 2839b72e..a1a74255 100644
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(Type, float)", asMETHODPR(CCircuitDef, SetRange, (CCircuitDef::RangeType, float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(float)", asMETHODPR(CCircuitDef, SetRange, (float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAirThreat() const", asMETHOD(CCircuitDef, GetAirThreat), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -556,6 +2576,67 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +2606,67 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13282,7 +13320,7 @@ index 2839b72e..a1a74255 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +2645,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +2675,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13309,7 +13347,7 @@ index 2839b72e..a1a74255 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -572,9 +2673,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -572,9 +2703,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13383,7 +13421,7 @@ index 2839b72e..a1a74255 100644
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
  	// RulesParams accessor on Unit
  	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -585,6 +2747,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +2777,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -13395,7 +13433,7 @@ index 2839b72e..a1a74255 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +2870,34 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +2900,34 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13430,7 +13468,7 @@ index 2839b72e..a1a74255 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -720,10 +2915,14 @@ bool CInitScript::Init()
+@@ -720,10 +2945,14 @@ bool CInitScript::Init()
  	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
  	int r = mod->SetDefaultNamespace("Main"); ASSERT(r >= 0);
  	mainInfo.update = script->GetFunc(mod, "void AiUpdate()");
@@ -13445,7 +13483,7 @@ index 2839b72e..a1a74255 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +2939,43 @@ void CInitScript::Update()
+@@ -740,9 +2969,43 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -13489,7 +13527,7 @@ index 2839b72e..a1a74255 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -768,6 +3001,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
+@@ -768,6 +3031,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -13507,7 +13545,7 @@ index 2839b72e..a1a74255 100644
  void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  {
  	if (mainInfo.unitDestroyed == nullptr) {
-@@ -779,6 +3023,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +3053,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -13541,7 +13579,7 @@ index 2839b72e..a1a74255 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +3173,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +3203,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});
@@ -15542,7 +15580,7 @@ index 275db3ae..5249e8a7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..bb56ea50 100644
+index bc8ff11b..a29053ef 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -16528,7 +16566,7 @@ index bc8ff11b..bb56ea50 100644
  				}
  			)
  			return true;
-@@ -508,8 +1272,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -508,8 +1272,49 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  			unit->CmdWait(false);
  		)
  	}
@@ -16541,10 +16579,15 @@ index bc8ff11b..bb56ea50 100644
 +	// update (their safety check lives inside the election) and so do rez
 +	// bots (their flee does too).
 +	{
-+		constexpr int REELECT_FRAMES = 3 * FRAMES_PER_SEC;
++		// apex_reelect_ttl: no more often than the script's prices refresh (apex_memo_ttl) -- a confirmation
++		// inside a price's lifetime reads the same prices; 18% of executed jobs only re-confirmed (his scav 8v8).
++		const int REELECT_FRAMES = (circuit->GetTunable("apex_reelect_ttl", 1.f) > 0.f)
++				? std::max(3 * FRAMES_PER_SEC, int(circuit->GetTunable("apex_memo_ttl", 300.f)))
++				: 3 * FRAMES_PER_SEC;
 +		CCircuitDef* rdef = unit->GetCircuitDef();
 +		if ((rdef != nullptr) && !rdef->IsRoleComm() && !rdef->IsAbleToResurrect()
-+			&& (frame - unit->GetElectFrame() < REELECT_FRAMES))
++			&& (frame - unit->GetElectFrame() < REELECT_FRAMES)
++			&& (circuit->GetInflMap()->GetEnemyInflAt(pos) < INFL_EPS || (frame - unit->GetElectFrame() < 3 * FRAMES_PER_SEC)))
 +		{
 +			return true;
 +		}
@@ -16573,7 +16616,7 @@ index bc8ff11b..bb56ea50 100644
  	ShowAssignee(unit);
  	if ((task != nullptr)
  		&& ((task->GetType() != IUnitTask::Type::BUILDER)
-@@ -527,22 +1327,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -527,22 +1332,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	// TODO: Check IsForceUpdate, shield charge and retreat
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -16712,7 +16755,7 @@ index bc8ff11b..bb56ea50 100644
  		return;
  	}
  
-@@ -550,10 +1459,24 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -550,10 +1464,24 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		return;
  	}
  
@@ -16738,7 +16781,7 @@ index bc8ff11b..bb56ea50 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -565,10 +1488,150 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,10 +1493,150 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -16891,7 +16934,7 @@ index bc8ff11b..bb56ea50 100644
  		unit->GetTravelAct()->StateFinish();
  	}
  }
-@@ -632,232 +1695,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
+@@ -632,232 +1700,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
  	return nullptr;
  }
  

@@ -22,6 +22,8 @@
 #include "task/fighter/FighterTask.h"
 #include "task/fighter/RaidTask.h"
 #include "unit/CircuitUnit.h"
+#include "unit/ally/AllyUnit.h"
+#include "spring/SpringCallback.h"
 #include "unit/action/DGunAction.h"
 #include "unit/CircuitWDef.h"
 #include "CircuitAI.h"
@@ -793,6 +795,32 @@ static bool CCircuitAI_CanBeBuiltAt(CCircuitAI* circuit, CCircuitDef* cdef, cons
 static bool CCircuitAI_IsNoPath(CCircuitAI* circuit, CCircuitDef* cdef, const AIFloat3& pos)
 {
 	return circuit->IsNoPath(cdef, pos);
+}
+
+// apex: the zone test CBMexTask::Reevaluate closes a claim on, so the script stops offering the spot.
+static bool CCircuitAI_IsZoneAlly(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	return circuit->IsAllyAware() && circuit->GetTerrainManager()->IsZoneAlly(pos);
+}
+
+// apex: CBMexTask::Reevaluate's whole test -- an ally's zone, or another team's extractor (frames too)
+// within extraction range -- so the script stops offering a spot the task would close on assignment.
+static bool CCircuitAI_MexAllyBlocked(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
+{
+	if ((def == nullptr) || !circuit->IsAllyAware()) {
+		return false;
+	}
+	if (circuit->GetTerrainManager()->IsZoneAlly(pos)) {
+		return true;
+	}
+	const auto& ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, def->GetExtrRangeM(), false);
+	for (ICoreUnit::Id id : ids) {
+		CAllyUnit* au = circuit->GetFriendlyUnit(id);
+		if ((au != nullptr) && au->GetCircuitDef()->IsMex() && (au->GetUnit()->GetTeam() != circuit->GetTeamId())) {
+			return true;
+		}
+	}
+	return false;
 }
 
 static bool CCircuitAI_CanDefReachAt(CCircuitAI* circuit, CCircuitDef* cdef,
@@ -2409,6 +2437,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReach(CCircuitDef@, const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanDefReach), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float DefMapCoverage(CCircuitDef@)", asFUNCTION(CCircuitAI_DefMapCoverage), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReachAt(CCircuitDef@, const AIFloat3& in, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CanDefReachAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsZoneAlly(const AIFloat3& in)", asFUNCTION(CCircuitAI_IsZoneAlly), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool MexAllyBlocked(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_MexAllyBlocked), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsNoPath(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_IsNoPath), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanBeBuiltAt(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanBeBuiltAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
