@@ -1395,6 +1395,11 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		// block: the raider leaves and the dead mex stayed unbuilt (his watch).
 		if (intoThreat || !circuit->GetTerrainManager()->CanReachAt(unit, endPos, range)) {
 			circuit->NoteBuildBlocked(endPos, buildDef);
+		} else if (buildType == BuildType::RECLAIM) {
+			// apex: a wreck refused for threat is re-elected until the threat leaves -- 683 aborts on 154
+			// spots, up to 35 on one, in a 16-AI game. It backs off for the mark's life (his 10-19); a wreck
+			// waits, and the reclaim market reads the mark (NearPathBlocked).
+			circuit->NoteBuildBlocked(endPos, nullptr);
 		}
 		{
 			const float gap = circuit->GetTerrainManager()->ReachGap(unit->GetArea(), endPos);

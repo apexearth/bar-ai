@@ -2498,7 +2498,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// ...NOT WHILE METAL IS BEING THROWN AWAY, as the yield above: a losing trade beats none
 			// (his 10-18 2v2: a vehicle-only seat at 105 m/s and a full bank built no tanks, all :losing).
 			if ((ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) > 0.f)
-				&& !spill
+				&& !(spill && (TopOwnLandPlantTier() - DefTier(d) <= 1))   // rich at T2 masses T1; at T3 it is only unit count (his 10-19: T1 Janus at T3)
 				&& (RecordRaw(d) < 1.f)
 				&& (ai.RecordCount(Catalog::Def(d), -1) > 0)
 				&& (Military::FoeTierAbove(DefTier(d)) > 0.5f))
@@ -2507,7 +2507,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
 				continue;
 			}
-			if (!spill && Outgrown(d)) {
+			if (!(spill && (TopOwnLandPlantTier() - DefTier(d) <= 1)) && Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;

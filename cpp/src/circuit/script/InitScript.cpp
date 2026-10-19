@@ -823,6 +823,38 @@ static bool CCircuitAI_MexAllyBlocked(CCircuitAI* circuit, CCircuitDef* def, con
 	return false;
 }
 
+// apex: ISensorTask::Update's whole test -- a friendly unit (ours or an ally's, frames too) with the same
+// sensor within 500 -- so the script stops pricing a radar the task aborts on its first update: 2,111 such
+// aborts in one 16-AI benchmark game, each an election and a walk.
+static bool CCircuitAI_SensorRedundantAt(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
+{
+	if ((def == nullptr) || !(def->IsRadar() || def->IsSonar())) {
+		return false;
+	}
+	COOAICallback* clb = circuit->GetCallback();
+	const auto& ids = clb->GetFriendlyUnitIdsIn(pos, 500.f);
+	for (int auId : ids) {
+		CCircuitDef* cd = circuit->GetCircuitDef(clb->Unit_GetDefId(auId));
+		if ((cd != nullptr) && ((def->IsRadar() && cd->IsRadar()) || (def->IsSonar() && cd->IsSonar()))) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// apex: IBuilderTask's reach test for a site that is not a defence (UpdatePath, "unreach-safe"): the threat
+// there under the hand's bar -- its power, our guns' influence, THREAT_MIN -- and a path within build range.
+// The reclaim market priced wrecks this test refuses: 683 aborts in one 16-AI game.
+static bool CCircuitAI_BuildSiteSafe(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& pos)
+{
+	if ((unit == nullptr) || (unit->GetCircuitDef() == nullptr)) {
+		return false;
+	}
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	const float bar = std::max(cdef->GetPower(), std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(pos)));
+	return circuit->GetTerrainManager()->CanReachAtSafe(unit, pos, cdef->GetBuildDistance(), bar);
+}
+
 static bool CCircuitAI_CanDefReachAt(CCircuitAI* circuit, CCircuitDef* cdef,
 		const AIFloat3& from, const AIFloat3& to, float range)
 {
@@ -2439,6 +2471,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReachAt(CCircuitDef@, const AIFloat3& in, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CanDefReachAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsZoneAlly(const AIFloat3& in)", asFUNCTION(CCircuitAI_IsZoneAlly), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool MexAllyBlocked(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_MexAllyBlocked), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool SensorRedundantAt(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_SensorRedundantAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool BuildSiteSafe(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_BuildSiteSafe), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsNoPath(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_IsNoPath), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanBeBuiltAt(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanBeBuiltAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

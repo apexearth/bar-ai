@@ -1085,6 +1085,7 @@ void StepWon(CCircuitUnit@ unit, Want@ w)
 }
 
 int gLimitDropN = 0;
+int gReclBlkDropN = 0, gReclBlkLogAt = 0;
 int gLimitLogAt = 0;
 int gUlOn = -1;
 bool UnitLimitOn()
@@ -1155,6 +1156,21 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 			gLimitLogAt = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: unit-limit t=" + ai.teamId + " drops=" + gLimitDropN + " last=" + w.def.GetName()
 				+ " max=" + w.def.GetMaxThisUnit());
+		}
+		return null;
+	}
+	// Ground a walk or reclaim could not reach carries the C++ mark (BuilderTask "unreach-safe"); the rez bots
+	// read it and the builder reclaim market did not -- 683 reclaim aborts on 154 spots, up to 35 on one, in
+	// the 16-AI benchmark (his 10-19: back off what a unit cannot get to). And the executor's own safety test, the
+	// refusal those aborts actually were (threat 2.8 against a constructor's power 0).
+	if ((w !is null) && (w.kind == WK_RECLAIM) && OnMap(w.pos)
+		&& (NearPathBlocked(w.pos) || ((w.target is null) && !Catalog::gRezzer[int(unit.circuitDef.id)] && !ai.BuildSiteSafe(unit, w.pos))))
+	{
+		++gReclBlkDropN;
+		if (ai.frame >= gReclBlkLogAt) {
+			gReclBlkLogAt = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: reclaim-unreach t=" + ai.teamId + " drops=" + gReclBlkDropN
+				+ " at=" + int(w.pos.x) + "," + int(w.pos.z));
 		}
 		return null;
 	}

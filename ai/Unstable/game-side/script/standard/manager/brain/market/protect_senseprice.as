@@ -89,7 +89,9 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		const float surprise = foeUnseen / fill;
 		// an unwatched line is the approach itself, blind: the whole surprise
 		const float watch = Catalog::gRadarR[d] * ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
-		if (lineUp && (Catalog::gRadarR[d] > 1.f)
+		// A mast the radar task would abort on its first update -- a friendly radar within 500 -- is no want
+		// (the 16-AI benchmark: corrad decided 587 times in 4 minutes, placed 29).
+		if (lineUp && (Catalog::gRadarR[d] > 1.f) && !ai.SensorRedundantAt(Catalog::Def(d), lineAt)
 			&& !ProtCovered(PROT_RADAR, lineAt, Catalog::gRadarR[d] * 0.6f))
 		{
 			at = lineAt;
@@ -116,6 +118,8 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			return false;
 		if (Gate(GATE_RADAR_HOT, ai.GetEnemyCostAt(gapAt, 900.f)
 				> Catalog::gCostM[int(unit.circuitDef.id)]))
+			return false;
+		if (ai.SensorRedundantAt(Catalog::Def(d), gapAt))
 			return false;
 		at = gapAt;
 		// Eyes for the army too: blind units chase shadows (apexearth:
