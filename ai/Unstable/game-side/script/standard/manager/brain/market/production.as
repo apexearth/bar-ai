@@ -2511,7 +2511,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 			// A full bank does not bring the outgrown tier back (his 10-19: "fewer stronger units is what I've always
 			// advocated for"): lifted, his Odderon army at minute 38 was Thugs, Garpikes and Hammers beside a Krow.
-			if (Outgrown(d)) {
+			if (!(spill && (ai.GetTunable("apex_spill_outgrown", 0.f) > 0.f) && (TopOwnLandPlantTier() - DefTier(d) <= 1)) && Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;
