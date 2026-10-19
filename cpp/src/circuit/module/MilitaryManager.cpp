@@ -359,7 +359,9 @@ void CMilitaryManager::InitHandlers()
 			cdef.SetRetreat((cdef.GetRetreat() < 0.f) ? fighterRet : cdef.GetRetreat() * retMod);
 		} else {
 //			damagedHandler[unitDefId] = structDamagedHandler;
-			if (cdef.IsRoleSuper()) {
+			// apex: a launcher whose stockpiled shot spawns units (the Pawn Launcher) is aimed like a super weapon;
+			// the plain stockpile handler only stockpiled, and nothing chose a target for it.
+			if (cdef.IsRoleSuper() || cdef.IsStockSpawner()) {
 				// apex: the Juno's warhead does 1 damage, so it is no attacker, but it
 				// is a launcher all the same
 				if (cdef.IsAttacker() || cdef.IsAttrStock()) {

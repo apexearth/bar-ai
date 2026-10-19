@@ -58,19 +58,14 @@ void AiMain()
 			cdef.AddAttribute(Unit::Attr::BASE.type);  // Build heavy energy at base
 	}
 
-	// Example of user-assigned custom attributes
-	array<string> names = {Factory::armalab, Factory::coralab, Factory::legalab, Factory::armavp, Factory::coravp, Factory::legavp,
-		Factory::armaap, Factory::coraap, Factory::legaap, Factory::armasy, Factory::corasy};
-	for (uint i = 0; i < names.length(); ++i) {
-		CCircuitDef@ cdef = ai.GetCircuitDef(names[i]);
-		if (cdef !is null)
-			Factory::userData[cdef.id].attr |= Factory::Attr::T2;
-	}
-	names = {Factory::armshltx, Factory::corgant, Factory::leggant};
-	for (uint i = 0; i < names.length(); ++i) {
-		CCircuitDef@ cdef = ai.GetCircuitDef(names[i]);
-		if (cdef !is null)
-			Factory::userData[cdef.id].attr |= Factory::Attr::T3;
+	// A plant's tier is its depth in the build tree: a name list left the experimental aircraft plant
+	// and the extra-units plants at T1, and a "T1" air plant beside an advanced one builds no armed planes.
+	for (Id defId = 1, count = ai.GetDefCount(); defId <= count; ++defId) {
+		const int tt = Market::TreeTier(int(defId));
+		if (tt == 2)
+			Factory::userData[defId].attr |= Factory::Attr::T2;
+		else if (tt >= 3)
+			Factory::userData[defId].attr |= Factory::Attr::T3;
 	}
 
 	// THE BEHEMOTH GETS A WIDE BERTH. Its D-gun one-shots whatever walks into

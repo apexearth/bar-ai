@@ -160,3 +160,7 @@ jammer. Priced as time bought, triggered by the enemy field in reach against our
   locally with `tools/netproof.py` (dedicated server, a headless spectator owning the AI). Needs a
   SpringLobby bot, the room's engine and game installed, a warm cache, and the BAR admins' approval
   of a bot account.
+- **Mass the long-range cannons** (10-18): one cannon may not get through their defence, but ten or
+  twenty may, and then they have to spend on shields, which are costly. Today each cannon is priced
+  as if it kills alone and the next one is worth less; nothing prices the volley that breaks a
+  position or the shields it forces them to buy. Not built.
