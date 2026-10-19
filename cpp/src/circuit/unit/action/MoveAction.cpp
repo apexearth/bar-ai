@@ -94,8 +94,20 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	// a second from our AIs, travel the largest source). Lean: it is told LEAN_AHEAD waypoints at once and
 	// re-ordered only when it nears the last of them (or the path is replaced, which resets lastQueued);
 	// the speed is sent when it changes.
-	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
 	constexpr int LEAN_AHEAD = 4;
+	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
+	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
+	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	if (lean) {
+		const AIFloat3& up = unit->GetPos(lastFrame);
+		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
+		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;
+		if (!lean) {
+			lastQueued = -1;
+			lastLeanPos.x = -1.f;
+		}
+	}
 	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
 		return;
 	}

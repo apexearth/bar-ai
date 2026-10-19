@@ -30871,18 +30871,21 @@ index 4a6cad0a..f2830338 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/action/FightAction.cpp b/src/circuit/unit/action/FightAction.cpp
-index 0f1640eb..8c3a67b9 100644
+index 0f1640eb..4261d106 100644
 --- a/src/circuit/unit/action/FightAction.cpp
 +++ b/src/circuit/unit/action/FightAction.cpp
-@@ -9,6 +9,7 @@
+@@ -7,8 +7,10 @@
+ 
+ #include "unit/action/FightAction.h"
  #include "unit/CircuitUnit.h"
++#include "unit/enemy/EnemyManager.h"
  #include "CircuitAI.h"
  #include "util/Utils.h"
 +#include "spring/SpringCallback.h"
  
  #include "AISCommands.h"
  
-@@ -47,13 +48,38 @@ void CFightAction::Update(CCircuitAI* circuit)
+@@ -47,13 +49,50 @@ void CFightAction::Update(CCircuitAI* circuit)
  	switch (pathMaxIndex) {
  		case -2:  // arrived
  			TRY_UNIT(circuit, unit,
@@ -30895,8 +30898,20 @@ index 0f1640eb..8c3a67b9 100644
  	}
  	int step = pathIterator;
 +	// apex: the MoveAction lean (apex_travel_lean): LEAN_AHEAD waypoints at once, re-ordered near the last.
-+	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
 +	constexpr int LEAN_AHEAD = 4;
++	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
++	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
++	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	if (lean) {
++		const AIFloat3& up = unit->GetPos(lastFrame);
++		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
++		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
++		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;
++		if (!lean) {
++			lastQueued = -1;
++			lastLeanPos.x = -1.f;
++		}
++	}
 +	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
 +		return;
 +	}
@@ -30922,7 +30937,7 @@ index 0f1640eb..8c3a67b9 100644
  
  	TRY_UNIT(circuit, unit,
  		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
-@@ -73,20 +99,28 @@ void CFightAction::Update(CCircuitAI* circuit)
+@@ -73,20 +112,28 @@ void CFightAction::Update(CCircuitAI* circuit)
  				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
  			}
  			if (isBadJump) {
@@ -30957,7 +30972,7 @@ index 0f1640eb..8c3a67b9 100644
  }
  
 diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
-index a01329c3..df328d90 100644
+index a01329c3..f4160762 100644
 --- a/src/circuit/unit/action/MoveAction.cpp
 +++ b/src/circuit/unit/action/MoveAction.cpp
 @@ -7,8 +7,12 @@
@@ -31011,7 +31026,7 @@ index a01329c3..df328d90 100644
  void CMoveAction::Update(CCircuitAI* circuit)
  {
  	if (lastFrame + FRAMES_PER_SEC > circuit->GetLastFrame()) {
-@@ -47,13 +82,45 @@ void CMoveAction::Update(CCircuitAI* circuit)
+@@ -47,13 +82,57 @@ void CMoveAction::Update(CCircuitAI* circuit)
  	switch (pathMaxIndex) {
  		case -2:  // arrived
  			TRY_UNIT(circuit, unit,
@@ -31028,8 +31043,20 @@ index a01329c3..df328d90 100644
 +	// a second from our AIs, travel the largest source). Lean: it is told LEAN_AHEAD waypoints at once and
 +	// re-ordered only when it nears the last of them (or the path is replaced, which resets lastQueued);
 +	// the speed is sent when it changes.
-+	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
 +	constexpr int LEAN_AHEAD = 4;
++	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
++	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
++	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	if (lean) {
++		const AIFloat3& up = unit->GetPos(lastFrame);
++		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
++		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
++		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;
++		if (!lean) {
++			lastQueued = -1;
++			lastLeanPos.x = -1.f;
++		}
++	}
 +	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
 +		return;
 +	}
@@ -31058,7 +31085,7 @@ index a01329c3..df328d90 100644
  
  	TRY_UNIT(circuit, unit,
  		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
-@@ -73,20 +140,28 @@ void CMoveAction::Update(CCircuitAI* circuit)
+@@ -73,20 +152,28 @@ void CMoveAction::Update(CCircuitAI* circuit)
  				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
  			}
  			if (isBadJump) {

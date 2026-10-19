@@ -7,6 +7,7 @@
 
 #include "unit/action/FightAction.h"
 #include "unit/CircuitUnit.h"
+#include "unit/enemy/EnemyManager.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 #include "spring/SpringCallback.h"
@@ -56,8 +57,20 @@ void CFightAction::Update(CCircuitAI* circuit)
 	}
 	int step = pathIterator;
 	// apex: the MoveAction lean (apex_travel_lean): LEAN_AHEAD waypoints at once, re-ordered near the last.
-	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
 	constexpr int LEAN_AHEAD = 4;
+	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
+	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
+	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	if (lean) {
+		const AIFloat3& up = unit->GetPos(lastFrame);
+		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
+		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;
+		if (!lean) {
+			lastQueued = -1;
+			lastLeanPos.x = -1.f;
+		}
+	}
 	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
 		return;
 	}
