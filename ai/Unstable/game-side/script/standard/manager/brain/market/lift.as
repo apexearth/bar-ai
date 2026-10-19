@@ -69,6 +69,7 @@ final class LiftJob {
 	bool retried = false;
 	int drops = 0;
 	int overAt = -1;     // first frame the plane hovered over its drop point still carrying
+	bool homeSent = false;   // the move home is one order, not one a second (LiftGoHome)
 }
 array<LiftJob@> gLift;
 
@@ -322,6 +323,7 @@ void LiftRehome(LiftJob@ jb, CCircuitUnit@ held)
 	jb.retried = false;
 	jb.drops = 0;
 	jb.overAt = -1;
+	jb.homeSent = false;
 	jb.deadline = ai.frame + int((pp.distance2D(to) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
 	jb.plane.CmdUnloadAt(to, held);
 	AiLog("apex: lift rehome t=" + ai.teamId + " #" + jb.plane.id + " holding " + held.circuitDef.GetName()
@@ -451,8 +453,10 @@ void LiftGoHome(LiftJob@ jb)
 {
 	if (!Base::gAnchorSet)
 		return;
-	if (jb.plane.GetPos(ai.frame).distance2D(Base::gAnchor) > 300.f)
-		jb.plane.CmdMoveTo(Base::gAnchor);
+	if (jb.homeSent || (jb.plane.GetPos(ai.frame).distance2D(Base::gAnchor) <= 300.f))
+		return;
+	jb.plane.CmdMoveTo(Base::gAnchor);
+	jb.homeSent = true;
 }
 
 void LiftEnd(LiftJob@ jb)
@@ -463,9 +467,14 @@ void LiftEnd(LiftJob@ jb)
 	jb.retried = false;
 	jb.drops = 0;
 	jb.overAt = -1;
+	jb.homeSent = false;
 	LiftGoHome(jb);
 }
 
+// An idle plane's search for work (the line site, then every turret against every job) found nothing:
+// another plane of its def finds nothing this update either -- same line, same turrets, only the flight
+// differs. lift.step was ~92% of up.lift (0.8-4.0 ms a second per seat in his +100 scav 8v8).
+array<int> gLiftIdleMiss;
 void LiftStep(LiftJob@ jb)
 {
 	if (jb.stage == 0) {
@@ -474,8 +483,15 @@ void LiftStep(LiftJob@ jb)
 			LiftRehome(jb, held);
 			return;
 		}
-		if (!FerryDispatch(jb) && !LiftDispatch(jb))
+		const int pdef = int(jb.plane.circuitDef.id);
+		if (gLiftIdleMiss.find(pdef) >= 0) {
 			LiftGoHome(jb);
+			return;
+		}
+		if (!FerryDispatch(jb) && !LiftDispatch(jb)) {
+			gLiftIdleMiss.insertLast(pdef);
+			LiftGoHome(jb);
+		}
 		return;
 	}
 	const AIFloat3 cp = jb.cargo.GetPos(ai.frame);
@@ -665,12 +681,15 @@ void NanoPriorityPass()
 int gLiftLogAt = 0;
 void LiftUpdate()
 {
-	LiftSample();
-	NanoPriorityPass();
-	FerryUpdate();
+	{ const double _t = Perf::T0(); LiftSample(); Perf::Add("lift.sample", _t); }
+	{ const double _t = Perf::T0(); NanoPriorityPass(); Perf::Add("lift.prio", _t); }
+	{ const double _t = Perf::T0(); FerryUpdate(); Perf::Add("lift.ferry", _t); }
+	gLiftIdleMiss.resize(0);
+	const double _tLs = Perf::T0();
 	for (uint j = 0; j < gLift.length(); ++j)
 		LiftStep(gLift[j]);
-	LiftSettleStep();
+	Perf::Add("lift.step", _tLs);
+	{ const double _t = Perf::T0(); LiftSettleStep(); Perf::Add("lift.settle", _t); }
 	if (ai.frame < gLiftLogAt)
 		return;
 	gLiftLogAt = ai.frame + 60 * SECOND;
