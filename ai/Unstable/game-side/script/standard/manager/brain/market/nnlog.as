@@ -684,6 +684,12 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 		AiLog("apex: nn-schema v10 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
 			+ " net=" + (NNW_ON ? NNW_GAMES : -1) + " explore=" + (gNnExplore ? 1 : 0) + " comb=trust");
 	}
+	// The record is training data, and the trainer reads only harness games: in a hosted game it is ~0.3 ms
+	// an election of string building nobody reads (his 10-19 Odderon game: 44,045 lines). TUNE_NN_RECORD.
+	if (ai.GetTunable("apex_nn_record", TUNE_NN_RECORD) <= 0.f) {
+		Perf::Add("dec.nnrec", _t);
+		return;
+	}
 	const bool here = (gNnDrawAt == ai.frame) && (gNnDrawUnit == int(unit.id));
 	// A ladder hoist or a kept tech lab is not sampled: the top option ran with p=1.
 	const bool drew = here && (gNnDrawMode == "draw");

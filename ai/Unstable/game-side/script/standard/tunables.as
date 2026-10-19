@@ -865,6 +865,7 @@ const float TUNE_CATALOG_DUMP = 0.f;
 // [toggle 0/1] -- The `apex: decide` and `apex: exec` lines, one per election
 //   and per execution. On: every harness tool parses them. See docs/tunables.md.
 const float TUNE_DECIDE_LOG = 1.f;
+const float TUNE_NN_RECORD = 1.f;   // [toggle 0/1] the `apex: nn` training record per election; the trainer reads only harness games, so a hosted game can set 0 (nnlog.as NnRecord)
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets

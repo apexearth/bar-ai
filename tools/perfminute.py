@@ -11,11 +11,11 @@ from pathlib import Path
 FPS = 30 * 60
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    args = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] != "--top"]
     top = 30
     if "--top" in sys.argv:
         top = int(sys.argv[sys.argv.index("--top") + 1])
-        args = [a for a in args if a != str(top)]
+
     path = Path(args[0])
     log = path / "infolog.txt" if path.is_dir() else path
     lo = float(args[1])
