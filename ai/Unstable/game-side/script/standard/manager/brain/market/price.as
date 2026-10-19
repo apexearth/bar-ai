@@ -899,7 +899,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			+ float(Catalog::gAreaCells[defId])
 				* gPrSpaceM;
 	const float wageNow = Wage();
-	gPrLastWalkC = walkSec * WalkRateWith(builderBP, wageNow) * gVwWalk;
+	w.walkSlope = WalkRateWith(builderBP, wageNow) * gVwWalk;
+	gPrLastWalkC = walkSec * w.walkSlope;
 	gPrLastBuildC = buildSec * BuildRateWith(builderBP, wageNow) * gVwBuild;
 	w.wfDelta = 0.f;
 	if (gPrWalkForgone)
@@ -932,6 +933,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			w.gain = gain;
 		} else {
 			gPrLastLateC = gain * lateS * gVwLate;
+			w.walkSlope += gain * gVwLate;
 			w.tCost += gPrLastLateC;
 		}
 	}

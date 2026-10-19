@@ -205,7 +205,8 @@ int MemoKey(int slot, CCircuitUnit@ unit, bool flags = true)
 		if (gMemoCell <= 1.f)
 			gMemoCell = Brain::LightTowerRange();
 		const AIFloat3 p = unit.GetPos(ai.frame);
-		k = k * 31 + int(p.x / gMemoCell) * 4093 + int(p.z / gMemoCell);
+		const float mcK = MemoCellK();
+		k = k * 31 + int(p.x / mcK) * 4093 + int(p.z / mcK);
 	}
 	return k;
 }
@@ -221,8 +222,48 @@ int MemoWay(int slot, CCircuitUnit@ unit)
 	const AIFloat3 p = unit.GetPos(ai.frame);
 	if (gMemoCell <= 1.f)
 		gMemoCell = Brain::LightTowerRange();
-	const int h = int(p.x / gMemoCell) * 7 + int(p.z / gMemoCell) * 3;
+	const float mcK = MemoCellK();
+	const int h = int(p.x / mcK) * 7 + int(p.z / mcK) * 3;
 	return ((h % MEMO_WAYS) + MEMO_WAYS) % MEMO_WAYS;
+}
+
+// TUNE_MEMO_REPRICE: a position-keyed answer is shared over a region four cells wide and its walk is
+// re-priced for the asker on the slope ValueOf charged (walkSlope). Keyed to the exact cell, a hand that
+// had walked one cell on missed (memo.m.own 25,336 of 41,366 misses, his scav 8v8).
+int gMrOn = -1;
+bool MemoReprOn()
+{
+	if (gMrOn < 0)
+		gMrOn = (ai.GetTunable("apex_memo_reprice", TUNE_MEMO_REPRICE) > 0.f) ? 1 : 0;
+	return gMrOn > 0;
+}
+float MemoCellK()
+{
+	if (gMemoCell <= 1.f)
+		gMemoCell = Brain::LightTowerRange();
+	return MemoReprOn() ? (gMemoCell * 4.f) : gMemoCell;
+}
+bool MemoPosSlot(int slot)
+{
+	return (slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9);
+}
+Want@ MemoServe(int slot, int r, CCircuitUnit@ unit)
+{
+	Want@ c = WantCopy(gMemoW[slot][r]);
+	if ((c is null) || !MemoReprOn() || !MemoPosSlot(slot) || !OnMap(c.pos) || (c.walkSlope <= 0.f))
+		return c;
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const float walk = (speed > 1.f) ? (unit.GetPos(ai.frame).distance2D(c.pos) / speed) : 60.f;
+	const float before = c.mCost + c.tCost;
+	float t = c.tCost + (walk - c.walkSec) * c.walkSlope;
+	if (t < 0.f)
+		t = 0.f;
+	c.tCost = t;
+	c.walkSec = walk;
+	const float after = c.mCost + t;
+	if ((before > 0.f) && (after > 0.f))
+		c.value *= before / after;
+	return c;
 }
 
 Want@ WantCopy(Want@ s)
@@ -244,6 +285,7 @@ Want@ WantCopy(Want@ s)
 	c.value = s.value;
 	c.buildSec = s.buildSec;
 	c.walkSec = s.walkSec;
+	c.walkSlope = s.walkSlope;
 	c.wfDelta = s.wfDelta;
 	c.src = s.src;
 	c.funded = s.funded;
@@ -372,7 +414,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		Perf::Note("memo.hit");
 		if (slot == 8)
 			gMexOpen = gMemoMexOpen[r];
-		return WantCopy(gMemoW[slot][r]);
+		return MemoServe(slot, r, unit);
 	}
 	// Why it missed: never computed / the stall-or-full flags moved / ownership or a slot's own stamp moved / aged out.
 	if (gMemoAt[slot][r] <= -30000)
@@ -408,7 +450,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 				gMemoDeferred[slot][r] = true;
 			if (slot == 8)
 				gMexOpen = gMemoMexOpen[r];
-			return WantCopy(gMemoW[slot][r]);
+			return MemoServe(slot, r, unit);
 		}
 		++gMemoStarvN;
 	}

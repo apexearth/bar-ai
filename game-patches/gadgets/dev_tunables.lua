@@ -390,6 +390,7 @@ local NAMES = {
 	"apex_reserve", -- want_assist.as: hold back for the factories while the army is short (0)
 	"apex_unlock_once", -- register.as: a plant is the metal unlock only once (0)
 	"apex_con_priced", -- production.as: cons on their price, not the floors (0)
+	"apex_memo_reprice", -- decide.as: memo answers shared by region, walk re-priced (0)
 	"apex_unit_limit",       -- decide.as ProposeStep: TEST ONLY, drop wants for a def at its unit count limit (0)
 	"apex_hands_once",       -- want_plant.as HandKinOf: a plant's build-power half divided by plants of any domain already making builders of its tier (0)
 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)
