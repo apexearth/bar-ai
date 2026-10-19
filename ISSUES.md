@@ -90,6 +90,15 @@ Levers measured so far: TUNE_CON_USE (a third fewer cons, eco not better, off); 
 four price switches in A/B (matches/hpab). Next: fewer flips per con, cheaper decisions (memo misses:
 mc.protect 7,878 of 15,561 asks).
 
+Memo census (memo.m.*, 18-min solo run of his setup, matches/memocensus-w4): 30,293 hits against 41,366
+misses -- ownership/position 25,336, empty or evicted 11,896, age 2,500, stall/full flags 1,634. A
+proposer's key carries the asker's cell, and hands move between elections, so most misses are the same
+hand one cell on. Widening the rows 4 -> 16 traded own misses for empty ones (20,051 / 16,906) with no
+gain. The fix is structural: memo the asker-independent part of a proposal (candidate scan, site search
+-- pw.cands, prot.loop, plant.lathesite, sense.*) and re-price only the walk per asker on a hit. Biggest
+first: want.protect 17.6 s, want.plant 17.6 s, want.sense 13.2 s, want.nano 12.4 s of a 27-min game.
+Constructor count is the other half: decisions scale with hands (40-60 a seat), see TUNE_CON_PRICED.
+
 ## A SITE MOVED AFTER PRICING IS A WALK NOBODY PRICED (2026-10-15)
 
 His watch game (army-smoke wdwatch1, t0, home 7600,4897): at 8.51 min `com-selfgun` hoisted an

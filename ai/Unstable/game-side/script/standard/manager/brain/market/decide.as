@@ -175,6 +175,7 @@ int gMemoStride = 0;
 // moves an input this key cannot see. MemoEvictKind covers the executed kind
 // only. See docs/tunables.md, apex_memo_ttl.
 array<array<int>@> gMemoKey;   // per slot: per-askerDef validity key
+array<array<int>@> gMemoKeyNF; // the same key without the stall/full flags, for the miss census
 
 // FOUR OF THE SEVEN PICK THEIR SITE FROM THE ASKER'S OWN POSITION -- protect and
 // sense take the nearest gap or slot, obsolete-reclaim the nearest victim, mexup
@@ -185,14 +186,14 @@ array<array<int>@> gMemoKey;   // per slot: per-askerDef validity key
 // a builder across the base gets its own answer. The cell is the light tower's
 // reach, this tree's unit for "the same piece of ground".
 float gMemoCell = 0.f;
-int MemoKey(int slot, CCircuitUnit@ unit)
+int MemoKey(int slot, CCircuitUnit@ unit, bool flags = true)
 {
 	// The stall state is an input: a tower priced on a full bank was served
 	// 16 s later with the bank at 10, its 680 E bill still forgiven.
 	// gOwnSetStamp STAYS: left to MemoTtl, stale answers were refused at
 	// execution and all-refused elections doubled (his-settings 8v8, 10-01).
-	int k = gOwnSetStamp * 4 + (HardEStall() ? 1 : 0)
-			+ (aiEconomyMgr.isEnergyFull ? 2 : 0);
+	int k = gOwnSetStamp * 4 + ((flags && HardEStall()) ? 1 : 0)
+			+ ((flags && aiEconomyMgr.isEnergyFull) ? 2 : 0);
 	// Not in the key: the protect field and the front (each re-stamps on a
 	// clock whether or not it moved); MemoTtl bounds their staleness. A FREED
 	// spot is: without it a dead extractor's spot waited out the answer's whole
@@ -218,6 +219,8 @@ int MemoWay(int slot, CCircuitUnit@ unit)
 	if (!((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9)))
 		return 0;
 	const AIFloat3 p = unit.GetPos(ai.frame);
+	if (gMemoCell <= 1.f)
+		gMemoCell = Brain::LightTowerRange();
 	const int h = int(p.x / gMemoCell) * 7 + int(p.z / gMemoCell) * 3;
 	return ((h % MEMO_WAYS) + MEMO_WAYS) % MEMO_WAYS;
 }
@@ -338,6 +341,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		gMemoDeferred.resize(MEMO_N);
 		gMemoKindPos.resize(MEMO_N);
 		gMemoKey.resize(MEMO_N);
+		gMemoKeyNF.resize(MEMO_N);
 		const uint rows = uint((Catalog::gDefCount + 1) * MEMO_WAYS);
 		gMemoStride = int(rows);
 		gMemoMexOpen.resize(rows);
@@ -352,6 +356,8 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 			@gMemoDeferred[s] = df;
 			@gMemoKindPos[s] = kp;
 			@gMemoKey[s] = mk;
+			array<int> mk2(rows, 0);
+			@gMemoKeyNF[s] = mk2;
 		}
 	}
 	const int ud = int(unit.circuitDef.id);
@@ -368,6 +374,13 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 			gMexOpen = gMemoMexOpen[r];
 		return WantCopy(gMemoW[slot][r]);
 	}
+	// Why it missed: never computed / the stall-or-full flags moved / ownership or a slot's own stamp moved / aged out.
+	if (gMemoAt[slot][r] <= -30000)
+		Perf::Note("memo.m.empty");
+	else if (gMemoKey[slot][r] != key)
+		Perf::Note((gMemoKeyNF[slot][r] == MemoKey(slot, unit, false)) ? "memo.m.flag" : "memo.m.own");
+	else
+		Perf::Note("memo.m.ttl");
 	if (gMemoFreshFrame != ai.frame) {
 		gMemoFreshFrame = ai.frame;
 		gMemoFreshN = 0;
@@ -409,6 +422,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		gMemoMexOpen[r] = gMexOpen;
 	gMemoAt[slot][r] = ai.frame;
 	gMemoKey[slot][r] = key;
+	gMemoKeyNF[slot][r] = MemoKey(slot, unit, false);
 	gMemoDeferred[slot][r] = false;
 	MemoUnlink(slot, r);
 	@gMemoW[slot][r] = fresh;
