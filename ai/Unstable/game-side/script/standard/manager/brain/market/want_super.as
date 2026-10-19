@@ -985,7 +985,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		} else {
 			const double _tSs = Perf::T0();
 			const int sKey = -(d * 16 + sc + 1);
-			if (!SiteCacheOn() || !SiteCacheGet(sKey, at)) {
+			if (!SiteCacheOn() || !SiteCacheGet(sKey, at, ((sc == SC_LRPC) || (sc == SC_HEAVY)) ? MemoTtl() : -1)) {
 				at = SuperSite(unit, sc, Catalog::Def(d));
 				if (SiteCacheOn())
 					SiteCachePut(sKey, at);

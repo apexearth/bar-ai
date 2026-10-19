@@ -953,8 +953,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		Want c;
 		const float walkSec = (hUSpeed > 1.f)
 				? (hUPos.distance2D(at) / hUSpeed) : 60.f;
+		const double _tPv = Perf::T0();
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c,
 				cls != PROT_DEF);
+		Perf::Add("pw.value", _tPv);
 		if (cls == PROT_AA)
 			AansNoteAA(d, gain, c.value, c.mCost + c.tCost);
 		if (rankNow && (cls == PROT_DEF) && (gDefRankDef.length() > 0))

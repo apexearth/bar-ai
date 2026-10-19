@@ -206,6 +206,7 @@ array<bool> gJcFar;
 array<float> gJcProg;
 array<float> gJcRing;
 array<int> gJcGuards;
+array<uint> gJcBusy;   // the crew, read once per fill: Workers() builds a unit array per call
 int gJcFrame = -1;
 int gJcJobStamp = -1;
 int gJcLiveStamp = -1;
@@ -234,6 +235,7 @@ void JobCacheFill(bool leashed)
 	gJcProg.resize(0);
 	gJcRing.resize(0);
 	gJcGuards.resize(0);
+	gJcBusy.resize(0);
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
 		IUnitTask@ cand = Requests::gLive[i];
 		if ((cand is null) || cand.IsDead()
@@ -252,6 +254,7 @@ void JobCacheFill(bool leashed)
 		gJcProg.insertLast(Requests::Progress(cand));
 		gJcRing.insertLast(Requests::RingSeen(cand));
 		gJcGuards.insertLast((val > 0.f) ? GuardsOnJob(cand) : 0);
+		gJcBusy.insertLast(Requests::Workers(cand));
 	}
 }
 
@@ -296,7 +299,7 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			++gJobCant;
 			continue;
 		}
-		const uint busy = Requests::Workers(cand);
+		const uint busy = gJcBusy[i];
 		// The score needs nothing the gates below compute, so a job that could not raise any of
 		// the three bests it is eligible for is passed over before them: the gates only remove.
 		const float dist = me.distance2D(where);

@@ -739,12 +739,27 @@ bool SiteCacheOn()
 		gScOn = (ai.GetTunable("apex_site_cache", TUNE_SITE_CACHE) > 0.f) ? 1 : 0;
 	return gScOn > 0;
 }
-bool SiteCacheGet(int key, AIFloat3 &out p)
+// A placement stales only the answers whose ground it can touch: its footprint plus the widest plant's
+// (a memo-lifetime cache expired exactly when the proposer missed, and hit nothing: his 8v8, siting calls
+// 1,074 -> 1,157). ttl < 0: the answer lives until ground near it is taken.
+const float SC_TOUCH_SQ = 16.f;
+void SiteCacheTouch(const AIFloat3& in p, int defId)
+{
+	if (!SiteCacheOn() || !Catalog::ValidId(defId))
+		return;
+	const float r = float(Catalog::gFootX[defId] + Catalog::gFootZ[defId] + SC_TOUCH_SQ) * SQUARE_SIZE;
+	for (uint i = 0; i < gScPos.length(); ++i) {
+		if (OnMap(gScPos[i]) && (gScPos[i].distance2D(p) < r))
+			gScAt[i] = -1000000;
+	}
+}
+bool SiteCacheGet(int key, AIFloat3 &out p, int ttl = -1)
 {
 	for (uint i = 0; i < gScKey.length(); ++i) {
 		if (gScKey[i] != key)
 			continue;
-		if ((gScStamp[i] != gOwnSetStamp) || (ai.frame >= gScAt[i] + MemoTtl()))
+		if ((gScStamp[i] != gOwnSetStamp) || (gScAt[i] < 0)
+			|| ((ttl >= 0) && (ai.frame >= gScAt[i] + ttl)))
 			return false;
 		p = gScPos[i];
 		return true;

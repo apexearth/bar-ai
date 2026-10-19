@@ -181,6 +181,7 @@ void NotePlaced(int defId, const AIFloat3& in p, Id id)
 	AiLog("apex: placed t=" + ai.teamId + " " + Catalog::Def(defId).GetName()
 		+ " at=" + int(p.x) + "," + int(p.z)
 		+ " foot=" + Catalog::gFootX[defId] + "x" + Catalog::gFootZ[defId]);
+	Market::SiteCacheTouch(p, defId);
 	gSeen.insertLast(p);
 	gSeenDef.insertLast(defId);
 	gSeenId.insertLast(id);
