@@ -323,6 +323,9 @@ public:
 	float GetFormDepth() const { return formDepth; }
 	bool HasFormSlot() const { return (formLateral != 0.f) || (formDepth != 0.f); }
 	springai::AIFloat3 InFormation(const springai::AIFloat3& p, OrdSrc src) const;
+	// apex: a move/fight/patrol point outside this unit's movement area is counted, and moved to the nearest
+	// reachable point under apex_reach_orders: the engine's failed search for it runs on every client.
+	springai::AIFloat3 ReachOrder(const springai::AIFloat3& pos, OrdSrc src);
 
 	void Morph();
 	void StopMorph();

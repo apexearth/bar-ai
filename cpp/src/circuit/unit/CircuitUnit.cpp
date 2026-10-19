@@ -595,12 +595,33 @@ AIFloat3 CCircuitUnit::InFormation(const AIFloat3& p, OrdSrc src) const
 	return out;
 }
 
+AIFloat3 CCircuitUnit::ReachOrder(const AIFloat3& pos, OrdSrc src)
+{
+	if ((manager == nullptr) || (area == nullptr)) {
+		return pos;  // a flier goes anywhere
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* tm = circuit->GetTerrainManager();
+	if (tm->CanMobileReachAt(area, pos, 0.f)) {
+		return pos;
+	}
+	AIFloat3 out = pos;
+	if (circuit->GetTunable("apex_reach_orders", 0.f) > 0.f) {
+		const AIFloat3 mp = tm->GetMovePosition(area, pos);
+		if (utils::is_valid(mp)) {
+			out = mp;
+		}
+	}
+	circuit->NoteOrderUnreach(static_cast<int>(src), (out.x != pos.x) || (out.z != pos.z));
+	return out;
+}
+
 void CCircuitUnit::CmdMoveTo(const AIFloat3& p0, short options, int timeout, OrdSrc src)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	const AIFloat3 pos = InFormation(p0, src);
+	const AIFloat3 pos = ReachOrder(InFormation(p0, src), src);
 	if (NoteOrder(OrdKind::MOVE, options, pos, 0, timeout, src)) {
 		return;
 	}
@@ -639,7 +660,7 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& p0, short options, int timeout, Or
 		CmdMoveTo(p0, options, timeout, src);  // InFormation applies there
 		return;
 	}
-	const AIFloat3 pos = InFormation(p0, src);
+	const AIFloat3 pos = ReachOrder(InFormation(p0, src), src);
 	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);
@@ -649,11 +670,12 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& p0, short options, int timeout, Or
 	unit->Fight(pos, options, timeout);
 }
 
-void CCircuitUnit::CmdPatrolTo(const AIFloat3& pos, short options, int timeout)
+void CCircuitUnit::CmdPatrolTo(const AIFloat3& p0, short options, int timeout)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
+	const AIFloat3 pos = ReachOrder(p0, OrdSrc::PATROL);
 	assert(utils::is_in_map(pos));
 	if (NoteOrder(OrdKind::PATROL, options, pos, 0, timeout, OrdSrc::PATROL)) {
 		return;

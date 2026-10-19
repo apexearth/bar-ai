@@ -761,6 +761,7 @@ public:
 	// apex: orders the arbiter refused, per call site -- what a centre TRIED to
 	// do while a higher-ranked decision was still running.
 	void NoteOrderRefused(int src, int byPrio);
+	void NoteOrderUnreach(int src, bool fixed);
 	// apex: the arc-side tiebreak that a sticky side would have held. Counted
 	// with apex_arc_sticky OFF too, so one run says what turning it on buys.
 	void NoteArcFlip(bool held, unsigned units);
@@ -868,6 +869,8 @@ private:
 	// [0] sent, [1] re-sends within 3s, [2] the far ones among those.
 	static constexpr int ORD_SRC_N = 22;
 	unsigned ordRefused[ORD_SRC_N] = {0};
+	unsigned ordUnreach[ORD_SRC_N] = {0};   // apex: orders whose point the unit's movement area cannot reach
+	unsigned ordUnreachFixed = 0;           // ...of those, moved to the nearest reachable point (apex_reach_orders)
 	unsigned ordSrc[ORD_SRC_N][3] = {{0}};
 	unsigned arcFlip[2] = {0, 0};   // [0] side changed, [1] a sticky side held it
 	unsigned arcFlipU[2] = {0, 0};  // units re-slotted by those

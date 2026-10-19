@@ -521,6 +521,7 @@ double ElecFrameUs()
 // Carried across frames: a step dearer than the slice leaves a debt the next
 // frames repay by electing nothing, so the average stays under the slice.
 double gElecCredit = 0.0;
+double gElecRollWall = -1.0;
 
 // THE FRAME SPENDS WHAT THE QUEUE NEEDS, NOT THE WHOLE SLICE. Each pending set is due by its
 // builder's next visit (gRevisitEma frames after it opened); a frame owes each set its
@@ -566,7 +567,17 @@ void ElecFrameRoll()
 {
 	if (gElecFrame != ai.frame) {
 		const double slice = ElecFrameUs();
-		gElecCredit += slice * double((gElecFrame < 0) ? 1 : (ai.frame - gElecFrame));
+		double frames = double((gElecFrame < 0) ? 1 : (ai.frame - gElecFrame));
+		// Catching up, the slice is owed per wall-clock frame at the game's speed, not per frame replayed:
+		// the same CPU a real second however many frames the host is running through (Perf::CatchingUp).
+		const double now = ai.ClockUs();
+		if ((gElecRollWall > 0.0) && Perf::CatchingUp()) {
+			const double wallFrames = (now - gElecRollWall) * 30.0 * double(Perf::SetSpeed()) / 1.0e6;
+			if (wallFrames < frames)
+				frames = wallFrames;
+		}
+		gElecRollWall = now;
+		gElecCredit += slice * frames;
 		if (gElecCredit > slice)
 			gElecCredit = slice;
 		gElecFrame = ai.frame;

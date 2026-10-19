@@ -1276,6 +1276,19 @@ int CCircuitAI::Update(int frame)
 				ref += buf;
 				ordRefused[i] = 0;
 			}
+			// apex: a point the unit cannot get to sends the engine's pathfinder -- synced, on every player's
+			// machine -- on a search that fails only after it has tried everything reachable (his 10-19).
+			std::string unr;
+			for (int i = 0; i < ORD_SRC_N; ++i) {
+				if (ordUnreach[i] == 0) { continue; }
+				snprintf(buf, sizeof(buf), " %s=%u", CCircuitUnit::OrdSrcName(i), ordUnreach[i]);
+				unr += buf;
+				ordUnreach[i] = 0;
+			}
+			if (!unr.empty()) {
+				LOG("apex: order-unreach t=%i fixed=%u%s", teamId, ordUnreachFixed, unr.c_str());
+			}
+			ordUnreachFixed = 0;
 			if (!ref.empty()) {
 				LOG("apex: order-refused t=%i (a lower-ranked centre tried to overwrite a live decision)%s", teamId, ref.c_str());
 			}
@@ -4421,6 +4434,16 @@ void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed, int src)
 				++ordSrc[src][2];
 			}
 		}
+	}
+}
+
+void CCircuitAI::NoteOrderUnreach(int src, bool fixed)
+{
+	if ((src >= 0) && (src < ORD_SRC_N)) {
+		++ordUnreach[src];
+	}
+	if (fixed) {
+		++ordUnreachFixed;
 	}
 }
 

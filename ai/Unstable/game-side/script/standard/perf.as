@@ -117,6 +117,11 @@ void TickSpeed()
 		if (gLagSev < 0.f)
 			gLagSev = 0.f;
 	}
+	if (CatchingUp() && (ai.frame >= gNextLagLog)) {
+		gNextLagLog = ai.frame + 30 * SECOND;
+		AiLog("apex: CATCHUP speed=" + formatFloat(gSimSpeed, "", 0, 2) + " set=" + formatFloat(SetSpeed(), "", 0, 1)
+			+ " -- elections budgeted per wall second");
+	}
 	if ((gLagSev > 0.f) && (ai.frame >= gNextLagLog)) {
 		gNextLagLog = ai.frame + 30 * SECOND;
 		AiLog("apex: LAG speed=" + formatFloat(gSimSpeed, "", 0, 2) + " set=" + formatFloat(SetSpeed(), "", 0, 1)
@@ -147,6 +152,20 @@ float SetSpeed()
 float SimSpeed()
 {
 	return gSimSpeed;
+}
+
+// A HOST BEHIND THE SERVER CATCHES UP FASTER THAN THE GAME'S SPEED (his 10-19: players fall behind the
+// server, and the AI host behind it stops operating properly). The lag ladder above reads only "slower
+// than 1x", so the replay of the missed frames read as recovered while every one of them paid a full
+// frame of AI work -- the backlog fed itself. Faster than the set speed, below a benchmark's, is the
+// catch-up. TUNE_CATCHUP_WALL.
+int gCuOn = -1;
+bool CatchingUp()
+{
+	if (gCuOn < 0)
+		gCuOn = (ai.GetTunable("apex_catchup_wall", TUNE_CATCHUP_WALL) > 0.f) ? 1 : 0;
+	const float s = SetSpeed();
+	return (gCuOn > 0) && (s > 0.f) && (gSimSpeed > s * 1.15f);
 }
 
 bool GameLagging()
