@@ -164,3 +164,8 @@ jammer. Priced as time bought, triggered by the enemy field in reach against our
   twenty may, and then they have to spend on shields, which are costly. Today each cannon is priced
   as if it kills alone and the next one is worth less; nothing prices the volley that breaks a
   position or the shields it forces them to buy. Not built.
+- **Find the lag on particular maps** (10-19): pathfinding is one of the big issues; units that are stuck
+  or cannot reach their destination should back off, or the ground a unit type cannot reach should be
+  blacklisted. Measured so far: in the 16-AI benchmark the engine is 75-85% of the late frame (34-51 ms
+  a frame at ~3,000 units) and our path queries 98 s of worker CPU (317k); reclaim refused for threat now
+  backs off (1dfb106f) and radar sites an ally covers are no longer chosen. Not yet compared across maps.
