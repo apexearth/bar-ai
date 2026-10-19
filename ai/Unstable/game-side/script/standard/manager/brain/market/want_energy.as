@@ -1115,6 +1115,30 @@ float BPCapacity()
 	return cap;
 }
 
+// BPCapacity's metal rate for the build power already ordered: nanos and plants in the
+// request book, a frame counted by its progress as ConvCapInFlight does.
+int gBpFlightFrame = -1;
+float gBpFlightVal = 0.f;
+float BpSpendInFlightM()
+{
+	if (gBpFlightFrame == ai.frame)
+		return gBpFlightVal;
+	gBpFlightFrame = ai.frame;
+	float cap = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (Catalog::gMobile[d] || (Catalog::gBuildPower[d] <= 0.f))
+			continue;
+		const float c = Catalog::gBuildPower[d] * (7.f / 80.f);
+		cap += (Requests::Workers(t) > 0) ? c : c * Requests::Progress(t);
+	}
+	gBpFlightVal = cap;
+	return cap;
+}
+
 // The mobile part of BPCapacity, same discount.
 float MobileBPCapacity()
 {
@@ -1691,6 +1715,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			cGain *= 1.f + cvGrowK
 					* growC / ((cvPower > growC) ? cvPower : ((growC > 0.f) ? growC : 1.f));
 		}
+		cGain *= MRealizeShare(chew * Catalog::gConvRatio[d],
+				Catalog::BuildSecondsAt(d, Catalog::gBuildPower[uid]));   // its metal must be spendable too
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is

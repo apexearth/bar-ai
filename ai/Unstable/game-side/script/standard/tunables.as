@@ -995,7 +995,7 @@ const float TUNE_CON_USE = 0.f;   // [toggle 0/1] constructors sized by use: the
 const float TUNE_HOIST_WAITS = 1.f;   // [toggle 0/1] a hoist (floor, role, field, defjoin, metalfirst...) waits while the hand is still walking to a live job; the draw and the emergencies still move it (decide.as; his 2026-10-18: cons walk far, work 2 s, walk back)
 const float TUNE_DRAW_WAITS = 0.f;   // [toggle 0/1] with TUNE_HOIST_WAITS: the draw also leaves a hand on a live job it is walking to unless the drawn job outbids its walk-paid value -- drawn once per job, not per election (decide.as; the cost of switching roles stand in for)
 const float TUNE_RESERVE = 0.f;   // [toggle 0/1] holding back is an option: while the army is short and no metal is spare, a drawn job worth less than 1/fill leaves the metal to the factories and the hand lathes a producing one (want_assist.as ReserveWant; his 2026-10-18)
-const float TUNE_UNLOCK_ONCE = 0.f;   // [toggle 0/1] a T2/T3 plant is the metal unlock (metal-first assists, MetalPathStarved) only if its units upgrade extractors and only until such a plant stands -- the extractor rule's sibling (register.as IsMetalUnlock; his 2026-10-18)
+const float TUNE_UNLOCK_ONCE = 0.f;   // [toggle 0/1] a T2/T3 plant is the metal unlock (metal-first assists, MetalPathStarved) only if its units upgrade extractors and only until such a plant stands -- the extractor rule's sibling (register.as IsMetalUnlock; his 2026-10-18); and the tech market prices the unlock once: a second plant beside a standing or ordered kin gets no unlock value (want_tech.as)
 const float TUNE_CON_PRICED = 0.f;   // [toggle 0/1] the con floors yield the lab to an army under its target share as measured, not under target / the con multiplier (production.as armyBehind; his 2026-10-18: a third of their army, the lab making cons). Floored to stand down entirely, a priced con never won: army gains are in gap metal, a con's in m/s
 const float TUNE_MEMO_REPRICE = 1.f;   // [toggle 0/1] position-keyed memo answers are shared over a region four cells wide and their walk re-priced per asker (decide.as MemoServe; perf, his scav 8v8 at 3.9x the frame budget)
 const float TUNE_REELECT_TTL = 1.f;   // [toggle 0/1] (C++ apex_reelect_ttl; needs the rebuilt DLL) a walking builder re-confirms its job no more often than the prices refresh (apex_memo_ttl), not every 3 s; with an enemy near it keeps 3 s (BuilderTask.cpp Reevaluate; perf)
@@ -1225,7 +1225,8 @@ const float TUNE_E_WASTE_WORTH = 0.25f;
 
 // M_REALIZE [toggle 0/1]: the metal twin of E_REALIZE -- extraction priced by
 //   the share of its metal we could actually spend. DEFAULT OFF: inert where it
-//   was measured and its premise is unproven. See docs/tunables.md.
+//   was measured and its premise is unproven. Also gates the rich seat spending: while the bank
+//   overflows, the :losing/:outgrown/T1-air-mute drops and the metal con role stand down. See docs/tunables.md.
 const float TUNE_M_REALIZE = 0.f;
 
 // The unspendable band keeps this share, because demand grows and the spot is

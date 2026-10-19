@@ -155,6 +155,9 @@ bool RoleWorthDoing(int c)
 {
 	if ((gRwSum <= 0.f) || (c < 0) || (c >= int(gRwWt.length())) || (gRwCatBest[c] < 0))
 		return false;
+	// A full bank is metal nothing spends: more income is not the seat's need (his 10-18 2v2).
+	if ((c == CAT_METAL) && MetalWasting() && (ai.GetTunable("apex_m_realize", TUNE_M_REALIZE) > 0.f))
+		return false;
 	// A QUOTA THE TARGET GAP SET IS NOT RE-JUDGED BY THE DRAW: the gap floor
 	// exists because a category the draw starves gets a starved ticket, and
 	// testing the quota against that same ticket starved it again. Only for

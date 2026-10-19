@@ -1761,6 +1761,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// fewer T2 units once T3 stands, the gantry's output first), whatever its
 	// units score per metal. Air plants never yield: T2 and T3 air stay full.
 	const bool wasting = MetalWasting();
+	const bool spill = wasting && (ai.GetTunable("apex_m_realize", TUNE_M_REALIZE) > 0.f);   // the rich seat spends: drops below stand down
 	const bool airLine = AirPlant(fid);
 	if (wasting) {
 		gYieldLog = " yield=off(wasting)";
@@ -2128,7 +2129,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
 			continue;
 		}
-		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
+		if (t1AirMute && !spill && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
 			continue;
 		// THE WING'S LOOK: an air scout bought for what seeing their economy
 		// adds to the first bomber's price (Air::LookGainFor). A second demand
@@ -2494,7 +2495,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// ...only where they field a tier above it, his ruling's case (most of
 			// their identified metal); elsewhere RecordMul prices the record (his
 			// 10-13: Flash and Stout dropped while the exempt Rover was bought 165x).
+			// ...NOT WHILE METAL IS BEING THROWN AWAY, as the yield above: a losing trade beats none
+			// (his 10-18 2v2: a vehicle-only seat at 105 m/s and a full bank built no tanks, all :losing).
 			if ((ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) > 0.f)
+				&& !spill
 				&& (RecordRaw(d) < 1.f)
 				&& (ai.RecordCount(Catalog::Def(d), -1) > 0)
 				&& (Military::FoeTierAbove(DefTier(d)) > 0.5f))
@@ -2503,7 +2507,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
 				continue;
 			}
-			if (Outgrown(d)) {
+			if (!spill && Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;

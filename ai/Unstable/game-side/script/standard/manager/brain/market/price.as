@@ -618,11 +618,29 @@ float MRealizeShare(float addM, float buildSec)
 		if ((bankRoom > 0.f) && (look > 1.f))
 			fill = bankRoom / look;
 	}
-	const float target = demand * gPrEHeadroom + fill;
+	// The headroom stands for demand the pull hides while the bank is short; with
+	// the bank full the pull is the whole spend, and 1.75x of it read a seat
+	// spilling 35 m/s as short of metal (his 10-18 2v2: share 1.0 at a full bank).
+	// Build power already ordered is spend on its way.
+	const float target = (aiEconomyMgr.isMetalFull ? demand : demand * gPrEHeadroom)
+			+ BpSpendInFlightM() + fill;
 	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
 	// a spot claimed now is still ours when it does. The band loses the wait,
-	// not the metal.
-	const float floorShare = gPrMWasteWorth;
+	// not the metal -- and, as on the energy side, it keeps only the share of the
+	// waste that build power already ordered will spend (his 10-18: "the value of
+	// another extractor is close to 0 when we're full and can't use the metal").
+	float floorShare = gPrMWasteWorth;
+	{
+		const float wasteM = Eco::MInc() - Eco::MPull();
+		if (aiEconomyMgr.isMetalFull && (wasteM > 1.f)) {
+			float follow = BpSpendInFlightM() / wasteM;
+			if (follow > 1.f)
+				follow = 1.f;
+			floorShare = gPrMWasteWorth * follow;
+			if (floorShare < 0.02f)
+				floorShare = 0.02f;
+		}
+	}
 	const float room = target - Eco::MInc();
 	float share = (room <= 0.f) ? 0.f
 			: ((room < addM) ? (room / addM) : 1.f);

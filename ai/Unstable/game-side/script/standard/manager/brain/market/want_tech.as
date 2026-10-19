@@ -903,8 +903,13 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				? LineMul(d) : PlantLineWorth(d);
 		float techGain = 0.f;
 		const bool waterUnlock = WaterPlantUnlocks(d);
+		// THE UNLOCK IS BOUGHT ONCE. A kin plant standing or ordered already brings the
+		// T2 constructor; a second one adds a line, which the plant market prices, and no
+		// unlock (his 10-18: a T2 air plant and a T2 vehicle plant at 40 m/s, the second
+		// at half the unlock's value, 74, before the first T2 constructor was out).
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
-			techGain = demand * pipe / float(1 + liveKin) * TeamTechMul(d, true);
+			techGain = (UnlockOnceOn() && (liveKin > 0)) ? 0.f
+					: demand * pipe / float(1 + liveKin) * TeamTechMul(d, true);
 		else if (waterUnlock)
 			techGain = demand * pipe;
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
