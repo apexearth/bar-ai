@@ -18,6 +18,30 @@ PR = re.compile(r"\[f=0*(\d+)\].*apex: prodrank fac=(\S+) t=(\d+) .*?n=\d+ (.*)$
 PRV = re.compile(r"([a-z0-9]+)(?::[a-z]+)?=([0-9.]+)\(")   # "armpw=307818.25(" and a con's "armck:b=91.16("
 
 
+KIND_LABEL = {
+    "mex": "Claim an extractor", "mexup": "Upgrade an extractor", "energy": "Energy", "convert": "Metal converter",
+    "nano": "Nano turret", "sense": "Radar, jammer or sensor", "protect": "Defence tower", "airdef": "Anti-air tower",
+    "plant": "Factory", "tech": "Advanced lab", "super": "Super build", "assist": "Help another build",
+    "reclaim": "Reclaim wrecks", "reclobs": "Reclaim our old building", "geo": "Geothermal", "teeth": "Dragon's teeth",
+    "store": "Storage", "produce": "Factory product",
+}
+
+
+def unit_names():
+    """Display names and descriptions from the game's language/en/units.json (via tools/bar_env.py)."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import bar_env
+        u = json.load(open(os.path.join(str(bar_env.load().game_sdd), "language", "en", "units.json"),
+                           encoding="utf-8"))["units"]
+        return u.get("names", {}), u.get("descriptions", {})
+    except Exception as e:
+        print("unit names unavailable:", e)
+        return {}, {}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("match")
@@ -54,9 +78,13 @@ def main():
                 r[1] = min(r[1], v)
                 r[2] += v
                 r[3] = max(r[3], v)
+    names, descs = unit_names()
     rows = []
     for (minute, market, kind, item), (n, vmin, s, vmax) in sorted(agg.items()):
-        rows.append({"minute": minute, "market": market, "kind": kind, "item": item, "n": n,
+        base = re.sub(r"_scav$", "", item)
+        rows.append({"minute": minute, "market": market, "kind": kind, "kindLabel": KIND_LABEL.get(kind, kind),
+                     "item": item, "label": names.get(base, item if item != "-" else KIND_LABEL.get(kind, kind)),
+                     "desc": descs.get(base, ""), "n": n,
                      "min": round(vmin, 4), "avg": round(s / n, 4), "max": round(vmax, 4)})
     json.dump(rows, open(a.out, "w"), separators=(",", ":"))
     print("rows", len(rows), "items", len({(r["kind"], r["item"]) for r in rows}),

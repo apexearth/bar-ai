@@ -188,6 +188,10 @@ protected:
 	std::set<CCircuitUnit*> traveled;
 	std::set<CCircuitUnit*> executors;
 	static bool sInReelect;  // apex: inside Reevaluate's re-election
+	static IBuilderTask* sReelectTask;  // apex: the task Reevaluate is confirming, for the script (ai.ReelectTask)
+public:
+	static IBuilderTask* ReelectTask() { return sReelectTask; }
+protected:
 	std::map<CCircuitUnit*, int> ordSilent;  // apex: frame an executor's queue was first seen empty
 	std::map<CCircuitUnit*, int> reexecN;    // apex: orders re-sent to it for this task
 

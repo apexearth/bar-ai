@@ -3379,7 +3379,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// A CONFIRMATION THAT ANSWERS THE SAME BUILD TYPE KEEPS THE JOB IN HAND. IBuilderTask::Reevaluate
 			// keeps the current task whenever the answer is a builder task of its own type, so the new one was
 			// never assigned and died as an orphan (his scav 8v8: ~580 radar tasks a game, why=?). Dropped here.
-			IUnitTask@ curT = unit.task;
+			// The task being confirmed, from the C++ (unit.task is hidden then: sameType read 0); null outside
+			// a confirmation, so an idle hand's election is untouched.
+			IUnitTask@ curT = aiBuilderMgr.ReelectTask();
 			if ((t !is null) && (curT !is null) && (curT !is t) && !curT.IsDead()
 				&& (curT.GetType() == Task::Type::BUILDER) && (t.GetType() == Task::Type::BUILDER)
 				&& (curT.GetBuildType() == t.GetBuildType()))

@@ -54,6 +54,14 @@ static IUnitTask* CBuilderManager_EnqueueMexUp(CBuilderManager* mgr, const AIFlo
 			IBuilderTask::Priority::HIGH, def, spotPos, index));
 }
 
+// apex: the task IBuilderTask::Reevaluate is confirming right now, or null outside a confirmation -- so the
+// script can keep the job in hand instead of founding a same-type task the C++ would drop.
+static IUnitTask* CBuilderManager_ReelectTask(CBuilderManager* mgr)
+{
+	IBuilderTask* t = IBuilderTask::ReelectTask();
+	return ((t != nullptr) && (t->GetManager() == mgr)) ? t : nullptr;
+}
+
 CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
 
 
@@ -119,6 +127,7 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
 	// per call. Auto-handle makes the engine drop the +1 after the call.
 	r = engine->RegisterObjectMethod("CBuilderManager", "void AssignTask(CCircuitUnit@, IUnitTask@+)", asMETHODPR(CBuilderManager, AssignTask, (CCircuitUnit*, IUnitTask*), void), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ EnqueueMexUp(const AIFloat3& in, CCircuitDef@)", asFUNCTION(CBuilderManager_EnqueueMexUp), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CBuilderManager", "IUnitTask@+ ReelectTask()", asFUNCTION(CBuilderManager_ReelectTask), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CBuilderManager", "uint GetWorkerCount() const", asMETHOD(CBuilderManager, GetWorkerCount), asCALL_THISCALL); ASSERT(r >= 0);
 	// apex: see BuilderManager.h -- lets script report the task budget that gates
 	// mex creation, instead of inferring it.

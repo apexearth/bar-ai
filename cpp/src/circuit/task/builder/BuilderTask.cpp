@@ -409,6 +409,7 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
 }
 
 bool IBuilderTask::sInReelect = false;
+IBuilderTask* IBuilderTask::sReelectTask = nullptr;
 
 void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
 {
@@ -1313,8 +1314,10 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 	}
 	HideAssignee(unit);
 	sInReelect = true;   // apex: strand census (see RemoveAssignee)
+	sReelectTask = this;
 	IUnitTask* task = manager->MakeTask(unit);
 	sInReelect = false;
+	sReelectTask = nullptr;
 	ShowAssignee(unit);
 	if ((task != nullptr)
 		&& ((task->GetType() != IUnitTask::Type::BUILDER)
