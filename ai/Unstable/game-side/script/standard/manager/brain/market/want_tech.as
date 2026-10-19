@@ -396,6 +396,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			// plain mexes would simply be arbitraged into mohos.
 			const float realF = MRealizeShare(rawUpM, walkSecU + Catalog::BuildSecondsAt(d, upBP));
 			delta *= realF;
+			delta += IncomeAccelM(rawUpM) * realF;
 			Want c;
 			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c, true, 0.f, hzOn);
 			if (hzOn)

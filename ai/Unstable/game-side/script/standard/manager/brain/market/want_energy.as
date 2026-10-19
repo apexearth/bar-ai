@@ -1715,8 +1715,12 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			cGain *= 1.f + cvGrowK
 					* growC / ((cvPower > growC) ? cvPower : ((growC > 0.f) ? growC : 1.f));
 		}
-		cGain *= MRealizeShare(chew * Catalog::gConvRatio[d],
-				Catalog::BuildSecondsAt(d, Catalog::gBuildPower[uid]));   // its metal must be spendable too
+		{
+			const float cvReal = MRealizeShare(chew * Catalog::gConvRatio[d],
+					Catalog::BuildSecondsAt(d, Catalog::gBuildPower[uid]));   // its metal must be spendable too
+			cGain *= cvReal;
+			cGain += IncomeAccelM(chew * Catalog::gConvRatio[d]) * cvReal;
+		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is

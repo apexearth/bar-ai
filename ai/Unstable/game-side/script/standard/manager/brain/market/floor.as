@@ -60,6 +60,21 @@ float InFlightGainM()
 	return gIfhGain;
 }
 
+// THE HOLD'S OTHER HALF. A build that holds the projects in flight pays for their returns; a build
+// that adds income speeds every one of them by the share of income it adds (his 10-18: "if upgrading
+// a metal extractor lets us build EVERYTHING ELSE 15% faster, isn't it super valuable?"). The caller
+// discounts it by the same survival and spendable share as its own stream. TUNE_INCOME_ACCEL.
+int gIaOn = -1;
+float IncomeAccelM(float addM)
+{
+	if (gIaOn < 0)
+		gIaOn = (ai.GetTunable("apex_income_accel", TUNE_INCOME_ACCEL) > 0.f) ? 1 : 0;
+	if ((gIaOn == 0) || (addM <= 0.f))
+		return 0.f;
+	const float inc = Eco::MInc();
+	return addM / ((inc > 1.f) ? inc : 1.f) * InFlightGainM();
+}
+
 void NoteJob(IUnitTask@ t, Want@ w)
 {
 	if ((t is null) || (w is null))

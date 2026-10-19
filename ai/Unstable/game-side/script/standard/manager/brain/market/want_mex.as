@@ -1336,7 +1336,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		gain *= surv * (1.f - risk) * pOpen;
 		// Metal we cannot spend scales nothing, so it is not priced as though
 		// it did -- the twin of the share energy has always had to prove.
-		gain *= MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
+		const float mxReal = MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
+		gain *= mxReal;
+		gain += IncomeAccelM(rawAddM) * surv * (1.f - risk) * pOpen * mxReal;
 		gain *= MapShareMul();
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM, EcoReturnOn());
 		// A spot with a recent loss near it is a rebuild: say what it is
