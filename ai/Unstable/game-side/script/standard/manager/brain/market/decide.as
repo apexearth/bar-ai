@@ -577,7 +577,15 @@ void ElecFrameRoll()
 				frames = wallFrames;
 		}
 		gElecRollWall = now;
-		gElecCredit += slice * frames;
+		// THE AVERAGE IS BUDGETED, THE BURST IS NOT (TUNE_ELEC_AVG_US): credit accrues at the average a frame may
+		// spend, and saved credit still pays a burst up to the slice. Accrued at the slice itself, the average
+		// could reach 8 ms an AI a frame, and the lag ladder cut it only once the game had already fallen below
+		// realtime for every player (his +100 scav 8v8: 1.6-1.8 ms an AI a frame, elections about half).
+		double rate = slice;
+		const double avgUs = double(ai.GetTunable("apex_elec_avg_us", TUNE_ELEC_AVG_US));
+		if ((avgUs > 0.0) && (avgUs < rate))
+			rate = avgUs;
+		gElecCredit += rate * frames;
 		if (gElecCredit > slice)
 			gElecCredit = slice;
 		gElecFrame = ai.frame;
