@@ -389,6 +389,7 @@ local NAMES = {
 	"apex_catchup_wall",     -- perf.as CatchingUp: behind the server, elections budgeted per wall second (1)
 	"apex_reach_orders",     -- CircuitUnit ReachOrder: a move/fight/patrol point the unit cannot reach goes to the nearest reachable one (0)
 	"apex_elec_avg_us",      -- decide.as ElecFrameRoll: average election budget per frame, us (0 off)
+	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
 	"apex_con_use", -- production.as: constructors sized by use (0)

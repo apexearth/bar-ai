@@ -153,7 +153,9 @@ void CSRepairTask::Finish()
 	for (CCircuitUnit* unit : units) {
 		TRY_UNIT(circuit, unit,
 			unit->CmdPriority(0);
-			unit->CmdPatrolTo(position, UNIT_COMMAND_OPTION_SHIFT_KEY);
+			// apex: a replacing patrol, not a queued one: SHIFT appended a patrol to the queue on every finished
+			// repair, and a turret repairs all game.
+			unit->CmdPatrolTo(position);
 		)
 	}
 

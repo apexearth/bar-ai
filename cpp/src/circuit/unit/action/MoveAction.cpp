@@ -133,6 +133,19 @@ void CMoveAction::Update(CCircuitAI* circuit)
 		)
 		return;
 	}
+	// THE SAME WAYPOINT IS NOT A NEW ORDER (apex_travel_samestep): off the lean path the unit is re-checked
+	// every second, and re-sent its waypoint, lookahead and speed even while it is still walking to the same
+	// one -- our moves were 1,948 a team a minute against BARb's 982 (his 10-19 Odderon 8v8). Re-sent only once
+	// the first waypoint has moved on, or the unit has no order left.
+	if ((circuit->GetTunable("apex_travel_samestep", 0.f) > 0.f) && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
+		const AIFloat3& sp = pPath->posPath[step];
+		if ((lastStepPos.x == sp.x) && (lastStepPos.z == sp.z)
+			&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
+		{
+			return;
+		}
+		lastStepPos = sp;
+	}
 
 	TRY_UNIT(circuit, unit,
 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;

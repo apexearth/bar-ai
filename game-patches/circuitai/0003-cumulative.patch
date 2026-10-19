@@ -15270,7 +15270,7 @@ index d29f5821..f0320ea4 100644
  };
  
 diff --git a/src/circuit/task/UnitTask.cpp b/src/circuit/task/UnitTask.cpp
-index 622a3113..21b7bb1c 100644
+index 622a3113..d822e0f4 100644
 --- a/src/circuit/task/UnitTask.cpp
 +++ b/src/circuit/task/UnitTask.cpp
 @@ -6,7 +6,9 @@
@@ -15495,7 +15495,25 @@ index 622a3113..21b7bb1c 100644
  }
  
  void IUnitTask::ClearRelease()
-@@ -80,7 +260,7 @@ void IUnitTask::RemoveAssignee(CCircuitUnit* unit)
+@@ -67,9 +247,14 @@ void IUnitTask::AssignTo(CCircuitUnit* unit)
+ 	unit->SetTask(this);
+ 	units.insert(unit);
+ 
+-	TRY_UNIT(manager->GetCircuit(), unit,
+-		unit->RemoveWait();
+-	)
++	// apex: only a waiting unit has a wait to remove. Sent on every assignment, CMD_REMOVE was 1,089 orders a
++	// team a minute against BARb's 186 (his 10-19 Odderon 8v8) -- each one through every client's synced
++	// AllowCommand -- because this AI re-assigns tasks several times as often.
++	if (unit->IsWaiting()) {
++		TRY_UNIT(manager->GetCircuit(), unit,
++			unit->RemoveWait();
++		)
++	}
+ 
+ 	if (!unit->GetCircuitDef()->IsMobile() && manager->GetCircuit()->GetSetupManager()->IsAntiCap()) {
+ 		unit->PushBack(new CAntiCapAction(unit));
+@@ -80,7 +265,7 @@ void IUnitTask::RemoveAssignee(CCircuitUnit* unit)
  {
  	pathQueries.erase(unit);
  	units.erase(unit);
@@ -15504,7 +15522,7 @@ index 622a3113..21b7bb1c 100644
  
  	manager->GetIdleTask()->AssignTo(unit);
  
-@@ -99,7 +279,7 @@ void IUnitTask::Stop(bool done)
+@@ -99,7 +284,7 @@ void IUnitTask::Stop(bool done)
  
  	CIdleTask* idleTask = manager->GetIdleTask();
  	for (CCircuitUnit* unit : units) {
@@ -15513,7 +15531,7 @@ index 622a3113..21b7bb1c 100644
  		idleTask->AssignTo(unit);
  	}
  	units.clear();
-@@ -114,14 +294,60 @@ void IUnitTask::Cancel()
+@@ -114,14 +299,60 @@ void IUnitTask::Cancel()
  {
  }
  
@@ -15575,7 +15593,7 @@ index 622a3113..21b7bb1c 100644
  	)
  }
  
-@@ -141,6 +367,10 @@ void IUnitTask::Dead()
+@@ -141,6 +372,10 @@ void IUnitTask::Dead()
  
  void IUnitTask::Abort()
  {
@@ -15586,7 +15604,7 @@ index 622a3113..21b7bb1c 100644
  	manager->AbortTask(this);
  }
  
-@@ -156,6 +386,27 @@ bool IUnitTask::IsQueryReady(CCircuitUnit* unit) const
+@@ -156,6 +391,27 @@ bool IUnitTask::IsQueryReady(CCircuitUnit* unit) const
  	return (query == nullptr) || (IPathQuery::State::READY == query->GetState());
  }
  
@@ -27156,7 +27174,7 @@ index 805fe3ba..e095dacc 100644
  
  	virtual void Start(CCircuitUnit* unit) override;
 diff --git a/src/circuit/task/static/RepairTask.cpp b/src/circuit/task/static/RepairTask.cpp
-index 4ccb77bc..6e34bdc2 100644
+index 4ccb77bc..82f07844 100644
 --- a/src/circuit/task/static/RepairTask.cpp
 +++ b/src/circuit/task/static/RepairTask.cpp
 @@ -76,6 +76,7 @@ void CSRepairTask::Update()
@@ -27167,6 +27185,17 @@ index 4ccb77bc..6e34bdc2 100644
  			|| (position.SqDistance2D(repTarget->GetPos(circuit->GetLastFrame())) > SQUARE(radius * 0.9f)))
  		{
  			manager->AbortTask(this);
+@@ -152,7 +153,9 @@ void CSRepairTask::Finish()
+ 	for (CCircuitUnit* unit : units) {
+ 		TRY_UNIT(circuit, unit,
+ 			unit->CmdPriority(0);
+-			unit->CmdPatrolTo(position, UNIT_COMMAND_OPTION_SHIFT_KEY);
++			// apex: a replacing patrol, not a queued one: SHIFT appended a patrol to the queue on every finished
++			// repair, and a turret repairs all game.
++			unit->CmdPatrolTo(position);
+ 		)
+ 	}
+ 
 diff --git a/src/circuit/task/static/SuperTask.cpp b/src/circuit/task/static/SuperTask.cpp
 index e19de07e..0b05153d 100644
 --- a/src/circuit/task/static/SuperTask.cpp
@@ -30918,7 +30947,7 @@ index 4a6cad0a..f2830338 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/action/FightAction.cpp b/src/circuit/unit/action/FightAction.cpp
-index 0f1640eb..4261d106 100644
+index 0f1640eb..6d875567 100644
 --- a/src/circuit/unit/action/FightAction.cpp
 +++ b/src/circuit/unit/action/FightAction.cpp
 @@ -7,8 +7,10 @@
@@ -30932,7 +30961,7 @@ index 0f1640eb..4261d106 100644
  
  #include "AISCommands.h"
  
-@@ -47,13 +49,50 @@ void CFightAction::Update(CCircuitAI* circuit)
+@@ -47,13 +49,60 @@ void CFightAction::Update(CCircuitAI* circuit)
  	switch (pathMaxIndex) {
  		case -2:  // arrived
  			TRY_UNIT(circuit, unit,
@@ -30981,10 +31010,20 @@ index 0f1640eb..4261d106 100644
 +		)
 +		return;
 +	}
++	// The MoveAction rule (apex_travel_samestep): the same first waypoint is not re-sent while the unit has it.
++	if ((circuit->GetTunable("apex_travel_samestep", 0.f) > 0.f) && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
++		const AIFloat3& sp = pPath->posPath[step];
++		if ((lastStepPos.x == sp.x) && (lastStepPos.z == sp.z)
++			&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
++		{
++			return;
++		}
++		lastStepPos = sp;
++	}
  
  	TRY_UNIT(circuit, unit,
  		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
-@@ -73,20 +112,28 @@ void CFightAction::Update(CCircuitAI* circuit)
+@@ -73,20 +122,28 @@ void CFightAction::Update(CCircuitAI* circuit)
  				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
  			}
  			if (isBadJump) {
@@ -31019,7 +31058,7 @@ index 0f1640eb..4261d106 100644
  }
  
 diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
-index a01329c3..f4160762 100644
+index a01329c3..e1fb571d 100644
 --- a/src/circuit/unit/action/MoveAction.cpp
 +++ b/src/circuit/unit/action/MoveAction.cpp
 @@ -7,8 +7,12 @@
@@ -31073,7 +31112,7 @@ index a01329c3..f4160762 100644
  void CMoveAction::Update(CCircuitAI* circuit)
  {
  	if (lastFrame + FRAMES_PER_SEC > circuit->GetLastFrame()) {
-@@ -47,13 +82,57 @@ void CMoveAction::Update(CCircuitAI* circuit)
+@@ -47,13 +82,70 @@ void CMoveAction::Update(CCircuitAI* circuit)
  	switch (pathMaxIndex) {
  		case -2:  // arrived
  			TRY_UNIT(circuit, unit,
@@ -31129,10 +31168,23 @@ index a01329c3..f4160762 100644
 +		)
 +		return;
 +	}
++	// THE SAME WAYPOINT IS NOT A NEW ORDER (apex_travel_samestep): off the lean path the unit is re-checked
++	// every second, and re-sent its waypoint, lookahead and speed even while it is still walking to the same
++	// one -- our moves were 1,948 a team a minute against BARb's 982 (his 10-19 Odderon 8v8). Re-sent only once
++	// the first waypoint has moved on, or the unit has no order left.
++	if ((circuit->GetTunable("apex_travel_samestep", 0.f) > 0.f) && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
++		const AIFloat3& sp = pPath->posPath[step];
++		if ((lastStepPos.x == sp.x) && (lastStepPos.z == sp.z)
++			&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
++		{
++			return;
++		}
++		lastStepPos = sp;
++	}
  
  	TRY_UNIT(circuit, unit,
  		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
-@@ -73,20 +152,28 @@ void CMoveAction::Update(CCircuitAI* circuit)
+@@ -73,20 +165,28 @@ void CMoveAction::Update(CCircuitAI* circuit)
  				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
  			}
  			if (isBadJump) {
@@ -31350,7 +31402,7 @@ index 799ca696..7c846f82 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/action/TravelAction.cpp b/src/circuit/unit/action/TravelAction.cpp
-index 96098603..9bc95813 100644
+index 96098603..84eea842 100644
 --- a/src/circuit/unit/action/TravelAction.cpp
 +++ b/src/circuit/unit/action/TravelAction.cpp
 @@ -9,11 +9,16 @@
@@ -31370,12 +31422,13 @@ index 96098603..9bc95813 100644
  namespace circuit {
  
  using namespace springai;
-@@ -63,17 +68,129 @@ void ITravelAction::SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed
+@@ -63,17 +68,130 @@ void ITravelAction::SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed
  {
  	// NOTE: pPath can be null. Caller uses StateWait() after this call in such cases
  	pathIterator = 0;
 +	lastQueued = -1;
 +	lastWanted = -1.f;
++	lastStepPos.x = -1.f;
  	this->pPath = pPath;
 +	// apex: A UNIT'S GOAL CHANGING IS THE DECISION; the waypoints it walks are
 +	// not. Measuring the waypoints counted a curving path as indecision and
@@ -31501,7 +31554,7 @@ index 96098603..9bc95813 100644
  
  //	int lastStep = pathIterator;
 diff --git a/src/circuit/unit/action/TravelAction.h b/src/circuit/unit/action/TravelAction.h
-index 63cd9245..f8e40555 100644
+index 63cd9245..f2293f7c 100644
 --- a/src/circuit/unit/action/TravelAction.h
 +++ b/src/circuit/unit/action/TravelAction.h
 @@ -27,8 +27,14 @@ public:
@@ -31519,13 +31572,14 @@ index 63cd9245..f8e40555 100644
  
  	std::shared_ptr<CPathInfo> pPath;
  	float speed;
-@@ -36,6 +42,9 @@ protected:
+@@ -36,6 +42,10 @@ protected:
  	int increment;
  	int minSqDist;
  	int lastSector;  // last issued sector index
 +	int lastQueued = -1;     // apex: the furthest path index this unit has been ordered to (apex_travel_lean)
 +	float lastWanted = -1.f; // apex: the wanted speed last sent
 +	springai::AIFloat3 lastLeanPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the waypoint last ordered, kept across a path replacement
++	springai::AIFloat3 lastStepPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the first waypoint last ordered off the lean path (apex_travel_samestep)
  	int lastFrame;
  
  #ifdef DEBUG_VIS

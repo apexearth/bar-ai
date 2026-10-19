@@ -247,9 +247,14 @@ void IUnitTask::AssignTo(CCircuitUnit* unit)
 	unit->SetTask(this);
 	units.insert(unit);
 
-	TRY_UNIT(manager->GetCircuit(), unit,
-		unit->RemoveWait();
-	)
+	// apex: only a waiting unit has a wait to remove. Sent on every assignment, CMD_REMOVE was 1,089 orders a
+	// team a minute against BARb's 186 (his 10-19 Odderon 8v8) -- each one through every client's synced
+	// AllowCommand -- because this AI re-assigns tasks several times as often.
+	if (unit->IsWaiting()) {
+		TRY_UNIT(manager->GetCircuit(), unit,
+			unit->RemoveWait();
+		)
+	}
 
 	if (!unit->GetCircuitDef()->IsMobile() && manager->GetCircuit()->GetSetupManager()->IsAntiCap()) {
 		unit->PushBack(new CAntiCapAction(unit));

@@ -93,6 +93,16 @@ void CFightAction::Update(CCircuitAI* circuit)
 		)
 		return;
 	}
+	// The MoveAction rule (apex_travel_samestep): the same first waypoint is not re-sent while the unit has it.
+	if ((circuit->GetTunable("apex_travel_samestep", 0.f) > 0.f) && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
+		const AIFloat3& sp = pPath->posPath[step];
+		if ((lastStepPos.x == sp.x) && (lastStepPos.z == sp.z)
+			&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
+		{
+			return;
+		}
+		lastStepPos = sp;
+	}
 
 	TRY_UNIT(circuit, unit,
 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;

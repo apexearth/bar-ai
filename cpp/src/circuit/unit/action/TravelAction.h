@@ -45,6 +45,7 @@ protected:
 	int lastQueued = -1;     // apex: the furthest path index this unit has been ordered to (apex_travel_lean)
 	float lastWanted = -1.f; // apex: the wanted speed last sent
 	springai::AIFloat3 lastLeanPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the waypoint last ordered, kept across a path replacement
+	springai::AIFloat3 lastStepPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the first waypoint last ordered off the lean path (apex_travel_samestep)
 	int lastFrame;
 
 #ifdef DEBUG_VIS
