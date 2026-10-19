@@ -392,6 +392,12 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	WeaponDef* stockDef = def->GetStockpileDef();
 	if (stockDef != nullptr) {
 		AddAttribute(ATTR_TYPE(STOCK));
+		// apex: a stockpiled shot that spawns a unit (the Pawn Launcher's armpw) is a launcher, not a nuke.
+		{
+			const std::map<std::string, std::string> cp = stockDef->GetCustomParams();
+			auto it = cp.find("spawns_name");
+			isStockSpawner = (it != cp.end()) && !it->second.empty();
+		}
 		weaponDef = circuit->GetWeaponDef(stockDef->GetWeaponDefId());
 		delete stockDef;
 	}

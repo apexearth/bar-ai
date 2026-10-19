@@ -7179,7 +7179,7 @@ index 2925da70..c7717017 100644
  	int metalPullCorFrame;
  	float metalPullCor;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a9..f882a614 100644
+index dda9b5a9..06c57d3a 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
 @@ -185,44 +185,7 @@ void CFactoryManager::InitHandlers()
@@ -7271,7 +7271,56 @@ index dda9b5a9..f882a614 100644
  
  		UnitRemoved(unit, UseAs::ASSIST);
  	};
-@@ -713,12 +642,15 @@ void CFactoryManager::Init()
+@@ -681,6 +610,48 @@ void CFactoryManager::ReadConfig()
+ 		factoryDefs[cdef->GetId()] = facDef;
+ 	}
+ 
++	// apex: A PLANT THE CONFIG DOES NOT LIST IS STILL A PLANT. Factory handling is gated on this map, so a
++	// modded plant (the extra-units experimental aircraft plants armapt3/corapt3/legapt3 among them) was
++	// built for 8,500 metal and never produced anything (his 10-18: "we make nothing out of it"). Every
++	// static builder whose build list holds mobile units gets an entry from its own list: equal draw,
++	// one income tier, one caretaker -- the script's production pricing decides what it makes.
++	for (CCircuitDef& cd : circuit->GetCircuitDefs()) {
++		if (cd.IsMobile() || !cd.IsBuilder() || (cd.GetImmobileId() < 0)
++			|| (factoryDefs.find(cd.GetId()) != factoryDefs.end()))
++		{
++			continue;
++		}
++		SFactoryDef facDef;
++		facDef.startImp = 1.f;
++		facDef.switchImp = 1.f;
++		float avgSpeed = 0.f;
++		for (CCircuitDef::Id bid : cd.GetBuildOptions()) {
++			CCircuitDef* udef = circuit->GetCircuitDef(bid);
++			if ((udef == nullptr) || !udef->IsMobile()) {   // aircraft have no movement class: IsMobile, not GetMobileId
++				continue;
++			}
++			facDef.buildDefs.push_back(udef);
++			avgSpeed += udef->GetSpeed();
++			if (facDef.landDef == nullptr) {
++				facDef.landDef = udef;
++			}
++			if (facDef.waterDef == nullptr) {
++				facDef.waterDef = udef;
++			}
++		}
++		if (facDef.buildDefs.empty()) {
++			continue;
++		}
++		facDef.mapSpeedPerc = avgSpeed / float(facDef.buildDefs.size());
++		facDef.incomes.push_back(std::numeric_limits<float>::max());
++		facDef.landTiers[0] = std::vector<float>(facDef.buildDefs.size(), 1.f / float(facDef.buildDefs.size()));
++		facDef.waterTiers = facDef.landTiers;
++		facDef.airTiers = facDef.landTiers;
++		facDef.nanoCount = 1;
++		factoryDefs[cd.GetId()] = facDef;
++		circuit->LOG("apex: factory-default %s units=%i (no config entry)", cd.GetDef()->GetName(), int(facDef.buildDefs.size()));
++	}
++
+ 	const Json::Value& select = root["select"];
+ 	const Json::Value& offset = select["offset"];
+ 	const Json::Value& speed = select["speed"];
+@@ -713,12 +684,15 @@ void CFactoryManager::Init()
  		CScheduler* scheduler = circuit->GetScheduler().get();
  		const int interval = 4;
  		const int offset = circuit->GetSkirmishAIId() % interval;
@@ -7290,7 +7339,7 @@ index dda9b5a9..f882a614 100644
  	};
  
  	circuit->GetSetupManager()->ExecOnFindStart(subinit);
-@@ -816,7 +748,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
+@@ -816,7 +790,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
  {
  	CRecruitTask* task = new CRecruitTask(this, ti.priority, ti.buildDef, ti.position, ti.type, ti.radius);
  	factoryTasks.push_back(task);
@@ -7299,7 +7348,7 @@ index dda9b5a9..f882a614 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -834,7 +766,9 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
+@@ -834,7 +808,9 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
  			task = new CSRepairTask(this, ti.priority, ti.target);
  		} break;
  		case IBuilderTask::BuildType::RECLAIM: {
@@ -7310,7 +7359,7 @@ index dda9b5a9..f882a614 100644
  		} break;
  		case IBuilderTask::BuildType::PATROL: {
  			task = new CSPatrolTask(this, ti.priority, ti.position, ti.timeout);
-@@ -845,7 +779,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
+@@ -845,7 +821,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
  		} break;
  	}
  
@@ -7319,7 +7368,7 @@ index dda9b5a9..f882a614 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -1178,11 +1112,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
+@@ -1178,11 +1154,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
  
  CCircuitDef* CFactoryManager::DefaultGetFactoryToBuild(const AIFloat3& position, bool isStart, bool isReset)
  {
@@ -7333,7 +7382,7 @@ index dda9b5a9..f882a614 100644
  }
  
  void CFactoryManager::EnableFactory(CCircuitUnit* unit)
-@@ -1317,13 +1248,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
+@@ -1317,13 +1290,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
  					}
  				}
  			}
@@ -7348,7 +7397,7 @@ index dda9b5a9..f882a614 100644
  		}
  	};
  
-@@ -1431,6 +1356,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
+@@ -1431,6 +1398,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
  		}
  	}
  
@@ -7359,7 +7408,7 @@ index dda9b5a9..f882a614 100644
  	const bool isActive = (noT1FacCount <= 0) || !IsT1Factory(unit->GetCircuitDef());
  
  	IUnitTask* task = UpdateBuildPower(unit, isActive);
-@@ -1460,7 +1389,10 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1460,7 +1431,10 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
  	bool isMetalEmpty = economyMgr->IsMetalEmpty();
  	CAllyUnit* repairTarget = nullptr;
@@ -7370,7 +7419,7 @@ index dda9b5a9..f882a614 100644
  	const AIFloat3& pos = unit->GetPos(circuit->GetLastFrame());
  	float radius = unit->GetCircuitDef()->GetBuildDistance();
  
-@@ -1483,25 +1415,60 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1483,25 +1457,60 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  			CCircuitDef* cdef = cand->GetCircuitDef();
  			const float maxHealth = u->GetMaxHealth();
  			const float buildTime = cdef->GetBuildTime() * (maxHealth - u->GetHealth()) / maxHealth;
@@ -7437,7 +7486,7 @@ index dda9b5a9..f882a614 100644
  	if (/*!isMetalEmpty && */(buildTarget != nullptr)) {
  		// Construction task
  		IBuilderTask::Priority priority = buildTarget->GetCircuitDef()->IsMobile() ?
-@@ -1513,8 +1480,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1513,8 +1522,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  		// Repair task
  		return Enqueue(TaskS::Repair(IBuilderTask::Priority::NORMAL, repairTarget));
  	}
@@ -7451,7 +7500,7 @@ index dda9b5a9..f882a614 100644
  		if (circuit->GetCallback()->IsFeaturesIn(pos, radius) && !builderMgr->IsResurrect(pos, radius)) {
  			return Enqueue(TaskS::Reclaim(IBuilderTask::Priority::NORMAL, pos, radius));
  		}
-@@ -1545,6 +1515,135 @@ void CFactoryManager::Watchdog()
+@@ -1545,6 +1557,135 @@ void CFactoryManager::Watchdog()
  	}
  }
  
@@ -7587,7 +7636,7 @@ index dda9b5a9..f882a614 100644
  void CFactoryManager::SetLastRequiredDef(CCircuitDef::Id facId, CCircuitDef* cdef,
  		const std::vector<float>& probs, bool isResp)
  {
-@@ -1706,7 +1805,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+@@ -1706,7 +1847,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
@@ -7624,7 +7673,7 @@ index dda9b5a9..f882a614 100644
  	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
  	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
  	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
-@@ -1717,7 +1844,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
+@@ -1717,7 +1886,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
  	tierDbg = 0;
  #endif
  	auto facIt = tiers.begin();
@@ -7633,7 +7682,7 @@ index dda9b5a9..f882a614 100644
  		while (facIt != tiers.end()) {
  			if (metalIncome < facDef.incomes[facIt->first]) {
  				break;
-@@ -1781,4 +1908,110 @@ CCircuitDef* CFactoryManager::GetFacRoleDef(CCircuitDef::RoleT role, const SFact
+@@ -1781,4 +1950,110 @@ CCircuitDef* CFactoryManager::GetFacRoleDef(CCircuitDef::RoleT role, const SFact
  	return buildDef;
  }
  
@@ -10881,7 +10930,7 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..e78c4dea 100644
+index 2839b72e..f1fd1c30 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,22 @@
@@ -13261,7 +13310,7 @@ index 2839b72e..e78c4dea 100644
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(Type, float)", asMETHODPR(CCircuitDef, SetRange, (CCircuitDef::RangeType, float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(float)", asMETHODPR(CCircuitDef, SetRange, (float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAirThreat() const", asMETHOD(CCircuitDef, GetAirThreat), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -556,6 +2606,67 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +2606,68 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13309,6 +13358,7 @@ index 2839b72e..e78c4dea 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRadarRadius() const", asMETHOD(CCircuitDef, GetRadarRadius), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetJammerRadius() const", asMETHOD(CCircuitDef, GetJammerRadius), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAntiNukeW() const", asMETHOD(CCircuitDef, IsAntiNukeW), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsStockSpawner() const", asMETHOD(CCircuitDef, IsStockSpawner), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsTargFac() const", asMETHOD(CCircuitDef, IsTargFac), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsKamikazeDef() const", asMETHOD(CCircuitDef, IsKamikazeDef), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsShieldDef() const", asMETHOD(CCircuitDef, IsShieldDef), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13329,7 +13379,7 @@ index 2839b72e..e78c4dea 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +2675,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +2676,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13356,7 +13406,7 @@ index 2839b72e..e78c4dea 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -572,9 +2703,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -572,9 +2704,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13430,7 +13480,7 @@ index 2839b72e..e78c4dea 100644
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
  	// RulesParams accessor on Unit
  	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -585,6 +2777,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +2778,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -13442,7 +13492,7 @@ index 2839b72e..e78c4dea 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +2900,34 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +2901,34 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13477,7 +13527,7 @@ index 2839b72e..e78c4dea 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -720,10 +2945,14 @@ bool CInitScript::Init()
+@@ -720,10 +2946,14 @@ bool CInitScript::Init()
  	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
  	int r = mod->SetDefaultNamespace("Main"); ASSERT(r >= 0);
  	mainInfo.update = script->GetFunc(mod, "void AiUpdate()");
@@ -13492,7 +13542,7 @@ index 2839b72e..e78c4dea 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +2969,43 @@ void CInitScript::Update()
+@@ -740,9 +2970,43 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -13536,7 +13586,7 @@ index 2839b72e..e78c4dea 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -768,6 +3031,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
+@@ -768,6 +3032,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -13554,7 +13604,7 @@ index 2839b72e..e78c4dea 100644
  void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  {
  	if (mainInfo.unitDestroyed == nullptr) {
-@@ -779,6 +3053,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +3054,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -13588,7 +13638,7 @@ index 2839b72e..e78c4dea 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +3203,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +3204,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});
@@ -28336,7 +28386,7 @@ index 5eebb710..abf75fc5 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..6d81c6f6 100644
+index a1ac882a..fe2934e8 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -28509,7 +28559,17 @@ index a1ac882a..6d81c6f6 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +396,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -299,10 +392,29 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	WeaponDef* stockDef = def->GetStockpileDef();
+ 	if (stockDef != nullptr) {
+ 		AddAttribute(ATTR_TYPE(STOCK));
++		// apex: a stockpiled shot that spawns a unit (the Pawn Launcher's armpw) is a launcher, not a nuke.
++		{
++			const std::map<std::string, std::string> cp = stockDef->GetCustomParams();
++			auto it = cp.find("spawns_name");
++			isStockSpawner = (it != cp.end()) && !it->second.empty();
++		}
+ 		weaponDef = circuit->GetWeaponDef(stockDef->GetWeaponDefId());
  		delete stockDef;
  	}
  
@@ -28529,7 +28589,7 @@ index a1ac882a..6d81c6f6 100644
  	if (!def->IsAbleToAttack()) {
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
-@@ -330,10 +436,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -330,10 +442,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	float bestWpRange = std::numeric_limits<float>::max();
  	float airDps = .0f;
  	float airDmg = .0f;
@@ -28551,7 +28611,7 @@ index a1ac882a..6d81c6f6 100644
  	CWeaponDef* bestDGunDef = nullptr;
  	CWeaponDef* bestWpDef = nullptr;
  	WeaponMount* bestDGunMnt = nullptr;
-@@ -355,6 +472,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -355,6 +478,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			continue;
  		}
  
@@ -28569,7 +28629,7 @@ index a1ac882a..6d81c6f6 100644
  		float dps = .0f;
  		float dmg = .0f;
  
-@@ -404,12 +532,51 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -404,12 +538,51 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		if (minReloadTime > reloadTime) {
  			minReloadTime = reloadTime;
  		}
@@ -28622,7 +28682,7 @@ index a1ac882a..6d81c6f6 100644
  		targetCategory |= weaponCat;
  
  		const float wdAoe = wd->GetAreaOfEffect();
-@@ -420,11 +587,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -420,11 +593,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  //		it = customParams.find("truerange");
  		const float range = /*(it != customParams.end()) ? utils::string_to_float(it->second) : */wd->GetRange();
  
@@ -28647,7 +28707,7 @@ index a1ac882a..6d81c6f6 100644
  		canSurfTargetAir |= isAirWeapon;
  
  		const bool isLandWeapon = ((wt != "TorpedoLauncher") || wd->IsSubMissile());
-@@ -460,15 +635,40 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -460,16 +641,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
  				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
  			};
@@ -28675,23 +28735,24 @@ index a1ac882a..6d81c6f6 100644
 +				for (float& s : dgunShots) {
 +					s *= mul;
 +				}
- 			}
++			}
 +			if (!wd->IsManualFire()) {
 +				fireDps += std::max(std::max(aP, sP), wP);
 +				fireDmg += std::max(std::max(aD, sD), wD);
 +				fireAirDps += aP; fireSurfDps += sP; fireWaterDps += wP;
 +				fireAirDmg += aD; fireSurfDmg += sD; fireWaterDmg += wD;
-+			}
-+		}
+ 			}
+ 		}
 +		if (!wd->IsManualFire()) {
 +			fireDps += dps;
 +			fireDmg += dmg;
 +			fireAirDps += dps; fireSurfDps += dps; fireWaterDps += dps;
 +			fireAirDmg += dmg; fireSurfDmg += dmg; fireWaterDmg += dmg;
- 		}
++		}
  		airDmg += dmg;
  		airDps += dps;
-@@ -477,20 +677,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		surfDmg += dmg;
+@@ -477,20 +683,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		waterDmg += dmg;
  		waterDps += dps;
  
@@ -28751,7 +28812,7 @@ index a1ac882a..6d81c6f6 100644
  		}
  		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
  			float& mr = maxRange[static_cast<RangeT>(RangeType::WATER)];
-@@ -498,6 +735,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -498,6 +741,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
  				maxRangeType = RangeType::WATER;
  			}
@@ -28761,7 +28822,7 @@ index a1ac882a..6d81c6f6 100644
  		}
  
  		// FIXME: hasDGun is actually "manual command to fire required". There's "DGun" weapon type,
-@@ -566,6 +806,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -566,6 +812,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		weaponMount = bestWpMnt;
  	}
  
@@ -28790,7 +28851,7 @@ index a1ac882a..6d81c6f6 100644
  	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
  	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
  		WeaponDef* wd = def->GetDeathExplosion();
-@@ -618,6 +880,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -618,6 +886,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	//       health /= def->GetArmoredMultiple();
  	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
  	const float dps = std::max(std::max(waterDps, surfDps), airDps);
@@ -28812,7 +28873,7 @@ index a1ac882a..6d81c6f6 100644
  	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
-@@ -629,6 +906,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -629,6 +912,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			surfThrDmg * sqrtf(health + maxShield * SHIELD_MOD),
  			waterThrDmg * sqrtf(health + maxShield * SHIELD_MOD));
  #endif
@@ -28830,7 +28891,7 @@ index a1ac882a..6d81c6f6 100644
  }
  
  CCircuitDef::~CCircuitDef()
-@@ -764,6 +1052,7 @@ void CCircuitDef::SetRange(float range)
+@@ -764,6 +1058,7 @@ void CCircuitDef::SetRange(float range)
  	maxRangeType = RangeType::AIR;
  	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
  		maxRange[rt] = range;
@@ -28838,7 +28899,7 @@ index a1ac882a..6d81c6f6 100644
  	}
  }
  
-@@ -772,6 +1061,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
+@@ -772,6 +1067,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
  	// TODO: Asserts >= 0?
  	minRange = std::min(minRange, range);
  	maxRange[static_cast<RangeT>(type)] = range;
@@ -28847,7 +28908,7 @@ index a1ac882a..6d81c6f6 100644
  		maxRangeType = type;
  	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a9..d8961dbc 100644
+index cd0b54a9..97d15c1d 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -15,6 +15,8 @@
@@ -29009,7 +29070,7 @@ index cd0b54a9..d8961dbc 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -346,13 +442,50 @@ public:
+@@ -346,13 +442,51 @@ public:
  	float GetExtractsM()    const { return extractsM; }
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
@@ -29044,6 +29105,7 @@ index cd0b54a9..d8961dbc 100644
 +	float GetLatticeStrideX() const { return (latStrideX > .0f) ? latStrideX : (footX * SQUARE_SIZE * 2); }
 +	float GetLatticeStrideZ() const { return (latStrideZ > .0f) ? latStrideZ : (footZ * SQUARE_SIZE * 2); }
 +	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
++	bool IsStockSpawner()   const { return isStockSpawner; }  // apex: its stockpiled shot spawns a unit (a launcher, not a nuke)
 +	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 +	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 +	bool IsShieldDef()      const { return shieldMount != nullptr; }
@@ -29060,7 +29122,7 @@ index cd0b54a9..d8961dbc 100644
  	void SetSelfDHP(float value) { selfDHP = value; }
  	float GetSelfDHP() const { return selfDHP; }
  
-@@ -405,17 +538,30 @@ private:
+@@ -405,17 +539,30 @@ private:
  	springai::WeaponMount* shieldMount;
  	springai::WeaponMount* weaponMount;
  	float pwrDmg, pwrMod;  // ally damage
@@ -29091,7 +29153,7 @@ index cd0b54a9..d8961dbc 100644
  	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
  	float shieldRadius;
  	float maxShield;
-@@ -435,6 +581,7 @@ private:
+@@ -435,6 +582,7 @@ private:
  
  	bool isAttacker : 1;
  	bool isAlwaysHit : 1;  // FIXME: calc per weapon
@@ -29099,7 +29161,7 @@ index cd0b54a9..d8961dbc 100644
  	bool hasDGun : 1;
  
  	// TODO: std::bitset<2>
-@@ -478,6 +625,7 @@ private:
+@@ -478,6 +626,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -29107,7 +29169,7 @@ index cd0b54a9..d8961dbc 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,18 +636,41 @@ private:
+@@ -488,18 +637,42 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -29130,6 +29192,7 @@ index cd0b54a9..d8961dbc 100644
 +	float latStrideX = .0f;
 +	float latStrideZ = .0f;
 +	bool isAntiNukeW = false;
++	bool isStockSpawner = false;
 +	bool isTargFac = false;
 +	bool isKamikazeD = false;
 +	bool isRezAble = false;

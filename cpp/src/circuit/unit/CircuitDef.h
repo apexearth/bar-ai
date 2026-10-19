@@ -473,6 +473,7 @@ public:
 	float GetLatticeStrideX() const { return (latStrideX > .0f) ? latStrideX : (footX * SQUARE_SIZE * 2); }
 	float GetLatticeStrideZ() const { return (latStrideZ > .0f) ? latStrideZ : (footZ * SQUARE_SIZE * 2); }
 	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
+	bool IsStockSpawner()   const { return isStockSpawner; }  // apex: its stockpiled shot spawns a unit (a launcher, not a nuke)
 	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 	bool IsShieldDef()      const { return shieldMount != nullptr; }
@@ -655,6 +656,7 @@ private:
 	float latStrideX = .0f;
 	float latStrideZ = .0f;
 	bool isAntiNukeW = false;
+	bool isStockSpawner = false;
 	bool isTargFac = false;
 	bool isKamikazeD = false;
 	bool isRezAble = false;

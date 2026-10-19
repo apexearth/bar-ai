@@ -1349,6 +1349,13 @@ bool ConStandsIdle(bool flyer, int tier = 1)
 
 int gConUseOn = -1;
 int gCpOn = -1;
+int gAocOn = -1;
+bool ArmyOneCurrencyOn()
+{
+	if (gAocOn < 0)
+		gAocOn = (ai.GetTunable("apex_army_one_currency", TUNE_ARMY_ONE_CURRENCY) > 0.f) ? 1 : 0;
+	return gAocOn > 0;
+}
 bool ConPricedOn()
 {
 	if (gCpOn < 0)
@@ -2876,6 +2883,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						/ ((fillS > 1.f) ? fillS : 60.f)
 						* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
 			}
+			// TUNE_ARMY_ONE_CURRENCY (his 10-18: get the valuations balanced): one unit fills its own cost of the
+			// gap, not the whole gap's stream, so its gain is min(cost, gap)/fill -- metal/s, the builder market's
+			// currency. Every army product scales by the same gap, so their order is unchanged; what changes is
+			// that a con (priced in m/s) and the builder market can be weighed against army (armpw 307,818 against
+			// armck 91 in one ranking before).
+			if (ArmyOneCurrencyOn()) {
+				const float gapUsed = gainViaRole ? effGap : ((rGap > 0.f) ? rGap : 0.f);
+				if (gapUsed > Catalog::gCostM[d])
+					gainA *= Catalog::gCostM[d] / gapUsed;
+			}
 			if (gainA <= 0.01f) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName()
@@ -3288,11 +3305,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// field and fourteen bots standing (his watch: "we are lacking
 		// rezbots").
 		const float hRez = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-		const float lifeG = RezLifeGain(rezDef, rezEat * eFeedA, gainM, hM, hRez);
-		if (ai.GetTunable("apex_rez_life", TUNE_REZ_LIFE) > 0.f)
-			gainM = lifeG;
-		else if (rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f) > gainM)
-			gainM = rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f);
+		if (ArmyOneCurrencyOn()) {
+			// One currency (TUNE_ARMY_ONE_CURRENCY): the medic fills its own cost of the gap, and the wrecks
+			// are the m/s it can eat -- not a stock over the payback horizon (armrectr 35,464 against armham 424).
+			if (armyGap > Catalog::gCostM[rezDef])
+				gainM *= Catalog::gCostM[rezDef] / armyGap;
+			if (rezEat * eFeedA > gainM)
+				gainM = rezEat * eFeedA;
+		} else {
+			const float lifeG = RezLifeGain(rezDef, rezEat * eFeedA, gainM, hM, hRez);
+			if (ai.GetTunable("apex_rez_life", TUNE_REZ_LIFE) > 0.f)
+				gainM = lifeG;
+			else if (rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f) > gainM)
+				gainM = rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f);
+		}
 		const float vM = gainM / Catalog::gCostM[rezDef] * bdhKeep;
 		if (gainM > 0.01f) {
 			candDef.insertLast(rezDef);

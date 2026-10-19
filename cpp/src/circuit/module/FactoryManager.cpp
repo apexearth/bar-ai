@@ -610,6 +610,48 @@ void CFactoryManager::ReadConfig()
 		factoryDefs[cdef->GetId()] = facDef;
 	}
 
+	// apex: A PLANT THE CONFIG DOES NOT LIST IS STILL A PLANT. Factory handling is gated on this map, so a
+	// modded plant (the extra-units experimental aircraft plants armapt3/corapt3/legapt3 among them) was
+	// built for 8,500 metal and never produced anything (his 10-18: "we make nothing out of it"). Every
+	// static builder whose build list holds mobile units gets an entry from its own list: equal draw,
+	// one income tier, one caretaker -- the script's production pricing decides what it makes.
+	for (CCircuitDef& cd : circuit->GetCircuitDefs()) {
+		if (cd.IsMobile() || !cd.IsBuilder() || (cd.GetImmobileId() < 0)
+			|| (factoryDefs.find(cd.GetId()) != factoryDefs.end()))
+		{
+			continue;
+		}
+		SFactoryDef facDef;
+		facDef.startImp = 1.f;
+		facDef.switchImp = 1.f;
+		float avgSpeed = 0.f;
+		for (CCircuitDef::Id bid : cd.GetBuildOptions()) {
+			CCircuitDef* udef = circuit->GetCircuitDef(bid);
+			if ((udef == nullptr) || !udef->IsMobile()) {   // aircraft have no movement class: IsMobile, not GetMobileId
+				continue;
+			}
+			facDef.buildDefs.push_back(udef);
+			avgSpeed += udef->GetSpeed();
+			if (facDef.landDef == nullptr) {
+				facDef.landDef = udef;
+			}
+			if (facDef.waterDef == nullptr) {
+				facDef.waterDef = udef;
+			}
+		}
+		if (facDef.buildDefs.empty()) {
+			continue;
+		}
+		facDef.mapSpeedPerc = avgSpeed / float(facDef.buildDefs.size());
+		facDef.incomes.push_back(std::numeric_limits<float>::max());
+		facDef.landTiers[0] = std::vector<float>(facDef.buildDefs.size(), 1.f / float(facDef.buildDefs.size()));
+		facDef.waterTiers = facDef.landTiers;
+		facDef.airTiers = facDef.landTiers;
+		facDef.nanoCount = 1;
+		factoryDefs[cd.GetId()] = facDef;
+		circuit->LOG("apex: factory-default %s units=%i (no config entry)", cd.GetDef()->GetName(), int(facDef.buildDefs.size()));
+	}
+
 	const Json::Value& select = root["select"];
 	const Json::Value& offset = select["offset"];
 	const Json::Value& speed = select["speed"];

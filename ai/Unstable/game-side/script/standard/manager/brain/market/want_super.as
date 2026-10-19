@@ -150,7 +150,9 @@ int SuperClassOf(int d)
 	else if (Catalog::gAntiNuke[d] && !Catalog::gMobile[d])
 		r = SC_ANTINUKE;
 	else if (IsSuperWeapon(d))
-		r = Catalog::gStock[d] ? SC_SILO : SC_LRPC;
+		// A stockpiled shot that spawns a unit (the Pawn Launcher) is a long-range gun that fires at will, not a
+		// silo the nuke planner holds: as a silo, 23-28 were built a game and their pawns waited for a nuke plan.
+		r = (Catalog::gStock[d] && !Catalog::Def(d).IsStockSpawner()) ? SC_SILO : SC_LRPC;
 	else if (IsGantryDef(d))
 		r = SC_GANTRY;
 	if (memo)
