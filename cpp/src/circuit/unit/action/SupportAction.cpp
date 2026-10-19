@@ -135,7 +135,7 @@ void CSupportAction::Update(CCircuitAI* circuit)
 	}
 	// apex: the stand holds until the leader moves, so the same fight order went out on every update: 608
 	// of 623 escort orders repeats in his 10-18 online 8v8. Lean: not again while it is still in hand.
-	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	const bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
 	if (lean && (pos.x == lastSent.x) && (pos.z == lastSent.z)
 		&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
 	{

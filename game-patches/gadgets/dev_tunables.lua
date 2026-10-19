@@ -385,7 +385,7 @@ local NAMES = {
 	"apex_income_accel",     -- floor.as IncomeAccelM: income wants credited the share of income times the in-flight gain (0)
 	"apex_lab_assist",       -- want_assist.as LabAssistGuard: lab orders priced, lab guards priced by the time they save (0)
 	"apex_site_cache",       -- sites.as: LatheSite/SuperSite answers cached one memo lifetime (0)
-	"apex_travel_lean",      -- MoveAction/FightAction/SupportAction: walkers told 4 waypoints at once, re-ordered near the last; speed and escort only on change (0)
+	"apex_travel_lean",      -- MoveAction/FightAction/SupportAction: walkers told 4 waypoints at once, re-ordered near the last; speed and escort only on change (1)
 	"apex_catchup_wall",     -- perf.as CatchingUp: behind the server, elections budgeted per wall second (1)
 	"apex_reach_orders",     -- CircuitUnit ReachOrder: a move/fight/patrol point the unit cannot reach goes to the nearest reachable one (0)
 	"apex_elec_avg_us",      -- decide.as ElecFrameRoll: average election budget per frame, us (0 off)

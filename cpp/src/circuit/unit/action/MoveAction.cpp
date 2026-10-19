@@ -97,7 +97,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	constexpr int LEAN_AHEAD = 4;
 	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
 	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
-	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
 	if (lean) {
 		const AIFloat3& up = unit->GetPos(lastFrame);
 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);

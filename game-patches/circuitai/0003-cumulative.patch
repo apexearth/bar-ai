@@ -30947,7 +30947,7 @@ index 4a6cad0a..f2830338 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/action/FightAction.cpp b/src/circuit/unit/action/FightAction.cpp
-index 0f1640eb..6d875567 100644
+index 0f1640eb..5a6c1601 100644
 --- a/src/circuit/unit/action/FightAction.cpp
 +++ b/src/circuit/unit/action/FightAction.cpp
 @@ -7,8 +7,10 @@
@@ -30977,7 +30977,7 @@ index 0f1640eb..6d875567 100644
 +	constexpr int LEAN_AHEAD = 4;
 +	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
 +	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
-+	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
 +	if (lean) {
 +		const AIFloat3& up = unit->GetPos(lastFrame);
 +		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
@@ -31058,7 +31058,7 @@ index 0f1640eb..6d875567 100644
  }
  
 diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
-index a01329c3..e1fb571d 100644
+index a01329c3..e4e5db29 100644
 --- a/src/circuit/unit/action/MoveAction.cpp
 +++ b/src/circuit/unit/action/MoveAction.cpp
 @@ -7,8 +7,12 @@
@@ -31132,7 +31132,7 @@ index a01329c3..e1fb571d 100644
 +	constexpr int LEAN_AHEAD = 4;
 +	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
 +	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
-+	bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
 +	if (lean) {
 +		const AIFloat3& up = unit->GetPos(lastFrame);
 +		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
@@ -31219,7 +31219,7 @@ index a01329c3..e1fb571d 100644
  }
  
 diff --git a/src/circuit/unit/action/SupportAction.cpp b/src/circuit/unit/action/SupportAction.cpp
-index 5285093c..c7a426f9 100644
+index 5285093c..1f0e570c 100644
 --- a/src/circuit/unit/action/SupportAction.cpp
 +++ b/src/circuit/unit/action/SupportAction.cpp
 @@ -8,22 +8,54 @@
@@ -31347,7 +31347,7 @@ index 5285093c..c7a426f9 100644
  	}
 +	// apex: the stand holds until the leader moves, so the same fight order went out on every update: 608
 +	// of 623 escort orders repeats in his 10-18 online 8v8. Lean: not again while it is still in hand.
-+	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	const bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
 +	if (lean && (pos.x == lastSent.x) && (pos.z == lastSent.z)
 +		&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
 +	{
