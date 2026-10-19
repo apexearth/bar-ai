@@ -202,7 +202,7 @@ int MemoKey(int slot, CCircuitUnit@ unit, bool flags = true)
 	// spot evicts the answers naming it (MemoEvictKind).
 	if (slot == 8)
 		k = k * 31 + gLFreeStamp;
-	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9)) {
+	if (MemoPosSlot(slot)) {
 		if (gMemoCell <= 1.f)
 			gMemoCell = Brain::LightTowerRange();
 		const AIFloat3 p = unit.GetPos(ai.frame);
@@ -218,7 +218,7 @@ int MemoKey(int slot, CCircuitUnit@ unit, bool flags = true)
 const int MEMO_WAYS = 4;
 int MemoWay(int slot, CCircuitUnit@ unit)
 {
-	if (!((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9)))
+	if (!MemoPosSlot(slot))
 		return 0;
 	const AIFloat3 p = unit.GetPos(ai.frame);
 	if (gMemoCell <= 1.f)
@@ -246,12 +246,16 @@ float MemoCellK()
 }
 bool MemoPosSlot(int slot)
 {
+	// The super slot (12) is world-anchored under TUNE_SITE_CACHE: its sites hang off the base, and keyed by the
+	// asker's cell it hit 33% (his 8v8). Its walk is still re-priced per asker (MemoServe).
+	if ((slot == 12) && SiteCacheOn())
+		return false;
 	return (slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9);
 }
 Want@ MemoServe(int slot, int r, CCircuitUnit@ unit)
 {
 	Want@ c = WantCopy(gMemoW[slot][r]);
-	if ((c is null) || !MemoReprOn() || !MemoPosSlot(slot) || !OnMap(c.pos) || (c.walkSlope <= 0.f))
+	if ((c is null) || !MemoReprOn() || !(MemoPosSlot(slot) || (((slot == 12) || (slot == 7) || (slot == 1)) && SiteCacheOn())) || !OnMap(c.pos) || (c.walkSlope <= 0.f))
 		return c;
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
 	const float walk = (speed > 1.f) ? (unit.GetPos(ai.frame).distance2D(c.pos) / speed) : 60.f;
