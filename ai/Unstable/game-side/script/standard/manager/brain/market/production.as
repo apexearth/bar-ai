@@ -2509,7 +2509,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
 				continue;
 			}
-			if (!(spill && (TopOwnLandPlantTier() - DefTier(d) <= 1)) && Outgrown(d)) {
+			// A full bank does not bring the outgrown tier back (his 10-19: "fewer stronger units is what I've always
+			// advocated for"): lifted, his Odderon army at minute 38 was Thugs, Garpikes and Hammers beside a Krow.
+			if (Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;

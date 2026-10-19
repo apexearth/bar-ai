@@ -1681,6 +1681,28 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			}
 		}
 	}
+	// AN IDLE NANO TURRET IS METAL BACK (his 10-19: "reclaiming or moving nano turrets to more useful places is
+	// great"; ~50 a team stood late in his Odderon game, each a unit the engine runs all game). Idle past the
+	// horizon a reclaim pays back on, it is priced like an idle plant; one the lift is moving is not.
+	if (!EcoDangerNear()) {
+		for (uint ni = 0; (ni < gOwnNano.length()) && (ni < gOwnNanoWorkAt.length()); ++ni) {
+			CCircuitUnit@ nu = gOwnNano[ni];
+			if ((nu is null) || (nu.circuitDef is null))
+				continue;
+			if (float(ai.frame - gOwnNanoWorkAt[ni]) < hz * float(SECOND))
+				continue;
+			if (InLiftJob(nu) || ReclaimClaimed(nu.id, unit.id))
+				continue;
+			const int nd = int(nu.circuitDef.id);
+			const float rchI = ReachVictimMul(unit, nu.GetPos(ai.frame), nd);
+			const float v = (rchI > 0.f) ? RetireValue(unit, nu, nd, ePM, wageR, hz) * rchI : 0.f;
+			if (v > bestValue) {
+				bestValue = v;
+				@best = nu;
+				bestDef = nd;
+			}
+		}
+	}
 	// A PLANT THE CORE HAS SWALLOWED MOVES TO THE RIM, new one first
 	// (apexearth 2026-09-17). Its footprint and the doorway held open
 	// through the block are turret ground, worth what the base puts on a
