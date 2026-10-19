@@ -401,6 +401,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			break;
 		}
 		batch.insertLast(o);
+		if (slot == 0)
+			Market::LabOrderNote(fac, o);
 		PendAdd(line, o);
 		Market::EcoSeatNoteOrder(o);
 		Market::SmallHardNoteOrder(o);

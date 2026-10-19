@@ -51,6 +51,8 @@ float InFlightGainM()
 				continue;
 			gIfhGain += gJobGain[i];
 		}
+		if (LabAssistOn())
+			gIfhGain += LabOrdersGainM();
 		if (ai.frame >= gIfhLogAt) {
 			gIfhLogAt = ai.frame + 60 * SECOND;
 			AiLog("apex: inflight-hold t=" + ai.teamId + " gain=" + NnF(gIfhGain, 1) + " jobs=" + gJobTask.length()
@@ -88,6 +90,7 @@ void NoteJob(IUnitTask@ t, Want@ w)
 			return;
 		}
 	}
+	PlantBoughtNote(w);
 	gJobTask.insertLast(t);
 	gJobVal.insertLast(w.value);
 	gJobGain.insertLast(w.gain);

@@ -727,8 +727,96 @@ void AssistEcoTaken(Want@ w, array<Want@>@ ranked)
 // fed drain -- the factory converts it into army for the rest of the game --
 // and taken only where it beats the priced assist above. Measured before it:
 // 0.8-0.9% of our constructor time on a factory against BARb's 12.8-21.6%.
+// A LAB'S ORDER IS A PROJECT IN FLIGHT (TUNE_LAB_ASSIST; his 10-18: "T2 con wants to be made but everyone
+// supported the gauntlet"). A lab's queue was unpriced, so the hold never charged a build for delaying it and a
+// guard on the lab bid a flat floor. The order is priced in the builder market's currency: a constructor carries
+// what its plant was bought for, shared with the hands of its tier we hold; an army unit, the gap its own cost
+// fills over the fill window.
+int gLaOn = -1;
+bool LabAssistOn()
+{
+	if (gLaOn < 0)
+		gLaOn = (ai.GetTunable("apex_lab_assist", TUNE_LAB_ASSIST) > 0.f) ? 1 : 0;
+	return gLaOn > 0;
+}
+array<int> gLaFac;
+array<int> gLaDef;
+array<float> gPlantBoughtG;
+void LabOrderNote(CCircuitUnit@ fac, CCircuitDef@ o)
+{
+	if ((fac is null) || (o is null))
+		return;
+	for (uint i = 0; i < gLaFac.length(); ++i) {
+		if (gLaFac[i] == int(fac.id)) {
+			gLaDef[i] = int(o.id);
+			return;
+		}
+	}
+	gLaFac.insertLast(int(fac.id));
+	gLaDef.insertLast(int(o.id));
+}
+int LabOrderOf(CCircuitUnit@ f)
+{
+	if (f is null)
+		return -1;
+	for (uint i = 0; i < gLaFac.length(); ++i) {
+		if (gLaFac[i] == int(f.id)) {
+			const int d = gLaDef[i];
+			return (Catalog::ValidId(d) && (f.CountQueued(Catalog::Def(d)) > 0)) ? d : -1;
+		}
+	}
+	return -1;
+}
+void PlantBoughtNote(Want@ w)
+{
+	if ((w is null) || (w.def is null) || ((w.kind != WK_TECH) && (w.kind != WK_PLANT)))
+		return;
+	const int d = int(w.def.id);
+	if (int(gPlantBoughtG.length()) <= d)
+		gPlantBoughtG.resize(d + 1);
+	gPlantBoughtG[d] = w.gain;
+}
+float LabProductG(int fd, int d)
+{
+	if (!Catalog::ValidId(d) || !Catalog::ValidId(fd))
+		return 0.f;
+	if (Catalog::gBuilder[d] && Catalog::gMobile[d]) {
+		int held = 0;
+		const array<int>@ own = OwnedDefs();
+		for (uint i = 0; i < own.length(); ++i) {
+			const int od = own[i];
+			if ((gOwnCount[od] > 0) && Catalog::gBuilder[od] && Catalog::gMobile[od]
+				&& (Catalog::gAdvHand[od] == Catalog::gAdvHand[d])
+				&& !Catalog::Def(od).IsRoleAny(Unit::Role::COMM.mask))
+				held += gOwnCount[od];
+		}
+		const float pg = (fd < int(gPlantBoughtG.length())) ? gPlantBoughtG[fd] : 0.f;
+		return pg / float(1 + held);
+	}
+	const float gap = ArmyTarget() - ArmyValue();
+	if (gap <= 0.f)
+		return 0.f;
+	float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	if (fill < 1.f)
+		fill = 180.f;
+	return ((Catalog::gCostM[d] < gap) ? Catalog::gCostM[d] : gap) / fill;
+}
+float LabOrdersGainM()
+{
+	float s = 0.f;
+	for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
+		CCircuitUnit@ f = Brain::gFQFac[i];
+		const int d = LabOrderOf(f);
+		if (d > 0)
+			s += LabProductG(int(f.circuitDef.id), d);
+	}
+	return s;
+}
+
 Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 {
+	if (LabAssistOn() && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return LabAssistGuard(unit, priced);
 	Want w = priced;
 	// Short contact: the commander's lathe at the lab is army owed now, a standing rate
 	// while the gap is open; FreeMetalFlow below still bounds it (smallhard.as).
@@ -813,6 +901,85 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	gAssistTargetId = fac.id;
 	gAssistGuardS = home ? (int(walkSec) + 10) : 10;
 	return g;
+}
+
+// The guard priced as the priced assist is: the order's gain times the seconds this hand's drain brings it
+// forward, over the payback horizon. Every queued lab is a candidate; the walk is in the price.
+int gLaBids = 0, gLaWins = 0, gLaLogAt = 0;
+Want@ LabAssistGuard(CCircuitUnit@ unit, const Want& in priced)
+{
+	Want w = priced;
+	const int uid = int(unit.circuitDef.id);
+	float eFeed = 1.f;
+	{
+		const float eInc = Eco::EInc();
+		const float ePull = Eco::EPull();
+		if ((ePull > 1.f) && (eInc < ePull))
+			eFeed = eInc / ePull;
+	}
+	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
+	const float mFree = FreeMetalFlow();
+	if (mFree < drain)
+		drain = mFree;
+	if (drain <= 0.05f)
+		return w;
+	float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	if (H < 1.f)
+		H = 900.f;
+	const float speed = Catalog::gSpeed[uid];
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	const float wage = WageOf(unit);
+	const float over0 = HandBuildsNano(uid) ? 0.f : OverflowM();
+	Want best;
+	CCircuitUnit@ bestFac = null;
+	float bestOcc = 0.f, bestG = 0.f;
+	for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
+		CCircuitUnit@ f = Brain::gFQFac[i];
+		const int d = LabOrderOf(f);
+		if (d <= 0)
+			continue;
+		const int fd = int(f.circuitDef.id);
+		const float G = LabProductG(fd, d);
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		const float B = Catalog::gBuildPower[fd] * (7.f / 80.f) + NanoLatheReaching(fp);
+		if (B <= 0.f)
+			continue;
+		const float R = (Catalog::gCostM[d] > 1.f) ? Catalog::gCostM[d] : 1.f;
+		const float saved = R * drain / (B * (B + drain));
+		const float occ = R / (B + drain);
+		const float walkSec = (speed > 1.f) ? (me.distance2D(fp) / speed) : 60.f;
+		float over = (over0 > drain) ? drain : over0;
+		Want g;
+		g.kind = WK_ASSIST;
+		g.pos = fp;
+		g.spotId = int(f.id);
+		g.gain = G * saved / H + over;
+		g.mCost = 1.f;
+		g.tCost = (walkSec + occ) * wage;
+		g.value = g.gain / (g.mCost + g.tCost);
+		++gLaBids;
+		if (g.value > best.value) {
+			best = g;
+			@bestFac = f;
+			bestOcc = occ;
+			bestG = G;
+		}
+	}
+	if ((bestFac is null) || (best.value <= w.value))
+		return w;
+	++gLaWins;
+	if (ai.frame >= gLaLogAt) {
+		gLaLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: labassist t=" + ai.teamId + " " + unit.circuitDef.GetName()
+			+ " -> " + bestFac.circuitDef.GetName() + " G=" + formatFloat(bestG, "", 0, 2)
+			+ " v=" + formatFloat(best.value * 1000.f, "", 0, 2)
+			+ " beat=" + formatFloat(w.value * 1000.f, "", 0, 2)
+			+ " bids=" + gLaBids + " wins=" + gLaWins);
+	}
+	@gAssistTarget = bestFac;
+	gAssistTargetId = bestFac.id;
+	gAssistGuardS = int(bestOcc) + 10;
+	return best;
 }
 
 // HOLDING BACK IS AN OPTION (TUNE_RESERVE; his 10-18: "sometimes doing nothing is the right choice, or
