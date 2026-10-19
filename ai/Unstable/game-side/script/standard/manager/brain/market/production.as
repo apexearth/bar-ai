@@ -2129,7 +2129,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
 			continue;
 		}
-		if (t1AirMute && !spill && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
+		// Not lifted by a full bank (the spill exception below is for ground lines a tier behind): a basic air plant beside
+		// an advanced one ordered 147 T1 fighters in ten minutes of his 10-19 Odderon game, 926 standing at minute 48.
+		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
 			continue;
 		// THE WING'S LOOK: an air scout bought for what seeing their economy
 		// adds to the first bomber's price (Air::LookGainFor). A second demand

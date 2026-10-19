@@ -1232,7 +1232,7 @@ const float TUNE_E_WASTE_WORTH = 0.25f;
 // M_REALIZE [toggle 0/1]: the metal twin of E_REALIZE -- extraction priced by
 //   the share of its metal we could actually spend. DEFAULT OFF: inert where it
 //   was measured and its premise is unproven. Also gates the rich seat spending: while the bank
-//   overflows, the :losing/:outgrown/T1-air-mute drops and the metal con role stand down. See docs/tunables.md.
+//   overflows, the :losing/:outgrown drops (one tier below the top) and the metal con role stand down; the T1 air mute holds. See docs/tunables.md.
 const float TUNE_M_REALIZE = 0.f;
 
 // The unspendable band keeps this share, because demand grows and the spot is
