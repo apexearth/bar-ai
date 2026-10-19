@@ -42,6 +42,9 @@ protected:
 	int increment;
 	int minSqDist;
 	int lastSector;  // last issued sector index
+	int lastQueued = -1;     // apex: the furthest path index this unit has been ordered to (apex_travel_lean)
+	float lastWanted = -1.f; // apex: the wanted speed last sent
+	springai::AIFloat3 lastLeanPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the waypoint last ordered, kept across a path replacement
 	int lastFrame;
 
 #ifdef DEBUG_VIS

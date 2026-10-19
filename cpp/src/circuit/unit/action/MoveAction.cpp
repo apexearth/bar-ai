@@ -12,6 +12,7 @@
 #include "CircuitAI.h"
 #include "terrain/TerrainManager.h"
 #include "util/Utils.h"
+#include "spring/SpringCallback.h"
 
 #include "AISCommands.h"
 
@@ -88,6 +89,38 @@ void CMoveAction::Update(CCircuitAI* circuit)
 		default: break;  // update waypoints
 	}
 	int step = pathIterator;
+	// apex: A WALKING UNIT WAS RE-ORDERED EVERY SECOND -- a waypoint, a queued lookahead and a speed, three
+	// network commands a second per unit whether anything changed or not (his 10-18 online 8v8: ~700 orders
+	// a second from our AIs, travel the largest source). Lean: it is told LEAN_AHEAD waypoints at once and
+	// re-ordered only when it nears the last of them (or the path is replaced, which resets lastQueued);
+	// the speed is sent when it changes.
+	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	constexpr int LEAN_AHEAD = 4;
+	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
+		return;
+	}
+	// ONE order, to the waypoint LEAN_AHEAD steps on; the engine paths the ground between. A replaced path
+	// that still points at the same ground sends nothing: queuing the lookahead on every replacement sent
+	// 2.4x the orders (smoke, travel 4,188 -> 10,048).
+	if (lean && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
+		const int t = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+		const AIFloat3& pos = pPath->posPath[t];
+		lastQueued = t;
+		const bool same = (lastLeanPos.x >= 0.f) && (pos.SqDistance2D(lastLeanPos) < float(minSqDist))
+				&& circuit->GetCallback()->Unit_HasCommands(unit->GetId());
+		TRY_UNIT(circuit, unit,
+			if (!same) {
+				FaceStep(t);
+				TravelTo(circuit, unit, pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
+				lastLeanPos = pos;
+			}
+			if (stepSpeed != lastWanted) {
+				unit->CmdWantedSpeed(stepSpeed);
+				lastWanted = stepSpeed;
+			}
+		)
+		return;
+	}
 
 	TRY_UNIT(circuit, unit,
 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
@@ -116,14 +149,19 @@ void CMoveAction::Update(CCircuitAI* circuit)
 			const AIFloat3& pos = pPath->posPath[step];
 			TravelTo(circuit, unit, pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
 		}
-		unit->CmdWantedSpeed(stepSpeed);
+		if (!lean || (stepSpeed != lastWanted)) {
+			unit->CmdWantedSpeed(stepSpeed);
+			lastWanted = stepSpeed;
+		}
 
-		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
+		const int ahead = lean ? (2 + LEAN_AHEAD) : 3;
+		for (int i = 2; (step < pathMaxIndex) && (i < ahead); ++i) {
 			step = std::min(step + increment, pathMaxIndex);
 			FaceStep(step);
 			const AIFloat3& pos = pPath->posPath[step];
 			TravelTo(circuit, unit, pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
 		}
+		lastQueued = step;
 	)
 }
 

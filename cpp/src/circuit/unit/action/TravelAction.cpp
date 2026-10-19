@@ -68,6 +68,8 @@ void ITravelAction::SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed
 {
 	// NOTE: pPath can be null. Caller uses StateWait() after this call in such cases
 	pathIterator = 0;
+	lastQueued = -1;
+	lastWanted = -1.f;
 	this->pPath = pPath;
 	// apex: A UNIT'S GOAL CHANGING IS THE DECISION; the waypoints it walks are
 	// not. Measuring the waypoints counted a curving path as indecision and

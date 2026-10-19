@@ -30832,10 +30832,18 @@ index 4a6cad0a..f2830338 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/action/FightAction.cpp b/src/circuit/unit/action/FightAction.cpp
-index 0f1640eb..6a850a7e 100644
+index 0f1640eb..8c3a67b9 100644
 --- a/src/circuit/unit/action/FightAction.cpp
 +++ b/src/circuit/unit/action/FightAction.cpp
-@@ -47,7 +47,7 @@ void CFightAction::Update(CCircuitAI* circuit)
+@@ -9,6 +9,7 @@
+ #include "unit/CircuitUnit.h"
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
++#include "spring/SpringCallback.h"
+ 
+ #include "AISCommands.h"
+ 
+@@ -47,13 +48,38 @@ void CFightAction::Update(CCircuitAI* circuit)
  	switch (pathMaxIndex) {
  		case -2:  // arrived
  			TRY_UNIT(circuit, unit,
@@ -30844,7 +30852,38 @@ index 0f1640eb..6a850a7e 100644
  			)
  			return;
  		case -1: return;  // continue with current waypoints
-@@ -73,19 +73,22 @@ void CFightAction::Update(CCircuitAI* circuit)
+ 		default: break;  // update waypoints
+ 	}
+ 	int step = pathIterator;
++	// apex: the MoveAction lean (apex_travel_lean): LEAN_AHEAD waypoints at once, re-ordered near the last.
++	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	constexpr int LEAN_AHEAD = 4;
++	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
++		return;
++	}
++	if (lean && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
++		const int t = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
++		const AIFloat3& pos = pPath->posPath[t];
++		lastQueued = t;
++		const bool same = (lastLeanPos.x >= 0.f) && (pos.SqDistance2D(lastLeanPos) < float(minSqDist))
++				&& circuit->GetCallback()->Unit_HasCommands(unit->GetId());
++		TRY_UNIT(circuit, unit,
++			if (!same) {
++				FaceStep(t);
++				unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
++				lastLeanPos = pos;
++			}
++			if (stepSpeed != lastWanted) {
++				unit->CmdWantedSpeed(stepSpeed);
++				lastWanted = stepSpeed;
++			}
++		)
++		return;
++	}
+ 
+ 	TRY_UNIT(circuit, unit,
+ 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
+@@ -73,20 +99,28 @@ void CFightAction::Update(CCircuitAI* circuit)
  				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
  			}
  			if (isBadJump) {
@@ -30858,23 +30897,31 @@ index 0f1640eb..6a850a7e 100644
  			const AIFloat3& pos = pPath->posPath[step];
 -			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
 +			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
++		}
++		if (!lean || (stepSpeed != lastWanted)) {
++			unit->CmdWantedSpeed(stepSpeed);
++			lastWanted = stepSpeed;
  		}
- 		unit->CmdWantedSpeed(stepSpeed);
+-		unit->CmdWantedSpeed(stepSpeed);
  
- 		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
+-		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
++		const int ahead = lean ? (2 + LEAN_AHEAD) : 3;
++		for (int i = 2; (step < pathMaxIndex) && (i < ahead); ++i) {
  			step = std::min(step + increment, pathMaxIndex);
 +			FaceStep(step);
  			const AIFloat3& pos = pPath->posPath[step];
 -			unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
 +			unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i, CCircuitUnit::OrdSrc::FWALK);
  		}
++		lastQueued = step;
  	)
  }
+ 
 diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
-index a01329c3..c769861d 100644
+index a01329c3..df328d90 100644
 --- a/src/circuit/unit/action/MoveAction.cpp
 +++ b/src/circuit/unit/action/MoveAction.cpp
-@@ -7,7 +7,10 @@
+@@ -7,8 +7,12 @@
  
  #include "unit/action/MoveAction.h"
  #include "unit/CircuitUnit.h"
@@ -30883,9 +30930,11 @@ index a01329c3..c769861d 100644
  #include "CircuitAI.h"
 +#include "terrain/TerrainManager.h"
  #include "util/Utils.h"
++#include "spring/SpringCallback.h"
  
  #include "AISCommands.h"
-@@ -31,6 +34,37 @@ CMoveAction::~CMoveAction()
+ 
+@@ -31,6 +35,37 @@ CMoveAction::~CMoveAction()
  {
  }
  
@@ -30923,7 +30972,7 @@ index a01329c3..c769861d 100644
  void CMoveAction::Update(CCircuitAI* circuit)
  {
  	if (lastFrame + FRAMES_PER_SEC > circuit->GetLastFrame()) {
-@@ -47,7 +81,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
+@@ -47,13 +82,45 @@ void CMoveAction::Update(CCircuitAI* circuit)
  	switch (pathMaxIndex) {
  		case -2:  // arrived
  			TRY_UNIT(circuit, unit,
@@ -30932,7 +30981,45 @@ index a01329c3..c769861d 100644
  			)
  			return;
  		case -1: return;  // continue with current waypoints
-@@ -73,19 +107,22 @@ void CMoveAction::Update(CCircuitAI* circuit)
+ 		default: break;  // update waypoints
+ 	}
+ 	int step = pathIterator;
++	// apex: A WALKING UNIT WAS RE-ORDERED EVERY SECOND -- a waypoint, a queued lookahead and a speed, three
++	// network commands a second per unit whether anything changed or not (his 10-18 online 8v8: ~700 orders
++	// a second from our AIs, travel the largest source). Lean: it is told LEAN_AHEAD waypoints at once and
++	// re-ordered only when it nears the last of them (or the path is replaced, which resets lastQueued);
++	// the speed is sent when it changes.
++	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	constexpr int LEAN_AHEAD = 4;
++	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
++		return;
++	}
++	// ONE order, to the waypoint LEAN_AHEAD steps on; the engine paths the ground between. A replaced path
++	// that still points at the same ground sends nothing: queuing the lookahead on every replacement sent
++	// 2.4x the orders (smoke, travel 4,188 -> 10,048).
++	if (lean && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
++		const int t = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
++		const AIFloat3& pos = pPath->posPath[t];
++		lastQueued = t;
++		const bool same = (lastLeanPos.x >= 0.f) && (pos.SqDistance2D(lastLeanPos) < float(minSqDist))
++				&& circuit->GetCallback()->Unit_HasCommands(unit->GetId());
++		TRY_UNIT(circuit, unit,
++			if (!same) {
++				FaceStep(t);
++				TravelTo(circuit, unit, pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
++				lastLeanPos = pos;
++			}
++			if (stepSpeed != lastWanted) {
++				unit->CmdWantedSpeed(stepSpeed);
++				lastWanted = stepSpeed;
++			}
++		)
++		return;
++	}
+ 
+ 	TRY_UNIT(circuit, unit,
+ 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
+@@ -73,20 +140,28 @@ void CMoveAction::Update(CCircuitAI* circuit)
  				unit->CmdJumpTo(jumpPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
  			}
  			if (isBadJump) {
@@ -30946,23 +31033,31 @@ index a01329c3..c769861d 100644
  			const AIFloat3& pos = pPath->posPath[step];
 -			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
 +			TravelTo(circuit, unit, pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
++		}
++		if (!lean || (stepSpeed != lastWanted)) {
++			unit->CmdWantedSpeed(stepSpeed);
++			lastWanted = stepSpeed;
  		}
- 		unit->CmdWantedSpeed(stepSpeed);
+-		unit->CmdWantedSpeed(stepSpeed);
  
- 		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
+-		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
++		const int ahead = lean ? (2 + LEAN_AHEAD) : 3;
++		for (int i = 2; (step < pathMaxIndex) && (i < ahead); ++i) {
  			step = std::min(step + increment, pathMaxIndex);
 +			FaceStep(step);
  			const AIFloat3& pos = pPath->posPath[step];
 -			unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
 +			TravelTo(circuit, unit, pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
  		}
++		lastQueued = step;
  	)
  }
+ 
 diff --git a/src/circuit/unit/action/SupportAction.cpp b/src/circuit/unit/action/SupportAction.cpp
-index 5285093c..b6bff4d2 100644
+index 5285093c..c7a426f9 100644
 --- a/src/circuit/unit/action/SupportAction.cpp
 +++ b/src/circuit/unit/action/SupportAction.cpp
-@@ -8,22 +8,53 @@
+@@ -8,22 +8,54 @@
  #include "unit/action/SupportAction.h"
  #include "unit/CircuitUnit.h"
  #include "task/fighter/SquadTask.h"
@@ -30970,6 +31065,7 @@ index 5285093c..b6bff4d2 100644
 +#include "terrain/TerrainManager.h"
  #include "CircuitAI.h"
  #include "util/Utils.h"
++#include "spring/SpringCallback.h"
  
  #include "AISCommands.h"
  
@@ -31016,7 +31112,7 @@ index 5285093c..b6bff4d2 100644
  }
  
  CSupportAction::~CSupportAction()
-@@ -39,9 +70,65 @@ void CSupportAction::Update(CCircuitAI* circuit)
+@@ -39,18 +71,83 @@ void CSupportAction::Update(CCircuitAI* circuit)
  	}
  
  	CCircuitUnit* unit = static_cast<CCircuitUnit*>(ownerList);
@@ -31084,17 +31180,27 @@ index 5285093c..b6bff4d2 100644
  	if (pos.SqDistance2D(unit->GetPos(frame)) < SQUARE(SQUARE_SIZE * 8)) {
  		return;  // stop pushing
  	}
-@@ -49,7 +136,7 @@ void CSupportAction::Update(CCircuitAI* circuit)
++	// apex: the stand holds until the leader moves, so the same fight order went out on every update: 608
++	// of 623 escort orders repeats in his 10-18 online 8v8. Lean: not again while it is still in hand.
++	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
++	if (lean && (pos.x == lastSent.x) && (pos.z == lastSent.z)
++		&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
++	{
++		return;
++	}
+ 	TRY_UNIT(circuit, unit,
  		if (unit->GetCircuitDef()->IsAttrMelee()) {
  			unit->GetUnit()->Guard(leader->GetUnit());
  		} else {
 -			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 +			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ESCORT);
  		}
++		lastSent = pos;
  	)
  }
+ 
 diff --git a/src/circuit/unit/action/SupportAction.h b/src/circuit/unit/action/SupportAction.h
-index 799ca696..755ad4cc 100644
+index 799ca696..7c846f82 100644
 --- a/src/circuit/unit/action/SupportAction.h
 +++ b/src/circuit/unit/action/SupportAction.h
 @@ -10,6 +10,8 @@
@@ -31106,7 +31212,7 @@ index 799ca696..755ad4cc 100644
  namespace circuit {
  
  class CSupportAction: public IUnitAction {
-@@ -22,6 +24,22 @@ public:
+@@ -22,6 +24,23 @@ public:
  private:
  	unsigned int updCount;
  	bool isLowUpdate;
@@ -31126,11 +31232,12 @@ index 799ca696..755ad4cc 100644
 +	bool hasStand;
 +	springai::AIFloat3 stand;
 +	springai::AIFloat3 standFrom;
++	springai::AIFloat3 lastSent = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: apex_travel_lean
  };
  
  } // namespace circuit
 diff --git a/src/circuit/unit/action/TravelAction.cpp b/src/circuit/unit/action/TravelAction.cpp
-index 96098603..1b49e4ab 100644
+index 96098603..9bc95813 100644
 --- a/src/circuit/unit/action/TravelAction.cpp
 +++ b/src/circuit/unit/action/TravelAction.cpp
 @@ -9,11 +9,16 @@
@@ -31150,9 +31257,12 @@ index 96098603..1b49e4ab 100644
  namespace circuit {
  
  using namespace springai;
-@@ -64,16 +69,126 @@ void ITravelAction::SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed
+@@ -63,17 +68,129 @@ void ITravelAction::SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed
+ {
  	// NOTE: pPath can be null. Caller uses StateWait() after this call in such cases
  	pathIterator = 0;
++	lastQueued = -1;
++	lastWanted = -1.f;
  	this->pPath = pPath;
 +	// apex: A UNIT'S GOAL CHANGING IS THE DECISION; the waypoints it walks are
 +	// not. Measuring the waypoints counted a curving path as indecision and
@@ -31278,7 +31388,7 @@ index 96098603..1b49e4ab 100644
  
  //	int lastStep = pathIterator;
 diff --git a/src/circuit/unit/action/TravelAction.h b/src/circuit/unit/action/TravelAction.h
-index 63cd9245..c8c828c5 100644
+index 63cd9245..f8e40555 100644
 --- a/src/circuit/unit/action/TravelAction.h
 +++ b/src/circuit/unit/action/TravelAction.h
 @@ -27,8 +27,14 @@ public:
@@ -31296,6 +31406,16 @@ index 63cd9245..c8c828c5 100644
  
  	std::shared_ptr<CPathInfo> pPath;
  	float speed;
+@@ -36,6 +42,9 @@ protected:
+ 	int increment;
+ 	int minSqDist;
+ 	int lastSector;  // last issued sector index
++	int lastQueued = -1;     // apex: the furthest path index this unit has been ordered to (apex_travel_lean)
++	float lastWanted = -1.f; // apex: the wanted speed last sent
++	springai::AIFloat3 lastLeanPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the waypoint last ordered, kept across a path replacement
+ 	int lastFrame;
+ 
+ #ifdef DEBUG_VIS
 diff --git a/src/circuit/unit/ally/AllyTeam.cpp b/src/circuit/unit/ally/AllyTeam.cpp
 index 48ff00bb..9a4799ee 100644
 --- a/src/circuit/unit/ally/AllyTeam.cpp

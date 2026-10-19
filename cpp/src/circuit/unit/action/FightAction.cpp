@@ -9,6 +9,7 @@
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
+#include "spring/SpringCallback.h"
 
 #include "AISCommands.h"
 
@@ -54,6 +55,31 @@ void CFightAction::Update(CCircuitAI* circuit)
 		default: break;  // update waypoints
 	}
 	int step = pathIterator;
+	// apex: the MoveAction lean (apex_travel_lean): LEAN_AHEAD waypoints at once, re-ordered near the last.
+	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	constexpr int LEAN_AHEAD = 4;
+	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
+		return;
+	}
+	if (lean && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
+		const int t = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+		const AIFloat3& pos = pPath->posPath[t];
+		lastQueued = t;
+		const bool same = (lastLeanPos.x >= 0.f) && (pos.SqDistance2D(lastLeanPos) < float(minSqDist))
+				&& circuit->GetCallback()->Unit_HasCommands(unit->GetId());
+		TRY_UNIT(circuit, unit,
+			if (!same) {
+				FaceStep(t);
+				unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
+				lastLeanPos = pos;
+			}
+			if (stepSpeed != lastWanted) {
+				unit->CmdWantedSpeed(stepSpeed);
+				lastWanted = stepSpeed;
+			}
+		)
+		return;
+	}
 
 	TRY_UNIT(circuit, unit,
 		constexpr short options = UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY;
@@ -82,14 +108,19 @@ void CFightAction::Update(CCircuitAI* circuit)
 			const AIFloat3& pos = pPath->posPath[step];
 			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
 		}
-		unit->CmdWantedSpeed(stepSpeed);
+		if (!lean || (stepSpeed != lastWanted)) {
+			unit->CmdWantedSpeed(stepSpeed);
+			lastWanted = stepSpeed;
+		}
 
-		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
+		const int ahead = lean ? (2 + LEAN_AHEAD) : 3;
+		for (int i = 2; (step < pathMaxIndex) && (i < ahead); ++i) {
 			step = std::min(step + increment, pathMaxIndex);
 			FaceStep(step);
 			const AIFloat3& pos = pPath->posPath[step];
 			unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i, CCircuitUnit::OrdSrc::FWALK);
 		}
+		lastQueued = step;
 	)
 }
 

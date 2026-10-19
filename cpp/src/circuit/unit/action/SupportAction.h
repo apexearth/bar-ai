@@ -40,6 +40,7 @@ private:
 	bool hasStand;
 	springai::AIFloat3 stand;
 	springai::AIFloat3 standFrom;
+	springai::AIFloat3 lastSent = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: apex_travel_lean
 };
 
 } // namespace circuit

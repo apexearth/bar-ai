@@ -12,6 +12,7 @@
 #include "terrain/TerrainManager.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
+#include "spring/SpringCallback.h"
 
 #include "AISCommands.h"
 
@@ -132,12 +133,21 @@ void CSupportAction::Update(CCircuitAI* circuit)
 	if (pos.SqDistance2D(unit->GetPos(frame)) < SQUARE(SQUARE_SIZE * 8)) {
 		return;  // stop pushing
 	}
+	// apex: the stand holds until the leader moves, so the same fight order went out on every update: 608
+	// of 623 escort orders repeats in his 10-18 online 8v8. Lean: not again while it is still in hand.
+	const bool lean = circuit->GetTunable("apex_travel_lean", 0.f) > 0.f;
+	if (lean && (pos.x == lastSent.x) && (pos.z == lastSent.z)
+		&& circuit->GetCallback()->Unit_HasCommands(unit->GetId()))
+	{
+		return;
+	}
 	TRY_UNIT(circuit, unit,
 		if (unit->GetCircuitDef()->IsAttrMelee()) {
 			unit->GetUnit()->Guard(leader->GetUnit());
 		} else {
 			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ESCORT);
 		}
+		lastSent = pos;
 	)
 }
 
