@@ -384,6 +384,7 @@ local NAMES = {
 	"apex_inflight_hold",    -- price.as displacedM: a build pays for the projects in progress it holds up (0)
 	"apex_income_accel",     -- floor.as IncomeAccelM: income wants credited the share of income times the in-flight gain (0)
 	"apex_lab_assist",       -- want_assist.as LabAssistGuard: lab orders priced, lab guards priced by the time they save (0)
+	"apex_site_cache",       -- sites.as: LatheSite/SuperSite answers cached one memo lifetime (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
 	"apex_con_use", -- production.as: constructors sized by use (0)

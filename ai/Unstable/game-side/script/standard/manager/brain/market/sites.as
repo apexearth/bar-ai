@@ -724,7 +724,63 @@ bool LatheConcentrate()
 	return gLcOn > 0;
 }
 
+// A SITE IS THE TEAM'S ANSWER, NOT THE ASKER'S. LatheSite (7.8 ms) and SuperSite (6.1 ms) were walked
+// afresh for every hand that priced the same plant: his 8v8, 1,089 and 1,490 calls. Kept one memo
+// lifetime and while our building set holds; C++ re-probes the lattice when the order lands, so a
+// slot taken meanwhile still lands on the nearest free cell. TUNE_SITE_CACHE.
+int gScOn = -1;
+array<int> gScKey;
+array<int> gScAt;
+array<int> gScStamp;
+array<AIFloat3> gScPos;
+bool SiteCacheOn()
+{
+	if (gScOn < 0)
+		gScOn = (ai.GetTunable("apex_site_cache", TUNE_SITE_CACHE) > 0.f) ? 1 : 0;
+	return gScOn > 0;
+}
+bool SiteCacheGet(int key, AIFloat3 &out p)
+{
+	for (uint i = 0; i < gScKey.length(); ++i) {
+		if (gScKey[i] != key)
+			continue;
+		if ((gScStamp[i] != gOwnSetStamp) || (ai.frame >= gScAt[i] + MemoTtl()))
+			return false;
+		p = gScPos[i];
+		return true;
+	}
+	return false;
+}
+void SiteCachePut(int key, const AIFloat3& in p)
+{
+	for (uint i = 0; i < gScKey.length(); ++i) {
+		if (gScKey[i] == key) {
+			gScAt[i] = ai.frame;
+			gScStamp[i] = gOwnSetStamp;
+			gScPos[i] = p;
+			return;
+		}
+	}
+	gScKey.insertLast(key);
+	gScAt.insertLast(ai.frame);
+	gScStamp.insertLast(gOwnSetStamp);
+	gScPos.insertLast(p);
+}
+
 AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
+{
+	if (!SiteCacheOn() || (def is null) || (mover is null))
+		return LatheSiteRaw(def, mover, interior);
+	const int key = int(def.id) * 4096 + int(mover.id);
+	AIFloat3 p;
+	if (SiteCacheGet(key, p))
+		return p;
+	p = LatheSiteRaw(def, mover, interior);
+	SiteCachePut(key, p);
+	return p;
+}
+
+AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
 {
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
 		return interior;

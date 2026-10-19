@@ -984,7 +984,12 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				continue;
 		} else {
 			const double _tSs = Perf::T0();
-			at = SuperSite(unit, sc, Catalog::Def(d));
+			const int sKey = -(d * 16 + sc + 1);
+			if (!SiteCacheOn() || !SiteCacheGet(sKey, at)) {
+				at = SuperSite(unit, sc, Catalog::Def(d));
+				if (SiteCacheOn())
+					SiteCachePut(sKey, at);
+			}
 			Perf::Add("super.site", _tSs);
 			// The cannon moves up only when its home site cannot reach the
 			// turrets our army dies to.
