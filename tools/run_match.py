@@ -640,6 +640,7 @@ def run(args) -> int:
     # corrupted the soak's log. A pidfile marks the dir busy; if its process is
     # still alive, silently side-step to a suffixed dir instead.
     pidfile = write_dir / "engine.pid"
+    sidestep_dir = None
     try:
         other = int(pidfile.read_text().strip())
     except (OSError, ValueError):
@@ -651,6 +652,7 @@ def run(args) -> int:
         if str(other) in alive:
             write_dir = write_dir.parent / f"{write_dir.name}-{os.getpid()}"
             write_dir.mkdir(parents=True, exist_ok=True)
+            sidestep_dir = write_dir
             pidfile = write_dir / "engine.pid"
             print(f"write-dir busy (engine pid {other}); using {write_dir}")
     pidfile.write_text(str(os.getpid()))
@@ -898,6 +900,11 @@ def run(args) -> int:
         audit_record.record(outdir, rep.rows, "watch" if (args.watch or args.windowed) else "batch")
     except Exception as e:  # noqa: BLE001 -- the match result stands regardless
         print(f"audit    failed to run: {e}")
+
+    # A side-stepped write dir was this run's alone, and everything in it -- the infolog with the AI
+    # logs merged in, the replay -- is in outdir by now. Left behind, they piled up: 318 on one lane.
+    if sidestep_dir is not None:
+        shutil.rmtree(sidestep_dir, ignore_errors=True)
 
     print()
     print(f"out      {outdir}")
