@@ -117,6 +117,11 @@ void TickSpeed()
 		if (gLagSev < 0.f)
 			gLagSev = 0.f;
 	}
+	if (!CatchingUp() && HostShort() && (ai.frame >= gNextLagLog)) {
+		gNextLagLog = ai.frame + 30 * SECOND;
+		AiLog("apex: HOSTSHORT speed=" + formatFloat(gSimSpeed, "", 0, 2) + " factor="
+			+ formatFloat(ai.GetSpeedFactor(), "", 0, 2) + " -- elections at their average budget");
+	}
 	if (CatchingUp() && (ai.frame >= gNextLagLog)) {
 		gNextLagLog = ai.frame + 30 * SECOND;
 		AiLog("apex: CATCHUP speed=" + formatFloat(gSimSpeed, "", 0, 2) + " set=" + formatFloat(SetSpeed(), "", 0, 1)
@@ -166,6 +171,16 @@ bool CatchingUp()
 		gCuOn = (ai.GetTunable("apex_catchup_wall", TUNE_CATCHUP_WALL) > 0.f) ? 1 : 0;
 	const float s = SetSpeed();
 	return (gCuOn > 0) && (s > 0.f) && (gSimSpeed > s * 1.15f);
+}
+
+// THE HOST IS SHORT OF TIME: the server has lowered the game's speed below realtime (it does so once the
+// busiest client's CPU passes ~75%, before anyone sees the game slow), the game already runs below 1x, or the
+// host is catching up. A capped election budget costs play strength -- one heavy Odderon 8v8 with it always on
+// was lost (army 0.36) where the uncapped one won -- so it is spent only while the host needs the time back.
+bool HostShort()
+{
+	const float s = ai.GetSpeedFactor();
+	return CatchingUp() || GameLagging() || ((s > 0.f) && (s < 0.995f));
 }
 
 bool GameLagging()

@@ -1028,7 +1028,7 @@ def main() -> int:
                          "for A/B tests")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,
                     help="AIs per side; --per-side 4 with two specs is a 4v4")
-    ap.add_argument("--speed", type=int, default=0,
+    ap.add_argument("--speed", type=float, default=0,
                     help="sim speed cap; MinSpeed is what actually raises it "
                          "(default 9999, or 1 with --watch)")
     ap.add_argument("--replay", action="store_true",

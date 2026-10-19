@@ -846,7 +846,8 @@ const float TUNE_MEMO_TTL = 300.f;
 //   The election is sliced against this between proposers, so it bounds the
 //   frame it is checked on. Lower = smaller hitch, slower orders. See docs/tunables.md.
 const float TUNE_ELEC_FRAME_US = 8000.f;
-const float TUNE_ELEC_AVG_US = 0.f;   // [us, 0 off] the average a frame may spend on builder elections; saved credit still pays a burst up to TUNE_ELEC_FRAME_US (decide.as ElecFrameRoll; 250 = 60% of the 417 us AI budget)
+const float TUNE_ELEC_AVG_US = 250.f;   // [us, 0 off] the average a frame may spend on builder elections; saved credit still pays a burst up to TUNE_ELEC_FRAME_US (decide.as ElecFrameRoll; 250 = 60% of the 417 us AI budget)
+const float TUNE_ELEC_AVG_ADAPT = 1.f;   // [toggle 0/1] the average election budget binds only while the host is short of time (Perf::HostShort: the server lowered the speed, the game is below 1x, or catching up); 0 = always
 
 // [toggle 0/1] -- The perf governor (lag-severity measures and its production
 //   cuts) is active; read once at startup. Off by default -- the harness passes

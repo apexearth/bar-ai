@@ -583,7 +583,8 @@ void ElecFrameRoll()
 		// realtime for every player (his +100 scav 8v8: 1.6-1.8 ms an AI a frame, elections about half).
 		double rate = slice;
 		const double avgUs = double(ai.GetTunable("apex_elec_avg_us", TUNE_ELEC_AVG_US));
-		if ((avgUs > 0.0) && (avgUs < rate))
+		const bool adapt = ai.GetTunable("apex_elec_avg_adapt", TUNE_ELEC_AVG_ADAPT) > 0.f;
+		if ((avgUs > 0.0) && (avgUs < rate) && (!adapt || Perf::HostShort()))
 			rate = avgUs;
 		gElecCredit += rate * frames;
 		if (gElecCredit > slice)
