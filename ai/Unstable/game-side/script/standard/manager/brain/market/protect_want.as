@@ -528,6 +528,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			}
 			const float rentCells = float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
+			const double _tSl = Perf::T0();
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
 				// The five site arrays are handles into a per-def cache;
@@ -874,6 +875,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " defHave=" + int(DefenceValue())
 					+ " defTarget=" + int(DefenceTarget()));
 			}
+			Perf::Add("pw.slots", _tSl);
 			NoteDefSite(bestIsFront, bestIsRing, bestIsWall, bestIsKnot, bestKappa);
 			// Is the chosen post in FRONT of the base or behind it? He reports
 			// towers landing behind, which the site list alone cannot show.
