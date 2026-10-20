@@ -214,8 +214,9 @@ int MemoKey(int slot, CCircuitUnit@ unit, bool flags = true)
 
 // SEVERAL ANSWERS PER DEF. One row per def made builders of one kind standing
 // in different cells evict each other on every election (27% hits in his-
-// settings 8v8); the asker's cell now picks one of MEMO_WAYS rows.
-const int MEMO_WAYS = 4;
+// settings 8v8); the asker's cell now picks one of MEMO_WAYS rows, a 4x4 tiling of cells: two cells share a
+// row only four cells apart on both axes (the old 4-way hash reduced to 3(cx+cz) mod 4, every diagonal one row).
+const int MEMO_WAYS = 16;
 int MemoWay(int slot, CCircuitUnit@ unit)
 {
 	if (!MemoPosSlot(slot))
@@ -224,8 +225,8 @@ int MemoWay(int slot, CCircuitUnit@ unit)
 	if (gMemoCell <= 1.f)
 		gMemoCell = Brain::LightTowerRange();
 	const float mcK = MemoCellK();
-	const int h = int(p.x / mcK) * 7 + int(p.z / mcK) * 3;
-	return ((h % MEMO_WAYS) + MEMO_WAYS) % MEMO_WAYS;
+	const int cx = int(p.x / mcK), cz = int(p.z / mcK);
+	return ((cx % 4) + 4) % 4 * 4 + ((cz % 4) + 4) % 4;
 }
 
 // TUNE_MEMO_REPRICE: a position-keyed answer is shared over a region four cells wide and its walk is
