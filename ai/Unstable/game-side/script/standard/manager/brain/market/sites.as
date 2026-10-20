@@ -747,9 +747,13 @@ void SiteCacheTouch(const AIFloat3& in p, int defId)
 {
 	if (!SiteCacheOn() || !Catalog::ValidId(defId))
 		return;
+	// A NEW LATHE MOVES EVERY ANSWER: LatheSite and the super sites rank ground by the lathe standing there, so a
+	// turret anywhere can make another block the best (his 10-20 eco game: the T2 lab went 440 elmos from the
+	// turret block, on a site cached before most of them stood).
+	const bool lathe = IsLatheDef(defId);
 	const float r = float(Catalog::gFootX[defId] + Catalog::gFootZ[defId] + SC_TOUCH_SQ) * SQUARE_SIZE;
 	for (uint i = 0; i < gScPos.length(); ++i) {
-		if (OnMap(gScPos[i]) && (gScPos[i].distance2D(p) < r))
+		if (lathe || (OnMap(gScPos[i]) && (gScPos[i].distance2D(p) < r)))
 			gScAt[i] = -1000000;
 	}
 }

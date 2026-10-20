@@ -875,6 +875,7 @@ const float TUNE_NANO_UPGRADE = 1.f;   // [toggle 0/1] want_reclaim.as: a patrol
 const float TUNE_DRAW_BEST = 1.f;   // [toggle 0/1] decide.as CategoryDraw: a builder takes its best-priced want, not a category draw (the mex ladder stays)
 const float TUNE_CREW_SPLIT = 1.f;   // [toggle 0/1] crew.as: the field crew and the home crew (his 10-01); 0 lets pricing alone send hands out
 const float TUNE_LAB_RATE = 0.f;   // [toggle 0/1] production.as: a constructor bids its gain rate in the lab, the army's currency, not gain per metal
+const float TUNE_E_FEED_WASTE = 0.f;   // [toggle 0/1] price.as EPrice: with metal overflowing, energy is worth the metal it lets us spend (the feed), not today's lathe
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets

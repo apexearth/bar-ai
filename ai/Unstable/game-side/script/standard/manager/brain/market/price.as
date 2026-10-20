@@ -259,6 +259,11 @@ void TrackMPull()
 //
 // Restricted to converters something we own can actually place -- the naive
 // max over the catalog anchored the floor on the T2 converter (0.01724) and
+bool EFeedWasteOn()
+{
+	return ai.GetTunable("apex_e_feed_waste", TUNE_E_FEED_WASTE) > 0.f;
+}
+
 // the scavenger units above it from frame zero.
 float EPriceFloor()
 {
@@ -389,6 +394,12 @@ float EPrice()
 		const float feed = Eco::MInc() + Eco::MCur() / look;
 		if (flow > feed)
 			flow = feed;
+		// THE LATHE IS FOR SALE (his 10-20: the chicken and the egg). With metal overflowing, the build power we
+		// own is not the limit -- a turret is cheap and is held back only by energy (want_nano's spare-energy
+		// cap), so a unit of energy is worth the metal it lets us spend, the feed, not today's lathe. Read at
+		// today's lathe, energy and turrets each waited for the other: 12 turrets at minute 16 against his 325.
+		if (EFeedWasteOn() && MetalWasting() && (feed > flow))
+			flow = feed;
 	}
 	const float atRisk = ((eInc > 0.01f) && (excess > 0.f))
 			? (flow / (eInc * (1.f + excess))) : 0.f;
@@ -421,6 +432,12 @@ float ECostSpot()
 		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
 		const float feed = Eco::MInc() + Eco::MCur() / look;
 		if (flow > feed)
+			flow = feed;
+		// THE LATHE IS FOR SALE (his 10-20: the chicken and the egg). With metal overflowing, the build power we
+		// own is not the limit -- a turret is cheap and is held back only by energy (want_nano's spare-energy
+		// cap), so a unit of energy is worth the metal it lets us spend, the feed, not today's lathe. Read at
+		// today's lathe, energy and turrets each waited for the other: 12 turrets at minute 16 against his 325.
+		if (EFeedWasteOn() && MetalWasting() && (feed > flow))
 			flow = feed;
 	}
 	const float unlock = ((eInc > 0.01f) && (excess > 0.f))

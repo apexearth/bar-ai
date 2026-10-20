@@ -401,6 +401,7 @@ local NAMES = {
 	"apex_draw_best",        -- decide.as: builders take the best-priced want, no category draw (0)
 	"apex_crew_split",       -- crew.as: field and home crews (1)
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
+	"apex_e_feed_waste",     -- price.as: energy priced by the spendable feed while metal overflows (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
