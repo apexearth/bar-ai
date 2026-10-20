@@ -28012,7 +28012,7 @@ index 78713628..f9930b07 100644
  
  bool CTerrainManager::CanMobileReachAtSafe(SArea* area, const AIFloat3& destination, const float range, const float threat)
 diff --git a/src/circuit/terrain/TerrainManager.h b/src/circuit/terrain/TerrainManager.h
-index 67097de0..2f3378c7 100644
+index 67097de0..6c231b29 100644
 --- a/src/circuit/terrain/TerrainManager.h
 +++ b/src/circuit/terrain/TerrainManager.h
 @@ -65,7 +65,7 @@ public:
@@ -28041,20 +28041,24 @@ index 67097de0..2f3378c7 100644
  	springai::AIFloat3 GetBuildPosition(CCircuitDef* cdef, const springai::AIFloat3& position);
  	springai::AIFloat3 GetMovePosition(terrain::SArea* sourceArea, const springai::AIFloat3& position);
  	springai::AIFloat3 ShiftPos(CCircuitDef* cdef, const springai::AIFloat3& position, float range, bool isOrtho = false);
-@@ -192,6 +195,12 @@ private:
+@@ -192,6 +195,16 @@ private:
  	terrain::SSector* GetAlternativeSector(terrain::SArea* destinationArea, const int sourceSIndex, terrain::SImmobileType* destinationIT); // can return 0
  	const terrain::SSector& GetSector(int sIndex) const { return areaData->sector[sIndex]; }
  public:
 +	// apex: how far the nearest ground this area holds is from pos -- the
 +	// distance CanMobileReachAt tests against a builder's range.
 +	float ReachGap(terrain::SArea* area, const springai::AIFloat3& pos) {
-+		return (area == nullptr) ? 0.f
-+				: GetClosestSector(area, GetSectorIndex(pos))->S->position.distance2D(pos);
++		const int iS = GetSectorIndex(pos);
++		if ((area == nullptr) || !terrainData->IsSectorValid(iS) || !IsAreaLive(area, "gap")) {
++			return -1.f;
++		}
++		const terrain::SAreaSector* closest = GetClosestSector(area, iS);
++		return (closest == nullptr) ? -1.f : closest->S->position.distance2D(pos);
 +	}
  	const std::vector<terrain::SMobileType>& GetMobileTypes() const {
  		return areaData->mobileType;
  	}
-@@ -221,6 +230,13 @@ public:
+@@ -221,6 +234,13 @@ public:
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position, const float range);  // NOTE: returns false if the area was too small to be recorded
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position);
  	bool CanBeBuiltAtSafe(CCircuitDef* cdef, const springai::AIFloat3& position);
@@ -28068,7 +28072,7 @@ index 67097de0..2f3378c7 100644
  	bool CanReachAt(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
  	bool CanReachAtSafe(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range, const float threat = THREAT_MIN);
  	bool CanReachAtSafe2(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
-@@ -255,6 +271,7 @@ private:
+@@ -255,6 +275,7 @@ private:
  	float minLandPercent;
  
  	std::unordered_set<const terrain::SArea*> enemyAreas;

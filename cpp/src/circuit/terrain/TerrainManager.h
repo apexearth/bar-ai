@@ -198,8 +198,12 @@ public:
 	// apex: how far the nearest ground this area holds is from pos -- the
 	// distance CanMobileReachAt tests against a builder's range.
 	float ReachGap(terrain::SArea* area, const springai::AIFloat3& pos) {
-		return (area == nullptr) ? 0.f
-				: GetClosestSector(area, GetSectorIndex(pos))->S->position.distance2D(pos);
+		const int iS = GetSectorIndex(pos);
+		if ((area == nullptr) || !terrainData->IsSectorValid(iS) || !IsAreaLive(area, "gap")) {
+			return -1.f;
+		}
+		const terrain::SAreaSector* closest = GetClosestSector(area, iS);
+		return (closest == nullptr) ? -1.f : closest->S->position.distance2D(pos);
 	}
 	const std::vector<terrain::SMobileType>& GetMobileTypes() const {
 		return areaData->mobileType;
