@@ -17,14 +17,50 @@ control) as the floor; then the squad layer, piece by piece, each beating the fl
 
 # Next big job (his 10-15: "we'll do it later")
 
-## Replace the overrides with one pricing scale
+## Replace the overrides with one pricing scale -- THE CURRENT JOB (his 10-19, restated)
 
-Hoists jump the auction at fixed values and keep beating priced work: defjoin (v=1000, pulled the eco
-seat onto Ambusher/Annihilator builds), the advanced-defence role (72 of 600 T2-con decisions to
-towers), the field crew (narrows a hand's list to field jobs), roles, estall (sent a T2 con to a
-9-minute AFUS at v=0.00), basefront and coverall (unpriced T1 guns). Price every job on one scale --
-income added, losses prevented (measured attack rate x what it covers), builder time forgone at its
-real rate -- then delete each hoist the pricing makes redundant, one A/B at a time.
+His 10-19: "I'm trying to get us to not have to rely on so many overrides and for our evaluation system to
+really be correct. Everything needs to have a proper value, even the roles that were assigned to constructors.
+Ideally, we don't even need those... if we didn't need them, I wouldn't want them." And the principle: "a
+constructor, a solar, metal, all of these things are what let us create those other highly valued units, and
+thus all these things could inherit/embody some of the value of what they allow the creation of."
+
+**The principle.** Only what wins the game has value of its own. A resource or enabler is worth the share of
+the value it makes possible: an extractor is worth the metal it adds times what metal buys now; a solar, its
+energy times energy's price; a constructor, its build power times build power's price plus what its unlock
+allows; a lab, what its line produces. Then the army's scale flows into everything that funds it, and only
+ratios decide.
+
+**What is wrong today (measured 10-19).**
+- Two currencies. Army gain is gap metal x a strength factor; a con's is income in m/s. In a T2 bot lab
+  (matches/labbest) the T2 con read 20-490 against Zeus 8k-347k, Fatboy 37k-1.3M, sniper 31k-2.2M.
+- The strength factor runs away: UnitPPC (with its range/worth/hold modifiers) over the line's best UnitCore
+  (without them) -- the sniper read p=54 (pc=15.9 before sight/screen/afford).
+- Labs choose by a value-weighted lottery (b16e31e8, 08-23), so even a correctly top-priced con loses two
+  times in three (his game: Incinerator 784 drawn over the T2 con 2,494). TUNE_LAB_BEST (b3ad8ed9, off) is
+  the best-priced pick; on only after the prices are fixed.
+- Builder decisions that skip the price, two 22-min 2v2s (~2,250 each): draw (category lottery) 40-46%,
+  ladder 15%, role 9-10%, field 7-10%, metalfirst 3%, estall 3%, then commetal, nanofloor, comescort, held,
+  upfirst, super, defpanic, open. Also the hoists listed before: defjoin (v=1000), advanced-defence role,
+  basefront, coverall.
+- Pieces that already reach for inheritance, each from one corner: energy priced by the metal it converts to
+  (EPriceFloor), TUNE_INCOME_ACCEL (income credited with the in-flight jobs it speeds), the con's upgrade term
+  (T2CON_UNLOCK), TeamTechMul. TUNE_ARMY_ONE_CURRENCY (off) was measured alone with the runaway factor in
+  place and hurt the army (0.52/0.72 of theirs vs 0.76/1.34 off, his +100 scav 8v8).
+
+**The steps, in order. Each is measured before the next; tick it here with the commit and the number.**
+1. [ ] Instrument a live price per resource -- what one more m/s of metal, e/s of energy, unit of build power
+   would buy now (value per cost of the best wants going unfunded, army included). Read-only; one game of
+   numbers shown to him before anything uses them.
+2. [ ] Enablers priced from those prices (mex, energy, converters, cons, nanos, labs).
+3. [ ] The army strength factor normalised against its own measure (line's best UnitPPC = 1), with one
+   currency.
+4. [ ] TUNE_LAB_BEST on; then the builder category draw replaced by the best-priced pick the same way.
+5. [ ] Each override above A/B'd off, one at a time, and deleted when the pricing already chooses what it
+   forced (ladder, roles, field crew, metalfirst, estall, ...). A role that still wins its A/B marks a missing
+   price term: find the term, add it, then delete the role.
+Tests: normal games vs v0.3.2 and BARb (not only his heavy setting); counters per step -- T2 cons per T2
+lab and each new lab's first unit, mohos by minute 12 per seat, why= shares, army vs theirs, result.
 
 # Team T2 (his 10-19)
 
