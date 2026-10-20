@@ -261,6 +261,8 @@ void OpenRaceClock(int fid, float &out H, float &out tR, float &out A, float &ou
 // The con floor asks: the lab's best fighter by the race, or -1 when the con pays more.
 int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef, int slot)
 {
+	if (EcoOnly())
+		return -1;   // the economy-only benchmark races no fighter
 	if ((ai.frame == gOrcAt) && (int(fac.id) == gOrcFid) && (slot == gOrcSlot))
 		return gOrcPick;
 	const double _t0 = ai.ClockUs();

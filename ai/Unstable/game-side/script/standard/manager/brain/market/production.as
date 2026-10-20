@@ -1191,6 +1191,8 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 					|| ConStandsIdle(Catalog::gFlyer[pd], Catalog::gAdvHand[pd] ? 2 : 1)))
 			return null;
 	}
+	if (EcoOnly() && !Catalog::gBuilder[pd])
+		return null;   // the economy-only benchmark: hands only, every path
 	return Catalog::Def(pd);
 }
 
@@ -1666,7 +1668,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	}
 	const int fid = int(fac.circuitDef.id);
 	const array<int>@ prods = Catalog::BuildsOf(fid);
-	if (AatOn()) {
+	if (AatOn() && !EcoOnly()) {
 		const int aad = AatLabOrder(prods);
 		if (aad > 0) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()

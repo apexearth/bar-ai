@@ -1167,7 +1167,7 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 		Perf::Add("want.protect", _t);
 	}
 	else if (step == 15) { if (!EcoOnly()) @w = MemoPropose(11, unit);  Perf::Add("want.teeth", _t); }
-	else if (step == 16) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
+	else if (step == 16) { if (!EcoOnly()) @w = MemoPropose(3, unit);   Perf::Add("want.sense", _t); }
 	else if (step == 17) { if (!EcoOnly()) @w = MemoPropose(9, unit);   Perf::Add("want.airdef", _t); }
 	else if (step == 18) { if (!EcoOnly()) @w = MemoPropose(12, unit);  Perf::Add("want.super", _t); }
 	else                 { @w = ProposeReclaimMetal(unit);    Perf::Add("want.reclmetal", _t); }
