@@ -57,7 +57,12 @@ ratios decide.
    min against 16.6/12.9/10.4, upgrades before minute 15 9/4/4 against 0/0/0, one game). Every income stream
    now takes its time as a horizon share (geo joined 10-20; converters already did).
 3. [ ] The army strength factor normalised against its own measure (line's best UnitPPC = 1), with one
-   currency.
+   currency. 10-20: root cause found -- army values are metal/s (the 09-07 x cost), a con's metal/s per
+   metal (Fatboy 2,114 vs T2 con 0.28). The consistent form (min(gap, cost x p)/fill, per metal; 4cb87bbf,
+   off) starved the early army in 2 of 3 games: army has no per-metal value of its own yet. What it is
+   worth is the loss it prevents -- what of ours is reachable by their army, times how much likelier we
+   keep it with this unit added (ours vs theirs at the fight, the calibrated estimate), over the horizon --
+   plus what it can take from them. Build that as the army's gain, then retry one currency + TUNE_LAB_BEST.
 4. [ ] TUNE_LAB_BEST on; then the builder category draw replaced by the best-priced pick the same way.
 5. [ ] Each override above A/B'd off, one at a time, and deleted when the pricing already chooses what it
    forced (ladder, roles, field crew, metalfirst, estall, ...). A role that still wins its A/B marks a missing
