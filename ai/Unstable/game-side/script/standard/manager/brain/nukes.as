@@ -824,4 +824,117 @@ void UpdateNukes()
 		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : "") + " kind=" + bestKind + " ecoBest=" + formatFloat(ecoBest, "", 0, 0));
 }
 
+//------------------------------------------------------------------------------
+// NUKE PRESSURE (his 10-19: "we need to be more responsive about building enough anti nuke when enemy is
+// launching a lot of nukes"). Every enemy missile a player could see counts: one our antis shot down (an anti's
+// stockpile dropped) or one that landed on us (a unit killed by a silo). An anti stops one missile per restock,
+// so the antis wanted are the missiles seen within one restock, measured on our own antis; until one has
+// restocked, every missile seen so far. Read by Market::SuperTarget.
+//------------------------------------------------------------------------------
+array<int> gNpShotAt;
+array<int> gNpAntiId;
+array<int> gNpAntiStock;
+array<int> gNpAntiUpAt;
+float gNpRefillS = -1.f;
+int gNpNext = 0;
+int gNpHitAt = -1000000;
+AIFloat3 gNpHitPos;
+int gNpLogAt = 0;
+
+void NukeShotNote(const string &in how)
+{
+	gNpShotAt.insertLast(ai.frame);
+	if (ai.frame >= gNpLogAt) {
+		gNpLogAt = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: nukepress t=" + ai.teamId + " " + how + " recent=" + NukeShotsRecent()
+			+ " seen=" + gNpShotAt.length() + " refill=" + int(gNpRefillS) + "s silos=" + EnemyNukeSilos());
+	}
+}
+
+// One missile kills many units at once: a kill near the last within a few seconds is the same missile.
+void NukeHitNote(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
+{
+	if ((unit is null) || (attackerDef is null)
+		|| (Market::SuperClassOf(int(attackerDef.id)) != Market::SC_SILO))
+		return;
+	const AIFloat3 p = unit.GetPos(ai.frame);
+	if ((ai.frame - gNpHitAt < 3 * SECOND) && (p.distance2D(gNpHitPos) < 1500.f))
+		return;
+	gNpHitAt = ai.frame;
+	gNpHitPos = p;
+	NukeShotNote("landed");
+}
+
+int NukeShotsRecent()
+{
+	if (gNpShotAt.length() == 0)
+		return 0;
+	if (gNpRefillS <= 0.f)
+		return int(gNpShotAt.length());
+	const int from = ai.frame - int(gNpRefillS * float(SECOND));
+	int n = 0;
+	for (uint i = 0; i < gNpShotAt.length(); ++i) {
+		if (gNpShotAt[i] >= from)
+			++n;
+	}
+	return n;
+}
+
+void NukePressureTick()
+{
+	if (ai.frame < gNpNext)
+		return;
+	gNpNext = ai.frame + 5 * SECOND;
+	array<int> seenId;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAntiNuke[d] || Catalog::gMobile[d])
+			continue;
+		CCircuitDef@ cdef = Catalog::Def(d);
+		if ((cdef is null) || (cdef.count <= 0))
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(cdef, AIFloat3(0.f, 0.f, 0.f), 0.f);
+		for (uint i = 0; (us !is null) && (i < us.length()); ++i) {
+			CCircuitUnit@ u = us[i];
+			if (u is null)
+				continue;
+			const int id = int(u.id);
+			const int stock = u.GetStockpile();
+			seenId.insertLast(id);
+			const int at = gNpAntiId.find(id);
+			if (at < 0) {
+				gNpAntiId.insertLast(id);
+				gNpAntiStock.insertLast(stock);
+				gNpAntiUpAt.insertLast(-1);
+				continue;
+			}
+			const int was = gNpAntiStock[uint(at)];
+			for (int k = stock; k < was; ++k)
+				NukeShotNote("intercepted");
+			if (stock > was) {
+				if (gNpAntiUpAt[uint(at)] >= 0) {
+					const float dt = float(ai.frame - gNpAntiUpAt[uint(at)]) / float(SECOND) / float(stock - was);
+					gNpRefillS = (gNpRefillS > 0.f) ? (0.8f * gNpRefillS + 0.2f * dt) : dt;
+				}
+				gNpAntiUpAt[uint(at)] = ai.frame;
+			}
+			gNpAntiStock[uint(at)] = stock;
+		}
+	}
+	// A dead anti leaves the ledger; missiles older than four restocks leave the count.
+	for (uint i = 0; i < gNpAntiId.length(); ) {
+		if (seenId.find(gNpAntiId[i]) < 0) {
+			gNpAntiId.removeAt(i);
+			gNpAntiStock.removeAt(i);
+			gNpAntiUpAt.removeAt(i);
+			continue;
+		}
+		++i;
+	}
+	if (gNpRefillS > 0.f) {
+		const int keep = ai.frame - int(4.f * gNpRefillS * float(SECOND));
+		while ((gNpShotAt.length() > 0) && (gNpShotAt[0] < keep))
+			gNpShotAt.removeAt(0);
+	}
+}
+
 }  // namespace Brain

@@ -224,6 +224,7 @@ void UpdateChunk(int c)
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Air::UpdateFighterStations(); Perf::Add("up.airstations", _t); }
 		if (UpEvery(4, 3)) { double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
+		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::NukePressureTick(); Perf::Add("up.nukepress", _t); }
 		{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
 		{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
 		{ double _t = Perf::T0(); Market::LabNanoLog(); Market::T2EcoStat(); Perf::Add("up.labnano", _t); }
@@ -511,6 +512,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	}
 	if (attackerDef is null)
 		return;
+	Brain::NukeHitNote(unit, attackerDef);
 	// The tier census FIRST: it is about what THEY field, so it must not sit
 	// behind the filters that ask what WE lost.
 	Military::NoteFoeDef(attackerDef.costM, attackerDef);

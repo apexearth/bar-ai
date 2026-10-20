@@ -203,6 +203,17 @@ int SuperTarget(int sc)
 	// Blind to their silos, extra copies follow what we have built: one more
 	// while a cluster worth more than an umbrella stands outside every one
 	// (apexearth 2026-09-25: the base had grown out from under its only one).
+	// MISSILES IN FLIGHT ASK FOR ANTIS (his 10-19): one anti stops one missile per restock, so the missiles seen
+	// within one restock are antis we needed, plus one for the next (Brain::NukeShotsRecent). A launch is also
+	// proof of a silo nobody has seen.
+	const int byShots = (sc == SC_ANTINUKE) ? Brain::NukeShotsRecent() : 0;
+	if ((sc == SC_ANTINUKE) && (byShots > 0)) {
+		const int byInc = 1 + int(inc / per);
+		int want = Brain::EnemyNukeSilos() + 1;
+		if (byShots + 1 > want)
+			want = byShots + 1;
+		return (want > byInc) ? want : byInc;
+	}
 	if ((sc == SC_ANTINUKE) && (Brain::EnemyNukeSilos() <= 0)) {
 		AIFloat3 unused;
 		const int have = SuperHave(sc);
@@ -546,6 +557,10 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 		const int bySilo = Brain::EnemyNukeSilos() + 1;
 		if ((Brain::EnemyNukeSilos() > 0) && (bySilo > depth))
 			depth = bySilo;
+		// ...and one past the missiles one restock has seen land or been shot down (his 10-19).
+		const int byShots = Brain::NukeShotsRecent() + 1;
+		if ((byShots > 1) && (byShots > depth))
+			depth = byShots;
 		if (ProtCoverCount(PROT_ANTINUKE, core, r) < depth) {
 			at = SuperSite(unit, SC_ANTINUKE);
 			return OnMap(at);
@@ -970,7 +985,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// before a gantry or a silo and took every super-push. A SEEN enemy
 			// silo overrides the bar -- being poor does not make the warhead
 			// cheaper.
-			if (Brain::EnemyNukeSilos() <= 0) {
+			if ((Brain::EnemyNukeSilos() <= 0) && (Brain::NukeShotsRecent() <= 0)) {
 				TrackIncome();
 				const float incNow = (gIncEma > 0.f)
 						? gIncEma : Eco::MInc();
