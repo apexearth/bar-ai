@@ -474,6 +474,8 @@ public:
 	float GetLatticeStrideZ() const { return (latStrideZ > .0f) ? latStrideZ : (footZ * SQUARE_SIZE * 2); }
 	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
 	bool IsStockSpawner()   const { return isStockSpawner; }  // apex: its stockpiled shot spawns a unit (a launcher, not a nuke)
+	int GetStockLimit()      const { return stockLimit; }      // apex: the stockpile weapon's customparams.stockpilelimit (0 none)
+	float GetStockTime()     const { return stockTime; }       // apex: seconds to stock one shot
 	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 	bool IsShieldDef()      const { return shieldMount != nullptr; }
@@ -657,6 +659,8 @@ private:
 	float latStrideZ = .0f;
 	bool isAntiNukeW = false;
 	bool isStockSpawner = false;
+	int stockLimit = 0;
+	float stockTime = 0.f;
 	bool isTargFac = false;
 	bool isKamikazeD = false;
 	bool isRezAble = false;

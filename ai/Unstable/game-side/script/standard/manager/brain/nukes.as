@@ -865,6 +865,60 @@ void NukeHitNote(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	NukeShotNote("landed");
 }
 
+// THE WORST SALVO (his 10-19: "antis can defend against about 6 nukes at once, but if enemy makes ~10 nukes and
+// launches all on your base you WILL die... ensure you can survive enemy volleys, you can get it all through
+// math"). Every silo we have seen is assumed full -- its stock limit, read from its weapon -- because they fire
+// together; missiles already seen in one restock floor it for silos nobody has seen.
+int gNpSalvoAt = -1;
+int gNpSalvo = 0;
+int NukeSalvoMax()
+{
+	if (ai.frame - gNpSalvoAt < 5 * SECOND)
+		return gNpSalvo;
+	gNpSalvoAt = ai.frame;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	const AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
+	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	int s = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Market::SuperClassOf(d) != Market::SC_SILO)
+			continue;
+		CCircuitDef@ cd = Catalog::Def(d);
+		if (cd is null)
+			continue;
+		const int n = ai.CountEnemyDefNear(cd.id, mid, r);
+		if (n > 0)
+			s += n * ((cd.GetStockLimit() > 0) ? cd.GetStockLimit() : 1);
+	}
+	const int seen = NukeShotsRecent();
+	gNpSalvo = (seen > s) ? seen : s;
+	return gNpSalvo;
+}
+
+// Antis one target needs to live through that salvo: each stops about TUNE_ANTI_AT_ONCE at once, and never more
+// than it can hold.
+int AntisForSalvo()
+{
+	const int s = NukeSalvoMax();
+	if (s <= 0)
+		return 0;
+	float per = ai.GetTunable("apex_anti_at_once", TUNE_ANTI_AT_ONCE);
+	int lim = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gAntiNuke[d] && !Catalog::gMobile[d] && Catalog::gAvailable[d]) {
+			CCircuitDef@ cd = Catalog::Def(d);
+			if ((cd !is null) && (cd.GetStockLimit() > lim))
+				lim = cd.GetStockLimit();
+		}
+	}
+	if ((lim > 0) && (float(lim) < per))
+		per = float(lim);
+	if (per < 1.f)
+		per = 1.f;
+	return int(ceil(float(s) / per));
+}
+
 int NukeShotsRecent()
 {
 	if (gNpShotAt.length() == 0)
@@ -880,11 +934,24 @@ int NukeShotsRecent()
 	return n;
 }
 
+bool gNpFactsLogged = false;
 void NukePressureTick()
 {
 	if (ai.frame < gNpNext)
 		return;
 	gNpNext = ai.frame + 5 * SECOND;
+	if (!gNpFactsLogged) {
+		gNpFactsLogged = true;
+		string ln = "apex: nukemath facts";
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (!(Catalog::gAntiNuke[d] && !Catalog::gMobile[d]) && (Market::SuperClassOf(d) != Market::SC_SILO))
+				continue;
+			CCircuitDef@ cd = Catalog::Def(d);
+			if (cd !is null)
+				ln += " " + cd.GetName() + "=" + cd.GetStockLimit() + "/" + int(cd.GetStockTime()) + "s";
+		}
+		AiLog(ln + " atOnce=" + int(ai.GetTunable("apex_anti_at_once", TUNE_ANTI_AT_ONCE)));
+	}
 	array<int> seenId;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAntiNuke[d] || Catalog::gMobile[d])

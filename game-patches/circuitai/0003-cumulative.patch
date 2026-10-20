@@ -11010,7 +11010,7 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..a38b3dc6 100644
+index 2839b72e..e4685917 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,16 +10,30 @@
@@ -13432,7 +13432,7 @@ index 2839b72e..a38b3dc6 100644
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(Type, float)", asMETHODPR(CCircuitDef, SetRange, (CCircuitDef::RangeType, float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(float)", asMETHODPR(CCircuitDef, SetRange, (float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAirThreat() const", asMETHOD(CCircuitDef, GetAirThreat), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -556,6 +2643,68 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +2643,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13481,6 +13481,8 @@ index 2839b72e..a38b3dc6 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetJammerRadius() const", asMETHOD(CCircuitDef, GetJammerRadius), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAntiNukeW() const", asMETHOD(CCircuitDef, IsAntiNukeW), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsStockSpawner() const", asMETHOD(CCircuitDef, IsStockSpawner), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "int GetStockLimit() const", asMETHOD(CCircuitDef, GetStockLimit), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStockTime() const", asMETHOD(CCircuitDef, GetStockTime), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsTargFac() const", asMETHOD(CCircuitDef, IsTargFac), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsKamikazeDef() const", asMETHOD(CCircuitDef, IsKamikazeDef), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsShieldDef() const", asMETHOD(CCircuitDef, IsShieldDef), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13501,7 +13503,7 @@ index 2839b72e..a38b3dc6 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +2713,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +2715,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13528,7 +13530,7 @@ index 2839b72e..a38b3dc6 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -572,9 +2741,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -572,9 +2743,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13602,7 +13604,7 @@ index 2839b72e..a38b3dc6 100644
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
  	// RulesParams accessor on Unit
  	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -585,6 +2815,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +2817,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -13614,7 +13616,7 @@ index 2839b72e..a38b3dc6 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +2938,34 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +2940,34 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13649,7 +13651,7 @@ index 2839b72e..a38b3dc6 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -718,12 +2981,39 @@ bool CInitScript::Init()
+@@ -718,12 +2983,39 @@ bool CInitScript::Init()
  	}
  
  	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
@@ -13689,7 +13691,7 @@ index 2839b72e..a38b3dc6 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +3030,43 @@ void CInitScript::Update()
+@@ -740,9 +3032,43 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -13733,7 +13735,7 @@ index 2839b72e..a38b3dc6 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -768,6 +3092,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
+@@ -768,6 +3094,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -13751,7 +13753,7 @@ index 2839b72e..a38b3dc6 100644
  void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  {
  	if (mainInfo.unitDestroyed == nullptr) {
-@@ -779,6 +3114,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +3116,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -13785,7 +13787,7 @@ index 2839b72e..a38b3dc6 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +3264,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +3266,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});
@@ -28571,7 +28573,7 @@ index 5eebb710..abf75fc5 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..fe2934e8 100644
+index a1ac882a..b442b33a 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -28744,7 +28746,7 @@ index a1ac882a..fe2934e8 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -299,10 +392,29 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -299,10 +392,34 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	WeaponDef* stockDef = def->GetStockpileDef();
  	if (stockDef != nullptr) {
  		AddAttribute(ATTR_TYPE(STOCK));
@@ -28753,6 +28755,11 @@ index a1ac882a..fe2934e8 100644
 +			const std::map<std::string, std::string> cp = stockDef->GetCustomParams();
 +			auto it = cp.find("spawns_name");
 +			isStockSpawner = (it != cp.end()) && !it->second.empty();
++			auto lim = cp.find("stockpilelimit");
++			if (lim != cp.end()) {
++				try { stockLimit = std::stoi(lim->second); } catch (...) {}
++			}
++			stockTime = stockDef->GetStockpileTime() / FRAMES_PER_SEC;
 +		}
  		weaponDef = circuit->GetWeaponDef(stockDef->GetWeaponDefId());
  		delete stockDef;
@@ -28774,7 +28781,7 @@ index a1ac882a..fe2934e8 100644
  	if (!def->IsAbleToAttack()) {
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
-@@ -330,10 +442,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -330,10 +447,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	float bestWpRange = std::numeric_limits<float>::max();
  	float airDps = .0f;
  	float airDmg = .0f;
@@ -28796,7 +28803,7 @@ index a1ac882a..fe2934e8 100644
  	CWeaponDef* bestDGunDef = nullptr;
  	CWeaponDef* bestWpDef = nullptr;
  	WeaponMount* bestDGunMnt = nullptr;
-@@ -355,6 +478,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -355,6 +483,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			continue;
  		}
  
@@ -28814,7 +28821,7 @@ index a1ac882a..fe2934e8 100644
  		float dps = .0f;
  		float dmg = .0f;
  
-@@ -404,12 +538,51 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -404,12 +543,51 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		if (minReloadTime > reloadTime) {
  			minReloadTime = reloadTime;
  		}
@@ -28867,7 +28874,7 @@ index a1ac882a..fe2934e8 100644
  		targetCategory |= weaponCat;
  
  		const float wdAoe = wd->GetAreaOfEffect();
-@@ -420,11 +593,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -420,11 +598,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  //		it = customParams.find("truerange");
  		const float range = /*(it != customParams.end()) ? utils::string_to_float(it->second) : */wd->GetRange();
  
@@ -28892,7 +28899,7 @@ index a1ac882a..fe2934e8 100644
  		canSurfTargetAir |= isAirWeapon;
  
  		const bool isLandWeapon = ((wt != "TorpedoLauncher") || wd->IsSubMissile());
-@@ -460,16 +641,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -460,16 +646,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
  				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
  			};
@@ -28937,7 +28944,7 @@ index a1ac882a..fe2934e8 100644
  		airDmg += dmg;
  		airDps += dps;
  		surfDmg += dmg;
-@@ -477,20 +683,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -477,20 +688,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		waterDmg += dmg;
  		waterDps += dps;
  
@@ -28997,7 +29004,7 @@ index a1ac882a..fe2934e8 100644
  		}
  		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
  			float& mr = maxRange[static_cast<RangeT>(RangeType::WATER)];
-@@ -498,6 +741,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -498,6 +746,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
  				maxRangeType = RangeType::WATER;
  			}
@@ -29007,7 +29014,7 @@ index a1ac882a..fe2934e8 100644
  		}
  
  		// FIXME: hasDGun is actually "manual command to fire required". There's "DGun" weapon type,
-@@ -566,6 +812,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -566,6 +817,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		weaponMount = bestWpMnt;
  	}
  
@@ -29036,7 +29043,7 @@ index a1ac882a..fe2934e8 100644
  	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
  	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
  		WeaponDef* wd = def->GetDeathExplosion();
-@@ -618,6 +886,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -618,6 +891,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	//       health /= def->GetArmoredMultiple();
  	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
  	const float dps = std::max(std::max(waterDps, surfDps), airDps);
@@ -29058,7 +29065,7 @@ index a1ac882a..fe2934e8 100644
  	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
-@@ -629,6 +912,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -629,6 +917,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			surfThrDmg * sqrtf(health + maxShield * SHIELD_MOD),
  			waterThrDmg * sqrtf(health + maxShield * SHIELD_MOD));
  #endif
@@ -29076,7 +29083,7 @@ index a1ac882a..fe2934e8 100644
  }
  
  CCircuitDef::~CCircuitDef()
-@@ -764,6 +1058,7 @@ void CCircuitDef::SetRange(float range)
+@@ -764,6 +1063,7 @@ void CCircuitDef::SetRange(float range)
  	maxRangeType = RangeType::AIR;
  	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
  		maxRange[rt] = range;
@@ -29084,7 +29091,7 @@ index a1ac882a..fe2934e8 100644
  	}
  }
  
-@@ -772,6 +1067,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
+@@ -772,6 +1072,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
  	// TODO: Asserts >= 0?
  	minRange = std::min(minRange, range);
  	maxRange[static_cast<RangeT>(type)] = range;
@@ -29093,7 +29100,7 @@ index a1ac882a..fe2934e8 100644
  		maxRangeType = type;
  	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a9..97d15c1d 100644
+index cd0b54a9..fc30c310 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -15,6 +15,8 @@
@@ -29255,7 +29262,7 @@ index cd0b54a9..97d15c1d 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -346,13 +442,51 @@ public:
+@@ -346,13 +442,53 @@ public:
  	float GetExtractsM()    const { return extractsM; }
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
@@ -29291,6 +29298,8 @@ index cd0b54a9..97d15c1d 100644
 +	float GetLatticeStrideZ() const { return (latStrideZ > .0f) ? latStrideZ : (footZ * SQUARE_SIZE * 2); }
 +	bool IsAntiNukeW()      const { return isAntiNukeW; }  // carries a nuke interceptor
 +	bool IsStockSpawner()   const { return isStockSpawner; }  // apex: its stockpiled shot spawns a unit (a launcher, not a nuke)
++	int GetStockLimit()      const { return stockLimit; }      // apex: the stockpile weapon's customparams.stockpilelimit (0 none)
++	float GetStockTime()     const { return stockTime; }       // apex: seconds to stock one shot
 +	bool IsTargFac()        const { return isTargFac; }    // targeting facility (pinpointer)
 +	bool IsKamikazeDef()    const { return isKamikazeD; }   // suicide unit: ammunition, not army
 +	bool IsShieldDef()      const { return shieldMount != nullptr; }
@@ -29307,7 +29316,7 @@ index cd0b54a9..97d15c1d 100644
  	void SetSelfDHP(float value) { selfDHP = value; }
  	float GetSelfDHP() const { return selfDHP; }
  
-@@ -405,17 +539,30 @@ private:
+@@ -405,17 +541,30 @@ private:
  	springai::WeaponMount* shieldMount;
  	springai::WeaponMount* weaponMount;
  	float pwrDmg, pwrMod;  // ally damage
@@ -29338,7 +29347,7 @@ index cd0b54a9..97d15c1d 100644
  	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
  	float shieldRadius;
  	float maxShield;
-@@ -435,6 +582,7 @@ private:
+@@ -435,6 +584,7 @@ private:
  
  	bool isAttacker : 1;
  	bool isAlwaysHit : 1;  // FIXME: calc per weapon
@@ -29346,7 +29355,7 @@ index cd0b54a9..97d15c1d 100644
  	bool hasDGun : 1;
  
  	// TODO: std::bitset<2>
-@@ -478,6 +626,7 @@ private:
+@@ -478,6 +628,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -29354,7 +29363,7 @@ index cd0b54a9..97d15c1d 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,18 +637,42 @@ private:
+@@ -488,18 +639,44 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -29378,6 +29387,8 @@ index cd0b54a9..97d15c1d 100644
 +	float latStrideZ = .0f;
 +	bool isAntiNukeW = false;
 +	bool isStockSpawner = false;
++	int stockLimit = 0;
++	float stockTime = 0.f;
 +	bool isTargFac = false;
 +	bool isKamikazeD = false;
 +	bool isRezAble = false;

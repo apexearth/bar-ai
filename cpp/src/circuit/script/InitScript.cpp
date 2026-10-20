@@ -2688,6 +2688,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetJammerRadius() const", asMETHOD(CCircuitDef, GetJammerRadius), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAntiNukeW() const", asMETHOD(CCircuitDef, IsAntiNukeW), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsStockSpawner() const", asMETHOD(CCircuitDef, IsStockSpawner), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "int GetStockLimit() const", asMETHOD(CCircuitDef, GetStockLimit), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStockTime() const", asMETHOD(CCircuitDef, GetStockTime), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsTargFac() const", asMETHOD(CCircuitDef, IsTargFac), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsKamikazeDef() const", asMETHOD(CCircuitDef, IsKamikazeDef), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsShieldDef() const", asMETHOD(CCircuitDef, IsShieldDef), asCALL_THISCALL); ASSERT(r >= 0);

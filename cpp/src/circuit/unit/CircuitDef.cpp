@@ -397,6 +397,11 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			const std::map<std::string, std::string> cp = stockDef->GetCustomParams();
 			auto it = cp.find("spawns_name");
 			isStockSpawner = (it != cp.end()) && !it->second.empty();
+			auto lim = cp.find("stockpilelimit");
+			if (lim != cp.end()) {
+				try { stockLimit = std::stoi(lim->second); } catch (...) {}
+			}
+			stockTime = stockDef->GetStockpileTime() / FRAMES_PER_SEC;
 		}
 		weaponDef = circuit->GetWeaponDef(stockDef->GetWeaponDefId());
 		delete stockDef;

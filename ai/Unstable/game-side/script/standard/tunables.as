@@ -868,6 +868,7 @@ const float TUNE_DECIDE_LOG = 1.f;
 const float TUNE_NN_RECORD = 0.f;   // [toggle 0/1] the `apex: nn` training record per election; the trainer reads only harness games, so a hosted game can set 0 (nnlog.as NnRecord)
 const float TUNE_GIFT_STAKE = 0.f;   // [toggle 0/1] gift.as: a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap it asks to cover (his 10-19)
 const float TUNE_LAB_BEST = 0.f;   // [toggle 0/1] production.as: a lab builds its best-priced unit, not a value-weighted draw (his 10-19)
+const float TUNE_ANTI_AT_ONCE = 6.f;   // [count] nukes one anti stops at once (his 10-19: "about 6"); the worst salvo / this = antis a target needs
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets
