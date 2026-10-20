@@ -872,7 +872,7 @@ const float TUNE_ANTI_AT_ONCE = 6.f;   // [count] nukes one anti stops at once (
 const float TUNE_LAB_INHERIT = 1.f;   // [toggle 0/1] want_tech.as: the advanced lab's gain is its upgrades at their own prices, its time a horizon share (his 10-19)
 const float TUNE_AIR_FEED_CAP = 1.f;   // [toggle 0/1] want_plant.as: an air plant's production yield is capped at the metal nothing spends, as a ground line's is (his 10-19)
 const float TUNE_NANO_UPGRADE = 1.f;   // [toggle 0/1] want_reclaim.as: a patrolling nano turret in reach of a rising mex upgrade guards it (his 10-19)
-const float TUNE_DRAW_BEST = 0.f;   // [toggle 0/1] decide.as CategoryDraw: a builder takes its best-priced want, not a category draw (the mex ladder stays)
+const float TUNE_DRAW_BEST = 1.f;   // [toggle 0/1] decide.as CategoryDraw: a builder takes its best-priced want, not a category draw (the mex ladder stays)
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets
