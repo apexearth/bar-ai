@@ -538,6 +538,13 @@ int gDeepAt = -1;
 float gDeepM = 0.f;
 AIFloat3 gDeepPos;
 // A target short of its salvo depth: the core, or a cluster worth more than the antis it needs.
+// The core's antis, with what they hold now: their restock race against the silos (Brain::AntisForSalvo).
+int CoreAntiNeed(const AIFloat3& in core, float r)
+{
+	const int k = ProtCoverCount(PROT_ANTINUKE, core, r);
+	return Brain::AntisForSalvo(k, Brain::AntiStockNear(core, r));
+}
+
 bool AntiDeficit(int need)
 {
 	if (need <= 0)
@@ -545,7 +552,7 @@ bool AntiDeficit(int need)
 	const float r = ai.GetTunable("apex_antinuke_r", TUNE_ANTINUKE_R);
 	const AIFloat3 core = gFarmSet ? gFarmPos
 			: (Base::gAnchorSet ? Base::gAnchor : Builder::gHomePos);
-	if (OnMap(core) && (ProtCoverCount(PROT_ANTINUKE, core, r) < need))
+	if (OnMap(core) && (ProtCoverCount(PROT_ANTINUKE, core, r) < CoreAntiNeed(core, r)))
 		return true;
 	if (gDeepAt != ai.frame) {
 		gDeepAt = ai.frame;
@@ -580,7 +587,7 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 		if ((Brain::EnemyNukeSilos() > 0) && (bySilo > depth))
 			depth = bySilo;
 		// ...and enough over the core to live through their worst salvo (his 10-19).
-		const int bySalvo = Brain::AntisForSalvo();
+		const int bySalvo = CoreAntiNeed(core, r);
 		if (bySalvo > depth)
 			depth = bySalvo;
 		if (ProtCoverCount(PROT_ANTINUKE, core, r) < depth) {

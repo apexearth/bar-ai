@@ -835,6 +835,7 @@ array<int> gNpShotAt;
 array<int> gNpAntiId;
 array<int> gNpAntiStock;
 array<int> gNpAntiUpAt;
+array<AIFloat3> gNpAntiPos;
 float gNpRefillS = -1.f;
 int gNpNext = 0;
 int gNpHitAt = -1000000;
@@ -868,9 +869,32 @@ void NukeHitNote(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 // THE WORST SALVO (his 10-19: "antis can defend against about 6 nukes at once, but if enemy makes ~10 nukes and
 // launches all on your base you WILL die... ensure you can survive enemy volleys, you can get it all through
 // math"). Every silo we have seen is assumed full -- its stock limit, read from its weapon -- because they fire
-// together; missiles already seen in one restock floor it for silos nobody has seen.
+// together; missiles already seen in one restock floor it for silos nobody has seen. Restock speed (his 10-19)
+// enters AntisForSalvo twice: our refill keeping pace with theirs, and the race to full stock.
 int gNpSalvoAt = -1;
 int gNpSalvo = 0;
+float gNpFullInS = 0.f;   // seconds until every seen silo could be full (0: it could be now)
+float gNpFoeRate = 0.f;   // missiles per second their seen silos restock
+array<int> gNpSiloDef;    // a seen silo type, and the frame each of its seen copies was first counted
+array<array<int>@> gNpSiloSeen;
+
+// Our anti's real restock: never faster than its weapon says, slower when we measure it slower (an energy
+// stall slows every stockpile).
+float AntiRestockS()
+{
+	float t = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gAntiNuke[d] && !Catalog::gMobile[d] && Catalog::gAvailable[d]) {
+			CCircuitDef@ cd = Catalog::Def(d);
+			if ((cd !is null) && (cd.GetStockTime() > t))
+				t = cd.GetStockTime();
+		}
+	}
+	if (gNpRefillS > t)
+		t = gNpRefillS;
+	return (t > 1.f) ? t : 90.f;
+}
+
 int NukeSalvoMax()
 {
 	if (ai.frame - gNpSalvoAt < 5 * SECOND)
@@ -881,6 +905,8 @@ int NukeSalvoMax()
 	const AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
 	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
 	int s = 0;
+	float fullIn = 0.f;
+	float rate = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (Market::SuperClassOf(d) != Market::SC_SILO)
 			continue;
@@ -888,17 +914,45 @@ int NukeSalvoMax()
 		if (cd is null)
 			continue;
 		const int n = ai.CountEnemyDefNear(cd.id, mid, r);
-		if (n > 0)
-			s += n * ((cd.GetStockLimit() > 0) ? cd.GetStockLimit() : 1);
+		int at = gNpSiloDef.find(d);
+		if ((at < 0) && (n > 0)) {
+			gNpSiloDef.insertLast(d);
+			array<int> a;
+			gNpSiloSeen.insertLast(a);
+			at = int(gNpSiloDef.length()) - 1;
+		}
+		if (at < 0)
+			continue;
+		// A copy first counted now has been stocking at least since now; one that vanished is dropped from the
+		// newest end, so the oldest (fullest) estimate stays.
+		array<int>@ seen = gNpSiloSeen[uint(at)];
+		while (int(seen.length()) < n)
+			seen.insertLast(ai.frame);
+		while (int(seen.length()) > n)
+			seen.removeLast();
+		const int lim = (cd.GetStockLimit() > 0) ? cd.GetStockLimit() : 1;
+		const float per = (cd.GetStockTime() > 1.f) ? cd.GetStockTime() : 120.f;
+		s += n * lim;
+		rate += float(n) / per;
+		for (uint i = 0; i < seen.length(); ++i) {
+			const float have = 1.f + float(ai.frame - seen[i]) / float(SECOND) / per;
+			const float left = (have >= float(lim)) ? 0.f : (float(lim) - have) * per;
+			if (left > fullIn)
+				fullIn = left;
+		}
 	}
-	const int seen = NukeShotsRecent();
-	gNpSalvo = (seen > s) ? seen : s;
+	const int shots = NukeShotsRecent();
+	gNpSalvo = (shots > s) ? shots : s;
+	gNpFullInS = (shots > s) ? 0.f : fullIn;
+	gNpFoeRate = rate;
 	return gNpSalvo;
 }
 
-// Antis one target needs to live through that salvo: each stops about TUNE_ANTI_AT_ONCE at once, and never more
-// than it can hold.
-int AntisForSalvo()
+// Antis one target needs, from three things the game's numbers settle: their worst salvo held at once
+// (~TUNE_ANTI_AT_ONCE each, never above an anti's own limit), our restock keeping pace with theirs, and the
+// race to full stock -- the antis over the target, k, holding `stock` now, refill (salvo - stock) at k per
+// restock and must get there before their silos can be full. k <= 0 asks the count alone.
+int AntisForSalvo(int k = -1, int stock = 0)
 {
 	const int s = NukeSalvoMax();
 	if (s <= 0)
@@ -916,7 +970,35 @@ int AntisForSalvo()
 		per = float(lim);
 	if (per < 1.f)
 		per = 1.f;
-	return int(ceil(float(s) / per));
+	int need = int(ceil(float(s) / per));
+	const float tA = AntiRestockS();
+	const int pace = int(ceil(gNpFoeRate * tA));
+	if (pace > need)
+		need = pace;
+	if (k > 0) {
+		const float missing = float(s - stock);
+		if (missing > 0.f) {
+			// at k antis the stock is full in missing / k restocks; that must not be later than their silos
+			// already full on their side, it is one restock away: each anti then has one to gain
+			const float tThem = (gNpFullInS > tA) ? gNpFullInS : tA;
+			const int race = int(ceil(missing * tA / tThem));
+			if (race > need)
+				need = race;
+		}
+	}
+	return need;
+}
+
+// What the antis over a point can stop right now: each its stock, up to what one stops at once.
+int AntiStockNear(const AIFloat3& in p, float r)
+{
+	const int per = int(ai.GetTunable("apex_anti_at_once", TUNE_ANTI_AT_ONCE));
+	int s = 0;
+	for (uint i = 0; (i < gNpAntiPos.length()) && (i < gNpAntiStock.length()); ++i) {
+		if (gNpAntiPos[i].distance2D(p) <= r)
+			s += (gNpAntiStock[i] < per) ? gNpAntiStock[i] : per;
+	}
+	return s;
 }
 
 int NukeShotsRecent()
@@ -935,6 +1017,7 @@ int NukeShotsRecent()
 }
 
 bool gNpFactsLogged = false;
+int gNpMathLogAt = 0;
 void NukePressureTick()
 {
 	if (ai.frame < gNpNext)
@@ -951,6 +1034,12 @@ void NukePressureTick()
 				ln += " " + cd.GetName() + "=" + cd.GetStockLimit() + "/" + int(cd.GetStockTime()) + "s";
 		}
 		AiLog(ln + " atOnce=" + int(ai.GetTunable("apex_anti_at_once", TUNE_ANTI_AT_ONCE)));
+	}
+	if ((ai.frame >= gNpMathLogAt) && (NukeSalvoMax() > 0)) {
+		gNpMathLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: nukemath t=" + ai.teamId + " salvo=" + gNpSalvo + " fullIn=" + int(gNpFullInS)
+			+ "s foeRate=" + formatFloat(gNpFoeRate * 60.f, "", 0, 2) + "/min restock=" + int(AntiRestockS())
+			+ "s antis=" + gNpAntiId.length() + " countNeed=" + AntisForSalvo());
 	}
 	array<int> seenId;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
@@ -972,6 +1061,7 @@ void NukePressureTick()
 				gNpAntiId.insertLast(id);
 				gNpAntiStock.insertLast(stock);
 				gNpAntiUpAt.insertLast(-1);
+				gNpAntiPos.insertLast(u.GetPos(ai.frame));
 				continue;
 			}
 			const int was = gNpAntiStock[uint(at)];
@@ -985,6 +1075,7 @@ void NukePressureTick()
 				gNpAntiUpAt[uint(at)] = ai.frame;
 			}
 			gNpAntiStock[uint(at)] = stock;
+			gNpAntiPos[uint(at)] = u.GetPos(ai.frame);
 		}
 	}
 	// A dead anti leaves the ledger; missiles older than four restocks leave the count.
@@ -993,6 +1084,7 @@ void NukePressureTick()
 			gNpAntiId.removeAt(i);
 			gNpAntiStock.removeAt(i);
 			gNpAntiUpAt.removeAt(i);
+			gNpAntiPos.removeAt(i);
 			continue;
 		}
 		++i;
