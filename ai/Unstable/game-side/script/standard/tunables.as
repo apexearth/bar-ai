@@ -866,6 +866,7 @@ const float TUNE_CATALOG_DUMP = 0.f;
 //   and per execution. On: every harness tool parses them. See docs/tunables.md.
 const float TUNE_DECIDE_LOG = 1.f;
 const float TUNE_NN_RECORD = 1.f;   // [toggle 0/1] the `apex: nn` training record per election; the trainer reads only harness games, so a hosted game can set 0 (nnlog.as NnRecord)
+const float TUNE_GIFT_STAKE = 0.f;   // [toggle 0/1] gift.as: a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap it asks to cover (his 10-19)
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets

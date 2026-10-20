@@ -63,8 +63,26 @@ float GiftNeedM()
 	if (!HaveFactory())
 		return 0.f;
 	const float gap = FoeAtHomeM() - aiMilitaryMgr.armyCost;
-	return (gap > 0.f) ? gap : 0.f;
+	if (gap <= 0.f)
+		return 0.f;
+	// Covering the gap risks about the gap; it is asked for only while the seat has more than that to save
+	// (his 10-19: a teammate with no commander, no base and no income kept getting units).
+	if (ai.GetTunable("apex_gift_stake", TUNE_GIFT_STAKE) > 0.f) {
+		float stake = Market::EconAssetsM();
+		if (Builder::gComm !is null)
+			stake += Catalog::gCostM[int(Builder::gComm.circuitDef.id)];
+		if (stake < gap) {
+			if (ai.frame >= gGiftStakeLogAt) {
+				gGiftStakeLogAt = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: gift-stake t=" + ai.teamId + " gap=" + int(gap) + " stake=" + int(stake)
+					+ " com=" + ((Builder::gComm !is null) ? 1 : 0));
+			}
+			return 0.f;
+		}
+	}
+	return gap;
 }
+int gGiftStakeLogAt = 0;
 
 // Our share of the enemy army that is NOT already standing at one of our
 // homes: the army attacking the ally we would help is not also a threat to

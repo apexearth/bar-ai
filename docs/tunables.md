@@ -258,6 +258,7 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 
 ## Everything else
 
+- `TUNE_GIFT_STAKE` = 0. A seat publishes a gift need only while its standing economy (EconAssetsM) plus a living commander's cost is at least the gap it asks to cover: covering the gap risks about the gap, so a seat with less than that left (his 10-19: no commander, no base, no income, still fed units) asks for nothing. Untested; on for his watch lane.
 - `TUNE_AFLOAT_SUB_COST` = 400. Seen sub value that reads "the enemy lives on water", only when it outweighs their land army: two subs once sent seven players to air plants while ground walked in.
 - `TUNE_BUDGET` = 1. Gates `BudgetMult` itself, so `apex: budget` prints real multipliers with the lever off.
 - `TUNE_BUDGET_LEVER` = 0. Budget target/actual multiplies want values (his "we whip things back into shape"): moved defence and army shares as asked and won 3.1% of 32 against 12.5% of 48 off; 22% of metal is chosen with no rival to steer toward. Off.

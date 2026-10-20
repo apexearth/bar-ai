@@ -393,6 +393,7 @@ local NAMES = {
 	"apex_nn_record",        -- nnlog.as NnRecord: the per-election training record (1; his hosted lane 0)
 	"apex_spill_outgrown",   -- production.as: 1 = a full bank lifts the outgrown T1 tier (the 10-18 behaviour), 0 = it stays out (0)
 	"apex_reclaim_idle_nano", -- want_reclaim.as: idle nano turrets priced for reclaim (1)
+	"apex_gift_stake",       -- gift.as: gifts asked only while the seat has more standing than the gap (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
