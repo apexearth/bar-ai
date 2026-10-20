@@ -462,6 +462,8 @@ def build_script(
         # in game-patches/gadgets/dev_tunables.lua -- WITHOUT THAT GADGET DEPLOYED
         # this key is ignored silently and frametime.py sees no perf lines (S8).
         "apex_perf": 1,
+        # The training record (nnlog.as) is off in tunables.as for hosted games; the trainer reads harness games.
+        "apex_nn_record": 1,
         # THE PER-PLAYER UNIT LIMIT, AND WE HAVE TO STATE IT.
         #
         # BAR's modoptions.lua declares "maxunits" with def=2000 ("Max Units Per

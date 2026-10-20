@@ -187,7 +187,7 @@ const float TUNE_CREW_ELECT = 0.f;
 
 // [toggle 0/1] -- AA counts what the whole side loses to aircraft, not only this
 //   seat (deathledger.as TeamAirLossRate). His 10-14; A/B before default.
-const float TUNE_TEAM_AIRLOSS = 0.f;
+const float TUNE_TEAM_AIRLOSS = 1.f;
 
 // [toggle 0/1] -- A policy network's output 0 plays each continuous head at the
 //   rule's value (policy.as PnValueRule), not the log-middle of its range (aa
@@ -197,50 +197,50 @@ const float TUNE_PN_RULE_CENTRE = 0.f;
 // [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
 //   clear our structures in their reach (raidanswer.as), not only units within one
 //   building's lifetime of travel. His 10-14; A/B before default.
-const float TUNE_RAID_ANSWER_REACH = 0.f;
+const float TUNE_RAID_ANSWER_REACH = 1.f;
 
 // [toggle 0/1] -- Flank guards (flankguard.as): groups from the home pools stand
 //   on stock GUARD tasks at the economy's approaches no tower covers. His 10-14;
 //   A/B before default.
-const float TUNE_FLANK_GUARD = 0.f;
+const float TUNE_FLANK_GUARD = 1.f;
 
 // [toggle 0/1] -- Tower refill (protect_refill.as): a finished gun an enemy killed
 //   is offered back on its gap, priced by the stake behind the breach at the
 //   exposure window's rate while the loss is fresh, exempt from the in-flight
 //   cap. His 10-14; A/B before default.
-const float TUNE_DEF_REFILL = 0.f;
+const float TUNE_DEF_REFILL = 1.f;
 
 // [toggle 0/1] -- A basic hand's tower is outdated against the guns our ADVANCED
 //   hands can build and afford, not only its own list: beaten on reach and kill
 //   by one, it keeps that share of its price. His 10-14; A/B before default.
-const float TUNE_DEF_TEAM_OBSOLETE = 0.f;
+const float TUNE_DEF_TEAM_OBSOLETE = 1.f;
 
 // [toggle 0/1] -- A lower plant's combat unit keeps the share of per-metal worth
 //   the best unit of its role (AA, bomber, other) from a higher plant we own and
 //   can afford delivers; the rest of its ticket defers to that line. His 10-15.
-const float TUNE_LINE_OBSOLETE = 0.f;
+const float TUNE_LINE_OBSOLETE = 1.f;
 
 // [toggle 0/1] -- Under measured lag every mobile unit a factory orders pays a slot
 //   price (lag x team metal per body / (1 - team bodies / team maxunits)); its draw
 //   weight keeps cost/(cost+price), the rest orders nothing. His 10-15.
-const float TUNE_UNIT_UPKEEP = 0.f;
+const float TUNE_UNIT_UPKEEP = 1.f;
 
 // [toggle 0/1] -- A rez bot is priced by the wreck stream it banks over its
 //   expected life (fleet metal / the fleet's death rate), net of its cost,
 //   instead of over the whole payback horizon. His 10-15.
-const float TUNE_REZ_LIFE = 0.f;
-const float TUNE_T2CON_UNLOCK = 0.f;     // an advanced con is priced by the mex upgrades it brings forward (UpgradeUnlockM), not the room
+const float TUNE_REZ_LIFE = 1.f;
+const float TUNE_T2CON_UNLOCK = 1.f;     // an advanced con is priced by the mex upgrades it brings forward (UpgradeUnlockM), not the room
 const float TUNE_UPGRADE_FIRST = 0.f;    // the oldest advanced hands UpgradeHandsWant licenses take the best upgrade, not guns (roles.as)
-const float TUNE_MEXUP_HORIZON = 0.f;    // a mex upgrade's walk and build cost their share of apex_payback_h, not gain x seconds
-const float TUNE_ECO_HORIZON = 0.f;     // energy and converters priced on the payback-horizon share, not gain x late seconds (his 10-15 eco seat: fusions at v=0.00)
-const float TUNE_ASSIST_ECO = 0.f;       // an assist on an economy frame is priced at the frame's gain x the seconds this hand saves it (want_assist.as)
+const float TUNE_MEXUP_HORIZON = 1.f;    // a mex upgrade's walk and build cost their share of apex_payback_h, not gain x seconds
+const float TUNE_ECO_HORIZON = 1.f;     // energy and converters priced on the payback-horizon share, not gain x late seconds (his 10-15 eco seat: fusions at v=0.00)
+const float TUNE_ASSIST_ECO = 1.f;       // an assist on an economy frame is priced at the frame's gain x the seconds this hand saves it (want_assist.as)
 const float TUNE_WALK_FORGONE = 0.f;     // a builder's walk and build seconds cost its own BP at what the economy can feed per BP-second, not income / worker count (price.as BuilderRate)
 
 // [toggle 0/1] -- A factory line's unserved spend counts the army's budget
 //   shortfall (target share - actual share) x metal income, so nanos are bought
 //   for the lines when the eco spends all the free flow (sites.as LineUnserved).
 //   His 10-14; A/B before default.
-const float TUNE_LINE_ARMY_GAP = 0.f;
+const float TUNE_LINE_ARMY_GAP = 1.f;
 
 // [toggle 0/1] -- Against T1 the commander takes any fight his estimate says he
 //   ends above 0.2 of his health (comdecide.as ComBar). His 10-14; A/B first.
@@ -249,7 +249,7 @@ const float TUNE_COM_BOLD = 0.f;
 // [toggle 0/1] -- A withdrawing commander steps back to the nearest ground the
 //   threat no longer reaches, not the back of the base (comdecide.as
 //   ComSafePoint). His 10-14; A/B first.
-const float TUNE_COM_STEP = 0.f;
+const float TUNE_COM_STEP = 1.f;
 
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
@@ -676,7 +676,7 @@ const float TUNE_AIR_AA_SPLIT = 1.f;
 
 // [multiple] -- Expected damage a raid must return against its own metal
 //   before it is worth mounting.
-const float TUNE_AIR_PAYOFF = 1.5f;
+const float TUNE_AIR_PAYOFF = 1.f;
 
 // [seconds] -- How long after a strike launches before it is scored. See
 //   docs/tunables.md.
@@ -865,7 +865,7 @@ const float TUNE_CATALOG_DUMP = 0.f;
 // [toggle 0/1] -- The `apex: decide` and `apex: exec` lines, one per election
 //   and per execution. On: every harness tool parses them. See docs/tunables.md.
 const float TUNE_DECIDE_LOG = 1.f;
-const float TUNE_NN_RECORD = 1.f;   // [toggle 0/1] the `apex: nn` training record per election; the trainer reads only harness games, so a hosted game can set 0 (nnlog.as NnRecord)
+const float TUNE_NN_RECORD = 0.f;   // [toggle 0/1] the `apex: nn` training record per election; the trainer reads only harness games, so a hosted game can set 0 (nnlog.as NnRecord)
 const float TUNE_GIFT_STAKE = 0.f;   // [toggle 0/1] gift.as: a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap it asks to cover (his 10-19)
 
 // [0..2] -- How strongly the value net reweights each builder decision
@@ -963,38 +963,38 @@ const float TUNE_CONSOLIDATE_EDGE = 1.f;
 // [0/1] -- A fighter tasked while armed enemies engage where it stands defends that spot
 //   until they are gone (C++ MakeTask), and a defender beside our structures does not
 //   consolidate away from them.
-const float TUNE_BIRTH_DEFEND = 0.f;
-const float TUNE_AOE_VS_BLOB = 0.f;   // [toggle 0/1] factory prices ground splash units by the enemy units their shell catches in the ball they bring, and splash demand tracks their clumped army (his 2026-10-15)
-const float TUNE_RUSH_AWARE = 0.f;   // [toggle 0/1] the army floor covers the enemy army that can walk in while our next tier is being paid for, and T2/T3 plants, the gantry and long energy builds are priced by the share of that rush we can hold (his 2026-10-15, small maps)
+const float TUNE_BIRTH_DEFEND = 1.f;
+const float TUNE_AOE_VS_BLOB = 1.f;   // [toggle 0/1] factory prices ground splash units by the enemy units their shell catches in the ball they bring, and splash demand tracks their clumped army (his 2026-10-15)
+const float TUNE_RUSH_AWARE = 1.f;   // [toggle 0/1] the army floor covers the enemy army that can walk in while our next tier is being paid for, and T2/T3 plants, the gantry and long energy builds are priced by the share of that rush we can hold (his 2026-10-15, small maps)
 const float TUNE_SMALL_PRESSURE = 0.f;   // [toggle 0/1] where their army walks to us faster than it can outbuild our holding army: shorter payback horizon and up to 2x army target, the team's combined army decides whether the seats leave home together, the team operation contests their outer extractors, and outer extractors want fewer extra guns (his 2026-10-15, small maps)
-const float TUNE_MAP_SHARE = 0.f;   // [toggle 0/1] while our team holds fewer extractor spots than its seat share of the map: army target x (1 + gap), the leave-home bar and the stance hold lean to attack, raids and the team operation go for their extractors on the ground between, and a free spot's mex is worth (1 + gap) more (his 2026-10-15)
-const float TUNE_SMALL_HARD = 0.f;   // [toggle 0/1] where our pathfinder's walk to them is shorter than their time to outbuild our holding army: army floor covers their strength at arrival (seen army, their commanders, their likely extractor income x the walk), fast units priced by the income they can deny, raids and the team operation price their extractors by income denied for the rest of the horizon, the commander's lathe at the lab is army owed and his claims fear their unseen commander; mex pricing untouched (his 2026-10-16)
+const float TUNE_MAP_SHARE = 1.f;   // [toggle 0/1] while our team holds fewer extractor spots than its seat share of the map: army target x (1 + gap), the leave-home bar and the stance hold lean to attack, raids and the team operation go for their extractors on the ground between, and a free spot's mex is worth (1 + gap) more (his 2026-10-15)
+const float TUNE_SMALL_HARD = 1.f;   // [toggle 0/1] where our pathfinder's walk to them is shorter than their time to outbuild our holding army: army floor covers their strength at arrival (seen army, their commanders, their likely extractor income x the walk), fast units priced by the income they can deny, raids and the team operation price their extractors by income denied for the rest of the horizon, the commander's lathe at the lab is army owed and his claims fear their unseen commander; mex pricing untouched (his 2026-10-16)
 const float TUNE_COM_HOME = 0.f;   // [toggle 0/1] the commander's jobs away from a recruiting lab pay contact k x army gap x his lathe for the time they keep him away, and the lab guard earns it; his fight estimate stops crediting D-gun kills on commanders and lets a lone foe keep full fire; their commanders count as ground army at our base, which he defends while k x the stake there outweighs his expected death; his D-gun walk-in in peace prices the seen guns and unseen commanders where it goes (his 2026-10-16, small maps)
 const float TUNE_TEAM_AIR = 0.f;   // [toggle 0/1] the team leader prices the AIR plan against NORMAL every 30 s (square-law ground fight with and without the hold's army spend, plus one air sortie through the AA we have seen); under AIR every seat builds an air plant, bombers and gunships priced on the team target's shortfall, fighters only against seen fighters, holds them at one rally behind our lines, and all launch together when the gathered wing finishes the target; the scored strikes reprice the plan (his 2026-10-16)
-const float TUNE_BUDGET_HOLD = 0.f;   // [toggle 0/1] while army is under its budget share, the orders that skip the budget's draw price -- constructor floors, priced builders at the lab, and the hoisted nano, defence and defence-assist wants -- keep budget mult(row)/mult(army) of their odds or value when their row is over its share (his 2026-10-16, small maps)
-const float TUNE_EARLY_BALL = 0.f;   // [toggle 0/1] on short contact (apex_small_hard's k) a fast cheap unit is priced by the enemy metal a ball of them razes before their production answers, the massing pool waits for that ball, units are priced by the ground they watch per metal until income saturates it, scouts stop counting as patrol, and an air scout is priced by the unseen enemy metal its sweep adds (his 2026-10-16)
-const float TUNE_OPEN_RACE = 0.f;   // [toggle 0/1] (needs apex_small_hard) each con-floor order races a constructor's income to the horizon against the lab's best fighter's denial of their eco plus the hold it adds against their raiders, both timed from build, walk and feed share; a lab under an energy stall prices every unit by its feed share instead of ordering nothing; the budget hold counts ordered units; fight pools and escorts do not pursue a target fleeing faster than they close; on short contact a con is priced by the open spots it reaches before their cons (spotrace.as), a fighter's strength by the square law, and the team army and raiders contest their extractors, cons and raced spots at each target's local defence (his 2026-10-16)
-const float TUNE_ECO_RETURN = 0.f;   // [toggle 0/1] mex, generator, converter and storage priced by metal returned per metal over the horizon at the energy actually available: a converter chews only energy no standing or ordered converter reaches, a generator counts only demand energy would unlock (a metal-bound ask is not energy demand), energy bills at no less than the conversion floor; small_hard's k, the rush floor, the map-share army nudge and the budget's army row scale by the threat arriving (their army on our edge, raids on our economy) or our odds of killing them (2026-10-16, large-map scaling)
-const float TUNE_EXPAND_FAR = 0.f;   // [toggle 0/1] (C++ apex_expand_far too) a mex claim is worth its spot's income x P(we hold it) -- P(open) = their arrival over theirs plus ours, 0 under a seen enemy extractor, x (1 - the road's heat share) -- against the walk and the hand; hot spots, hot roads and death walks are priced instead of refused, a dead task's claim frees its spot at once, the extractor def is never held after aborts, a walker lets go only when its road turns riskier than it was priced, a crewless claim is adopted only when it outscores the elected spot, and the DLL walks a mex task through a hot road (2026-10-16, large-map expansion stall)
+const float TUNE_BUDGET_HOLD = 1.f;   // [toggle 0/1] while army is under its budget share, the orders that skip the budget's draw price -- constructor floors, priced builders at the lab, and the hoisted nano, defence and defence-assist wants -- keep budget mult(row)/mult(army) of their odds or value when their row is over its share (his 2026-10-16, small maps)
+const float TUNE_EARLY_BALL = 1.f;   // [toggle 0/1] on short contact (apex_small_hard's k) a fast cheap unit is priced by the enemy metal a ball of them razes before their production answers, the massing pool waits for that ball, units are priced by the ground they watch per metal until income saturates it, scouts stop counting as patrol, and an air scout is priced by the unseen enemy metal its sweep adds (his 2026-10-16)
+const float TUNE_OPEN_RACE = 1.f;   // [toggle 0/1] (needs apex_small_hard) each con-floor order races a constructor's income to the horizon against the lab's best fighter's denial of their eco plus the hold it adds against their raiders, both timed from build, walk and feed share; a lab under an energy stall prices every unit by its feed share instead of ordering nothing; the budget hold counts ordered units; fight pools and escorts do not pursue a target fleeing faster than they close; on short contact a con is priced by the open spots it reaches before their cons (spotrace.as), a fighter's strength by the square law, and the team army and raiders contest their extractors, cons and raced spots at each target's local defence (his 2026-10-16)
+const float TUNE_ECO_RETURN = 1.f;   // [toggle 0/1] mex, generator, converter and storage priced by metal returned per metal over the horizon at the energy actually available: a converter chews only energy no standing or ordered converter reaches, a generator counts only demand energy would unlock (a metal-bound ask is not energy demand), energy bills at no less than the conversion floor; small_hard's k, the rush floor, the map-share army nudge and the budget's army row scale by the threat arriving (their army on our edge, raids on our economy) or our odds of killing them (2026-10-16, large-map scaling)
+const float TUNE_EXPAND_FAR = 1.f;   // [toggle 0/1] (C++ apex_expand_far too) a mex claim is worth its spot's income x P(we hold it) -- P(open) = their arrival over theirs plus ours, 0 under a seen enemy extractor, x (1 - the road's heat share) -- against the walk and the hand; hot spots, hot roads and death walks are priced instead of refused, a dead task's claim frees its spot at once, the extractor def is never held after aborts, a walker lets go only when its road turns riskier than it was priced, a crewless claim is adopted only when it outscores the elected spot, and the DLL walks a mex task through a hot road (2026-10-16, large-map expansion stall)
 const float TUNE_COM_FIGHT = 0.f;   // [toggle 0/1] every second each ground squad with an armed enemy in reach (army, commanders, towers that reach where it stands to fight) is fought out on paper, calibrated online by the team's real-over-predicted metal lost and killed: it fights while (loss - kill) is under what falling back abandons (our metal and open spots in the threat's reach, as much as the fight would hold them, plus the walk out and back), a verdict moving only past the measured error band; losing groups fall back onto one point against their largest group; attack groups out of contact walk onto their groups they beat by more than the band; raid packs and split-off packs go only at a size that wins at the target; a commander in our base pulls the base groups onto it when they win together (his 2026-10-16)
-const float TUNE_SURF_DPS = 0.f;   // [toggle 0/1] (C++ apex_surf_dps too; needs the rebuilt DLL) every ground-combat valuation reads a unit's damage against the surface alone and every anti-air one its damage against aircraft, instead of the max over both, and the same for reach (land range vs air range), so an anti-air missile is no ground gun (armamph, his 2026-10-16)
+const float TUNE_SURF_DPS = 1.f;   // [toggle 0/1] (C++ apex_surf_dps too; needs the rebuilt DLL) every ground-combat valuation reads a unit's damage against the surface alone and every anti-air one its damage against aircraft, instead of the max over both, and the same for reach (land range vs air range), so an anti-air missile is no ground gun (armamph, his 2026-10-16)
 const float TUNE_COUNTER_MIX = 0.f;   // [toggle 0/1] each ground army candidate's draw value is multiplied by its square-law fight value per metal against the enemy mobile army we have seen (splash on our clumped units, one-shot units do not engage, outranged units pay the closing time, a slower winner cannot catch), where it outruns a foe it cannot fight it keeps a raid value from their known economy less our raiders, and the army candidates are renormalised so army vs eco is unchanged (his 2026-10-16)
 const float TUNE_FOCUS_FIRE = 0.f;   // [toggle 0/1] (C++ apex_focus_fire) a ground group in contact sets its targets together each second: the enemy whose death removes the most of their damage per second of our fire first (towers, commander, splash over our clump), in lethal doses among members in range, units it one-shots on the next; set-target only, nobody is moved; unarmed buildings after every armed enemy in reach; with apex_com_fight a group in contact keeps fighting until the estimate pulls it out (his 2026-10-16)
-const float TUNE_AA_THREAT = 0.f;   // [toggle 0/1] anti-air where their air hurts us: places are ground where their armed air was seen over our buildings or killed something of ours; static AA goes to the place where it stops the most of that air's cost at its catalog exchange rate, mobile AA guards the army their air is killing and the lab makes one when that army is short; the AA panic ends only on AA finished or with hands on it; the anti-air budget row is the air share of their force or of our losses over that exchange rate (his 2026-10-16)
+const float TUNE_AA_THREAT = 1.f;   // [toggle 0/1] anti-air where their air hurts us: places are ground where their armed air was seen over our buildings or killed something of ours; static AA goes to the place where it stops the most of that air's cost at its catalog exchange rate, mobile AA guards the army their air is killing and the lab makes one when that army is short; the AA panic ends only on AA finished or with hands on it; the anti-air budget row is the air share of their force or of our losses over that exchange rate (his 2026-10-16)
 const float TUNE_GATHER = 0.f;   // [toggle 0/1] (also C++ apex_gather) raid packs keep the members they launched with: the raiders gathered at home and the pack in the field are priced apart, a GO launches the gathered group whole as a new pack, a pack sent home dissolves into the pools; their army counts at the target if it can arrive while we walk and work there; pools never walk out to a launched squad, an all-raider pool never promotes itself, a goal pack paths around what beats it; every squad's join window shuts when it launches -- attacks, raids, bomber waves, gunship wings, sieges -- and nothing joins it until it is home (his 2026-10-16)
 const float TUNE_JOIN_ARRIVE = 0.f;   // [toggle 0/1] one test for every hand sent into work already under way (defence/unlock joins, priced assists and the idle floor, joins onto a big build, the commander rescue, army gifts to an ally, nano lifts): it counts only the seconds the job lands sooner after the hand arrives, given the hands already on it, times the job's worth, less the trip's risk; nothing joins work that finishes before it gets there or a crew already full; a rez bot goes only to a commander nobody is raising that will not rot first; a gift goes as one wave of units that reach the ally before its fight ends (his 2026-10-16)
-const float TUNE_LAB_NANO = 0.f;   // [toggle 0/1] a nano turret at a lab is priced by the army metal per second it adds there, bounded by income / labs less the turrets already there (the nanos-first ratio as an output), run at the feed share a stalled economy gives it, instead of by spare metal only (his 2026-10-16)
-const float TUNE_UNSTICK = 0.f;  // [toggle 0/1] ordered combat units that do not move are nudged to open ground, pen-tested, their wall self-destructed once the trapped metal's lost service exceeds it; nanos and converters keep ground plants' door lanes and never split open ground (his 2026-10-15)
-const float TUNE_AIR_EVERY = 0.f;   // [toggle 0/1] every seat's air plant is priced by what it yields (air constructors' build power and spilled metal, its bombers' and gunships' net against the AA seen, fighters against their air, the look) instead of income bars on one seat; the held wing flies at the best cell the planes at home beat; fighters are bought against the enemy air seen and hunt it as whole flights (his 2026-10-16)
-const float TUNE_UNIT_LIFE = 0.f;   // [toggle 0/1] a scout or support plane is worth the work over the life it is expected to have, read from our own losses of that def (the window as the prior life), not the whole window (329 scout planes, ~28 a minute dying, in a 1v1, 2026-10-17)
-const float TUNE_NANO_EARLY = 0.f;   // [toggle 0/1] a T2/T3 plant under construction (its frame, or its manned order whose site has not moved) takes the nanos its finished plant would, at its own ground: a gantry's income-derived ring takes the batch, a T2 lab or air plant its floor of 4 (his 2026-10-17: "the nano turrets should get built while the gantry is being built too")
-const float TUNE_FLOW_E_BILL = 0.f;   // [toggle 0/1] with metal spilling, a factory order still pays its energy bill out of its gain (the line floor read per E bill), so a near-worthless energy-heavy unit is not built just because the line would idle (2026-10-17: armpeep at gain 0.00 built ~28 a minute)
-const float TUNE_GANTRY_OWN_SLOT = 0.f;   // [toggle 0/1] the gantry does not take or wait for the one-at-a-time strategic slot (a production line, not a gun) -- his 10-17 ruling: "let the gantry go up alongside them"
+const float TUNE_LAB_NANO = 1.f;   // [toggle 0/1] a nano turret at a lab is priced by the army metal per second it adds there, bounded by income / labs less the turrets already there (the nanos-first ratio as an output), run at the feed share a stalled economy gives it, instead of by spare metal only (his 2026-10-16)
+const float TUNE_UNSTICK = 1.f;  // [toggle 0/1] ordered combat units that do not move are nudged to open ground, pen-tested, their wall self-destructed once the trapped metal's lost service exceeds it; nanos and converters keep ground plants' door lanes and never split open ground (his 2026-10-15)
+const float TUNE_AIR_EVERY = 1.f;   // [toggle 0/1] every seat's air plant is priced by what it yields (air constructors' build power and spilled metal, its bombers' and gunships' net against the AA seen, fighters against their air, the look) instead of income bars on one seat; the held wing flies at the best cell the planes at home beat; fighters are bought against the enemy air seen and hunt it as whole flights (his 2026-10-16)
+const float TUNE_UNIT_LIFE = 1.f;   // [toggle 0/1] a scout or support plane is worth the work over the life it is expected to have, read from our own losses of that def (the window as the prior life), not the whole window (329 scout planes, ~28 a minute dying, in a 1v1, 2026-10-17)
+const float TUNE_NANO_EARLY = 1.f;   // [toggle 0/1] a T2/T3 plant under construction (its frame, or its manned order whose site has not moved) takes the nanos its finished plant would, at its own ground: a gantry's income-derived ring takes the batch, a T2 lab or air plant its floor of 4 (his 2026-10-17: "the nano turrets should get built while the gantry is being built too")
+const float TUNE_FLOW_E_BILL = 1.f;   // [toggle 0/1] with metal spilling, a factory order still pays its energy bill out of its gain (the line floor read per E bill), so a near-worthless energy-heavy unit is not built just because the line would idle (2026-10-17: armpeep at gain 0.00 built ~28 a minute)
+const float TUNE_GANTRY_OWN_SLOT = 1.f;   // [toggle 0/1] the gantry does not take or wait for the one-at-a-time strategic slot (a production line, not a gun) -- his 10-17 ruling: "let the gantry go up alongside them"
 const float TUNE_T2_ECO = 0.f;   // [toggle 0/1] the next-tier rule also says NOW when the ETA ladder took the plant over the best economy rung (each such election counted at the plant's funded share, NOW at one whole), and the super push and next-tier hoist yield a ceiling hand to the upgrades its list offers, an anti-nuke against a seen silo excepted (his 2026-10-17: "focus on getting the fusions and upgrading the mexes")
 const float TUNE_ADV_LAB_WAIT = 0.f;   // [toggle 0/1] no second advanced (T2) lab while one stands or is under way and any extractor we hold is below the best extraction; which comes first stays the market's (his 2026-10-17 ruling)
 const float TUNE_INFLIGHT_HOLD = 1.f;   // [toggle 0/1] every build pays for the returns of the projects in progress it holds up, for the share of its metal free flow cannot pay (price.as displacedM; his 2026-10-18: every simultaneous build slows the ones in progress)
-const float TUNE_INCOME_ACCEL = 0.f;   // [toggle 0/1] the hold's other half: an extractor, upgrade or converter is credited the share of income it adds times the gain of the projects in flight it speeds up (floor.as IncomeAccelM; his 2026-10-18)
-const float TUNE_LAB_ASSIST = 0.f;   // [toggle 0/1] a lab's order is a priced project in flight (the hold charges for delaying it, the income credit counts it) and a guard on the lab is priced by the seconds it brings that order forward (want_assist.as LabAssistGuard; his 2026-10-18)
+const float TUNE_INCOME_ACCEL = 1.f;   // [toggle 0/1] the hold's other half: an extractor, upgrade or converter is credited the share of income it adds times the gain of the projects in flight it speeds up (floor.as IncomeAccelM; his 2026-10-18)
+const float TUNE_LAB_ASSIST = 1.f;   // [toggle 0/1] a lab's order is a priced project in flight (the hold charges for delaying it, the income credit counts it) and a guard on the lab is priced by the seconds it brings that order forward (want_assist.as LabAssistGuard; his 2026-10-18)
 const float TUNE_SITE_CACHE = 1.f;   // [toggle 0/1] perf: LatheSite and SuperSite answers kept one memo lifetime while our building set holds (sites.as)
 const float TUNE_CATCHUP_WALL = 1.f;   // [toggle 0/1] a host running faster than the game's speed is catching up behind the server: the election budget accrues per wall-clock frame, not per frame replayed (perf.as CatchingUp; his 2026-10-19)
 const float TUNE_LATHE_CONCENTRATE = 0.f;   // [toggle 0/1] LatheSite takes the richest lathe whatever is rising there, not one build beside each block (sites.as; his 2026-10-18: concentrate on what is important; we waste a lot of room)
@@ -1003,20 +1003,20 @@ const float TUNE_CON_USE = 0.f;   // [toggle 0/1] constructors sized by use: the
 const float TUNE_HOIST_WAITS = 1.f;   // [toggle 0/1] a hoist (floor, role, field, defjoin, metalfirst...) waits while the hand is still walking to a live job; the draw and the emergencies still move it (decide.as; his 2026-10-18: cons walk far, work 2 s, walk back)
 const float TUNE_DRAW_WAITS = 0.f;   // [toggle 0/1] with TUNE_HOIST_WAITS: the draw also leaves a hand on a live job it is walking to unless the drawn job outbids its walk-paid value -- drawn once per job, not per election (decide.as; the cost of switching roles stand in for)
 const float TUNE_RESERVE = 0.f;   // [toggle 0/1] holding back is an option: while the army is short and no metal is spare, a drawn job worth less than 1/fill leaves the metal to the factories and the hand lathes a producing one (want_assist.as ReserveWant; his 2026-10-18)
-const float TUNE_UNLOCK_ONCE = 0.f;   // [toggle 0/1] a T2/T3 plant is the metal unlock (metal-first assists, MetalPathStarved) only if its units upgrade extractors and only until such a plant stands -- the extractor rule's sibling (register.as IsMetalUnlock; his 2026-10-18); and the tech market prices the unlock once: a second plant beside a standing or ordered kin gets no unlock value (want_tech.as)
+const float TUNE_UNLOCK_ONCE = 1.f;   // [toggle 0/1] a T2/T3 plant is the metal unlock (metal-first assists, MetalPathStarved) only if its units upgrade extractors and only until such a plant stands -- the extractor rule's sibling (register.as IsMetalUnlock; his 2026-10-18); and the tech market prices the unlock once: a second plant beside a standing or ordered kin gets no unlock value (want_tech.as)
 const float TUNE_CON_PRICED = 0.f;   // [toggle 0/1] the con floors yield the lab to an army under its target share as measured, not under target / the con multiplier (production.as armyBehind; his 2026-10-18: a third of their army, the lab making cons). Floored to stand down entirely, a priced con never won: army gains are in gap metal, a con's in m/s
 const float TUNE_MEMO_REPRICE = 1.f;   // [toggle 0/1] position-keyed memo answers are shared over a region four cells wide and their walk re-priced per asker (decide.as MemoServe; perf, his scav 8v8 at 3.9x the frame budget)
 const float TUNE_REELECT_TTL = 1.f;   // [toggle 0/1] (C++ apex_reelect_ttl; needs the rebuilt DLL) a walking builder re-confirms its job no more often than the prices refresh (apex_memo_ttl), not every 3 s; with an enemy near it keeps 3 s (BuilderTask.cpp Reevaluate; perf)
 const float TUNE_NANO_PRICED = 0.f;   // [toggle 0/1] the 2/4/9 nanos-per-plant floor (siting and hoist) stands down; nanos stand on their price -- build power added to what is in reach, at what the economy can feed (want_nano.as, decide.as; his 2026-10-18)
 const float TUNE_ARMY_ONE_CURRENCY = 0.f;   // [toggle 0/1] a factory product's gain is the gap its own cost fills (min(cost, gap)/fill, m/s), not the whole gap's stream: army in the builder market's currency (production.as; his 2026-10-18 balance)
 const float TUNE_UNIT_LIMIT = 0.f;   // [toggle 0/1] TEST ONLY: drop a want whose def is at its unit count limit (maxThisUnit, which folds a lobby restriction with behaviour.json's limit) -- for run_match --restrict-mex games; off in play because the JSON caps are BARb's, not ours (2026-10-17)
-const float TUNE_HANDS_ONCE = 0.f;   // [toggle 0/1] a plant's build-power half is divided by the finished or manned plants of ANY domain that already make a builder of at least its builder's tier: an advanced air plant beside a T2 lab making T2 cons is bought for its planes, not as second hands (his 2026-10-17)
-const float TUNE_COM_AIR = 0.f;   // [toggle 0/1] the commander counts strike air: when what reaches him kills him before our AA at him kills it, he builds an AA tower where he stands if it is up in time and turns it, else he retreats (his 2026-10-17)
-const float TUNE_ALLY_AIR = 0.f;   // [toggle 0/1] an ally's interceptors fly to where their air is killing our things, not only to our home: each seat publishes its worst air-damage place (aathreat) beside the air over its home (his 2026-10-17: fighters used to protect allies; their gunships do tons of damage)
-const float TUNE_AIR_ANSWER = 0.f;   // [toggle 0/1] fighters are bought against the strike raid that came over our ground (the most seen there at once, or a plane that killed ours, remembered over BLEED_TAU), not only the air in sight this second; an AA def's exchange rate counts the share of their firing positions it reaches (their stand-off reach against its own), what killed us joins the air it is priced against, a loss under standing AA raises that place's air to the cover plus the plane that got through, and a plant whose fighters are owed is not all-quiet (his 2026-10-17: bombed five minutes with no AA; fighters no longer protect allies)
-const float TUNE_JAM_SIGHT = 0.f;   // [toggle 0/1] a force we cannot see is suspected where contacts dropped off our radar inside its coverage, where a jammer was seen, and where our things died to a shooter nobody saw; its metal enters the threat, hazard and trip reads, and sight over it (a camera tower at our edge facing it, a scout look) is priced by the loss it threatens (his 2026-10-17: players attack us with jammer-supported armies)
-const float TUNE_ORDER_RELEASE = 0.f;   // [toggle 0/1] a build order the market elected someone to that now has no worker and no frame stops counting as coming: the lab, gantry and super lanes ask for its def again, the ask adopts it on the same ground or aborts it and founds afresh, and a lab order on ground the asker cannot work is founded afresh (2026-10-17: a T2 lab order sat five minutes with zero workers after its builder was pulled off)
-const float TUNE_LIVE_NOT_BAN = 0.f;   // [toggle 0/1] a site judgement is read live or priced, never held on a clock: a dead tower's site priced by its killers still in reach, a footprint refusal blocks only footprints that hold it, the stuck watch marks only unreachable ground, abort streaks price one site not the def, a dropped mex upgrade lifts when its threat is gone (his 2026-10-16)
+const float TUNE_HANDS_ONCE = 1.f;   // [toggle 0/1] a plant's build-power half is divided by the finished or manned plants of ANY domain that already make a builder of at least its builder's tier: an advanced air plant beside a T2 lab making T2 cons is bought for its planes, not as second hands (his 2026-10-17)
+const float TUNE_COM_AIR = 1.f;   // [toggle 0/1] the commander counts strike air: when what reaches him kills him before our AA at him kills it, he builds an AA tower where he stands if it is up in time and turns it, else he retreats (his 2026-10-17)
+const float TUNE_ALLY_AIR = 1.f;   // [toggle 0/1] an ally's interceptors fly to where their air is killing our things, not only to our home: each seat publishes its worst air-damage place (aathreat) beside the air over its home (his 2026-10-17: fighters used to protect allies; their gunships do tons of damage)
+const float TUNE_AIR_ANSWER = 1.f;   // [toggle 0/1] fighters are bought against the strike raid that came over our ground (the most seen there at once, or a plane that killed ours, remembered over BLEED_TAU), not only the air in sight this second; an AA def's exchange rate counts the share of their firing positions it reaches (their stand-off reach against its own), what killed us joins the air it is priced against, a loss under standing AA raises that place's air to the cover plus the plane that got through, and a plant whose fighters are owed is not all-quiet (his 2026-10-17: bombed five minutes with no AA; fighters no longer protect allies)
+const float TUNE_JAM_SIGHT = 1.f;   // [toggle 0/1] a force we cannot see is suspected where contacts dropped off our radar inside its coverage, where a jammer was seen, and where our things died to a shooter nobody saw; its metal enters the threat, hazard and trip reads, and sight over it (a camera tower at our edge facing it, a scout look) is priced by the loss it threatens (his 2026-10-17: players attack us with jammer-supported armies)
+const float TUNE_ORDER_RELEASE = 1.f;   // [toggle 0/1] a build order the market elected someone to that now has no worker and no frame stops counting as coming: the lab, gantry and super lanes ask for its def again, the ask adopts it on the same ground or aborts it and founds afresh, and a lab order on ground the asker cannot work is founded afresh (2026-10-17: a T2 lab order sat five minutes with zero workers after its builder was pulled off)
+const float TUNE_LIVE_NOT_BAN = 1.f;   // [toggle 0/1] a site judgement is read live or priced, never held on a clock: a dead tower's site priced by its killers still in reach, a footprint refusal blocks only footprints that hold it, the stuck watch marks only unreachable ground, abort streaks price one site not the def, a dropped mex upgrade lifts when its threat is gone (his 2026-10-16)
 
 // The defaults below reproduce the previous gCombat/costM ranking EXACTLY --
 //   dps * sqrt(alpha) * hp / cost is what power^2/cost expands to -- so the
@@ -1184,10 +1184,10 @@ const float TUNE_CON_ESCORT = 1.f;
 
 // STOCK_ARMY: 1 hands every combat unit (ground, air, AA) to stock BARb: its
 // DefaultMakeTask and fight code; our army layers stand down. See docs/tunables.md.
-const float TUNE_STOCK_ARMY = 0.f;
+const float TUNE_STOCK_ARMY = 1.f;
 
 // OUR_AIR: 1 (with STOCK_ARMY 1) keeps aircraft under our air control; the ground army stays stock. See docs/tunables.md.
-const float TUNE_OUR_AIR = 0.f;
+const float TUNE_OUR_AIR = 1.f;
 
 // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
 const float TUNE_SQUADS = 0.f;
@@ -1235,7 +1235,7 @@ const float TUNE_E_WASTE_WORTH = 0.25f;
 //   the share of its metal we could actually spend. DEFAULT OFF: inert where it
 //   was measured and its premise is unproven. Also gates the rich seat spending: while the bank
 //   overflows, the :losing/:outgrown drops (one tier below the top) and the metal con role stand down; the T1 air mute holds. See docs/tunables.md.
-const float TUNE_M_REALIZE = 0.f;
+const float TUNE_M_REALIZE = 1.f;
 
 // The unspendable band keeps this share, because demand grows and the spot is
 //   still ours when it does -- the same reason E_WASTE_WORTH is not zero.
@@ -1496,7 +1496,7 @@ const float TUNE_ECO_LATCH = 1.f;
 //   at the normal time and hands out advanced constructors in proportion to the allies'
 //   uncovered upgrade hands; the others price their own first advanced lab down by the share
 //   of those hands the handouts cover. His 10-15. See docs/tunables.md.
-const float TUNE_TEAM_TECH = 0.f;
+const float TUNE_TEAM_TECH = 1.f;
 
 // [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves
 //   the ordinary seat election alone. Above 0 it takes the seat whatever
@@ -2108,7 +2108,7 @@ const float TUNE_DEFJOIN_PRICE = 1.f;  // the defence assist offered to the draw
 const float TUNE_FIELD_PRICED = 1.f;   // the field crew's towers and radar go to the draw
 const float TUNE_COVER_PRICED = 1.f;   // the coverall and base-front towers go to the draw
 const float TUNE_DEF_DANGER = 0.f;     // the defence target follows the danger our army cannot meet
-const float TUNE_DEF_MEASURED = 0.f;   // [toggle 0/1] defence demand on the measured attack rate, not the 1/120 s prior (his 10-15); docs/tunables.md
+const float TUNE_DEF_MEASURED = 1.f;   // [toggle 0/1] defence demand on the measured attack rate, not the 1/120 s prior (his 10-15); docs/tunables.md
 
 // [multiplier] -- What a mex UPGRADE'S extra metal stream is worth, over its
 //   honest arithmetic. See docs/tunables.md.
