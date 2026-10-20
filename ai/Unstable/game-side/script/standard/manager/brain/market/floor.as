@@ -82,6 +82,13 @@ void NoteJob(IUnitTask@ t, Want@ w)
 	if ((t is null) || (w is null))
 		return;
 	++gJobStamp;
+	for (uint li = 0; (li < Requests::gLive.length()) && (li < Requests::gLiveVal.length()); ++li) {
+		if (Requests::gLive[li] is t) {
+			Requests::gLiveVal[li] = w.value;
+			Requests::gLiveGain[li] = w.gain;
+			break;
+		}
+	}
 	for (uint i = 0; i < gJobTask.length(); ++i) {
 		if (gJobTask[i] is t) {
 			gJobVal[i] = w.value;
@@ -213,6 +220,7 @@ int gJcLiveStamp = -1;
 int gJcGuardStamp = -1;
 bool gJcLeashed = false;
 
+int gJcFill = 0;
 void JobCacheFill(bool leashed)
 {
 	JobSweep();
@@ -222,6 +230,7 @@ void JobCacheFill(bool leashed)
 		&& (gJcGuardStamp == gGuardStamp) && (gJcLeashed == leashed))
 		return;
 	const double _tF = Perf::T0();
+	++gJcFill;
 	gJcFrame = ai.frame;
 	gJcJobStamp = gJobStamp;
 	gJcLiveStamp = Requests::gLiveStamp;
@@ -237,18 +246,25 @@ void JobCacheFill(bool leashed)
 	gJcRing.resize(0);
 	gJcGuards.resize(0);
 	gJcBusy.resize(0);
+	const bool aligned = (Requests::gLiveVal.length() == Requests::gLive.length())
+			&& (Requests::gLiveGain.length() == Requests::gLive.length());
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
 		IUnitTask@ cand = Requests::gLive[i];
 		if ((cand is null) || cand.IsDead()
 			|| (cand.GetType() != Task::Type::BUILDER)
 			|| (cand.buildDef is null))
 			continue;
-		const float val = JobValue(cand);
+		const float val = aligned ? Requests::gLiveVal[i] : JobValue(cand);
+		if (aligned && ((gJcFill & 63) == 0)) {
+			Perf::Note("as.check");
+			if ((JobValue(cand) != val) || ((val > 0.f) && (JobGain(cand) != Requests::gLiveGain[i])))
+				Perf::Note("as.mismatch");
+		}
 		const AIFloat3 where = cand.GetBuildPos();
 		const bool onMap = OnMap(where);
 		gJcTask.insertLast(cand);
 		gJcVal.insertLast(val);
-		gJcGain.insertLast((val > 0.f) ? JobGain(cand) : -1.f);
+		gJcGain.insertLast((val > 0.f) ? (aligned ? Requests::gLiveGain[i] : JobGain(cand)) : -1.f);
 		gJcPos.insertLast(where);
 		gJcOnMap.insertLast(onMap);
 		gJcFar.insertLast((val > 0.f) && onMap && leashed && EcoFar(where));

@@ -187,6 +187,8 @@ array<int> gLiveProgAt;           // ...and when
 array<float> gLiveSample;         // progress at the last rate sample
 array<int> gLiveSampleAt;
 array<float> gLiveRingBP;         // lathe SEEN on the frame beyond its crew
+array<float> gLiveVal;            // the market's value and gain for the job (Market::NoteJob), -1 unpriced
+array<float> gLiveGain;
 array<float> gEffBPSum(ai.GetDefCount() + 1, 0.f);
 array<float> gEffBPN(ai.GetDefCount() + 1, 0.f);
 // ...and for the reactor CLASS as a whole, so the first advanced fusion is
@@ -349,6 +351,8 @@ void Register(IUnitTask@ task)
 	gLiveSample.insertLast(0.f);
 	gLiveSampleAt.insertLast(ai.frame);
 	gLiveRingBP.insertLast(0.f);
+	gLiveVal.insertLast(Market::JobValue(task));
+	gLiveGain.insertLast(Market::JobGain(task));
 	if (IsBigEnergy(task.buildDef))
 		Market::ComBigEInvalidate();
 	// WHERE THE EXPENSIVE THING ACTUALLY LANDED. The exec line prints the
@@ -449,6 +453,10 @@ void Forget(IUnitTask@ task)
 					gLiveSampleAt.removeAt(i);
 				if (i < gLiveRingBP.length())
 					gLiveRingBP.removeAt(i);
+				if (i < gLiveVal.length())
+					gLiveVal.removeAt(i);
+				if (i < gLiveGain.length())
+					gLiveGain.removeAt(i);
 				gLiveStarted.removeAt(i);
 			}
 			gLive.removeAt(i);
