@@ -177,6 +177,7 @@ int gMemoStride = 0;
 // only. See docs/tunables.md, apex_memo_ttl.
 array<array<int>@> gMemoKey;   // per slot: per-askerDef validity key
 array<array<int>@> gMemoKeyNF; // the same key without the stall/full flags, for the miss census
+array<array<int>@> gMemoSetOf; // gOwnSetStamp when the row was filled: an own miss with it unchanged moved cell
 
 // FOUR OF THE SEVEN PICK THEIR SITE FROM THE ASKER'S OWN POSITION -- protect and
 // sense take the nearest gap or slot, obsolete-reclaim the nearest victim, mexup
@@ -389,6 +390,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		gMemoKindPos.resize(MEMO_N);
 		gMemoKey.resize(MEMO_N);
 		gMemoKeyNF.resize(MEMO_N);
+		gMemoSetOf.resize(MEMO_N);
 		const uint rows = uint((Catalog::gDefCount + 1) * MEMO_WAYS);
 		gMemoStride = int(rows);
 		gMemoMexOpen.resize(rows);
@@ -405,6 +407,8 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 			@gMemoKey[s] = mk;
 			array<int> mk2(rows, 0);
 			@gMemoKeyNF[s] = mk2;
+			array<int> ms(rows, -1);
+			@gMemoSetOf[s] = ms;
 		}
 	}
 	const int ud = int(unit.circuitDef.id);
@@ -425,7 +429,8 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	if (gMemoAt[slot][r] <= -30000)
 		Perf::Note("memo.m.empty");
 	else if (gMemoKey[slot][r] != key)
-		Perf::Note((gMemoKeyNF[slot][r] == MemoKey(slot, unit, false)) ? "memo.m.flag" : "memo.m.own");
+		Perf::Note((gMemoKeyNF[slot][r] == MemoKey(slot, unit, false)) ? "memo.m.flag"
+				: ((gMemoSetOf[slot][r] == gOwnSetStamp) ? "memo.m.cell" : "memo.m.own"));
 	else
 		Perf::Note("memo.m.ttl");
 	if (gMemoFreshFrame != ai.frame) {
@@ -470,6 +475,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	gMemoAt[slot][r] = ai.frame;
 	gMemoKey[slot][r] = key;
 	gMemoKeyNF[slot][r] = MemoKey(slot, unit, false);
+	gMemoSetOf[slot][r] = gOwnSetStamp;
 	gMemoDeferred[slot][r] = false;
 	MemoUnlink(slot, r);
 	@gMemoW[slot][r] = fresh;
@@ -1935,6 +1941,10 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 		gNnDrawMode = "ladder";
 		return true;
 	}
+	// THE BEST-PRICED WANT (TUNE_DRAW_BEST, his 10-19: proper valuation, no overrides): every builder want is
+	// priced by one ValueOf, so the top of the ranking stands; the draw sent 40-46% of decisions elsewhere.
+	if (ai.GetTunable("apex_draw_best", TUNE_DRAW_BEST) > 0.f)
+		return false;
 	if (sumV2 > 0.f) {
 		uint h2 = uint(atFrame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
 		h2 ^= (h2 >> 13);
