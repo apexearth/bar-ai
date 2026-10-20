@@ -253,6 +253,23 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 	return w;
 }
 
+// THE SHARE OF A HAND'S LATHE ENERGY CAN FEED (TUNE_ASSIST_EFEED). In a stall the engine throttles pull to
+// income, so income/pull reads a starved lab as fed; the ask at full speed is what the hands would draw.
+// One feed for the priced assist, the factory guard and the commander at home.
+float AssistEFeed()
+{
+	const float eInc = Eco::EInc();
+	if (ai.GetTunable("apex_assist_efeed", TUNE_ASSIST_EFEED) <= 0.f) {
+		const float ePull = Eco::EPull();
+		return ((ePull > 1.f) && (eInc < ePull)) ? (eInc / ePull) : 1.f;
+	}
+	float ask = Eco::EPull();
+	const float fleet = FleetAskE();
+	if (fleet > ask)
+		ask = fleet;
+	return ((ask > 1.f) && (eInc < ask)) ? (eInc / ask) : 1.f;
+}
+
 Want@ ProposeAssist(CCircuitUnit@ unit)
 {
 	Want w;
@@ -348,7 +365,9 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// while solar lost the auction at a drained bank; the assist was
 	// worthless and blocking the fix).
 	float eFeed = 1.f;
-	if (HardEStall()) {
+	if (ai.GetTunable("apex_assist_efeed", TUNE_ASSIST_EFEED) > 0.f)
+		eFeed = AssistEFeed();
+	else if (HardEStall()) {
 		eFeed = 0.1f;
 	} else {
 		const float eInc = Eco::EInc();
@@ -841,13 +860,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	if (fac is null)
 		return w;
 	const int uid = int(unit.circuitDef.id);
-	float eFeed = 1.f;
-	{
-		const float eInc = Eco::EInc();
-		const float ePull = Eco::EPull();
-		if ((ePull > 1.f) && (eInc < ePull))
-			eFeed = eInc / ePull;
-	}
+	const float eFeed = AssistEFeed();
 	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const float mFree = FreeMetalFlow();
 	// Under the army gap his pull at the lab takes metal from economy into army, which is what the
@@ -910,13 +923,7 @@ Want@ LabAssistGuard(CCircuitUnit@ unit, const Want& in priced)
 {
 	Want w = priced;
 	const int uid = int(unit.circuitDef.id);
-	float eFeed = 1.f;
-	{
-		const float eInc = Eco::EInc();
-		const float ePull = Eco::EPull();
-		if ((ePull > 1.f) && (eInc < ePull))
-			eFeed = eInc / ePull;
-	}
+	const float eFeed = AssistEFeed();
 	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const float mFree = FreeMetalFlow();
 	if (mFree < drain)

@@ -2427,7 +2427,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// by the 400 bar while the metal bank sat full for twelve minutes
 	// (Isthmus seed 13, 2026-09-08). Above the bar the market's energy price
 	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
-	const bool hoistWorth = true;
+	const bool hoistWorth = ai.GetTunable("apex_estall_hoist", TUNE_ESTALL_HOIST) > 0.f;
 	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)
 		) {
 		// WHAT IS ORDERED COVERS IT ONCE FED: then the stall wants hands on

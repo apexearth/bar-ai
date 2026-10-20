@@ -1535,6 +1535,32 @@ bool HandsOnceOn()
 	return gHoOn > 0;
 }
 
+// REACH IS REACH (TUNE_REACH_ONCE, the sibling of TUNE_HANDS_ONCE): an air con claims and upgrades a land spot
+// as well as a land con does, so a land plant's constructor half is a copy of an air plant of its reach, and
+// back. Water spots stay their own.
+int gRoOn = -1;
+bool ReachKinClass(int a, int b)
+{
+	if (a == b)
+		return true;
+	if (gRoOn < 0)
+		gRoOn = (ai.GetTunable("apex_reach_once", TUNE_REACH_ONCE) > 0.f) ? 1 : 0;
+	return (gRoOn > 0) && (((a == PC_AIR) && (b == PC_LAND)) || ((a == PC_LAND) && (b == PC_AIR)));
+}
+
+float OwnedKinReach(int dClass)
+{
+	float r = OwnedDomainReach(dClass);
+	for (int c = 0; c < 3; ++c) {
+		if ((c != dClass) && ReachKinClass(c, dClass)) {
+			const float o = OwnedDomainReach(c);
+			if (o > r)
+				r = o;
+		}
+	}
+	return r;
+}
+
 int HandKinOf(int d, int con)
 {
 	if (!Catalog::ValidId(con))
@@ -1872,7 +1898,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if (Catalog::gBuildsList[rd].length() == 0)
 				continue;
 			if ((rd != d)
-				&& ((PlantReachOf(rd) < myReach) || (PlantClass(rd) != dClass)))
+				&& ((PlantReachOf(rd) < myReach) || !ReachKinClass(PlantClass(rd), dClass)))
 				continue;
 			if ((gComState[ci] != CS_FINISHED)
 				&& ((gComTask[ci] is null)
@@ -1928,7 +1954,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// (seed 31). Nothing is outgrown before its better exists.
 		float subMul = 1.f;
 		{
-			const float bestOwn = OwnedDomainReach(dClass);
+			const float bestOwn = OwnedKinReach(dClass);
 			if ((myReach > 0.f) && (bestOwn > myReach))
 				subMul = myReach / bestOwn;
 		}
