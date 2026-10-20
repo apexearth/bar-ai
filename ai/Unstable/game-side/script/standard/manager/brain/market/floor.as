@@ -270,8 +270,17 @@ void JobCacheFill(bool leashed)
 		gJcFar.insertLast((val > 0.f) && onMap && leashed && EcoFar(where));
 		gJcProg.insertLast(Requests::Progress(cand));
 		gJcRing.insertLast(Requests::RingSeen(cand));
-		gJcGuards.insertLast((val > 0.f) ? GuardsOnJob(cand) : 0);
-		gJcBusy.insertLast(Requests::Workers(cand));
+		// One crew array per row: Workers() and GuardsOnJob() each built their own.
+		array<CCircuitUnit@>@ crew = cand.GetUnits();
+		int guards = 0;
+		if ((val > 0.f) && (crew !is null)) {
+			for (uint c = 0; c < crew.length(); ++c) {
+				if (crew[c] !is null)
+					guards += GuardsOn(crew[c].id);
+			}
+		}
+		gJcGuards.insertLast(guards);
+		gJcBusy.insertLast((crew is null) ? 0 : crew.length());
 	}
 	Perf::Add("as.fill", _tF);
 	Perf::AddUs("as.rows.live", double(Requests::gLive.length()));
