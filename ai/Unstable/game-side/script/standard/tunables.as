@@ -870,6 +870,7 @@ const float TUNE_GIFT_STAKE = 0.f;   // [toggle 0/1] gift.as: a seat asks for gi
 const float TUNE_LAB_BEST = 0.f;   // [toggle 0/1] production.as: a lab builds its best-priced unit, not a value-weighted draw (his 10-19)
 const float TUNE_ANTI_AT_ONCE = 6.f;   // [count] nukes one anti stops at once (his 10-19: "about 6"); the worst salvo / this = antis a target needs
 const float TUNE_LAB_INHERIT = 1.f;   // [toggle 0/1] want_tech.as: the advanced lab's gain is its upgrades at their own prices, its time a horizon share (his 10-19)
+const float TUNE_AIR_FEED_CAP = 1.f;   // [toggle 0/1] want_plant.as: an air plant's production yield is capped at the metal nothing spends, as a ground line's is (his 10-19)
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets

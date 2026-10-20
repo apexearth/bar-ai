@@ -648,6 +648,11 @@ float DupNanoBp()
 // THE WEALTH WAIVER. The copy ban and the one-advanced-plant-at-a-time
 // serialization both argue "the cheaper substitute exists"; structural
 // overflow above the drain of a whole extra line is that argument already
+bool AirFeedCapOn()
+{
+	return ai.GetTunable("apex_air_feed_cap", TUNE_AIR_FEED_CAP) > 0.f;
+}
+
 // falsified.
 bool WealthWaiver()
 {
@@ -1826,9 +1831,18 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
 		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
-		const float prodOwn = evAir ? Air::EvPlantProdYield(d, fillS0)
+		float prodOwn = evAir ? Air::EvPlantProdYield(d, fillS0)
 				: prodHalf * FoeTierPlantMul(d)
 					* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d);
+		// A LINE WE CANNOT FEED ADDS NO THROUGHPUT, air too (his 10-19: "we still build the second T2 plant too
+		// early... I'd never do that until I have multiple fusion alive with energy converters"). The ground
+		// half is already capped at the metal nothing spends (prodTerm above); the air yield was not. Converted
+		// energy is metal income, so fusions feeding converters are what lift it.
+		if (evAir && (lines0 > 0) && AirFeedCapOn()) {
+			const float spare = SpareMetalRate();
+			if (prodOwn > spare)
+				prodOwn = (spare > 0.f) ? spare : 0.f;
+		}
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
