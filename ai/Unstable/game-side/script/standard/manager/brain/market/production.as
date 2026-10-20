@@ -1119,10 +1119,19 @@ float BestLatheBPPerM()
 	return topBPM;
 }
 
+int gLabBest = -1;
+bool LabBestOn()
+{
+	if (gLabBest < 0)
+		gLabBest = (ai.GetTunable("apex_lab_best", TUNE_LAB_BEST) > 0.f) ? 1 : 0;
+	return gLabBest > 0;
+}
+
 CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 {
+	// A redraw reuses this election's prices; under the best-priced pick it would only repeat the first unit.
 	if ((fac is null) || (gRedrawAt != ai.frame) || (gRedrawFac != int(fac.id))
-		|| (gRedrawSum <= 0.f))
+		|| (gRedrawSum <= 0.f) || LabBestOn())
 		return null;
 	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
 			+ uint(slot) * 2246822519;
@@ -3522,12 +3531,26 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	float roll = rollF * sumV;
 	uint pick = 0;
 	bool hit = false;
-	for (uint ci = 0; ci < candV.length(); ++ci) {
-		roll -= candV[ci];
-		if (roll <= 0.f) {
-			pick = ci;
-			hit = true;
-			break;
+	if (LabBestOn()) {
+		// THE BEST-PRICED UNIT (his 10-19: a new T2 lab's first unit was an Incinerator at 784 over the T2 con at
+		// 2,494, drawn at one in ten). Each slot is priced again with the last one pending, so a unit's price
+		// falls as its kind comes; the no-order tickets win when they outweigh every candidate together.
+		float candSum = 0.f;
+		for (uint ci = 0; ci < candV.length(); ++ci) {
+			candSum += candV[ci];
+			if (candV[ci] > candV[pick])
+				pick = ci;
+		}
+		hit = (candV.length() > 0) && (candV[pick] > 0.f) && (candSum >= obsM + upM);
+		roll = hit ? 0.f : ((obsM >= upM) ? upM + 1.f : 0.f);
+	} else {
+		for (uint ci = 0; ci < candV.length(); ++ci) {
+			roll -= candV[ci];
+			if (roll <= 0.f) {
+				pick = ci;
+				hit = true;
+				break;
+			}
 		}
 	}
 	if (!hit && (obsM + upM > 0.f)) {

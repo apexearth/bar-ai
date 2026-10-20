@@ -259,6 +259,7 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 ## Everything else
 
 - `TUNE_GIFT_STAKE` = 0. A seat publishes a gift need only while its standing economy (EconAssetsM) plus a living commander's cost is at least the gap it asks to cover: covering the gap risks about the gap, so a seat with less than that left (his 10-19: no commander, no base, no income, still fed units) asks for nothing. Untested; on for his watch lane.
+- `TUNE_LAB_BEST` = 0. A lab builds its best-priced unit instead of the value-weighted draw b16e31e8 brought in (08-23: the argmax of that day built 29 cons and no army, a con price that never fell). His 10-19 game: a new Legion T2 lab drew an Incinerator (784) over the T2 con (2,494) at one in ten. Each queue slot is priced again with the last pending, so a kind's price falls as it comes; the redraw (cached prices, after the time slice) orders nothing; line-obsolete and upkeep still order nothing when their shares outweigh every candidate. A/B pending: cons vs army by minute, first unit of each new lab.
 - `TUNE_NN_RECORD` = 0. The `apex: nn` training record per election (nnlog.as NnRecord): ~0.3 ms an election of string building in a hosted game nobody trains on (his 10-19 Odderon game: 44,045 lines). run_match.py passes apex_nn_record=1, so every harness game still records.
 - `TUNE_AIR_PAYOFF` = 1. v0.3.2's value (the repo had 1.5); promoted with the release settings 10-19.
 - `TUNE_RAID_ANSWER_REACH` = 1. v0.3.2's value; promoted with the release settings 10-19.
