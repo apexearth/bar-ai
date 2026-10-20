@@ -63,6 +63,18 @@ ratios decide.
    worth is the loss it prevents -- what of ours is reachable by their army, times how much likelier we
    keep it with this unit added (ours vs theirs at the fight, the calibrated estimate), over the horizon --
    plus what it can take from them. Build that as the army's gain, then retry one currency + TUNE_LAB_BEST.
+   Calibration 10-20, ~50 2v2 games vs BARb (tools/lossfit.py / defeatfit.py over matches/oc, drawbest,
+   roles, crew, labbest, scale), by army ratio r = ours/theirs:
+     our structure losses: 11.5-11.8%/min of our assets at r < 0.35, 10.0% at 0.35-0.5, 8.5-8.8% at 0.5-1,
+       6.4% above 2.5 (slope ~3.5%/min per unit r below 1);
+     eliminated within 10 min: 39% (r < 0.1), 18% (0.1-0.2), 11% (0.2-0.35), 5.6% (0.35-0.5), 1-2% (0.5-1),
+       0% above 1 -- fits P = 0.5 exp(-r/0.15);
+     their losses (BARb side): ~1.8%/min of their assets while we are under 0.4 of them, 2.8-3.2% at 0.4-1.
+   Priced from these, a metal of army returns ~0.005-0.01/s at realistic numbers -- above an extractor only
+   near defeat. The open question for him: the builder values carry growth premiums (apex_mex_growth up to
+   8x) that a raw extractor return (~0.035/s) does not; either those overstate economy, or observational
+   data (weak economies field small armies) cannot separate cause and effect here. Needs his call before
+   the army price is built on it.
 4. [ ] TUNE_LAB_BEST on; then the builder category draw replaced by the best-priced pick the same way.
 5. [ ] Each override above A/B'd off, one at a time, and deleted when the pricing already chooses what it
    forced (ladder, roles, field crew, metalfirst, estall, ...). A role that still wins its A/B marks a missing
