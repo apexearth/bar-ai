@@ -277,6 +277,59 @@ void AllyUpgradeSpots(array<AIFloat3>@ pos, array<int>@ spot, array<float>@ inc,
 	}
 }
 
+// WHAT THE LAB UNLOCKS, AT WHAT THE UPGRADES ARE PRICED (his 10-19: "the value of a T2 lab can be perceived as
+// the same value as having all your existing metal extractors upgraded... the amount of time it takes to get
+// there is a limiter"). Each held extractor's upgrade to the best extraction in the game, with the terms the
+// upgrade itself is priced on -- growth, survival, the upgrade preference, the spendable share, the income
+// acceleration -- so the lab inherits their value instead of a raw metal/s sum. The tech seat adds the allies'
+// spots it will serve. The time to get there is ValueOf's horizon share (TUNE_LAB_INHERIT). Cached 5 s.
+int gUdpAt = -1000000;
+float gUdpM = 0.f;
+float UpDemandPriced()
+{
+	if (ai.frame - gUdpAt < 5 * SECOND)
+		return gUdpM;
+	gUdpAt = ai.frame;
+	array<AIFloat3> uPos;
+	array<int> uSpot;
+	array<float> uInc;
+	array<float> uExt;
+	for (uint li = 0; li < gLSpot.length(); ++li) {
+		if (gLExtract[li] <= 0.f)
+			continue;
+		uPos.insertLast(gLPos[li]);
+		uSpot.insertLast(gLSpot[li]);
+		uInc.insertLast(gLIncome[li]);
+		uExt.insertLast(gLExtract[li]);
+	}
+	if (TeamTechIsSeat())
+		AllyUpgradeSpots(uPos, uSpot, uInc, uExt);
+	const float ceilX = BestExtract();
+	const float growK = ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH);
+	const float upBoost = ai.GetTunable("apex_mexup_boost", TUNE_MEXUP_BOOST);
+	const float incMul = IncomeMult();
+	const float power = EcoPowerM();
+	float sum = 0.f;
+	for (uint i = 0; i < uPos.length(); ++i) {
+		if (uExt[i] >= ceilX)
+			continue;
+		const float raw = uInc[i] * incMul * (ceilX - uExt[i]);
+		if (raw <= 0.f)
+			continue;
+		float d = raw * (1.f + growK * raw / ((power > raw) ? power : raw));
+		d *= StreamSurvival(uPos[i]) * upBoost;
+		const float realF = MRealizeShare(raw, 0.f);
+		sum += d * realF + IncomeAccelM(raw) * realF;
+	}
+	gUdpM = sum;
+	return sum;
+}
+
+bool LabInheritOn()
+{
+	return ai.GetTunable("apex_lab_inherit", TUNE_LAB_INHERIT) > 0.f;
+}
+
 int gMuDiagAt = 0;
 float gMuSurv = -1.f;
 bool gMuAlly = false;
@@ -603,7 +656,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		if ((ours > 0.f) && (theirs > ours))
 			outclass = (theirs / ours) - 1.f;
 	}
-	float demand = UpDemand() + ConvUpDemand() + outclass;
+	float demand = (LabInheritOn() ? UpDemandPriced() : UpDemand()) + ConvUpDemand() + outclass;
 	// THE CLIMB IS WORTH WHAT THE SIMULATOR SAYS IT SAVES. The demand terms
 	// are proxies for one question -- does the world after an advanced plant
 	// reach the target sooner -- and on a map with no spots the only proxy
@@ -1046,7 +1099,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		Want c;
 		ValueOf(d, techGain * fundedMul
 					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),
-				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
+				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c, true, 0.f, LabInheritOn());
 		// the follow-through bill: cheapest constructor this lab produces
 		{
 			float conBill = 0.f;
