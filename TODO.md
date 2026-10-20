@@ -54,9 +54,8 @@ ratios decide.
    numbers shown to him before anything uses them.
 2. [ ] Enablers priced from those prices (mex, energy, converters, cons, nanos, labs). Labs started: the advanced
    lab inherits its upgrades' prices and takes its time as a horizon share (016cd027: first T2 lab 9.0/6.3/7.4
-   min against 16.6/12.9/10.4, upgrades before minute 15 9/4/4 against 0/0/0, one game). Still billed gain x
-   seconds: converters (want_energy.as 1495, 1724, though TUNE_ECO_HORIZON says it covers them), geo
-   (want_plant.as 75), supers.
+   min against 16.6/12.9/10.4, upgrades before minute 15 9/4/4 against 0/0/0, one game). Every income stream
+   now takes its time as a horizon share (geo joined 10-20; converters already did).
 3. [ ] The army strength factor normalised against its own measure (line's best UnitPPC = 1), with one
    currency.
 4. [ ] TUNE_LAB_BEST on; then the builder category draw replaced by the best-priced pick the same way.

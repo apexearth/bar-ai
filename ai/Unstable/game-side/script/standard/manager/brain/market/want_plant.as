@@ -72,7 +72,8 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	@w.def = Catalog::Def(geoId);
 	w.pos = pos;
 	w.spotId = spot;
-	ValueOf(geoId, gain, walkSec, Catalog::gBuildPower[uid], w);
+	// a vent is a generator: its time is a horizon share, as every energy rung's is (TUNE_ECO_HORIZON)
+	ValueOf(geoId, gain, walkSec, Catalog::gBuildPower[uid], w, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 	return w;
 }
 
