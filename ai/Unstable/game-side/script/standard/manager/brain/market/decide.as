@@ -2197,6 +2197,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ranked.insertAt(at, c);
 	}
 	Perf::Add("dec.rank", _tRank);
+	VScaleNote(ranked);
 	OppTimeReprice(unit, ranked);
 	NnScore(unit, ranked);
 	WalkForgoneStat(unit, ranked);

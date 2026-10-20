@@ -3528,6 +3528,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	h ^= (h >> 13);
 	const float rollF = float(h % 10000) / 10000.f;
 	UpkeepNote(candDef, sumV, rollF);
+	VScaleLabNote(candDef, candV);
 	float roll = rollF * sumV;
 	uint pick = 0;
 	bool hit = false;
