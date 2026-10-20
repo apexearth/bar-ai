@@ -2900,17 +2900,21 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						/ ((fillS > 1.f) ? fillS : 60.f)
 						* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
 			}
-			// TUNE_ARMY_ONE_CURRENCY (his 10-18: get the valuations balanced): one unit fills its own cost of the
-			// gap, not the whole gap's stream, so its gain is min(cost, gap)/fill -- metal/s, the builder market's
-			// currency. Every army product scales by the same gap, so their order is unchanged; what changes is
-			// that a con (priced in m/s) and the builder market can be weighed against army (armpw 307,818 against
-			// armck 91 in one ranking before).
+			// TUNE_ARMY_ONE_CURRENCY (his 10-18/10-19: get the valuations balanced). One unit closes at most its own
+			// strength of the gap -- its cost times the strength factor p, never more than the gap -- over the
+			// fill time, so its gain is min(gap, cost x p)/fill in metal/s and its value that per metal, the
+			// currency every other want and the constructor are priced in. The x cost below (09-07, so a big unit
+			// is not charged its cost twice) is cancelled here: before, an army value was metal/s and a con's was
+			// metal/s per metal, ~one unit-cost apart (Fatboy 2,114 against the T2 con 0.28, matches/scale s21).
+			// The 10-18 version capped at cost and still went through the x cost; its A/B measured that.
 			if (ArmyOneCurrencyOn()) {
 				const float gapUsed = gainViaRole ? effGap : ((rGap > 0.f) ? rGap : 0.f);
-				if (gapUsed > Catalog::gCostM[d])
-					gainA *= Catalog::gCostM[d] / gapUsed;
+				const float pR = ppc / linePPC;
+				const float holds = Catalog::gCostM[d] * pR;
+				if ((gapUsed > 0.f) && (pR > 0.f) && (Catalog::gCostM[d] > 0.f))
+					gainA *= ((holds < gapUsed) ? holds : gapUsed) / (gapUsed * pR) / Catalog::gCostM[d];
 			}
-			if (gainA <= 0.01f) {
+			if ((ArmyOneCurrencyOn() ? (gainA * Catalog::gCostM[d]) : gainA) <= 0.01f) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName()
 						+ "=0(p" + formatFloat(ppc / linePPC, "", 0, 3)
@@ -2977,7 +2981,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					+ ",p" + formatFloat(ppc / linePPC, "", 0, 3)
 					+ ",pc" + formatFloat(ppcCore / linePPC, "", 0, 3)
 					+ ",r" + formatFloat(roleW, "", 0, 2)
-					+ ",a" + formatFloat(affM, "", 0, 2)
+					+ ",a" + formatFloat(affM, "", 0, 2) + ",G" + formatFloat(effGap, "", 0, 0) + ",k" + formatFloat(stakeMul, "", 0, 2)
 					+ ((aoeMul > 1.f) ? (",s" + formatFloat(aoeMul, "", 0, 2)) : "") + ")";
 			continue;
 		}
