@@ -226,6 +226,7 @@ void UpdateChunk(int c)
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::NukePressureTick(); Perf::Add("up.nukepress", _t); }
 		{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
+		{ double _t = Perf::T0(); Market::NanoUpgradeAssist(); Perf::Add("up.nanoup", _t); }
 		{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
 		{ double _t = Perf::T0(); Market::LabNanoLog(); Market::T2EcoStat(); Perf::Add("up.labnano", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }

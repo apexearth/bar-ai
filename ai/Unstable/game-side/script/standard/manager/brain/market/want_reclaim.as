@@ -134,6 +134,13 @@ const int NANO_SEND_MAX = 64;   // one pass's orders; the rest go next pass
 // The census drops a dead turret here before its handle is read again.
 void NanoSentDrop(CCircuitUnit@ u)
 {
+	for (uint i = 0; i < gNanoUpUnit.length(); ++i) {
+		if (gNanoUpUnit[i] is u) {
+			gNanoUpUnit.removeAt(i);
+			gNanoUpFrame.removeAt(i);
+			break;
+		}
+	}
 	for (uint i = 0; i < gNanoSent.length(); ++i) {
 		if (gNanoSent[i] is u) {
 			gNanoSent.removeAt(i);
@@ -235,6 +242,77 @@ void NanoReclaimAssist()
 	}
 	if (sent > 0)
 		AiLog("apex: nano-assist reclaim x" + sent + " pen=" + penSent);
+}
+
+// TURRETS HELP THE MEX UPGRADE (his 10-19: "nano turrets still prefer helping make another T2 con or army unit
+// than assisting a mex upgrade. the mex upgrade is the right choice"). A turret on patrol takes whatever the
+// engine's patrol reaches first; a patrolling turret in reach of a rising upgrade frame is told to guard it, and
+// goes back to patrol when the frame is finished or gone. TUNE_NANO_UPGRADE.
+array<CCircuitUnit@> gNanoUpUnit;
+array<Id> gNanoUpFrame;
+int gNanoUpNext = 0;
+int gNanoUpSentN = 0;
+int gNanoUpLogAt = 0;
+void NanoUpgradeAssist()
+{
+	if ((ai.frame < gNanoUpNext) || (ai.GetTunable("apex_nano_upgrade", TUNE_NANO_UPGRADE) <= 0.f))
+		return;
+	gNanoUpNext = ai.frame + 3 * SECOND;
+	for (uint i = 0; i < gNanoUpUnit.length(); ) {
+		CCircuitUnit@ nu = gNanoUpUnit[i];
+		CCircuitUnit@ fr = ai.GetTeamUnit(gNanoUpFrame[i]);
+		if ((fr !is null) && (fr.GetHealthPercent() < 1.f) && (nu !is null) && (nu.CmdQueueSize() > 0)) {
+			++i;
+			continue;
+		}
+		if (nu !is null) {
+			AIFloat3 pp = nu.GetPos(ai.frame);
+			pp.x += 48.f;
+			pp.z += 48.f;
+			nu.CmdPatrolTo(pp);
+		}
+		gNanoUpUnit.removeAt(i);
+		gNanoUpFrame.removeAt(i);
+	}
+	if (gNanoDefs.length() == 0)
+		return;
+	const float reach = NanoRange();
+	int sent = 0;
+	for (uint j = 0; (j < gJobTask.length()) && (sent < NANO_SEND_MAX); ++j) {
+		if ((j >= gJobKind.length()) || (gJobKind[j] != WK_MEXUP))
+			continue;
+		IUnitTask@ t = gJobTask[j];
+		if ((t is null) || t.IsDead())
+			continue;
+		CCircuitUnit@ fr = t.target;
+		if ((fr is null) || (fr.GetHealthPercent() >= 1.f))
+			continue;
+		const AIFloat3 fp = fr.GetPos(ai.frame);
+		for (uint n = 0; (n < gNanoDefs.length()) && (sent < NANO_SEND_MAX); ++n) {
+			array<CCircuitUnit@>@ ns = ai.GetOwnUnitsOfDef(Catalog::Def(gNanoDefs[n]), fp, reach);
+			if (ns is null)
+				continue;
+			for (uint k = 0; (k < ns.length()) && (sent < NANO_SEND_MAX); ++k) {
+				if ((ns[k] is null) || (ns[k].CmdQueueSize() > 1) || (gNanoUpUnit.findByRef(ns[k]) >= 0))
+					continue;
+				bool reclaiming = false;
+				for (uint s = 0; (s < gNanoSent.length()) && !reclaiming; ++s)
+					reclaiming = (gNanoSent[s] is ns[k]);
+				if (reclaiming)
+					continue;
+				ns[k].CmdGuard(fr);
+				gNanoUpUnit.insertLast(ns[k]);
+				gNanoUpFrame.insertLast(fr.id);
+				++sent;
+			}
+		}
+	}
+	gNanoUpSentN += sent;
+	if ((sent > 0) && (ai.frame >= gNanoUpLogAt)) {
+		gNanoUpLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: nano-upgrade t=" + ai.teamId + " sent=" + sent + " guarding="
+			+ gNanoUpUnit.length() + " total=" + gNanoUpSentN);
+	}
 }
 
 // WHOSE HANDS THESE ARE. apexearth 2026-08-27: "we aren't expanding enough...
