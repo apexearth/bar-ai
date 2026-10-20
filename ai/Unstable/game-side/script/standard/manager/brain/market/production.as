@@ -1119,6 +1119,11 @@ float BestLatheBPPerM()
 	return topBPM;
 }
 
+bool LabRateOn()
+{
+	return ai.GetTunable("apex_lab_rate", TUNE_LAB_RATE) > 0.f;
+}
+
 int gLabBest = -1;
 bool LabBestOn()
 {
@@ -3277,7 +3282,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						+ " upD=" + formatFloat(upD, "", 0, 1)) : "") + ")";
 			continue;
 		}
-		const float v = gain / Catalog::gCostM[d] * bdhKeep;
+		// TUNE_LAB_RATE: the army bid (and the bomber's, above) is a demand rate; a constructor priced per metal sat
+		// one unit-cost below it (the T2 con 0.28 beside a Fatboy 2,114). On, the con bids its rate as well.
+		const float v = ((LabRateOn() ? gain : (gain / Catalog::gCostM[d]))) * bdhKeep;
 		if (bdhKeep < 1.f)
 			Brain::BudgetHoldNoteFac(bdhKeep);
 		if (prankNow)
