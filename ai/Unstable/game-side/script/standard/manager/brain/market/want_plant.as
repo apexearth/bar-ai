@@ -1665,7 +1665,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const bool candLog = (Factory::gFactoryCount == 0)
 			&& (ai.frame >= gNextPlantCandLog);
 	string cand = "";
-	// his 10-13 test of the opening lab: 1 vehicles first, 2 bots first, 0 the market
+	// his 10-13 test of the opening lab: 1 vehicles first, 2 bots first, 3 air first (his 10-20), 0 the market
 	const int firstLab = (Factory::gFactoryCount == 0) ? int(ai.GetTunable("apex_first_lab", TUNE_FIRST_LAB)) : 0;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
@@ -1677,7 +1677,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			const string nm = Catalog::Def(d).GetName();
 			const bool veh = (nm == Factory::armvp) || (nm == Factory::corvp) || (nm == Factory::legvp);
 			const bool bot = (nm == Factory::armlab) || (nm == Factory::corlab) || (nm == Factory::leglab);
-			if (!((firstLab == 1) ? veh : bot))
+			const bool air = (PlantClass(d) == PC_AIR) && (PlantTier(d) <= 1);
+			if (!((firstLab == 1) ? veh : ((firstLab == 3) ? air : bot)))
 				continue;
 		}
 		const int dClass = PlantClass(d);
@@ -1998,7 +1999,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// capability keeps its expansion at full value.
 		const float conSub = (pipeT * subMul * dupSubst
 				+ expTerm * subMul * (isCopy ? dupSubst : 1.f)) * rateMul;
-		float dupGain = (conSub + prodOwn * ((evAir && !isCopy) ? 1.f : dupSubst))
+		// The seat caution (an air army before the ground army fills, in a duel) holds the PRODUCTION half only:
+		// the air constructors are the hands that raise the turrets (his 10-20: "we don't have nano turrets because
+		// we don't have the air cons building them"). On the whole price it zeroed the plant while no army stood.
+		const float evCaution = evAir ? Air::EvSeatCaution() : 1.f;
+		float dupGain = (conSub + prodOwn * evCaution * ((evAir && !isCopy) ? 1.f : dupSubst))
 				/ float(1 + dupKin);
 		if (liveOther > 0)
 			dupGain /= float(1 + liveOther);
@@ -2055,8 +2060,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
 			&& !EcoQuiet())
 			plantG *= RushMul(Catalog::gCostM[d]);
-		const float evCaution = evAir ? Air::EvSeatCaution() : 1.f;
-		plantG *= evCaution;
 		const float liftG = PlantLiftGain(d);
 		if ((liftG > 0.f) && (ai.frame >= gNextPlantLiftLog)) {
 			gNextPlantLiftLog = ai.frame + 30 * SECOND;
