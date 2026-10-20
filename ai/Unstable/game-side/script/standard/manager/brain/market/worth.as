@@ -538,7 +538,7 @@ float EvidenceShrink(int d, float core)
 		// against the prior the matrix already weighs a matchup by, so a type
 		// earns its stats back at exactly the rate the record trusts them.
 		const CCircuitDef@ cdef = Catalog::Def(d);
-		const float prior = ai.GetTunable("apex_record_prior", 10.f);
+		const float prior = ai.GetTunable("apex_record_prior", TUNE_RECORD_PRIOR);
 		const float n = float(ai.RecordCount(cdef, -1));
 		const float w = ((n + prior) > 0.f) ? (n / (n + prior)) : 0.f;
 		const float over = (core - cl) / sig;
@@ -796,7 +796,7 @@ float RecordBar(int cls)
 	if ((gRecordBarAt >= 0) && (ai.frame < gRecordBarAt + 30 * SECOND))
 		return gRecordBar[cls];
 	gRecordBarAt = ai.frame;
-	const float prior = ai.GetTunable("apex_record_prior", 10.f);
+	const float prior = ai.GetTunable("apex_record_prior", TUNE_RECORD_PRIOR);
 	array<float> num(LC_N, prior), den(LC_N, prior);
 	for (int i = 1; i <= Catalog::gDefCount; ++i) {
 		if (!Catalog::ValidId(i) || !Catalog::gAvailable[i] || !WorthScorable(i))

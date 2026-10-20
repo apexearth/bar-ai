@@ -593,7 +593,7 @@ int NaDecide(int kind, const string why)
 			aaAll += gNaAAV[e];
 		float fade = 1.f;
 		if (gNaDeepLookAt >= 0) {
-			const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+			const float horizon = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * float(MINUTE);
 			fade = (horizon > 1.f) ? (float(ai.frame - gNaDeepLookAt) / horizon) : 1.f;
 			if (fade > 1.f)
 				fade = 1.f;

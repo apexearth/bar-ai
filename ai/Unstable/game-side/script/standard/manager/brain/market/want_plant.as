@@ -1660,7 +1660,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			&& (ai.frame >= gNextPlantCandLog);
 	string cand = "";
 	// his 10-13 test of the opening lab: 1 vehicles first, 2 bots first, 0 the market
-	const int firstLab = (Factory::gFactoryCount == 0) ? int(ai.GetTunable("apex_first_lab", 0.f)) : 0;
+	const int firstLab = (Factory::gFactoryCount == 0) ? int(ai.GetTunable("apex_first_lab", TUNE_FIRST_LAB)) : 0;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])

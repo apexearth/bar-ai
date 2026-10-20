@@ -89,7 +89,7 @@ bool OnOurGround(const AIFloat3& in at)
 // Our guns that reach `at`, units standing there left out.
 float GunsAt(const AIFloat3& in at)
 {
-	return Market::CoverAt(at) - UnitCoverAt(at) * ai.GetTunable("apex_unit_cover", 1.f);
+	return Market::CoverAt(at) - UnitCoverAt(at) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER);
 }
 
 // From the death hook: a finished structure of ours killed by a ground unit.

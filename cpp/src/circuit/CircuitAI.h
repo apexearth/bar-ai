@@ -198,6 +198,8 @@ public:
 	}
 	// apex_stock_army: every combat unit runs stock BARb's fight code (docs/how-it-works.md, Army control layers)
 	bool IsStockArmy() const;
+	// the script's TUNE_X constants, as the default of apex_x for every C++ read (tunables.as is the one config)
+	void SetScriptDefaults(std::unordered_map<std::string, float>&& defs);
 	// apex_surf_dps: a def's damage against a domain is that domain's own rate, not the max over all three
 	bool IsSurfDps() const;
 	float DpsVs(const CCircuitDef* cdef, bool air) const;
@@ -499,6 +501,7 @@ public:
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
+	std::unordered_map<std::string, float> scriptDefaults;  // see SetScriptDefaults
 	mutable int stockArmy = -1;
 	mutable int surfDpsOn = -1;
 	mutable int ourAir = -1;

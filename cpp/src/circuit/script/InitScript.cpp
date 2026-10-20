@@ -31,6 +31,9 @@
 #include "util/MaskHandler.h"
 #include "util/Utils.h"
 
+#include <algorithm>
+#include <cstring>
+#include <unordered_map>
 #include "angelscript/include/angelscript.h"
 #include "angelscript/add_on/scriptarray/scriptarray.h"
 #include "angelscript/add_on/scriptdictionary/scriptdictionary.h"
@@ -2978,6 +2981,29 @@ bool CInitScript::Init()
 	}
 
 	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
+	{
+		// apex: every TUNE_X float constant is the default of apex_x, for C++ reads too
+		std::unordered_map<std::string, float> defs;
+		const asUINT n = mod->GetGlobalVarCount();
+		for (asUINT i = 0; i < n; ++i) {
+			const char* name = nullptr;
+			const char* ns = nullptr;
+			int typeId = 0;
+			if ((mod->GetGlobalVar(i, &name, &ns, &typeId) < 0) || (name == nullptr)
+				|| (typeId != asTYPEID_FLOAT) || (strncmp(name, "TUNE_", 5) != 0))
+			{
+				continue;
+			}
+			const float* v = static_cast<const float*>(mod->GetAddressOfGlobalVar(i));
+			if (v == nullptr) {
+				continue;
+			}
+			std::string key = std::string("apex_") + (name + 5);
+			std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return std::tolower(c); });
+			defs[key] = *v;
+		}
+		circuit->SetScriptDefaults(std::move(defs));
+	}
 	int r = mod->SetDefaultNamespace("Main"); ASSERT(r >= 0);
 	mainInfo.update = script->GetFunc(mod, "void AiUpdate()");
 	mainInfo.frame = mod->GetFunctionByDecl("void AiFrame()");   // optional: no "not found" line for older scripts

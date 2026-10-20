@@ -300,7 +300,7 @@ float EPriceFloor()
 		}
 	}
 	gEPriceFloor = (best > 0.f) ? best : bestAny;
-	if (ai.GetTunable("apex_efloor_diag", 0.f) > 0.f) {
+	if (ai.GetTunable("apex_efloor_diag", TUNE_EFLOOR_DIAG) > 0.f) {
 		AiLog("apex: efloor t=" + ai.teamId
 			+ " floor=" + formatFloat(gEPriceFloor, "", 0, 5)
 			+ " raw=" + formatFloat(bestRaw, "", 0, 5)
@@ -748,7 +748,7 @@ float MStallPremium()
 {
 	const float inc = Eco::MInc();
 	const float pull = Eco::MPull();
-	if ((pull <= inc) || (ai.GetTunable("apex_mstall_prem", 1.f) <= 0.f))
+	if ((pull <= inc) || (ai.GetTunable("apex_mstall_prem", TUNE_MSTALL_PREM) <= 0.f))
 		return 1.f;
 	const float st = Eco::MStor();
 	float frac = 0.f;

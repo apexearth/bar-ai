@@ -757,7 +757,7 @@ float LookStale()
 {
 	if (gLookAt < 0)
 		return 1.f;
-	const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * float(MINUTE);
 	if (horizon <= 1.f)
 		return 1.f;
 	const float f = float(ai.frame - gLookAt) / horizon;

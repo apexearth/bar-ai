@@ -510,7 +510,7 @@ void UpdateGuardPosts()
 {
 	if (StockQuiet("guardposts"))
 		return;
-	if (ai.GetTunable("apex_guard_posts", 1.f) <= 0.f)
+	if (ai.GetTunable("apex_guard_posts", TUNE_GUARD_POSTS) <= 0.f)
 		return;
 	const float everyS = ai.GetTunable("apex_protect_field_s", TUNE_PROTECT_FIELD_S);
 	const int every = int(((everyS > 0.1f) ? everyS : 2.f) * 30.f);

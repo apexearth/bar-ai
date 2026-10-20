@@ -405,7 +405,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		// see TeamBestTowerPowerAffordable. 0 restores the old behaviour for
 		// the A/B; both numbers are printed in `apex: defwhy`.
 		hTeamPowAll = TeamBestTowerPower();
-		hTeamPow = (ai.GetTunable("apex_def_teampow_afford", 1.f) > 0.f)
+		hTeamPow = (ai.GetTunable("apex_def_teampow_afford", TUNE_DEF_TEAMPOW_AFFORD) > 0.f)
 				? TeamBestTowerPowerAffordable(hAffordM)
 				: hTeamPowAll;
 		if (hTeamPow <= 0.f)
@@ -650,7 +650,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// one game, the largest by far -- has never been looked at. Same
 			// shape as defwhy, on the refusal instead of the win.
 			if ((bestGain <= 0.f) && (ai.frame >= gNextNoSiteLog)
-				&& (ai.GetTunable("apex_nosite_diag", 0.f) > 0.f)) {
+				&& (ai.GetTunable("apex_nosite_diag", TUNE_NOSITE_DIAG) > 0.f)) {
 				gNextNoSiteLog = ai.frame + 10 * SECOND;
 				float pMax = 0.f;
 				int pNeg = 0;

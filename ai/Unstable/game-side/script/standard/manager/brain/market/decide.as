@@ -1729,7 +1729,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 			// once built" and "not late" in one number.
 			const int techPick = EtaTechPick(ranked);
 			if ((techPick >= 0) && (EtaOfWant(ranked[techPick]) < EtaOfWant(ranked[pick]))) {
-				if (ai.GetTunable("apex_eta_trace", 0.f) > 0.f) {
+				if (ai.GetTunable("apex_eta_trace", TUNE_ETA_TRACE) > 0.f) {
 					gLadderTrace = true;
 					gLadderTraceS = "";
 					EtaOfWant(ranked[techPick]);
@@ -3286,7 +3286,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 	// Auction dump for T2-capable builders, one per 30s, tunable-gated.
-	if ((ai.GetTunable("apex_auction_diag", 0.f) > 0.f) && (ai.frame >= gNextAuctionDiag)) {
+	if ((ai.GetTunable("apex_auction_diag", TUNE_AUCTION_DIAG) > 0.f) && (ai.frame >= gNextAuctionDiag)) {
 		bool t2able = false;
 		const array<int>@ mm = Catalog::BuildsOf(int(unit.circuitDef.id));
 		for (uint z = 0; z < mm.length(); ++z) {

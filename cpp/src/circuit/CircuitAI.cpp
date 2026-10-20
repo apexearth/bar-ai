@@ -2260,12 +2260,25 @@ float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 	return GetOwnTunable(name, defVal);
 }
 
-float CCircuitAI::GetOwnTunable(const std::string& name, float defVal) const
+void CCircuitAI::SetScriptDefaults(std::unordered_map<std::string, float>&& defs)
+{
+	scriptDefaults = std::move(defs);
+	// anything read before the script compiled was answered with a call site's own default
+	tunables.clear();
+	stockArmy = -1;
+	surfDpsOn = -1;
+	ourAir = -1;
+	LOG("apex: settings from tunables.as n=%i", static_cast<int>(scriptDefaults.size()));
+}
+
+float CCircuitAI::GetOwnTunable(const std::string& name, float callDef) const
 {
 	auto it = tunables.find(name);
 	if (it != tunables.end()) {
 		return it->second;
 	}
+	auto sd = scriptDefaults.find(name);
+	const float defVal = (sd != scriptDefaults.end()) ? sd->second : callDef;
 	// THIS BOT'S OWN OPTION OUTRANKS THE GAME-WIDE RULES PARAM. A rules param is
 	// set once for the match, so it can never say "this bot plays the eco seat
 	// and that one does not" -- which is what the lobby's per-AI options are for

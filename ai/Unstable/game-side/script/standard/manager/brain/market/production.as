@@ -1519,7 +1519,7 @@ float FoeHalfCoverage()
 {
 	if (gFoeHalfPt.length() == 0)
 		return 0.f;
-	const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * float(MINUTE);
 	int n = 0;
 	for (uint i = 0; i < gFoeHalfPt.length(); ++i) {
 		if (float(ai.frame - gFoeHalfSeen[i]) < horizon)
@@ -2511,7 +2511,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 			// A full bank does not bring the outgrown tier back (his 10-19: "fewer stronger units is what I've always
 			// advocated for"): lifted, his Odderon army at minute 38 was Thugs, Garpikes and Hammers beside a Krow.
-			if (!(spill && (ai.GetTunable("apex_spill_outgrown", 0.f) > 0.f) && (TopOwnLandPlantTier() - DefTier(d) <= 1)) && Outgrown(d)) {
+			if (!(spill && (ai.GetTunable("apex_spill_outgrown", TUNE_SPILL_OUTGROWN) > 0.f) && (TopOwnLandPlantTier() - DefTier(d) <= 1)) && Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;
@@ -2846,7 +2846,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// of Crashers held, 30% of the army (apexearth, watching: "we've made
 			// 23 AA units and have seen 0 enemy air"). A role the model asks for
 			// none of gets none.
-			if ((rTarget > 1.f) || (ai.GetTunable("apex_role_floor_zero", 1.f) <= 0.f)) {
+			if ((rTarget > 1.f) || (ai.GetTunable("apex_role_floor_zero", TUNE_ROLE_FLOOR_ZERO) <= 0.f)) {
 				if (roleW < 0.05f)
 					roleW = 0.05f;   // never exactly zero: portfolio floor
 			}

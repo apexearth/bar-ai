@@ -198,7 +198,7 @@ bool ComHomeWalkOk(CCircuitUnit@ u)
 		return gCmhWalkOk;
 	gCmhWalkAt = ai.frame;
 	gCmhWalkOk = true;
-	float mult = ai.GetTunable("apex_dgun_close_mult", 2.f);
+	float mult = ai.GetTunable("apex_dgun_close_mult", TUNE_DGUN_CLOSE_MULT);
 	if (mult < 1.f)
 		mult = 1.f;
 	const float reach = u.DGunRange() * mult;

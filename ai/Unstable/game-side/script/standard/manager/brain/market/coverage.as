@@ -94,7 +94,7 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 	// today's shortfall and abort the build mid-walk. 1 = his ruling as it
 	// stands; 0 measures the loop by removing the mobile half.
 	const float unitCover = Military::UnitCoverAt(pos)
-			* ai.GetTunable("apex_unit_cover", 1.f);
+			* ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER);
 	if ((gProtPos[PROT_DEF].length() == 0) && (extraReach <= 0.f))
 		return unitCover;
 	CwTuneFill();

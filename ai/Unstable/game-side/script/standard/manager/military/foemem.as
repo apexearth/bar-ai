@@ -216,7 +216,7 @@ void FmPublish()
 	float etaW = 0.f, certW = 0.f, knS = 0.f, knM = 0.f;
 	int knN = 0, nLos = 0, nRad = 0, nGh = 0, nGone = 0, nBlip = 0;
 	float near = -1.f;
-	const float staleS = ai.GetTunable("apex_ghost_stale_min", 15.f) * 60.f;
+	const float staleS = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * 60.f;
 	AIFloat3 fb = aiSetupMgr.GetEnemyBoxCentre();
 	if (!OnMap(fb))
 		fb = Front::FoeAnchor();

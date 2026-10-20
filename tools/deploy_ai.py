@@ -359,6 +359,12 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
     print(f"  scripts      {stamp}")
     print(f"  game-side    {game_target}")
     print(f"               digest {_tree_digest(game_target)}")
+    # the deployed copy must play tunables.as as committed (tools/settings_check.py)
+    chk = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "settings_check.py"),
+                          f"{short}:{variant}"], capture_output=True, text=True)
+    for line in chk.stdout.splitlines():
+        if line.startswith("DIFFERS") or line.startswith("settings:"):
+            print(f"  {line}")
 
     print(
         f"\nDeployed '{variant}' to engine {env.engine_version} as shortName '{short}'.\n"

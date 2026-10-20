@@ -205,7 +205,7 @@ void CmRefresh()
 		gCmEver.resize(Catalog::gDefCount + 1);
 	array<int> defs;
 	array<float> w;
-	const float staleS = ai.GetTunable("apex_ghost_stale_min", 15.f) * 60.f;
+	const float staleS = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * 60.f;
 	float seen = 0.f;
 	for (uint s = 0; s < Military::gFmId.length(); ++s) {
 		if (Military::gFmId[s] < 0)

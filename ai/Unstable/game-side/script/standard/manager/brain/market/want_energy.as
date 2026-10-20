@@ -95,7 +95,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// SpaceRentM is perCell x cells x k, so one cell's worth answers every
 	// footprint -- it walked the whole defence field per rung for the same number.
 	const float genRentCell = SpaceRentM(eSite, 1);
-	const bool  genDiag = (ai.GetTunable("apex_efloor_diag", 0.f) > 0.f) || gWtRunning;
+	const bool  genDiag = (ai.GetTunable("apex_efloor_diag", TUNE_EFLOOR_DIAG) > 0.f) || gWtRunning;
 	// ROOM IS LOCAL (protect_field.as on PfCrowd: the base-wide fill FALLS as
 	// the base grows, 0.024 in a full base against 0.15 at the site). The
 	// ground a reactor competes for is the ground around where it would stand.

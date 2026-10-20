@@ -366,8 +366,8 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 
 ## C++-only options (read through `GetTunable` in the DLL; no `TUNE_` constant)
 
-- `apex_fight_travel`. Attack and defend tasks travel with fight orders instead of moves (his watch: a squad moved straight into a pack in our base). Off pending A/B.
-- `apex_target_value`. Value-based targeting: groups by worth per second of walk and fire, fire allocated in lethal doses to the lowest kill time (his doctrine on targets). 43% of our kills are under 100 metal. Off pending A/B.
+- `apex_fight_travel` (TUNE_FIGHT_TRAVEL = 1). Attack and defend tasks travel with fight orders instead of moves (his watch: a squad moved straight into a pack in our base). On since v0.3.2 (its AIOptions; in the repo file 10-19). Forced 0 for stock-controlled units by the stock army table.
+- `apex_target_value` (TUNE_TARGET_VALUE = 1). Value-based targeting: groups by worth per second of walk and fire, fire allocated in lethal doses to the lowest kill time (his doctrine on targets). 43% of our kills are under 100 metal. On since v0.3.2 (its AIOptions; in the repo file 10-19). Forced 0 for stock-controlled units by the stock army table.
 - `apex_unit_cover`. Mobile units count as cover for buildings (his ruling). With it off ~70% more defence stood and the abort rate did not move (54% -> 53%). Left at 1.
 - `apex_inbase_path`. Path in-base hops instead of skipping pathing: removed the anomaly (119 -> 0) and not the stuck builders (21 -> 20), mexes held worse. Off.
 - `apex_hold_<unit>`. What a unit is good for when ground is lost: the Behemoth 2x is his call ("the best thing to do in this situation is to make a Behemoth"). Live only while losing ground. Unmeasured.

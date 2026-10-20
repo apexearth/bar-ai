@@ -19,7 +19,7 @@ const array<float> WT_E = { 1700.f, 2500.f, 4200.f, 6500.f, 10200.f, 13600.f, 17
 
 bool WantTestOn()
 {
-	return ai.GetTunable("apex_wanttest", 0.f) > 0.f;
+	return ai.GetTunable("apex_wanttest", TUNE_WANTTEST) > 0.f;
 }
 
 // Offered every election; keeps the first hand that can build a fusion-class

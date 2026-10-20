@@ -41,7 +41,7 @@ bool PnOn()
 	if (gPnMode >= 0)
 		return gPnMode == 1;
 	gPnMode = 0;
-	if (ai.GetTunable("apex_policy", 1.f) <= 0.f) {
+	if (ai.GetTunable("apex_policy", TUNE_POLICY) <= 0.f) {
 		AiLog("apex: policy OFF t=" + ai.teamId + " (apex_policy=0)");
 		return false;
 	}

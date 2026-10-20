@@ -123,7 +123,7 @@ bool AtomicLookFresh(const AIFloat3& in cell)
 {
 	if ((gAtomLookAt < 0) || (gAtomLookSeen.distance2D(cell) > 1.f))
 		return false;
-	const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * float(MINUTE);
 	return float(ai.frame - gAtomLookAt) < horizon;
 }
 

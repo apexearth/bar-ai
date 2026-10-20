@@ -1027,7 +1027,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// fleet lacks. Without this, 40-metal winds out-valued the 3300 tech
 		// bill at argmax for five straight minutes of full storage.
 		techGain += OverflowM() * pipe;
-		if (ai.GetTunable("apex_techcand_diag", 0.f) > 0.f) {
+		if (ai.GetTunable("apex_techcand_diag", TUNE_TECHCAND_DIAG) > 0.f) {
 			AiLog("apex: techcand " + Catalog::Def(d).GetName()
 				+ " prodCeil=" + formatFloat(prodCeil, "", 0, 4)
 				+ " ownCeil=" + formatFloat(ownCeil, "", 0, 4)
