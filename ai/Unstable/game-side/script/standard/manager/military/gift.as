@@ -154,8 +154,8 @@ bool GiftableDef(int d)
 
 void UpdateGifts()
 {
-	if (StockQuiet("gift"))
-		return;
+	// The heartbeat is the team's liveness signal (teamtech.as TtAlive), so it is published under the stock army
+	// too; quieting it there left team tech with no seats in every v0.3.2 game.
 	if (ai.frame >= gGiftPubAt) {
 		gGiftPubAt = ai.frame + 2 * SECOND;
 		ai.PublishTeamValue(TV_GFOE, FoeAtHomeM());
@@ -165,6 +165,8 @@ void UpdateGifts()
 		ai.PublishTeamValue(TV_GSPARE, GiftSpareM());
 		ai.PublishTeamValue(TV_GAT, float(ai.frame));
 	}
+	if (StockQuiet("gift"))
+		return;
 	if (ai.frame < gGiftNextAt)
 		return;
 	gGiftNextAt = ai.frame + GIFT_EVERY;
