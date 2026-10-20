@@ -221,6 +221,7 @@ void JobCacheFill(bool leashed)
 		&& (gJcLiveStamp == Requests::gLiveStamp)
 		&& (gJcGuardStamp == gGuardStamp) && (gJcLeashed == leashed))
 		return;
+	const double _tF = Perf::T0();
 	gJcFrame = ai.frame;
 	gJcJobStamp = gJobStamp;
 	gJcLiveStamp = Requests::gLiveStamp;
@@ -256,6 +257,9 @@ void JobCacheFill(bool leashed)
 		gJcGuards.insertLast((val > 0.f) ? GuardsOnJob(cand) : 0);
 		gJcBusy.insertLast(Requests::Workers(cand));
 	}
+	Perf::Add("as.fill", _tF);
+	Perf::AddUs("as.rows.live", double(Requests::gLive.length()));
+	Perf::AddUs("as.rows.job", double(gJobTask.length()));
 }
 
 IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
