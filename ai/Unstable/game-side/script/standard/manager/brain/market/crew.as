@@ -23,7 +23,7 @@ int gNextCrewLog = 0;
 
 bool CrewSplitOn()
 {
-	return CeilingConsOwned() > 0;
+	return (CeilingConsOwned() > 0) && (ai.GetTunable("apex_crew_split", TUNE_CREW_SPLIT) > 0.f);
 }
 
 // How far our own base reaches: plants, generators, converters and nanos,
