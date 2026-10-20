@@ -330,6 +330,43 @@ bool LabInheritOn()
 	return ai.GetTunable("apex_lab_inherit", TUNE_LAB_INHERIT) > 0.f;
 }
 
+// THE HELP A NEW UPGRADE WITHHOLDS (his 10-20: "we spread ourselves out on too many mex upgrades at once,
+// restrict to fewer and assisting more would cascade the progress better"). While metal overflows, build power
+// is the bind: the hand that opens another upgrade is not finishing one already rising. With a fixed lathe,
+// one-after-another beats all-at-once (each finishes about half a build sooner on average), and a hand pricing
+// alone sees the new upgrade against never rather than against a few seconds later. The charge is what helping
+// the best upgrade in flight would have saved: its gain x the seconds this hand cuts from it, in metal -- the
+// assist want's own arithmetic. TUNE_UPGRADE_HELP_COST.
+float UpgradeHelpForgoneM(CCircuitUnit@ unit)
+{
+	if ((ai.GetTunable("apex_upgrade_help_cost", TUNE_UPGRADE_HELP_COST) <= 0.f) || !MetalWasting())
+		return 0.f;
+	const float myDrain = Catalog::gBuildPower[int(unit.circuitDef.id)] * (7.f / 80.f);
+	if (myDrain <= 0.f)
+		return 0.f;
+	float best = 0.f;
+	for (uint j = 0; (j < gJobTask.length()) && (j < gJobKind.length()); ++j) {
+		if (gJobKind[j] != WK_MEXUP)
+			continue;
+		IUnitTask@ t = gJobTask[j];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const float G = gJobGain[j];
+		if (G <= 0.f)
+			continue;
+		const float B = float(Requests::Workers(t)) * Requests::DRAIN + NanoLatheReaching(t.GetBuildPos());
+		if (B <= 0.f)
+			continue;
+		float R = t.buildDef.costM * (1.f - Requests::Progress(t));
+		if (R < 1.f)
+			R = 1.f;
+		const float saved = G * R * myDrain / (B * (B + myDrain));
+		if (saved > best)
+			best = saved;
+	}
+	return best;
+}
+
 int gMuDiagAt = 0;
 float gMuSurv = -1.f;
 bool gMuAlly = false;
@@ -358,6 +395,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	// Hoisted for the same reason as everything else here: it does not vary
 	// with the spot or the extractor being priced.
 	const float upBP = EffBP(Catalog::gBuildPower[uid]);
+	const float helpM = UpgradeHelpForgoneM(unit);
 	array<AIFloat3> uPos;
 	array<int> uSpot;
 	array<float> uInc;
@@ -452,6 +490,10 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			delta += IncomeAccelM(rawUpM) * realF;
 			Want c;
 			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c, true, 0.f, hzOn);
+			if (helpM > 0.f) {
+				c.tCost += helpM;
+				c.value = c.gain / (c.mCost + c.tCost);
+			}
 			if (hzOn)
 				++gMuHzPriced;
 			if (c.value > w.value) {

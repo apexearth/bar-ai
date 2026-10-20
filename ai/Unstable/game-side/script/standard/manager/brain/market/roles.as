@@ -102,8 +102,11 @@ void ConRoleRecount()
 	const int roled = int(float(gWorkerIds.length()) * shareK);
 	float sum = 0.f;
 	for (int c = 0; c < CAT_N; ++c) {
-		const float gap = CatGapFrac(c);
-		gRoleNeed[c] = (gap > gRoleShare[c]) ? gap : gRoleShare[c];
+		// the economy-only benchmark has no army to produce, so no hand holds the production role (his 10-20 game:
+		// a production-roled air con bought a vehicle plant and a bot lab after the air labs stood)
+		const bool noArmy = EcoOnly() && (c == CAT_PRODUCE);
+		const float gap = noArmy ? 0.f : CatGapFrac(c);
+		gRoleNeed[c] = noArmy ? 0.f : ((gap > gRoleShare[c]) ? gap : gRoleShare[c]);
 		sum += gRoleNeed[c];
 	}
 	for (int c = 0; c < CAT_N; ++c)

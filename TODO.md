@@ -93,6 +93,19 @@ price the flight as the walk it saves the receiver's upgrades. No override: the 
 anyone's, and a receiver's own lab is worth less by the handouts that cover it (TeamTechMul).
 
 
+
+## The economy ramp (his 10-20, watching the +0 eco test)
+
+Run `python tools/ecotest.py` (+0, NullAI, eco only; `--ai-option apex_first_lab=3` opens with air). His notes
+from the air-first watch game: "sometimes we choose to make fusion plants where we have no nanos nearby, also we
+spread ourselves out on too many mex upgrades at once, restrict to fewer and assisting more would cascade the
+progress better, also anticipating future nanoturret needs ahead of time would allow us to scale more properly."
+And earlier: "eventually reclaim the T2 bot lab if you need the metal for fusion or the T2 air lab, then go into
+air cons"; no hover lab in an eco game (0 economic benefit); the T2 lab beside the turret block.
+- [ ] Fusion and other big builds land at the turret block (BigEnergySite / LatheSite).
+- [ ] Fewer mex upgrades at once, more hands on each: a new upgrade is charged for the ones it slows.
+- [ ] Turrets bought ahead of the work that will need them.
+- [ ] The T2 bot lab reclaimed once the T2 air lab stands and its metal is wanted.
 ## Teammates fund the tech seat (his 10-19)
 
 "So the right choice is to keep boosting our income until we feel more comfortable making the T2 lab. Also if
