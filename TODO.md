@@ -49,10 +49,14 @@ ratios decide.
   place and hurt the army (0.52/0.72 of theirs vs 0.76/1.34 off, his +100 scav 8v8).
 
 **The steps, in order. Each is measured before the next; tick it here with the commit and the number.**
-1. [ ] Instrument a live price per resource -- what one more m/s of metal, e/s of energy, unit of build power
+1. [x] Instrument a live price per resource (e1ee2abb: apex: vscale shows each kind's top value per minute) -- what one more m/s of metal, e/s of energy, unit of build power
    would buy now (value per cost of the best wants going unfunded, army included). Read-only; one game of
    numbers shown to him before anything uses them.
-2. [ ] Enablers priced from those prices (mex, energy, converters, cons, nanos, labs).
+2. [ ] Enablers priced from those prices (mex, energy, converters, cons, nanos, labs). Labs started: the advanced
+   lab inherits its upgrades' prices and takes its time as a horizon share (016cd027: first T2 lab 9.0/6.3/7.4
+   min against 16.6/12.9/10.4, upgrades before minute 15 9/4/4 against 0/0/0, one game). Still billed gain x
+   seconds: converters (want_energy.as 1495, 1724, though TUNE_ECO_HORIZON says it covers them), geo
+   (want_plant.as 75), supers.
 3. [ ] The army strength factor normalised against its own measure (line's best UnitPPC = 1), with one
    currency.
 4. [ ] TUNE_LAB_BEST on; then the builder category draw replaced by the best-priced pick the same way.
@@ -72,6 +76,15 @@ deliver the T2 constructors to our allies quickly." The lift that moves nano tur
 price the flight as the walk it saves the receiver's upgrades. No override: the tech seat's T2 is priced like
 anyone's, and a receiver's own lab is worth less by the handouts that cover it (TeamTechMul).
 
+
+## Teammates fund the tech seat (his 10-19)
+
+"So the right choice is to keep boosting our income until we feel more comfortable making the T2 lab. Also if
+we boost or have 1 of our guys go T2 early on a team game then that can be fine too. We just need to have
+someone be willing and then the teammates can depend on them for the upgrade, they could even send metal to get
+their T2 con sooner." Team tech elects the seat and its lab now inherits the allies' upgrades it serves
+(TUNE_LAB_INHERIT); not built: allies send metal to the tech seat while its lab or first T2 con is short, priced
+as the upgrades the metal brings forward (the gift path already has ai.SendResources).
 # Strategies
 
 ## Abuse the BARb AI the way humans do
