@@ -3117,7 +3117,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))
 	{
 		const double _tUa = Perf::T0();
-		Want@ ua = ProposeUnlockAssist(unit, false);
+		Want@ ua = null;
+		if (ai.GetTunable("apex_unlock_hoist", TUNE_UNLOCK_HOIST) > 0.f)
+			@ua = ProposeUnlockAssist(unit, false);
 		Perf::Add("dr.unlock", _tUa);
 		string uaWhy = "metalfirst";
 		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
