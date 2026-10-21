@@ -54,6 +54,39 @@ function FindBar {
     return $null
 }
 
+function BarProcesses($root) {
+    @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        try { $_.Path -and $_.Path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
+    })
+}
+
+# The lobby hides every AI it has no simple name for while simpleAiList is on (its default), and the
+# checkbox sits on the Developer tab, which only devmode.txt shows. The lobby rewrites IGL_data.lua
+# when it closes, so this runs with BAR closed.
+function ShowFullAiList($data) {
+    $devmode = Join-Path $data "devmode.txt"
+    if (-not (Test-Path -LiteralPath $devmode)) { New-Item -ItemType File -Path $devmode | Out-Null }
+    $igl = Join-Path $data "LuaMenu\Config\IGL_data.lua"
+    if (Test-Path -LiteralPath $igl) {
+        $text = [IO.File]::ReadAllText($igl)
+        if ($text -match 'simpleAiList\s*=\s*false') { return }
+        Copy-Item -LiteralPath $igl "$igl.before-apex" -Force
+        if ($text -match 'simpleAiList\s*=\s*true') {
+            $text = $text -replace 'simpleAiList\s*=\s*true', 'simpleAiList = false'
+        } elseif ($text -match '\["Chili lobby"\]\s*=\s*\{') {
+            $text = ([regex]'(\["Chili lobby"\]\s*=\s*\{)').Replace($text, "`$1`n`t`tsimpleAiList = false,", 1)
+        } elseif ($text -match 'return\s*\{') {
+            $text = ([regex]'(return\s*\{)').Replace($text, "`$1`n`t[`"Chili lobby`"] = {`n`t`tsimpleAiList = false,`n`t},", 1)
+        } else {
+            throw "unrecognised lobby settings file $igl"
+        }
+    } else {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $igl) | Out-Null
+        $text = "return {`n`t[`"Chili lobby`"] = {`n`t`tsimpleAiList = false,`n`t},`n}`n"
+    }
+    [IO.File]::WriteAllText($igl, $text, (New-Object Text.UTF8Encoding($false)))
+}
+
 function PickFolder {
     Add-Type -AssemblyName System.Windows.Forms
     $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -102,13 +135,14 @@ if (-not $eng) {
 Say "Engine:     $($eng.Name)"
 
 $target = Join-Path $eng.FullName "AI\Skirmish\$Short\$Variant"
-$running = @(Get-Process -Name spring, spring-headless, spring-dedicated -ErrorAction SilentlyContinue)
+$barRoot = $data
+if ((Split-Path -Leaf $data) -eq "data") { $barRoot = Split-Path -Parent $data }
 if (Test-Path -LiteralPath $target) {
     Say "Replacing the copy already installed."
     try {
         Remove-Item -LiteralPath $target -Recurse -Force
     } catch {
-        if ($running.Count -gt 0) { Fail "a game is running and has this AI loaded. Close BAR and run this again." }
+        if ((BarProcesses $barRoot).Count -gt 0) { Fail "a game is running and has this AI loaded. Close BAR and run this again." }
         Fail "could not remove the old copy at $target : $($_.Exception.Message)"
     }
 }
@@ -121,13 +155,39 @@ try {
     Fail "copying to $target failed: $($_.Exception.Message)"
 }
 if (-not (Test-Path -LiteralPath (Join-Path $target "SkirmishAI.dll"))) { Fail "the copy is incomplete at $target." }
+Say "AI files:   $target"
+
+$listed = $false
+while ($true) {
+    if ((BarProcesses $barRoot).Count -eq 0) {
+        try {
+            ShowFullAiList $data
+            $listed = $true
+        } catch {
+            Say "Could not change the lobby setting: $($_.Exception.Message)"
+        }
+        break
+    }
+    Write-Host ""
+    Say "BAR is open. Its lobby must be closed to switch on the full AI list"
+    Say "(it saves its settings when it closes and would undo the change)."
+    if ($Yes) { break }
+    $a = Read-Host "  Close BAR completely, then press Enter (or type S to skip)"
+    if ($a -match '^(s|skip)$') { break }
+}
 
 Write-Host ""
 Write-Host "  Done. $Short $Variant is installed." -ForegroundColor Green
-Say "Installed to: $target"
+if ($listed) {
+    Say "The lobby will show the full AI list (devmode.txt made, 'Simple AI list' off)."
+} else {
+    Say "The lobby setting was NOT changed. To see $Short in the AI list, run Install.bat"
+    Say "again with BAR closed, or make an empty file named devmode.txt in"
+    Say "$data"
+    Say "and untick 'Simple AI list' under Settings > Developer in the lobby."
+}
 Write-Host ""
-Say "Restart BAR if it is open. In a lobby, Add AI and pick $Short."
-Say "If you do not see it, untick 'simplified AI list' in the AI menu."
+Say "Start BAR. In a lobby, Add AI and pick $Short $Variant."
 Say "Only the player hosting the game needs this. After a BAR engine update,"
 Say "run Install.bat again."
 exit 0
