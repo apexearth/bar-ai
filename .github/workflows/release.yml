@@ -98,4 +98,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*.zip \
             --title "$GITHUB_REF_NAME" \
-            --notes "Host-only install for BAR engine $ENGINE_NAME. Unzip and follow INSTALL.txt. C++: $CIRCUITAI_SHA"
+            --notes "Host-only install for BAR engine $ENGINE_NAME. Extract the zip and double-click Install.bat (INSTALL.txt has the manual steps). C++: $CIRCUITAI_SHA"

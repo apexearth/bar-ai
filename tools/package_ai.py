@@ -7,7 +7,8 @@ Produces dist/<ShortName>-<variant>-<engine>-<date>-<git>.zip containing the
 same self-contained engine-side folder deploy_ai.py installs locally:
 BARb/stable's data files + our SkirmishAI.dll + AIInfo/AIOptions + config and
 script overlaid for archive-free play (no game-archive support needed -- see
-deploy_ai.py for why that works).
+deploy_ai.py for why that works), under payload/, beside Install.bat
+(tools/installer/), which finds the BAR install and copies it into the engine.
 
 Who needs it: ONLY the game host. Other players in a hosted lobby need
 nothing. The DLL is built against one exact engine tag (the AI boundary is a
@@ -26,7 +27,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import bar_env
 from deploy_ai import (BASE_SHORT_NAME, REPO, _assert_version_matches,
-                       _copy_tree, short_name)
+                       _copy_tree, _stamp_scripts, short_name)
+
+INSTALLER = Path(__file__).parent / "installer"
 
 INSTALL = """\
 {name} -- a custom AI for Beyond All Reason
@@ -39,11 +42,16 @@ WHO NEEDS THIS
   Only the player HOSTING the game. Everyone else just joins the lobby.
 
 INSTALL
+  Extract this zip (right-click, "Extract All..."), then double-click
+  Install.bat. It finds BAR, copies the AI into the engine folder and says
+  where it went. Run it again after a BAR engine update.
+
+INSTALL BY HAND
   1. Find your BAR install's engine folder:
        <BAR install>\\data\\engine\\{engine}\\
      ("<BAR install>" is usually
       C:\\Users\\<you>\\AppData\\Local\\Programs\\Beyond-All-Reason)
-  2. Copy the "{short}" folder from this zip into:
+  2. Copy the "payload\\{short}" folder from this zip into:
        <BAR install>\\data\\engine\\{engine}\\AI\\Skirmish\\
      so that this file exists:
        ...\\AI\\Skirmish\\{short}\\{variant}\\AIInfo.lua
@@ -107,7 +115,8 @@ def main() -> int:
     zip_path = out_dir / f"{short}-{variant}-{engine}-{args.label or date + '-' + git}.zip"
 
     with tempfile.TemporaryDirectory() as tmp:
-        target = Path(tmp) / short / variant
+        payload = Path(tmp) / "payload"
+        target = payload / short / variant
         # Same assembly deploy_ai.deploy() performs, into a staging dir:
         # stable's data files, then our AIInfo/AIOptions/DLL, then config+script
         # overlaid so the AI runs with no game-archive support at all.
@@ -136,10 +145,19 @@ def main() -> int:
                         q = target / sub / f.relative_to(s_dir)
                         q.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(f, q)
+        _stamp_scripts(variant, (target / "script",))
 
-        (Path(tmp) / "INSTALL.txt").write_text(INSTALL.format(
+        (Path(tmp) / "INSTALL.txt").write_bytes(INSTALL.format(
             name=short, short=short, variant=variant,
-            engine=engine, date=date, git=git), encoding="utf-8")
+            engine=engine, date=date, git=git).replace("\n", "\r\n").encode("utf-8"))
+        # cmd.exe misreads a .bat with LF endings; both scripts go out CRLF.
+        for name, dst in (("Install.bat", Path(tmp) / "Install.bat"),
+                          ("install.ps1", payload / "install.ps1")):
+            text = (INSTALLER / name).read_text(encoding="utf-8")
+            for key, val in (("@SHORT@", short), ("@VARIANT@", variant),
+                             ("@ENGINE@", engine), ("@NAME@", f"{short} {variant}")):
+                text = text.replace(key, val)
+            dst.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode("ascii"))
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(Path(tmp).rglob("*")):
