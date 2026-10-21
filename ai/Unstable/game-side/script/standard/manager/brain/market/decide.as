@@ -1287,6 +1287,7 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 // trip -- TripRisk times what the asker is worth, the commander being worth
 // everything we own -- and it is assigned, not accumulated, because memoed
 // wants come back as the same object.
+array<int> gDetourLogAt(2, 0);
 void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 {
 	if ((w is null) || (w.kind == WK_NONE) || !OnMap(w.pos) || (w.value <= 0.f))
@@ -1332,6 +1333,13 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 			const float c1 = w.mCost + w.tCost;
 			if ((c0 > 0.f) && (c1 > 0.f))
 				w.value *= c0 / c1;
+		}
+		const uint lk = (w.kind == WK_MEX) ? 0 : 1;
+		if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (ai.frame >= gDetourLogAt[lk])) {
+			gDetourLogAt[lk] = ai.frame + 10 * SECOND;
+			AiLog("apex: detour t=" + ai.teamId + " " + KindName(w.kind) + ":" + ((w.def is null) ? "-" : w.def.GetName())
+				+ " backM=" + int(w.backM) + " tCost=" + int(w.tCost) + " v=" + formatFloat(w.value, "", 0, 2)
+				+ " homeD=" + int(hp.distance2D(Builder::gHomePos)) + " jobHomeD=" + int(w.pos.distance2D(Builder::gHomePos)));
 		}
 	}
 	if (w.kind == WK_MEX)
