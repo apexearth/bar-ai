@@ -1483,7 +1483,8 @@ Want@ ProposeStorage(CCircuitUnit@ unit, float eWasted)
 			|| Catalog::gSub[d] || (Catalog::gStoreE[d] < 1000.f)
 			|| (Catalog::gStoreM[d] > 1.f)   // metal storage stays off (his 2026-08-27 ruling)
 			|| (Catalog::gConvCapacity[d] > 0.f) || (Catalog::gMakeE[d] >= 1.f)
-			|| (Catalog::gPower[d] > 1.f))   // a Pulsar holds energy too: storage is not a gun
+			|| (Catalog::gPower[d] > 1.f)   // a Pulsar holds energy too: storage is not a gun
+			|| Catalog::gShield[d])   // nor a shield: its 3,000-metal dome holds energy (bought as storage 10-20)
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			return w;   // one store at a time: the band it opens is not read yet
