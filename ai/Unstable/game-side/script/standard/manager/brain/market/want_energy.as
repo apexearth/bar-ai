@@ -1566,12 +1566,6 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	if ((eSurplus <= 1.f) && !pinned) {
 		++gCwNoSurplus;
 		ConvWhyLog();
-		// ENERGY WASTED BESIDE CONVERTERS WITH ROOM IS A BANK TOO SMALL TO HOLD IT (his 10-20: "we should make energy
-		// storage too so we have better buffer"). A converter runs on the bank above its band, so with the standing
-		// capacity already past the free energy the spill is the gap between ticks: 4,300 e/s wasted beside 35,530
-		// of converters, storage never offered (it was asked only once the band was full).
-		if (eWasted > 1.f)
-			return ProposeStorage(unit, eWasted);
 		return w;
 	}
 	// The band is full: another converter would stand idle.
