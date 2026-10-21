@@ -1781,6 +1781,7 @@ const float TUNE_BP_TRAVEL = 0.f;
 const float TUNE_LIFT_TURRETS = 1.f;   // [toggle 0/1] lift.as: with no line short of lathe a transport is priced on the idle turrets it can fly to the frame furthest from done, and eco-only mode may build it (his 10-20)
 const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
 const float TUNE_LIFT_RESERVE = 0.f;   // [toggle 0/1] lift.as: a free transport holds the longest-idle turret over the base and drops it where lathe is wanted (his 10-21)
+const float TUNE_LIFT_COMPACT = 0.f;   // [toggle 0/1] lift.as: a free transport moves an idle turret with no flush neighbour into a cell core or flush beside a turret group (his 10-21)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;

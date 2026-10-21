@@ -404,6 +404,7 @@ local NAMES = {
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
 	"apex_lift_reserve", -- lift.as: idle turrets held in the air (0)
+	"apex_lift_compact", -- lift.as: stray turrets set flush (0)
 	"apex_cell_layout", -- cells.as: eco cells (0)
 	"apex_eco_spend", -- price.as: spending, not income, is the eco goal (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)

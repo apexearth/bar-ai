@@ -537,6 +537,100 @@ void ReserveStep(LiftJob@ jb)
 	}
 }
 
+// TURRETS SET FLUSH (TUNE_LIFT_COMPACT; his 10-21: "another task for transports should be to 'fix' nano turret
+// placement. If they are not properly grouped up with 0 spacing between them the transports can attempt to fix
+// that"). A free plane with no work to carry takes an idle turret with no turret flush beside it and sets it in the
+// core of the nearest cell, or else on the nearest free cell flush against a turret that already has a neighbour.
+int gCompactMoved = 0;
+uint gCompactI = 0;
+const int COMPACT_SCAN = 40;      // turrets read per dispatch, round robin
+bool LiftCompactOn() { return LiftTurretsOn() && (ai.GetTunable("apex_lift_compact", TUNE_LIFT_COMPACT) > 0.f); }
+
+int TurretNeighbours(uint i, float pitch)
+{
+	int n = 0;
+	const AIFloat3 a = gOwnNanoPos[i];
+	NanoNear(a, pitch * 1.5f);
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint j = uint(gNanoGrid.hit[q]);
+		if (j == i)
+			continue;
+		const float dx = abs(gOwnNanoPos[j].x - a.x), dz = abs(gOwnNanoPos[j].z - a.z);
+		if (((abs(dx - pitch) < 4.f) && (dz < 0.5f * pitch)) || ((abs(dz - pitch) < 4.f) && (dx < 0.5f * pitch)))
+			++n;
+	}
+	return n;
+}
+
+bool CompactSlot(uint i, AIFloat3& out at)
+{
+	const int cd = int(gOwnNano[i].circuitDef.id);
+	if (CellLayoutOn() && CellSlot(cd, at, gOwnNanoPos[i]))
+		return true;
+	const float pitch = Lattice::FootPitch(cd);
+	CCircuitDef@ def = Catalog::Def(cd);
+	float best = -1.f;
+	NanoNear(gOwnNanoPos[i], 1200.f);
+	array<int> near = gNanoGrid.hit;   // TurretNeighbours reuses the grid's hit list
+	for (uint q = 0; q < near.length(); ++q) {
+		const uint j = uint(near[q]);
+		if ((j == i) || (TurretNeighbours(j, pitch) == 0))
+			continue;
+		for (int k = 0; k < 4; ++k) {
+			const AIFloat3 c = gOwnNanoPos[j] + AIFloat3(((k == 0) ? pitch : ((k == 1) ? -pitch : 0.f)), 0.f,
+					((k == 2) ? pitch : ((k == 3) ? -pitch : 0.f)));
+			const float dd = c.distance2D(gOwnNanoPos[i]);
+			if ((best >= 0.f) && (dd >= best))
+				continue;
+			AIFloat3 got;
+			if (OnMap(c) && !LiftSlotTaken(c) && ai.CanPlaceCell(def, c, got)) {
+				best = dd;
+				at = c;
+			}
+		}
+	}
+	return best >= 0.f;
+}
+
+bool CompactDispatch(LiftJob@ jb)
+{
+	if (!LiftCompactOn() || (gOwnNano.length() == 0))
+		return false;
+	const int pd = int(jb.plane.circuitDef.id);
+	const float speed = LiftSpeed(jb.plane);
+	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
+	const uint n = gOwnNano.length();
+	for (int k = 0; k < COMPACT_SCAN; ++k) {
+		const uint i = (gCompactI++) % n;
+		CCircuitUnit@ u = gOwnNano[i];
+		if ((u is null) || !LiftFits(pd, int(u.circuitDef.id)))
+			continue;
+		const float pitch = Lattice::FootPitch(int(u.circuitDef.id));
+		const float sec = pp.distance2D(gOwnNanoPos[i]) / speed;
+		if (!LiftIdleEnough(i, sec + LIFT_HAND_OVERHEAD_S) || InLiftJob(u) || LiftRefused(u)
+			|| Builder::SiteHot(gOwnNanoPos[i]) || (TurretNeighbours(i, pitch) > 0))
+			continue;
+		AIFloat3 to;
+		if (!CompactSlot(i, to) || (to.distance2D(gOwnNanoPos[i]) < pitch))
+			continue;
+		@jb.cargo = u;
+		jb.src = u.GetPos(ai.frame);
+		jb.to = to;
+		jb.stage = 1;
+		jb.retried = false;
+		jb.deadline = ai.frame + int((pp.distance2D(jb.src) / speed * 3.f + 30.f) * float(SECOND));
+		// join-arrive: an idle turret moved flush beside its kin; no work under way is joined
+		jb.plane.CmdLoadUnit(u);
+		NanoCensusMove(u, to);
+		++gCompactMoved;
+		AiLog("apex: lift compact t=" + ai.teamId + " #" + jb.plane.id + " takes #" + u.id
+				+ " from=" + int(jb.src.x) + "," + int(jb.src.z) + " to=" + int(to.x) + "," + int(to.z)
+				+ " moved=" + gCompactMoved);
+		return true;
+	}
+	return false;
+}
+
 void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
 {
 	const AIFloat3 at = cargo.GetPos(ai.frame);
@@ -626,7 +720,7 @@ void LiftStep(LiftJob@ jb)
 			LiftGoHome(jb);
 			return;
 		}
-		if (!FerryDispatch(jb) && !LiftDispatch(jb) && !HandDispatch(jb) && !ReserveLoad(jb)) {
+		if (!FerryDispatch(jb) && !LiftDispatch(jb) && !HandDispatch(jb) && !CompactDispatch(jb) && !ReserveLoad(jb)) {
 			gLiftIdleMiss.insertLast(pdef);
 			LiftGoHome(jb);
 		}
@@ -850,7 +944,8 @@ void LiftUpdate()
 			+ " repriced=" + gFerryRepriced + " ferryHeld=" + gFerryHeld
 			+ " missSlots=" + gFerryMissM.length() + " missM=" + formatFloat(FerryMissSum(), "", 0, 1)
 			+ " plantLift=" + formatFloat(gPlantLiftLast, "", 0, 3)
-			+ " reserveHeld=" + gReserveHeld + " reserveSent=" + gReserveSent + " reserveDown=" + gReserveDown);
+			+ " reserveHeld=" + gReserveHeld + " reserveSent=" + gReserveSent + " reserveDown=" + gReserveDown
+			+ " compacted=" + gCompactMoved);
 }
 
 // What a transport of def d is worth [metal/s over the fill]: the turrets it
