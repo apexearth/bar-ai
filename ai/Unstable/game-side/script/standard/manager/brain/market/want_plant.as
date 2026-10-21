@@ -1875,6 +1875,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if (prodOwn > spare)
 				prodOwn = (spare > 0.f) ? spare : 0.f;
 		}
+		// Economy-only: a lab builds constructors only, so the army it would field is no part of its worth (a bot
+		// lab bought at gain 1.33 and a vehicle plant at 30 beside the air plants, 10-20).
+		if (EcoOnly())
+			prodOwn = 0.f;
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
