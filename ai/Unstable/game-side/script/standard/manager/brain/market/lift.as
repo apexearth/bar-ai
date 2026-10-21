@@ -496,7 +496,7 @@ void LiftStep(LiftJob@ jb)
 			LiftGoHome(jb);
 			return;
 		}
-		if (!FerryDispatch(jb) && !LiftDispatch(jb)) {
+		if (!FerryDispatch(jb) && !LiftDispatch(jb) && !HandDispatch(jb)) {
 			gLiftIdleMiss.insertLast(pdef);
 			LiftGoHome(jb);
 		}
@@ -722,6 +722,124 @@ void LiftUpdate()
 // could carry into the short line instead of building them there, and the
 // front towers lost building on site that it would have flown instead. A plane
 // we already have answers the same cargo, so it answers the same demand.
+// HANDS FLOWN TO THE WORK (TUNE_LIFT_HANDS; his 10-20: price a transport by "how it can quickly move ground units,
+// like the commander, to get them around the field faster and save walk time" -- and "a transporting commander
+// which is shot down DIES"). A ground builder walking to a far job is lifted when the seconds the flight saves, at
+// its own lathe, beat what the flight risks: the AA we have seen along the route against the plane's health, times
+// the plane and its cargo -- for the commander, everything we own.
+const float LIFT_HAND_OVERHEAD_S = 10.f;   // load and unload, measured off the turret lifts' up/done lines
+int gLiftHandsSent = 0;
+bool LiftHandsOn() { return ai.GetTunable("apex_lift_hands", TUNE_LIFT_HANDS) > 0.f; }
+
+float LiftRouteLossP(CCircuitUnit@ plane, const AIFloat3& in a, const AIFloat3& in b)
+{
+	const int pd = int(plane.circuitDef.id);
+	const float hp = (Catalog::gHealth[pd] > 1.f) ? Catalog::gHealth[pd] : 1.f;
+	const float sec = a.distance2D(b) / LiftSpeed(plane);
+	float dmg = 0.f;
+	for (int k = 0; k <= 8; ++k) {
+		const float f = float(k) / 8.f;
+		dmg += Air::NaAAAt(a + (b - a) * f) * sec / 9.f;
+	}
+	return (dmg >= hp) ? 1.f : (dmg / hp);
+}
+
+float LiftHandWorth(CCircuitUnit@ plane, CCircuitUnit@ u, AIFloat3& out site, float& out saved)
+{
+	saved = 0.f;
+	if ((u is null) || (u.circuitDef is null) || (u.task is null) || (u.task.GetType() != Task::Type::BUILDER))
+		return 0.f;
+	const int ud = int(u.circuitDef.id);
+	if (!Catalog::gMobile[ud] || Catalog::gFlyer[ud] || !LiftFits(int(plane.circuitDef.id), ud) || InLiftJob(u))
+		return 0.f;
+	site = u.task.GetBuildPos();
+	if (!OnMap(site))
+		return 0.f;
+	const float speed = Catalog::gSpeed[ud];
+	if (speed <= 1.f)
+		return 0.f;
+	const AIFloat3 at = u.GetPos(ai.frame);
+	const float reach = Catalog::gBuildDist[ud];
+	const float d = at.distance2D(site) - reach;
+	if (d <= 0.f)
+		return 0.f;
+	const float vp = LiftSpeed(plane);
+	const float flown = plane.GetPos(ai.frame).distance2D(at) / vp + d / vp + LIFT_HAND_OVERHEAD_S;
+	saved = d / speed - flown;
+	if (saved <= 0.f)
+		return 0.f;
+	const bool com = u.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	const float stake = (com ? ComHomeWorthM() : Catalog::gCostM[ud]) + Catalog::gCostM[int(plane.circuitDef.id)];
+	return saved * WageOf(u) - LiftRouteLossP(plane, at, site) * stake;
+}
+
+bool HandDispatch(LiftJob@ jb)
+{
+	if (!LiftHandsOn())
+		return false;
+	CCircuitUnit@ best = null;
+	float bestV = 0.f, bestSaved = 0.f;
+	AIFloat3 bestSite;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		AIFloat3 site;
+		float saved;
+		const float v = LiftHandWorth(jb.plane, gWorkers[i], site, saved);
+		if (v > bestV) {
+			bestV = v;
+			@best = gWorkers[i];
+			bestSite = site;
+			bestSaved = saved;
+		}
+	}
+	if (best is null)
+		return false;
+	const AIFloat3 at = best.GetPos(ai.frame);
+	const float reach = Catalog::gBuildDist[int(best.circuitDef.id)] * 0.7f;
+	const float d = at.distance2D(bestSite);
+	jb.to = (d > reach) ? (bestSite + (at - bestSite) * (reach / d)) : at;
+	@jb.cargo = best;
+	jb.src = at;
+	jb.stage = 1;
+	jb.retried = false;
+	const float speed = LiftSpeed(jb.plane);
+	jb.deadline = ai.frame + int((jb.plane.GetPos(ai.frame).distance2D(at) / speed * 3.f + 30.f) * float(SECOND));
+	jb.plane.CmdLoadUnit(best);   // join-arrive: the hand is flown to its own job, not sent into another's
+	++gLiftHandsSent;
+	AiLog("apex: lift hand t=" + ai.teamId + " " + jb.plane.circuitDef.GetName() + " #" + jb.plane.id
+		+ " takes " + best.circuitDef.GetName() + " #" + best.id + " saves=" + int(bestSaved) + "s v=" + int(bestV)
+		+ " to=" + int(jb.to.x) + "," + int(jb.to.z) + " sent=" + gLiftHandsSent);
+	return true;
+}
+
+// What the hands' walks would save a plane of def d, for the production market: the best lift on offer now.
+float LiftHandsWorthFor(int d)
+{
+	if (!LiftHandsOn())
+		return 0.f;
+	float best = 0.f;
+	for (uint j = 0; j < gLift.length(); ++j)
+		if ((gLift[j] !is null) && (gLift[j].plane !is null) && (gLift[j].stage == 0))
+			return 0.f;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if ((u is null) || (u.circuitDef is null) || (u.task is null) || (u.task.GetType() != Task::Type::BUILDER))
+			continue;
+		const int ud = int(u.circuitDef.id);
+		if (!Catalog::gMobile[ud] || Catalog::gFlyer[ud] || !Catalog::Def(d).CanLift(u.circuitDef))
+			continue;
+		const AIFloat3 site = u.task.GetBuildPos();
+		const float speed = Catalog::gSpeed[ud];
+		if (!OnMap(site) || (speed <= 1.f))
+			continue;
+		const float dist = u.GetPos(ai.frame).distance2D(site) - Catalog::gBuildDist[ud];
+		const float vp = (Catalog::gSpeed[d] > 1.f) ? Catalog::gSpeed[d] : 100.f;
+		const float saved = dist / speed - dist / vp - LIFT_HAND_OVERHEAD_S;
+		if (saved > 0.f)
+			best += saved * WageOf(u);
+	}
+	return best;
+}
+
 float LiftGainFor(int d, float fillSec)
 {
 	++gLiftAsk;
@@ -735,7 +853,7 @@ float LiftGainFor(int d, float fillSec)
 	}
 	const float fill = (fillSec > 1.f) ? fillSec : 180.f;
 	float took = 0.f;
-	const float worth = LiftTurretWorth(d, took);
+	const float worth = LiftTurretWorth(d, took) + LiftHandsWorthFor(d);
 	gLiftPriced = (worth + FerryMissedFor(d, fill)) / fill;
 	gLiftPricedTurrets = int(took);
 	return gLiftPriced;
