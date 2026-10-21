@@ -378,3 +378,4 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 - `apex_unit_cover`. Mobile units count as cover for buildings (his ruling). With it off ~70% more defence stood and the abort rate did not move (54% -> 53%). Left at 1.
 - `apex_inbase_path`. Path in-base hops instead of skipping pathing: removed the anomaly (119 -> 0) and not the stuck builders (21 -> 20), mexes held worse. Off.
 - `apex_hold_<unit>`. What a unit is good for when ground is lost: the Behemoth 2x is his call ("the best thing to do in this situation is to make a Behemoth"). Live only while losing ground. Unmeasured.
+- `TUNE_ASSIST_SHARE` = 0.3 (was 0.5). 10-21 goal sweep (eco +0 air-first, 20 min, paired): 0.3 against 0.5 +18.7%, +28.6%, +3.3% on 18 fresh seeds, about +17% pooled; 0.15 +15.8% (se 13.9), 0 +23.6% (se 19.5). Not yet checked against BARb.

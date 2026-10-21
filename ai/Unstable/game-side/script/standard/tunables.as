@@ -1160,7 +1160,7 @@ const float TUNE_BP_HEADROOM = 1.0f;
 
 // ASSIST_SHARE: fraction of the standing lathe fleet expected to fold onto a
 //   priced build (Requests::Take joins same-def askers).
-const float TUNE_ASSIST_SHARE = 0.5f;
+const float TUNE_ASSIST_SHARE = 0.3f;
 
 // BP_LOOKAHEAD: seconds of income GROWTH folded into the BP target -- the
 //   compounding term; a flat economy adds nothing.
