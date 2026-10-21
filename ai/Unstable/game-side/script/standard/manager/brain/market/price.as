@@ -546,6 +546,14 @@ float ERealizeShare(float addE, float buildSec)
 	}
 	float target = demand * gPrEHeadroom
 			+ ConvCapE() + fill;
+	// SPENDING IS DEMAND (TUNE_ECO_SPEND): the metal now spilling is spent only by lathe that does not stand yet, and
+	// that lathe draws energy. Without it the share read the standing fleet's ask alone, so spending mode bought less
+	// energy (minute 10: 1,243 e/s against 1,506) and the turrets that would have spent the spill never ran.
+	if (EcoSpendOn()) {
+		const float spill = Eco::MInc() - Eco::MPull();
+		if (spill > 0.f)
+			target += spill * LineEnergyDensity() * (80.f / 7.f);
+	}
 	// ...and never below the standing fleet's full-speed ask.
 	if (!er) {
 		const float ask = FleetAskE() + ConvCapE() + fill;
@@ -600,7 +608,8 @@ int gMRealLogAt = 0;
 // SPENDING IS THE GOAL (TUNE_ECO_SPEND, his 10-21: "the goal of eco should perhaps be all about metal and energy
 // SPENDING instead of income"; "we still go out looking for more mexes when they'll only help us overflow"). On, the
 // realize shares price income by what will be spent in eco-only games too, as in a real one.
-bool EcoIncomeGoal() { return EcoOnly() && (ai.GetTunable("apex_eco_spend", TUNE_ECO_SPEND) <= 0.f); }
+bool EcoSpendOn() { return EcoOnly() && (ai.GetTunable("apex_eco_spend", TUNE_ECO_SPEND) > 0.f); }
+bool EcoIncomeGoal() { return EcoOnly() && !EcoSpendOn(); }
 
 float MRealizeShare(float addM, float buildSec)
 {

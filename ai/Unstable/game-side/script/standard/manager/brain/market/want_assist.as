@@ -791,7 +791,17 @@ float LabProductG(int fd, int d)
 				held += gOwnCount[od];
 		}
 		const float pg = (fd < int(gPlantBoughtG.length())) ? gPlantBoughtG[fd] : 0.f;
-		return pg / float(1 + held);
+		float g = pg / float(1 + held);
+		// A HAND IS PRICED BY THE SPENDING IT UNLOCKS, as a turret is (TUNE_ECO_SPEND; his 10-21): the spill its
+		// lathe would spend, at most its own drain.
+		if (EcoSpendOn()) {
+			const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
+			const float over = OverflowM();
+			const float spend = (over < drain) ? over : drain;
+			if (spend > g)
+				g = spend;
+		}
+		return g;
 	}
 	const float gap = ArmyTarget() - ArmyValue();
 	if (gap <= 0.f)
