@@ -55,6 +55,18 @@ bool EnergyWasting()
 }
 
 int gGenHeldLogAt = 0;
+// The crew a generator's site would get, in build power. The turrets reaching the site were added in metal a second
+// (NanoLatheReaching: 17.5 a turret) beside hands in build power (200 a turret), a ring of turrets read as a twelfth
+// of itself; TUNE_CREW_LATHE counts them in build power and adds what the transports can fly in over the build.
+float GenCrewBP(int uid, int d, float nanoLathe)
+{
+	const float hands = Catalog::gBuildPower[uid] * float(Requests::SiteWorkerCap(Catalog::Def(d)));
+	if (ai.GetTunable("apex_crew_lathe", TUNE_CREW_LATHE) <= 0.f)
+		return hands + nanoLathe;
+	const float standing = hands + nanoLathe * (80.f / 7.f);
+	return standing + FlyableLatheBP(Catalog::BuildSecondsAt(d, (standing > 1.f) ? standing : 1.f));
+}
+
 Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
 	Want w;
@@ -181,8 +193,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// ETA arm at the foot of the loop, which fills it if this does not.
 		float crewBP = 0.f;
 		if (genArriveOn)
-			crewBP = Catalog::gBuildPower[uid]
-					* float(Requests::SiteWorkerCap(Catalog::Def(d))) + genNanoBP;
+			crewBP = GenCrewBP(uid, d, genNanoBP);
 		float fArr = 1.f;
 		float fGrow = 1.f, fSurv = 1.f, fInf = 1.f, fReal = 1.f, fRent = 0.f;
 		float gain = Catalog::gMakeE[d] * fPrice;
@@ -395,8 +406,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			const double _tEt = Perf::T0();
 			const float gM = Catalog::gMakeE[d] * ConvRate();
 			if (crewBP <= 0.f)
-				crewBP = Catalog::gBuildPower[uid]
-						* float(Requests::SiteWorkerCap(Catalog::Def(d))) + genNanoBP;
+				crewBP = GenCrewBP(uid, d, genNanoBP);
 			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
 			Perf::Add("en.eta", _tEt);
 			if ((etaD < 0) || (s < etaS)) {

@@ -490,8 +490,13 @@ bool CellSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 
 		const uint c = order[bi];
 		order[bi] = order[a];
 		key[bi] = key[a];
-		if (turret ? CellCoreNext(c, at) : CellRingNext(c, d, at))
+		if (turret ? CellCoreNext(c, at) : CellRingNext(c, d, at)) {
+			// a turret bought for a frame stands where it reaches that frame (his 10-21: "we are making less nano
+			// turrets now where we actually need them"), else it packs beside the frame
+			if (turret && OnMap(near) && (at.distance2D(near) > Catalog::gBuildDist[d]))
+				break;
 			return CellHanded(d, c);
+		}
 	}
 	// Every core full: the turret packs beside the work it was bought for. A cell opens only when a building fits
 	// no ring (his 10-21: "we are not fully utilizing them before going off and building another one").
