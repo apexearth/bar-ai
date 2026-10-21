@@ -246,7 +246,15 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 		const AIFloat3 p = t.GetBuildPos();
 		if (!OnMap(p) || Builder::SiteHot(p))
 			continue;
-		const float g = NanoGap(p);
+		// Outside every turret's circle was the test, and a big base has no such frame: 486 idle, 16 planes, 2
+		// moved (his 10-20). With TUNE_LIFT_TURRETS the frame is the one furthest from done at the lathe on it.
+		float g = 0.f;
+		if (LiftTurretsOn()) {
+			const float B = float(Requests::Workers(t)) * Requests::DRAIN + NanoLatheReaching(p);
+			const float R = t.buildDef.costM * (1.f - Requests::Progress(t));
+			g = (B > 0.f) ? (R / B) : R;
+		} else
+			g = NanoGap(p);
 		if (g <= gap)
 			continue;
 		// a frame the lathe on it finishes before the plane can reach it is no sink
@@ -735,17 +743,29 @@ float LiftGainFor(int d, float fillSec)
 
 // The metal of the idle turrets a plane of def d could carry into the short
 // line, and how many.
+// A TRANSPORT IS WORTH WHAT IT MOVES (TUNE_LIFT_TURRETS; his 10-20: "you can price a transport by its ability to
+// move nano turrets"). With no line short of lathe, the big frame the turrets on it finish slowest takes the idle
+// turrets a plane can fly: as many as finish what is left of it within a minute.
+bool LiftTurretsOn() { return ai.GetTunable("apex_lift_turrets", TUNE_LIFT_TURRETS) > 0.f; }
+
 float LiftTurretWorth(int d, float& out took)
 {
 	took = 0.f;
 	AIFloat3 lp;
 	float net = 0.f;
 	CCircuitUnit@ line = null;
-	if (!LineSiteFor(lp, net, line) || (net <= 0.f)) {
+	float need = 0.f;
+	if (LineSiteFor(lp, net, line) && (net > 0.f))
+		need = net / NANO_ABSORB;
+	else {
 		++gLiftNoLine;
-		return 0.f;
+		float gap = 0.f;
+		if (!LiftTurretsOn() || !SinkSiteFor(lp, gap) || (gSinkJob is null) || (gSinkJob.buildDef is null))
+			return 0.f;
+		need = gSinkJob.buildDef.costM * (1.f - Requests::Progress(gSinkJob)) / (NANO_ABSORB * 60.f);
+		if (need < 1.f)
+			need = 1.f;
 	}
-	const float need = net / NANO_ABSORB;
 	const float speed = (Catalog::gSpeed[d] > 1.f) ? Catalog::gSpeed[d] : 100.f;
 	float worth = 0.f;
 	for (uint i = 0; (i < gOwnNano.length()) && (took < need); ++i) {

@@ -1191,7 +1191,7 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 					|| ConStandsIdle(Catalog::gFlyer[pd], Catalog::gAdvHand[pd] ? 2 : 1)))
 			return null;
 	}
-	if (EcoOnly() && !Catalog::gBuilder[pd])
+	if (EcoOnly() && !Catalog::gBuilder[pd] && !(LiftTurretsOn() && IsLiftDef(pd)))
 		return null;   // the economy-only benchmark: hands only, every path
 	return Catalog::Def(pd);
 }
@@ -2127,7 +2127,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 		}
-		if (EcoOnly() && !Catalog::gBuilder[d])
+		if (EcoOnly() && !Catalog::gBuilder[d] && !(LiftTurretsOn() && IsLiftDef(d)))
 			continue;   // the economy-only benchmark: hands only
 		if (ecoStrictOn && !EcoSeatFacKeeps(d)) {
 			++gEsFacRef;

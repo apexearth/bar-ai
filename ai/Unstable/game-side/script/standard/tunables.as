@@ -1779,6 +1779,7 @@ const float TUNE_BP_TRAVEL = 0.f;
 const float TUNE_IDLE_LATHE = 0.f;   // [toggle 0/1] sites.as/joinnet.as/governed.as: work goes where turrets stand idle -- blocks ranked by idle build power and probed until six fit, every static build sited at one while a turret idles, a new frame there over a join, no wait for a full crew (his 10-20)
 const float TUNE_NANO_E_INHERIT = 0.f;   // [toggle 0/1] want_nano.as/want_energy.as: a generator inherits the gain the energy cap took from a turret, for the share of the gap it closes (his 10-20)
 const float TUNE_M_FULL_SMOOTH = 0.f;   // [toggle 0/1] price.as MRealizeShare: the metal bank's fullness is a ~25 s average, and a bank that has sat full discounts the held peak and the spend in flight (his 10-20)
+const float TUNE_LIFT_TURRETS = 0.f;   // [toggle 0/1] lift.as: with no line short of lathe a transport is priced on the idle turrets it can fly to the frame furthest from done, and eco-only mode may build it (his 10-20)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;

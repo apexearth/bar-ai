@@ -405,6 +405,7 @@ local NAMES = {
 	"apex_idle_lathe", -- work goes where turrets stand idle (0)
 	"apex_nano_e_inherit", -- a generator inherits the turret value its energy unblocks (0)
 	"apex_m_full_smooth", -- price.as: metal bank fullness averaged (0)
+	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
