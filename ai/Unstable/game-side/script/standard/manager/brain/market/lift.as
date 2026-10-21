@@ -841,11 +841,26 @@ float LiftHandsWorthFor(int d)
 }
 
 float gLiftTookDist = 0.f;   // the summed flight of the turrets LiftTurretWorth took, for the fleet's throughput
+int gLiftPriceLogAt = 0;
+void LiftPriceLog(int d, const string &in why, float took, float need, float have, float worth)
+{
+	if (ai.frame < gLiftPriceLogAt)
+		return;
+	gLiftPriceLogAt = ai.frame + 60 * SECOND;
+	AiLog("apex: lift-price t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " why=" + why
+		+ " took=" + int(took) + " need=" + formatFloat(need, "", 0, 1) + " have=" + int(have)
+		+ " worth=" + int(worth) + " turrets=" + gOwnNano.length());
+}
+
 float LiftGainFor(int d, float fillSec)
 {
 	++gLiftAsk;
-	if (!IsLiftDef(d) || (Brain::PendAnyOf(d) > 0))
+	if (!IsLiftDef(d))
 		return 0.f;
+	if (Brain::PendAnyOf(d) > 0) {
+		LiftPriceLog(d, "pending", 0.f, 0.f, float(gLift.length()), 0.f);
+		return 0.f;
+	}
 	// A free plane already answers the cargo: ten were bought for jobs two
 	// planes were doing, the rest hovering over the air plant (10-01).
 	// ...with TUNE_LIFT_TURRETS the fleet answers what it can carry in the fill, not whether one plane is free this
@@ -864,10 +879,14 @@ float LiftGainFor(int d, float fillSec)
 		const float planeSec = took * (2.f * gLiftTookDist / took / v + LIFT_HAND_OVERHEAD_S);
 		const float needPlanes = planeSec / fill;
 		const float have = float(gLift.length());
-		if (needPlanes <= have)
+		if (needPlanes <= have) {
+			LiftPriceLog(d, "covered", took, needPlanes, have, worth);
 			return 0.f;
+		}
 		worth *= (needPlanes - have) / needPlanes;
-	}
+		LiftPriceLog(d, "buy", took, needPlanes, have, worth);
+	} else if (LiftTurretsOn())
+		LiftPriceLog(d, "none-idle", took, 0.f, float(gLift.length()), worth);
 	gLiftPriced = (worth + FerryMissedFor(d, fill)) / fill;
 	gLiftPricedTurrets = int(took);
 	return gLiftPriced;
@@ -909,7 +928,7 @@ float LiftTurretWorth(int d, float& out took)
 		const int c = int(u.circuitDef.id);
 		if (!LiftFits(d, c))
 			continue;
-		if (LiftServed(c))
+		if (!LiftTurretsOn() && LiftServed(c))   // with TUNE_LIFT_TURRETS the fleet's throughput answers this, not one owned plane
 			continue;
 		const AIFloat3 up = gOwnNanoPos[i];
 		if (up.distance2D(lp) < Catalog::gBuildDist[c])
