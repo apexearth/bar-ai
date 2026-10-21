@@ -186,7 +186,6 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 - `TUNE_E_HEADROOM` = 1.75. Energy income target as a multiple of trending pull; 1.25 and 1.5 still under-supplied in watched games.
 - `TUNE_ESCORT_SPEED` = 1. An escort must catch a raider or be a riot unit (his "rocket bots die in a 1v1 vs a pawn"); a multiple of the field's mean speed.
 - `TUNE_MEX_GROWTH` = 6 (was 8; with energy 10, his 10-20 "tune down mex a little and tune up energy a little": 28-minute eco +0 air-first, seeds 131-134, mean income minutes 8-26 +6% (se 6%, 3/4), energy at 14 +31%; 4/12 +9% (se 13%)). A spot is worth what it raises us by (his "when a mex would double our income it is very important"): at 8, doubling x9, +10% x1.8, +1% x1.08.
-- `TUNE_INFERIOR_DISCOUNT` = 1. Discount a generator by how much better one another constructor of ours could build, so a restricted worker spends its time on the better one.
 - `TUNE_ENERGY_GROWTH_ARRIVE` = 0. Charge the energy growth premium only on the share of the plan horizon a generator pays over, so the Epic reactor stops winning for its size (his "we should make AFUS first ... the algorithm smart enough to have chosen this"). Off; untested.
 - `TUNE_E_REALIZE` = 1. Price generation by the share anything would use (demand at headroom plus converter capacity); 0 is the control.
 - `TUNE_E_WASTE_WORTH` = 0.25. Overflow makes a generator lose to the converter, never unbuildable (his ruling: the generator ladder never pauses on waste). Chosen, not derived.

@@ -688,8 +688,6 @@ GROUPS = [
                  ("TUNE_VW_MCS_DEPTH", "how much of the metal bill a full bank forgives (search scaffolding)"),
                  ("TUNE_BUDGET_LEVER", "whether the category budget's target/actual multiplier actually SCALES wants or is only logged. Measured OFF: 32 games with it on won 3.1% against 48 games off at 12.5%, and his live read agreed -- it moves defence share 0.16 -> 0.23 and does not move economy at all, because economy is the category most often decided with no rival want to price against"),
                  ("TUNE_T2_FUSION_PULL", "while the T2 switch is on and no advanced generator stands, TAKE the fusion instead of drawing it. The switch already names fusions as its purpose but only removes army from the target, and the freed metal went to wind: measured first fusion at minute 16.2 against BARb's 9.7, from a T2 plant we finished FIRST at 8.0"),
-                 ("TUNE_INFERIOR_DISCOUNT", "stops building a generator tier "
-                  "once a better one is available"),
              ]},
             {"title": "Metal converters",
              "what": "Turning surplus energy back into metal. These modulate "

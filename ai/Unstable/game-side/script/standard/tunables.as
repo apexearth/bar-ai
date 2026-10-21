@@ -1219,7 +1219,6 @@ const float TUNE_MEX_GROWTH = 6.f;
 //   constructor we own could build instead, so a worker restricted to the
 //   inferior option prefers to spend its build power on the better one. See
 //   docs/tunables.md.
-const float TUNE_INFERIOR_DISCOUNT = 1.f;
 
 const float TUNE_ENERGY_GROWTH = 10.f;
 

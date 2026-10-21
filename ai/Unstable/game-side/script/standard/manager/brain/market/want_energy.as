@@ -89,8 +89,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	const float genPower = EcoPowerM();
 	const float genGrowK = ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH);
 	const bool  genSurvOn = ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f;
-	const bool  genInferiorOn = ai.GetTunable("apex_inferior_discount",
-			TUNE_INFERIOR_DISCOUNT) > 0.f;
+	// ...but not while metal is wasted (his 10-21: attack metal excess): energy per metal ranks generators by a
+	// currency we are throwing away, and the cost side already forgives the metal. Standing down there, eco +0
+	// air-first, seeds 251-254: minute 20 +15% (se 6%), mean income +16% (4/4), energy at 14 +32%.
+	const bool  genInferiorOn = !MetalWasting();
 	const float genBestEPerM = genInferiorOn ? OwnedBestEPerM() : 0.f;
 	// SpaceRentM is perCell x cells x k, so one cell's worth answers every
 	// footprint -- it walked the whole defence field per rung for the same number.
