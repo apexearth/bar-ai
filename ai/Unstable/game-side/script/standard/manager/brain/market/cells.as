@@ -7,7 +7,9 @@ namespace Market {
 // then open ground a ring's width from the others, nearest home. Turrets, built or flown in, take the core of the
 // cell where the work is. The cell is the request's exact site (IUnitTask.SetExactSite).
 
-const int CELL_CORE = 4;       // turrets per core side
+// The cell's shape is under test (his 10-21: "try with some different settings until you figure out which one
+// works best"): core side, spacing, how far the ring reaches, and whether idle home turrets seed cells.
+int CellCore() { const int k = int(ai.GetTunable("apex_cell_core", TUNE_CellCore())); return (k < 2) ? 2 : k; }
 const int CELL_SCAN = 300;     // ring cells tried per ask: a ring among standing turrets is mostly taken
 
 bool CellLayoutOn() { return ai.GetTunable("apex_cell_layout", TUNE_CELL_LAYOUT) > 0.f; }
@@ -36,7 +38,7 @@ int CellNanoDef()
 float CellCoreHalf()
 {
 	const int nd = CellNanoDef();
-	return Catalog::ValidId(nd) ? (0.5f * float(CELL_CORE) * Lattice::FootPitch(nd)) : 96.f;
+	return Catalog::ValidId(nd) ? (0.5f * float(CellCore()) * Lattice::FootPitch(nd)) : 96.f;
 }
 
 // How far from the centre a building of def d may stand: in reach of the core's near side (his 10-21: "the areas
@@ -48,7 +50,9 @@ float CellReach()
 }
 float CellRingMax(int d)
 {
-	return CellReach() - CellCoreHalf() + 0.5f * Lattice::FootPitch(d);
+	// apex_cell_ring: 0 the core's near side reaches it, 1 its farthest turret does
+	const float k = (ai.GetTunable("apex_cell_ring", TUNE_CELL_RING) > 0.f) ? 1.414f : 1.f;
+	return CellReach() - k * CellCoreHalf() + 0.5f * Lattice::FootPitch(d);
 }
 
 bool CellRingFull(uint c, int d)
@@ -68,10 +72,10 @@ bool CellCoreNext(uint c, AIFloat3& out at)
 	const float pn = Lattice::FootPitch(nd);
 	array<AIFloat3> cand;
 	array<float> key;
-	for (int i = 0; i < CELL_CORE; ++i) {
-		for (int j = 0; j < CELL_CORE; ++j) {
-			const AIFloat3 p = gCellAt[c] + AIFloat3((float(i) - 0.5f * float(CELL_CORE - 1)) * pn, 0.f,
-					(float(j) - 0.5f * float(CELL_CORE - 1)) * pn);
+	for (int i = 0; i < CellCore(); ++i) {
+		for (int j = 0; j < CellCore(); ++j) {
+			const AIFloat3 p = gCellAt[c] + AIFloat3((float(i) - 0.5f * float(CellCore() - 1)) * pn, 0.f,
+					(float(j) - 0.5f * float(CellCore() - 1)) * pn);
 			cand.insertLast(p);
 			key.insertLast(p.distance2D(gCellAt[c]));
 		}
@@ -177,8 +181,8 @@ bool CellOpen()
 	const float reach = Catalog::gBuildDist[nd];
 	const AIFloat3 home = gFarmSet ? gFarmPos : Base::gAnchor;
 	CCircuitDef@ def = Catalog::Def(nd);
-	const float step = 2.f * (reach - CellCoreHalf());
-	{
+	const float step = 2.f * (reach - CellCoreHalf()) * ai.GetTunable("apex_cell_space", TUNE_CELL_SPACE);
+	if (ai.GetTunable("apex_cell_home", TUNE_CELL_HOME) > 0.f) {
 		IdleNanoLatheM();
 		float bestIdle = 0.f;
 		AIFloat3 seed;
