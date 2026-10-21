@@ -426,7 +426,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			+ " local=" + formatFloat(PfCrowdAt(eSite, 400.f), "", 0, 3)
 			+ " m/cell=" + formatFloat(PfMetalPerCell(), "", 0, 1));
 	}
-	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
+	if (etaOn && (ai.GetTunable("apex_epick_eta", TUNE_EPICK_ETA) > 0.f)
+		&& (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
 		const float mktS = w.walkSec + EtaWithN(int(w.def.id),
 				Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
 				EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f);

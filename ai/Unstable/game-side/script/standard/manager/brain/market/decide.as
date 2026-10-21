@@ -1276,8 +1276,7 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 	const bool comClaim = (w.kind == WK_MEX)
 			|| ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT));
 	return ComFar(at) && (at.distance2D(unit.GetPos(ai.frame)) > HERE_R)
-		&& !(comClaim && !gCsT2 && ComClaimOk(unit, at)
-			&& (ai.GetTunable("apex_com_claim_leash", TUNE_COM_CLAIM_LEASH) <= 0.f));
+		&& !(comClaim && !gCsT2 && ComClaimOk(unit, at));
 }
 
 // EVERY WANT PAYS THE ASKER'S ROAD, not only the mex want: a T2 con walked

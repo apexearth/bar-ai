@@ -1366,7 +1366,7 @@ const float TUNE_JOIN_MIN_M = 354.f;
 // ECO_LEASH: work radius of the quiet rear's builders from home -- the safe
 //   radius it prices everything else against.
 const float TUNE_ECO_LEASH = 2500.f;
-const float TUNE_COM_CLAIM_LEASH = 0.f;   // [toggle 0/1] MEASUREMENT (10-21): the leash holds the commander's extractor claims too -- what his staying home is worth
+const float TUNE_EPICK_ETA = 1.f;   // [toggle 0/1] want_energy.as: the ETA may replace the market's generator; its crew grows with cost, so the dearer cloakable fusion read 1,545 s against the fusion's 2,015 and displaced the market's AFUS (his 10-21)
 const float TUNE_FAC_BUSY = 0.f;   // [toggle 0/1] sites.as RisingNear: a working factory holds the turrets in its reach, as the idle census counts it (his 10-21)
 
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets and
