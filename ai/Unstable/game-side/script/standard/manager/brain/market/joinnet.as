@@ -54,11 +54,11 @@ IUnitTask@ JoinOrNew(CCircuitUnit@ unit, CCircuitDef@ def, const AIFloat3& in sp
 			/ (Requests::DRAIN * float((crew > 0) ? crew : 1));
 	int rule = Requests::WorthJoining(extra, progress, Catalog::gCostM[int(def.id)], crew, speed)
 			? NJ_JOIN : NJ_NEW;
-	// A NEW FRAME WHERE TURRETS STAND IDLE (TUNE_IDLE_LATHE; his 10-20: "still not enough parallel activities
+	// A NEW FRAME WHERE TURRETS STAND IDLE (his 10-20: "still not enough parallel activities
 	// happening once we're ridiculously wealthy"). Joining adds this hand's lathe to a frame; a frame opened in
 	// reach of idle turrets adds theirs as well. While free metal feeds both, the new frame is the faster spend:
 	// 530 joins to 13 new in his watch game while hundreds of turrets idled and 1,200+ m/s went unspent.
-	if ((rule == NJ_JOIN) && OnMap(spot) && IdleLatheOn()) {
+	if ((rule == NJ_JOIN) && OnMap(spot)) {
 		const float idleAt = IdleNanoLatheNear(spot);
 		const float mine = Catalog::gBuildPower[int(unit.circuitDef.id)] * (7.f / 80.f);
 		if ((idleAt > 0.f) && (FreeMetalFlow() >= mine + idleAt))

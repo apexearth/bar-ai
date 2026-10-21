@@ -317,9 +317,8 @@ uint EffectiveCap(const CCircuitDef@ want)
 	// Cheap defs saturate at two or three hands, so converters and nanos still
 	// parallelize freely; "really expensive" falls out of the crew arithmetic.
 	// Idle turrets are a crew already standing, and free metal feeds them: a second frame does not wait for the
-	// first to fill (TUNE_IDLE_LATHE, joinnet.as).
-	const bool idleCrew = Market::IdleLatheOn()
-			&& (Market::IdleNanoLatheM() > 0.f) && (Market::FreeMetalFlow() > Market::IdleNanoLatheM());
+	// first to fill (joinnet.as).
+	const bool idleCrew = (Market::IdleNanoLatheM() > 0.f) && (Market::FreeMetalFlow() > Market::IdleNanoLatheM());
 	if (!idleCrew && !SitesSaturated(want)) {
 		const uint have = InFlight(want);
 		if (have < cap)

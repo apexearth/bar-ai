@@ -830,17 +830,15 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 	// and a big footprint fits nowhere near a block's middle.
 	array<float> ringBP;
 	ringBP.resize(gOwnNanoPos.length());
-	const bool idleRank = IdleLatheOn();
 	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
 		ringBP[i] = RingBPAt(gOwnNanoPos[i]);
-		if (idleRank)
-			ringBP[i] /= float(1 + RisingNear(gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
+		ringBP[i] /= float(1 + RisingNear(gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
 	}
 	array<int> top;
 	// A block packed solid with turrets has no ground left in its reach, and the richest were exactly those (his
 	// 10-20: "we keep trying to build all our buildings in the same general area which has all of its current nano
 	// turret capacity used"). Idle-ranked, the probe walks on until six blocks fit.
-	const int probeCap = idleRank ? (LATHE_SITE_PROBES * 3) : LATHE_SITE_PROBES;
+	const int probeCap = LATHE_SITE_PROBES * 3;
 	int fits = 0;
 	for (int k = 0; k < probeCap; ++k) {
 		int pick = -1;
@@ -2338,13 +2336,12 @@ float LatheBuildTime()
 	return gLatheBt;
 }
 
-// WORK GOES WHERE TURRETS STAND IDLE (TUNE_IDLE_LATHE; his 10-20: spread the builds so other turrets can help).
+// WORK GOES WHERE TURRETS STAND IDLE (his 10-20: spread the builds so other turrets can help).
 // Siting, the join-or-new choice and the request cap read it together: a frame sited at an idle ring, opened
 // rather than joined elsewhere, with no wait for the first frame's crew.
-bool IdleLatheOn() { return ai.GetTunable("apex_idle_lathe", TUNE_IDLE_LATHE) > 0.f; }
 bool IdleLatheWorthy(int bd)
 {
-	return IdleLatheOn() && Catalog::ValidId(bd) && !Catalog::gMobile[bd] && (Catalog::gBuildPower[bd] <= 0.f)
+	return Catalog::ValidId(bd) && !Catalog::gMobile[bd] && (Catalog::gBuildPower[bd] <= 0.f)
 		&& (Catalog::gExtractsM[bd] <= 0.f) && (IdleNanoLatheM() > 0.f);
 }
 

@@ -250,16 +250,11 @@ void TrackMPull()
 	gMFullEma = 0.8f * gMFullEma + 0.2f * (aiEconomyMgr.isMetalFull ? 1.f : 0.f);
 }
 
-// HOW FULL THE BANK HAS BEEN, not whether it is full this tick (TUNE_M_FULL_SMOOTH; his 10-20: "we have air going
+// HOW FULL THE BANK HAS BEEN, not whether it is full this tick (his 10-20: "we have air going
 // out to get more mexes when we can't even spend the metal we have"). A bank at the brim read full one sample and
 // short the next, the realize share flipped 0.02 <-> 1.00 with it, and the extractor walks were bought on the 1.00
 // samples. Over ~25 s; a bank that has sat full also shows the held peak and the spend in flight are stale.
-float MFullW()
-{
-	if (ai.GetTunable("apex_m_full_smooth", TUNE_M_FULL_SMOOTH) <= 0.f)
-		return aiEconomyMgr.isMetalFull ? 1.f : 0.f;
-	return gMFullEma;
-}
+float MFullW() { return gMFullEma; }
 
 // A conversion ratio is not a price until a converter stands (apexearth:
 // "we have to have a converter for that to even be true"). Per 1 E/s of
