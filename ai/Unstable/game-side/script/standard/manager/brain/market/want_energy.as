@@ -1538,6 +1538,14 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// walk again (apexearth's call, twice). Overflow = the surplus the E bank
 	// cannot absorb.
 	const float eStore2 = Eco::EStor();
+	// THE OVERFLOW ON ITS WAY (TUNE_CONV_AHEAD; his 10-20 "making the converters before you've finished the afus",
+	// 10-21 "we are clearly not anticipating energy overflow"). Converters answered only a full bank and a surplus
+	// already spilling; the generation being built arrives as overflow unless its converters rise beside it. The
+	// forward surplus is income and that generation, less pull, the energy builds under way will draw, and the
+	// converters already ordered.
+	float eAhead = 0.f;
+	if (ai.GetTunable("apex_conv_ahead", TUNE_CONV_AHEAD) > 0.f)
+		eAhead = Eco::EInc() + EMakeInFlight() - Eco::EPull() - EDrainInFlight() - ConvCapInFlight();
 	// WHY THERE IS NO CONVERTER. Measured 2026-08-31 on Red Comet 1v1 +100%:
 	// 46-56% of all energy thrown away, the bank pinned at 87-99% of storage
 	// for the whole game, and `energy/convert` winning ZERO elections while
@@ -1545,7 +1553,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// carrying no traffic. Each early exit below is now countable rather than
 	// silent; the last line says which one is eating the want.
 	++gCwCalls;
-	if ((eStore2 > 1.f)
+	if ((eStore2 > 1.f) && (eAhead <= 1.f)
 		&& (Eco::ECur() < 0.85f * eStore2)) {
 		++gCwBank;
 		ConvWhyLog();
@@ -1564,6 +1572,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			: (eWasted - StandingConvCap());
 	if (er)
 		eSurplus = ErConvRoomE();
+	if (eAhead > eSurplus)
+		eSurplus = eAhead;
 	gCwSurplus = eSurplus;
 	// A pinned bank is its own evidence -- see EnergyPinned. The EMA is the
 	// wrong instrument there, so it does not get to veto.

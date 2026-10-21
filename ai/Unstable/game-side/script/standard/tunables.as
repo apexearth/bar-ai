@@ -1790,6 +1790,7 @@ const float TUNE_LIFT_COMPACT = 0.f;   // [toggle 0/1] lift.as: a free transport
 const float TUNE_CREW_LATHE = 0.f;   // [toggle 0/1] want_energy.as GenCrewBP: a reactor's crew counts its turrets in build power and the turrets the transports can fly in (his 10-21)
 const float TUNE_NANO_AT_WORK = 0.f;   // [toggle 0/1] execute.as: a turret bought for a frame stands at the frame, one bought for the spill at the eco site, not at the neediest plant line (his 10-21)
 const float TUNE_ECO_NO_ARMY = 0.f;   // [toggle 0/1] army.as: the army target is zero in economy-only games, whose labs make constructors alone (his 10-21)
+const float TUNE_CONV_AHEAD = 0.f;   // [toggle 0/1] want_energy.as ProposeConvert: converters answer the forward surplus (income + generation building - pull - draws building - converters ordered) (his 10-20/21)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;
