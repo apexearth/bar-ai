@@ -1789,6 +1789,7 @@ const float TUNE_IDLE_LATHE_SITE = 0.f;   // [toggle 0/1] sites.as: turret rings
 const float TUNE_LIFT_SINK = 0.f;   // [toggle 0/1] lift.as: with no line short of lathe, a transport is priced on the idle turrets it can fly to the big frame nobody lathes (his 10-20)
 const float TUNE_CONV_ANTICIPATE = 0.f;   // [toggle 0/1] want_energy.as: converters are bought for generator output arriving within a converter's build time, not only for energy already spilling (his 10-20)
 const float TUNE_LAB_ORDER_GAIN = 0.f;   // [toggle 0/1] want_assist.as: a hand on a lab is priced on the gain the production market gave the order it is building; the commander takes the same guard while no army is owed (his 10-20)
+const float TUNE_REALIZE_CAPACITY = 0.f;   // [toggle 0/1] price.as MRealizeShare: the metal a new income can be spent on is at least the build power standing (BPCapacity), not only the pull (his 10-20)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;

@@ -693,9 +693,18 @@ float MRealizeShare(float addM, float buildSec)
 	// spilling 35 m/s as short of metal (his 10-18 2v2: share 1.0 at a full bank).
 	// Build power already ordered is spend on its way.
 	const float fullW = MFullW();
-	const float target = demand * (1.f + (gPrEHeadroom - 1.f) * (1.f - fullW))
+	float target = demand * (1.f + (gPrEHeadroom - 1.f) * (1.f - fullW))
 			+ BpSpendInFlightM() * (1.f - fullW) + fill
 			+ (IdleLatheSiteOn() ? IdleNanoLatheM() : 0.f);   // idle turrets are spend waiting for a site (his 10-20: 45k banked, 486 idle)
+	// WHAT WE COULD SPEND, NOT WHAT WE DO (TUNE_REALIZE_CAPACITY; his 10-20: "we have such a silly amount of build
+	// power on the map, we can 100% spend all our income, but we're still excessing"). Read off the pull, the share
+	// closed a loop: nothing worth building is offered, so little is spent, so more income reads unspendable and
+	// nothing worth building is offered. The build power standing is the spend we can make.
+	if (ai.GetTunable("apex_realize_capacity", TUNE_REALIZE_CAPACITY) > 0.f) {
+		const float cap = BPCapacity();
+		if (cap > target)
+			target = cap;
+	}
 	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
 	// a spot claimed now is still ours when it does. The band loses the wait,
 	// not the metal -- and, as on the energy side, it keeps only the share of the
