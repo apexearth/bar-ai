@@ -694,7 +694,8 @@ float MRealizeShare(float addM, float buildSec)
 	// Build power already ordered is spend on its way.
 	const float fullW = MFullW();
 	const float target = demand * (1.f + (gPrEHeadroom - 1.f) * (1.f - fullW))
-			+ BpSpendInFlightM() * (1.f - fullW) + fill;
+			+ BpSpendInFlightM() * (1.f - fullW) + fill
+			+ (IdleLatheSiteOn() ? IdleNanoLatheM() : 0.f);   // idle turrets are spend waiting for a site (his 10-20: 45k banked, 486 idle)
 	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
 	// a spot claimed now is still ours when it does. The band loses the wait,
 	// not the metal -- and, as on the energy side, it keeps only the share of the

@@ -246,7 +246,16 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 		const AIFloat3 p = t.GetBuildPos();
 		if (!OnMap(p) || Builder::SiteHot(p))
 			continue;
-		const float g = NanoGap(p);
+		// Outside every turret's circle was the test, and with 900 turrets standing nothing is: 486 idle, 16
+		// planes, 2 moved (his 10-20). With TUNE_LIFT_SINK the frame is the one furthest from done at the lathe
+		// on it, in seconds -- the frame an extra turret brings forward most.
+		float g = 0.f;
+		if (LiftSinkOn()) {
+			const float B = float(Requests::Workers(t)) * Requests::DRAIN + NanoLatheReaching(p);
+			const float R = t.buildDef.costM * (1.f - Requests::Progress(t));
+			g = (B > 0.f) ? (R / B) : R;
+		} else
+			g = NanoGap(p);
 		if (g <= gap)
 			continue;
 		// a frame the lathe on it finishes before the plane can reach it is no sink
