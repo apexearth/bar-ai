@@ -405,6 +405,7 @@ local NAMES = {
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
 	"apex_big_eff_pool", -- register.as: one build-power record for big energy (0)
 	"apex_eta_space", -- eta.as: footprint priced in the generator ETA (0)
+	"apex_eco_spend", -- price.as: spending, not income, is the eco goal (0)
 	"apex_fac_busy", -- sites.as: working factories hold their turrets (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_row_layout", -- rows of one kind behind the anchor (0)

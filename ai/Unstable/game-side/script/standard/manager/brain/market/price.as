@@ -597,7 +597,10 @@ int gMRealLogAt = 0;
 // would spend it on, and in a real game the army is that sink; economy-only mode removes it, so once both banks
 // overflowed every income build read near zero and idle air cons assisted each other "over nothing" (assist won
 // 302 of 602 offers; turrets were offered in 245 of 687 elections). Here more income is the objective itself.
-bool EcoIncomeGoal() { return EcoOnly(); }
+// SPENDING IS THE GOAL (TUNE_ECO_SPEND, his 10-21: "the goal of eco should perhaps be all about metal and energy
+// SPENDING instead of income"; "we still go out looking for more mexes when they'll only help us overflow"). On, the
+// realize shares price income by what will be spent in eco-only games too, as in a real one.
+bool EcoIncomeGoal() { return EcoOnly() && (ai.GetTunable("apex_eco_spend", TUNE_ECO_SPEND) <= 0.f); }
 
 float MRealizeShare(float addM, float buildSec)
 {
