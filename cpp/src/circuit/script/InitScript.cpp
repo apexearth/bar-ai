@@ -2193,6 +2193,28 @@ static const springai::AIFloat3& Task_GetBuildPos(IUnitTask* task)
 	return (bt != nullptr) ? bt->GetPosition() : offMap;
 }
 
+// THE SCRIPT'S CELL, EXACTLY (his 10-20: rows of one kind). A row layout lays each building on a cell it
+// computed; the lattice snap moved it onto the def's own map-corner phase, which is what leaves strips where two
+// footprints meet. When the request's position is buildable at its facing it becomes the build position; a cell
+// taken by the time a hand arrives falls back to the lattice search as before.
+static bool IUnitTask_SetExactSite(IUnitTask* task)
+{
+	IBuilderTask* bt = AsBuilderTask(task);
+	if ((bt == nullptr) || (bt->GetBuildDef() == nullptr)) {
+		return false;
+	}
+	const springai::AIFloat3& p = bt->GetTaskPos();   // the asked cell, not a cell the constructor already snapped
+	if (!utils::is_valid(p)) {
+		return false;
+	}
+	CCircuitAI* circuit = bt->GetManager()->GetCircuit();
+	if (!circuit->GetMap()->IsPossibleToBuildAt(bt->GetBuildDef()->GetDef(), p, bt->GetFacing())) {
+		return false;
+	}
+	bt->SetBuildPos(p);
+	return true;
+}
+
 static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
 {
 	// Without caching arrayType can be extracted by:
@@ -2435,6 +2457,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "bool IsDead() const", asMETHODPR(IUnitTask, IsDead, () const, bool), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "Type GetBuildType() const", asFUNCTION(Task_GetBuildType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "const AIFloat3& GetBuildPos() const", asFUNCTION(Task_GetBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "bool SetExactSite()", asFUNCTION(IUnitTask_SetExactSite), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "CCircuitDef@ get_buildDef() const property", asFUNCTION(Task_GetBuildDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "CCircuitUnit@ get_target() const property", asFUNCTION(Task_GetTarget), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// apex: primed here so the first call is not the one that pays for the

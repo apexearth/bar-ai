@@ -1173,7 +1173,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (Catalog::ValidId(nAnchor) && (Catalog::gBuildsList[nAnchor].length() > 0))
 			NoteNanoDry(nAnchor, nPacked.length() == 0);
-		if (nPacked.length() > 0) {
+		// An eco turret stands on a turret row (TUNE_ROW_LAYOUT); a line's turrets keep packing round their plant.
+		AIFloat3 nRow;
+		const bool nRowed = ((w.spotId == NS_SINK) || (w.spotId == NS_FARM)) && RowSlot(int(w.def.id), nRow);
+		if (nRowed) {
+			slot = nRow;
+		} else if (nPacked.length() > 0) {
 			slot = nPacked[0];
 		} else {
 			// Every cell in reach is taken. The engine's own search is the
@@ -1210,6 +1215,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		IUnitTask@ nFirst = Requests::Take(unit, w.def, Task::BuildType::NANO,
 				Task::Priority::NORMAL, nSlot, nCover, 0.f,
 				made, true);
+		if ((nFirst !is null) && nRowed && made)
+			nFirst.SetExactSite();
 		// HOW MANY, NOT WHETHER (apexearth: "the single build request could
 		// expand out into 2, 5, 10, 20, whatever we can afford" -- and, on
 		// the first draft's flow arithmetic: "your logic of 'each nano
@@ -1468,9 +1475,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				+ " slot=" + int(slot.x) + "," + int(slot.z)
 				+ " ring=" + int(RingBPAt(slot))
 				+ " farm=" + int(w.pos.x) + "," + int(w.pos.z));
+		AIFloat3 rowAt;
+		const bool rowed = !floats && RowSlot(int(w.def.id), rowAt);
+		if (rowed)
+			slot = rowAt;
 		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
+		if ((et !is null) && rowed && crtd)
+			et.SetExactSite();
 		if (et !is null)
 			return et;
 		// REFUSED IS NOT "NOTHING TO DO" WHILE WE ARE STALLED. The rung the
@@ -1506,9 +1519,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (OnMap(aslot))
 				aslot = ClearOfSpots(aslot, 120.f);
 			bool acrtd = false;
+			AIFloat3 arow;
+			const bool arowed = RowSlot(ad, arow);
+			if (arowed)
+				aslot = arow;
 			IUnitTask@ at = Requests::Take(unit, adef, Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, OnMap(aslot) ? aslot : w.pos,
 					Lattice::StrideOf(ad), 0.f, acrtd, par);
+			if ((at !is null) && arowed && acrtd)
+				at.SetExactSite();
 			if (at is null)
 				continue;
 			if (ai.frame >= gNextELadderLog) {
@@ -1537,8 +1556,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if ((unit !is null) && OnMap(slot))
 			slot = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		const AIFloat3 cAt = OffFactoryExit(ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f));
+		AIFloat3 cRow;
+		const bool cRowed = RowSlot(int(w.def.id), cRow);
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
+				Task::Priority::NORMAL, cRowed ? cRow : cAt, cell, 0.f, crtd, par);
+		if ((cFirst !is null) && cRowed && crtd)
+			cFirst.SetExactSite();
 		// HOW MANY, NOT WHETHER -- the same law the nano burst already uses,
 		// with the SURPLUS in place of the bank (apexearth, on the nanos: "the
 		// single build request could expand out into 2, 5, 10, 20, whatever we
@@ -1603,13 +1626,23 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (wantC > 1) {
 					const double _tC = Perf::T0();
 					array<AIFloat3> packC;
-					PackSlots(cvd, cAt, -1, wantC - 1, packC);
+					if (RowLayoutOn() && RowFamily(cvd)) {
+						for (int rk = 1; rk < wantC; ++rk) {
+							AIFloat3 rc;
+							if (!RowSlot(cvd, rc))
+								break;
+							packC.insertLast(rc);
+						}
+					} else
+						PackSlots(cvd, cAt, -1, wantC - 1, packC);
 					int cOpen = 0;
 					for (uint ci = 0; ci < packC.length(); ++ci) {
 						bool mkc = false;
-						Requests::Take(null, w.def, Task::BuildType::CONVERT,
+						IUnitTask@ ct = Requests::Take(null, w.def, Task::BuildType::CONVERT,
 								Task::Priority::NORMAL, packC[ci], cell, 0.f,
 								mkc, true);
+						if ((ct !is null) && mkc && RowLayoutOn())
+							ct.SetExactSite();
 						if (mkc)
 							++cOpen;
 					}
