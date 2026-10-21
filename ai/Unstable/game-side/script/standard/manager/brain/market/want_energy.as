@@ -1514,6 +1514,55 @@ Want@ ProposeStorage(CCircuitUnit@ unit, float eWasted)
 	return w;
 }
 
+// ENERGY ON ITS WAY (TUNE_CONV_ANTICIPATE; his 10-20: "making the converters before you've finished the afus
+// because you know it is coming soon and you may already be overflowing energy"). A generator in flight that will
+// stand before a converter started now could, at the build power on it, is surplus the converter must be there to
+// take: all of it while energy already spills, past the shortfall otherwise.
+float EArrivingWithin(float sec)
+{
+	float e = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (Catalog::gMobile[d] || (Catalog::gMakeE[d] <= 1.f))
+			continue;
+		const float B = float(Requests::Workers(t)) * Requests::DRAIN + NanoLatheReaching(t.GetBuildPos());
+		if (B <= 0.f)
+			continue;
+		const float R = Catalog::gCostM[d] * (1.f - Requests::Progress(t));
+		if (R / B <= sec)
+			e += Catalog::gMakeE[d];
+	}
+	return e;
+}
+
+float ConvAnticipatedE(CCircuitUnit@ unit, float eWasted)
+{
+	if (ai.GetTunable("apex_conv_anticipate", TUNE_CONV_ANTICIPATE) <= 0.f)
+		return 0.f;
+	float horizon = 0.f;
+	const float bp = EffBP(Catalog::gBuildPower[int(unit.circuitDef.id)]);
+	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));
+	for (uint i = 0; i < b.length(); ++i) {
+		const int d = b[i];
+		if (Catalog::gAvailable[d] && !Catalog::gMobile[d] && (Catalog::gConvCapacity[d] > 0.f)) {
+			const float s = Catalog::BuildSecondsAt(d, bp);
+			if (s > horizon)
+				horizon = s;
+		}
+	}
+	const float arrive = EArrivingWithin(horizon + 30.f);
+	if (arrive <= 0.f)
+		return 0.f;
+	float shortE = EnergyDeficitNowE();
+	if (shortE < 0.f)
+		shortE = 0.f;
+	const float fut = ((eWasted > 1.f) ? (eWasted + arrive) : (arrive - shortE)) - ConvCapInFlight();
+	return (fut > 0.f) ? fut : 0.f;
+}
+
 Want@ ProposeConvert(CCircuitUnit@ unit)
 {
 	Want w;
@@ -1531,7 +1580,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// carrying no traffic. Each early exit below is now countable rather than
 	// silent; the last line says which one is eating the want.
 	++gCwCalls;
-	if ((eStore2 > 1.f)
+	const float eAhead = ConvAnticipatedE(unit, (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma);
+	if ((eStore2 > 1.f) && (eAhead <= 1.f)
 		&& (Eco::ECur() < 0.85f * eStore2)) {
 		++gCwBank;
 		ConvWhyLog();
@@ -1550,6 +1600,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			: (eWasted - StandingConvCap());
 	if (er)
 		eSurplus = ErConvRoomE();
+	if (eAhead > eSurplus)
+		eSurplus = eAhead;
 	gCwSurplus = eSurplus;
 	// A pinned bank is its own evidence -- see EnergyPinned. The EMA is the
 	// wrong instrument there, so it does not get to veto.

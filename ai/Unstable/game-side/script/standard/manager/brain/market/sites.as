@@ -837,7 +837,12 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			ringBP[i] /= float(1 + RisingNear(gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
 	}
 	array<int> top;
-	for (int k = 0; k < LATHE_SITE_PROBES; ++k) {
+	// A block packed solid with turrets has no ground left in its reach, and the six richest were exactly those:
+	// every frame fell to the one block with room while the rest stood idle (his 10-20: "huge amounts of nano
+	// turrets underutilized"). Idle-ranked, the probe walks on until six blocks fit.
+	const int probeCap = idleRank ? (LATHE_SITE_PROBES * 3) : LATHE_SITE_PROBES;
+	int fits = 0;
+	for (int k = 0; k < probeCap; ++k) {
 		int pick = -1;
 		for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
 			if ((ringBP[i] <= 0.f) || ((pick >= 0) && (ringBP[i] <= ringBP[uint(pick)])))
@@ -908,7 +913,7 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 	}
 	int fwdRefused = 0;
 	string why;
-	for (uint t = 0; t < top.length(); ++t) {
+	for (uint t = 0; (t < top.length()) && (fits < LATHE_SITE_PROBES); ++t) {
 		const uint i = uint(top[t]);
 		// The window is the block's width: the nearest legal footprint to
 		// a block's centre is on its rim, and the score below still demands
@@ -954,6 +959,7 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		// The ring's lathe over the frames already rising in it: several
 		// groups, one build beside each -- or, concentrated (TUNE_LATHE_CONCENTRATE, his 10-18: build what is
 		// important, not many things at once; we waste a lot of room), the richest lathe whatever rises there.
+		++fits;
 		const float stand = RingBPAt(s);
 		const float room = RoomBPAt(did, nanoDef, due, s);
 		const float bp = (stand + room) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s, r)));

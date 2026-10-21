@@ -316,7 +316,10 @@ uint EffectiveCap(const CCircuitDef@ want)
 	// holds its full crew -- hands that could still join must join first.
 	// Cheap defs saturate at two or three hands, so converters and nanos still
 	// parallelize freely; "really expensive" falls out of the crew arithmetic.
-	if (!SitesSaturated(want)) {
+	// Idle turrets are a crew already standing: a frame opened at their ring needs no hand pulled off another
+	// (his 10-20: "we need to start producing in parallel more").
+	const bool idleCrew = Market::IdleLatheSiteOn() && (Market::IdleNanoLatheM() > 0.f);
+	if (!idleCrew && !SitesSaturated(want)) {
 		const uint have = InFlight(want);
 		if (have < cap)
 			cap = (have > 0) ? have : 1;

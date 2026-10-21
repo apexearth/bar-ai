@@ -551,7 +551,8 @@ void ScoutOverflight()
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d]
 			|| !Catalog::gFlyer[d] || Catalog::gBuilder[d]
 			|| (Catalog::gPower[d] > 1.f)
-			|| (Catalog::gCostM[d] > 100.f))
+			|| (Catalog::gCostM[d] > 100.f)
+			|| Market::IsLiftDef(d))   // a transport is cheap and unarmed but no scout: it was flown over their base (his 10-20)
 			continue;
 		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d),
 				foe, 0.f);
