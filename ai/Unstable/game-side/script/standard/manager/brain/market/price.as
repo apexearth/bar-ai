@@ -602,7 +602,7 @@ bool EcoIncomeGoal() { return EcoOnly(); }
 float MRealizeShare(float addM, float buildSec)
 {
 	PrTuneFill();
-	if ((addM <= 0.f) || (EcoIncomeGoal() && (ai.GetTunable("apex_eco_mreal", TUNE_ECO_MREAL) <= 0.f)))
+	if ((addM <= 0.f) || EcoIncomeGoal())
 		return 1.f;
 	if (!gPrMRealizeOn)
 		return 1.f;

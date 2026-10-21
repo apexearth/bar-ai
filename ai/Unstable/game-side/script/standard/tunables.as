@@ -1221,7 +1221,6 @@ const float TUNE_MEX_GROWTH = 6.f;
 //   docs/tunables.md.
 
 const float TUNE_ENERGY_GROWTH = 10.f;
-const float TUNE_ECO_MREAL = 0.f;   // [toggle 0/1] price.as: in eco-only games the metal realize share discounts metal nothing would spend (10-21 test)
 
 // [toggle 0/1] DEFAULT OFF -- charge the energy growth premium above on the
 //   share of the plan's own horizon a generator would actually be paying over,
