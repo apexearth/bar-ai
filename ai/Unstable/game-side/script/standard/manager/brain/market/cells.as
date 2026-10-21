@@ -9,7 +9,7 @@ namespace Market {
 
 // The cell's shape is under test (his 10-21: "try with some different settings until you figure out which one
 // works best"): core side, spacing, how far the ring reaches, and whether idle home turrets seed cells.
-int CellCore() { const int k = int(ai.GetTunable("apex_cell_core", TUNE_CellCore())); return (k < 2) ? 2 : k; }
+int CellCore() { const int k = int(ai.GetTunable("apex_cell_core", TUNE_CELL_CORE)); return (k < 2) ? 2 : k; }
 const int CELL_SCAN = 300;     // ring cells tried per ask: a ring among standing turrets is mostly taken
 
 bool CellLayoutOn() { return ai.GetTunable("apex_cell_layout", TUNE_CELL_LAYOUT) > 0.f; }
