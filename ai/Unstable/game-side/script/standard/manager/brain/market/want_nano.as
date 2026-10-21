@@ -182,6 +182,31 @@ AIFloat3 WetNanoSite(int d, const AIFloat3& in yard, float radius = -1.f)
 	return gWetNanoSite[k];
 }
 
+// THE TURRET THE ENERGY WOULD UNBLOCK (TUNE_NANO_E_INHERIT; his 10-20: "not enough build power. Make more nano
+// turrets earlier"; his rule that an enabler inherits the value of what it enables). A turret held back only by
+// energy loses its gain to the cap above; the generator that closes that gap carries it, so the solar comes first
+// and the turret follows on energy that exists. Pricing the turret past the cap without building the energy took
+// it from the upgrades (-31%, the deleted TUNE_NANO_E_COST).
+float gNebM = 0.f, gNebE = 0.f;
+int gNebAt = -999999;
+void NanoEBlockNote(float lostM, float shortE)
+{
+	if ((lostM <= 0.f) || (shortE <= 1.f))
+		return;
+	if ((ai.frame - gNebAt > 5 * SECOND) || (lostM > gNebM)) {
+		gNebM = lostM;
+		gNebE = shortE;
+		gNebAt = ai.frame;
+	}
+}
+float NanoEBlockGain(float makeE)
+{
+	if ((ai.GetTunable("apex_nano_e_inherit", TUNE_NANO_E_INHERIT) <= 0.f) || (ai.frame - gNebAt > 5 * SECOND)
+		|| (gNebE <= 1.f) || (makeE <= 0.f))
+		return 0.f;
+	return gNebM * ((makeE < gNebE) ? (makeE / gNebE) : 1.f);
+}
+
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -577,8 +602,11 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// nano turrets... are stalling because we lack energy").
 			{
 				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-				if (askE > 1.f)
+				if (askE > 1.f) {
+					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
+					NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));
+				}
 			}
 			// ...and no more than the metal feed has left over: while what is asked
 			// already exceeds what income and bank can feed, more lathe adds nothing.

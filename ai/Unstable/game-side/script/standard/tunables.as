@@ -1778,6 +1778,7 @@ const float TUNE_BP_VS_LATHE = 1.f;
 const float TUNE_BP_TRAVEL = 0.f;
 const float TUNE_PLANT_PAYBACK = 0.f;   // [toggle 0/1] want_plant.as: a plant whose gain cannot repay its cost within the payback horizon is not offered, and a plant whose builder is dominated (one we make reaches as far and moves as fast) has no constructor half (his 10-20)
 const float TUNE_JOIN_IDLE_LATHE = 0.f;   // [toggle 0/1] joinnet.as: a hand opens a new frame instead of joining when idle turrets reach the planned spot and free metal feeds them (his 10-20)
+const float TUNE_NANO_E_INHERIT = 0.f;   // [toggle 0/1] want_nano.as/want_energy.as: a generator inherits the gain the energy cap took from a turret, for the share of the gap it closes (his 10-20)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;
