@@ -55,61 +55,6 @@ bool EnergyWasting()
 }
 
 int gGenHeldLogAt = 0;
-// A GENERATOR THIS HAND CAN BEAT ON EVERY COUNT IS NEVER THE ANSWER. The cloakable fusion makes the fusion's 750 E
-// for 6% more metal, 22% more energy and 20% more build time, and its cloak is worth nothing in our currency; priced
-// within noise of the fusion, it won 895 elections to the fusion's 679 in twelve eco games (his 10-21 watch). Dominated:
-// another generator the same hand builds, on the same ground (land, water, submerged), makes at least as much for no
-// more metal, energy, build time or footprint. From the unit stats, refreshed with availability.
-array<int> gGdUid;
-array<array<bool>> gGdDom;
-int gGdAt = 0;
-bool GenDominated(int uid, int d)
-{
-	if (ai.frame >= gGdAt) {
-		gGdAt = ai.frame + 30 * SECOND;
-		gGdUid.resize(0);
-		gGdDom.resize(0);
-	}
-	int slot = -1;
-	for (uint i = 0; i < gGdUid.length(); ++i)
-		if (gGdUid[i] == uid) {
-			slot = int(i);
-			break;
-		}
-	if (slot < 0) {
-		const array<int>@ b = Catalog::gBuildsList[uid];
-		array<bool> dom(b.length(), false);
-		for (uint i = 0; i < b.length(); ++i) {
-			const int x = b[i];
-			if (Catalog::gMakeE[x] <= 1.f)
-				continue;
-			for (uint j = 0; j < b.length(); ++j) {
-				const int y = b[j];
-				if ((y == x) || !Catalog::gAvailable[y] || Catalog::gMobile[y] || Catalog::gNeedGeo[y]
-					|| (Catalog::gFloater[y] != Catalog::gFloater[x]) || (Catalog::gSub[y] != Catalog::gSub[x]))
-					continue;
-				if ((Catalog::gMakeE[y] < Catalog::gMakeE[x]) || (Catalog::gCostM[y] > Catalog::gCostM[x])
-					|| (Catalog::gCostE[y] > Catalog::gCostE[x]) || (Catalog::gBuildTime[y] > Catalog::gBuildTime[x])
-					|| (Catalog::gAreaCells[y] > Catalog::gAreaCells[x]))
-					continue;
-				if ((Catalog::gMakeE[y] > Catalog::gMakeE[x]) || (Catalog::gCostM[y] < Catalog::gCostM[x])
-					|| (Catalog::gCostE[y] < Catalog::gCostE[x]) || (Catalog::gBuildTime[y] < Catalog::gBuildTime[x])) {
-					dom[i] = true;
-					break;
-				}
-			}
-		}
-		gGdUid.insertLast(uid);
-		gGdDom.insertLast(dom);
-		slot = int(gGdUid.length()) - 1;
-	}
-	const array<int>@ b = Catalog::gBuildsList[uid];
-	for (uint i = 0; i < b.length(); ++i)
-		if (b[i] == d)
-			return gGdDom[uint(slot)][i];
-	return false;
-}
-
 Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
 	Want w;
@@ -190,8 +135,6 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
 			continue;
 		if (Catalog::gMakeE[d] <= 1.f)
-			continue;
-		if ((ai.GetTunable("apex_gen_dominated", TUNE_GEN_DOMINATED) > 0.f) && GenDominated(uid, d))
 			continue;
 		// A floater is priced at water this hand can build from, and placed
 		// there (execute.as) -- never at the land farm (the armfmkr churn).

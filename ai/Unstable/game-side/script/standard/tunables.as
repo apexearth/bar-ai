@@ -1367,7 +1367,6 @@ const float TUNE_JOIN_MIN_M = 354.f;
 //   radius it prices everything else against.
 const float TUNE_ECO_LEASH = 2500.f;
 const float TUNE_COM_CLAIM_LEASH = 0.f;   // [toggle 0/1] MEASUREMENT (10-21): the leash holds the commander's extractor claims too -- what his staying home is worth
-const float TUNE_GEN_DOMINATED = 0.f;   // [toggle 0/1] want_energy.as: a generator the same hand beats on every count (cloakable fusion) is not offered (his 10-21)
 const float TUNE_FAC_BUSY = 0.f;   // [toggle 0/1] sites.as RisingNear: a working factory holds the turrets in its reach, as the idle census counts it (his 10-21)
 
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets and
