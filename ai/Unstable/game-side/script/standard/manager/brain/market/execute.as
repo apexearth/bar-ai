@@ -1175,7 +1175,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			NoteNanoDry(nAnchor, nPacked.length() == 0);
 		// An eco turret stands on a turret row (TUNE_ROW_LAYOUT); a line's turrets keep packing round their plant.
 		AIFloat3 nRow;
-		const bool nRowed = ((w.spotId == NS_SINK) || (w.spotId == NS_FARM)) && RowSlot(int(w.def.id), nRow);
+		const bool nRowed = ((w.spotId == NS_SINK) || (w.spotId == NS_FARM))
+				&& RowSlot(int(w.def.id), nRow, (w.spotId == NS_SINK) ? w.pos : AIFloat3(-1.f, 0.f, -1.f));
 		if (nRowed) {
 			slot = nRow;
 		} else if (nPacked.length() > 0) {

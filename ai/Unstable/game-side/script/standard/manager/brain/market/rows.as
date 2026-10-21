@@ -122,18 +122,25 @@ int RowTurretNear(float c, float& out dist)
 	return best;
 }
 
-// A slot on a row of def d's kind.
-bool RowSlot(int d, AIFloat3& out at)
+// A slot on a row of def d's kind. A turret bought for one frame (`near` on the map) takes the turret row nearest
+// that frame's depth -- the long row of build power beside the work (his 10-21) -- else the one nearest the newest
+// eco row.
+bool RowSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 0.f, -1.f))
 {
 	if (!RowLayoutOn() || !RowFamily(d) || !RowFrame())
 		return false;
 	const bool turret = Catalog::gBuildPower[d] > 0.f;
 	if (turret) {
-		// The turret row nearest the newest eco row that still has room, else a new one at the back.
 		float newest = -1.f;
 		for (uint r = 0; r < gRowDef.length(); ++r)
 			if (Catalog::gBuildPower[gRowDef[r]] <= 0.f)
 				newest = RowCentre(r);
+		if (OnMap(near)) {
+			const AIFloat3 rel = near - gRowOrigin;
+			const float nd = rel.x * gRowBackDir.x + rel.z * gRowBackDir.z;
+			if (nd > 0.f)
+				newest = nd;
+		}
 		array<uint> order;
 		array<float> key;
 		for (uint r = 0; r < gRowDef.length(); ++r) {
