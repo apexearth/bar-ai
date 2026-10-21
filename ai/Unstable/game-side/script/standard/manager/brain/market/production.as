@@ -3615,8 +3615,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
 		return null;
 	}
-	gOrderGainDef = best;
-	gOrderGainNote = bestGain;
 	AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
 		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)
