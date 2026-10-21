@@ -316,7 +316,11 @@ uint EffectiveCap(const CCircuitDef@ want)
 	// holds its full crew -- hands that could still join must join first.
 	// Cheap defs saturate at two or three hands, so converters and nanos still
 	// parallelize freely; "really expensive" falls out of the crew arithmetic.
-	if (!SitesSaturated(want)) {
+	// Idle turrets are a crew already standing, and free metal feeds them: a second frame does not wait for the
+	// first to fill (TUNE_JOIN_IDLE_LATHE, joinnet.as).
+	const bool idleCrew = (ai.GetTunable("apex_join_idle_lathe", TUNE_JOIN_IDLE_LATHE) > 0.f)
+			&& (Market::IdleNanoLatheM() > 0.f) && (Market::FreeMetalFlow() > Market::IdleNanoLatheM());
+	if (!idleCrew && !SitesSaturated(want)) {
 		const uint have = InFlight(want);
 		if (have < cap)
 			cap = (have > 0) ? have : 1;

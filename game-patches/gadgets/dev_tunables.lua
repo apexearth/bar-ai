@@ -403,6 +403,7 @@ local NAMES = {
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_e_feed_waste",     -- price.as: energy priced by the spendable feed while metal overflows (0)
 	"apex_plant_payback", -- want_plant.as: no plant that cannot pay back within the horizon (0)
+	"apex_join_idle_lathe", -- joinnet.as: new frame at idle turrets over a join (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
