@@ -230,6 +230,7 @@ float gMPullPrev = -1.f;
 int gMPullPrevAt = 0;
 float gMPullGrowth = 0.f;
 float gMDemandPk = 0.f;
+float gMFullEma = 0.f;
 void TrackMPull()
 {
 	if (ai.frame < gMPullPrevAt + 5 * SECOND)
@@ -246,6 +247,18 @@ void TrackMPull()
 	// energy side needed: metal pull dips to nothing between jobs.
 	const float md0 = (pull > 0.f) ? pull : 0.f;
 	gMDemandPk = (md0 > gMDemandPk) ? md0 : (0.97f * gMDemandPk + 0.03f * md0);
+	gMFullEma = 0.8f * gMFullEma + 0.2f * (aiEconomyMgr.isMetalFull ? 1.f : 0.f);
+}
+
+// HOW FULL THE BANK HAS BEEN, not whether it is full this tick (TUNE_M_FULL_SMOOTH; his 10-20: "we have air going
+// out to get more mexes when we can't even spend the metal we have"). A bank at the brim read full one sample and
+// short the next, the realize share flipped 0.02 <-> 1.00 with it, and the extractor walks were bought on the 1.00
+// samples. Over ~25 s; a bank that has sat full also shows the held peak and the spend in flight are stale.
+float MFullW()
+{
+	if (ai.GetTunable("apex_m_full_smooth", TUNE_M_FULL_SMOOTH) <= 0.f)
+		return aiEconomyMgr.isMetalFull ? 1.f : 0.f;
+	return gMFullEma;
 }
 
 // A conversion ratio is not a price until a converter stands (apexearth:
@@ -617,9 +630,10 @@ float MRealizeShare(float addM, float buildSec)
 	if (Eco::MInc() <= 0.f)
 		return 1.f;
 	TrackMPull();
+	const float fullW = MFullW();
 	float demand = Eco::MPull();
 	if (demand < gMDemandPk)
-		demand = gMDemandPk;
+		demand += (gMDemandPk - demand) * (1.f - fullW);
 	if (demand < 0.f)
 		demand = 0.f;
 	if (gMPullGrowth > 0.f) {
@@ -639,8 +653,8 @@ float MRealizeShare(float addM, float buildSec)
 	// the bank full the pull is the whole spend, and 1.75x of it read a seat
 	// spilling 35 m/s as short of metal (his 10-18 2v2: share 1.0 at a full bank).
 	// Build power already ordered is spend on its way.
-	const float target = (aiEconomyMgr.isMetalFull ? demand : demand * gPrEHeadroom)
-			+ BpSpendInFlightM() + fill;
+	const float target = demand * (1.f + (gPrEHeadroom - 1.f) * (1.f - fullW))
+			+ BpSpendInFlightM() * (1.f - fullW) + fill;
 	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
 	// a spot claimed now is still ours when it does. The band loses the wait,
 	// not the metal -- and, as on the energy side, it keeps only the share of the
@@ -649,13 +663,14 @@ float MRealizeShare(float addM, float buildSec)
 	float floorShare = gPrMWasteWorth;
 	{
 		const float wasteM = Eco::MInc() - Eco::MPull();
-		if (aiEconomyMgr.isMetalFull && (wasteM > 1.f)) {
+		if ((fullW > 0.f) && (wasteM > 1.f)) {
 			float follow = BpSpendInFlightM() / wasteM;
 			if (follow > 1.f)
 				follow = 1.f;
-			floorShare = gPrMWasteWorth * follow;
-			if (floorShare < 0.02f)
-				floorShare = 0.02f;
+			float wasteFloor = gPrMWasteWorth * follow;
+			if (wasteFloor < 0.02f)
+				wasteFloor = 0.02f;
+			floorShare = fullW * wasteFloor + (1.f - fullW) * gPrMWasteWorth;
 		}
 	}
 	const float room = target - Eco::MInc();
@@ -674,6 +689,7 @@ float MRealizeShare(float addM, float buildSec)
 			+ " pk=" + int(gMDemandPk)
 			+ " growth=" + formatFloat(gMPullGrowth, "", 0, 2)
 			+ " target=" + int(target)
+			+ " fullW=" + formatFloat(fullW, "", 0, 2)
 			+ " bank%=" + int((mst > 1.f) ? (100.f * Eco::MCur() / mst) : -1.f));
 	}
 	return share;
