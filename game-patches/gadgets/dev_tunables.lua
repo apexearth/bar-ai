@@ -401,7 +401,6 @@ local NAMES = {
 	"apex_draw_best",        -- decide.as: builders take the best-priced want, no category draw (0)
 	"apex_crew_split",       -- crew.as: field and home crews (1)
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
-	"apex_e_feed_waste",     -- price.as: energy priced by the spendable feed while metal overflows (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
