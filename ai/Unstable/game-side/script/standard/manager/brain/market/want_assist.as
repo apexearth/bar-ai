@@ -967,7 +967,9 @@ Want@ LabAssistGuard(CCircuitUnit@ unit, const Want& in priced)
 			continue;
 		const int fd = int(f.circuitDef.id);
 		float G = LabProductG(fd, d);
-		if (LabOrderGainOn() && Catalog::gBuilder[d]) {
+		// The commander only: priced for every hand, the constructors took the guard and he took the extractors
+		// they left (seeds 61-64, -12%).
+		if (LabOrderGainOn() && Catalog::gBuilder[d] && unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
 			const float og = LabOrderGainOf(int(f.id));
 			if (og > G)
 				G = og;
