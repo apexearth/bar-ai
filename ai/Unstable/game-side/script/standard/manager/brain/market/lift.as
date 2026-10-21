@@ -889,7 +889,7 @@ float LiftTurretWorth(int d, float& out took)
 	CCircuitUnit@ line = null;
 	float need = 0.f;
 	if (LineSiteFor(lp, net, line) && (net > 0.f))
-		need = net / NANO_ABSORB;
+		need = LiftTurretsOn() ? float(gOwnNano.length()) : (net / NANO_ABSORB);   // the fleet is sized on every idle turret
 	else {
 		++gLiftNoLine;
 		float gap = 0.f;
