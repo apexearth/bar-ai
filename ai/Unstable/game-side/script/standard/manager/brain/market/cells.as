@@ -16,6 +16,9 @@ bool CellLayoutOn() { return ai.GetTunable("apex_cell_layout", TUNE_CELL_LAYOUT)
 
 array<AIFloat3> gCellAt;
 array<bool> gCellCoreFull;
+array<int> gCellLo, gCellHi;          // line mode: the turret slots the line holds, lo..hi (empty while hi < lo)
+array<bool> gCellLoShut, gCellHiShut; // line mode: an end that met ground no turret can stand on
+AIFloat3 gCellNear(-1.f, 0.f, -1.f);   // the ask's work, for the end a line grows from
 array<array<int>> gCellFullDefs;   // defs whose ring in this cell has no free cell left
 bool gCellsExhausted = false;
 int gCellNano = -1;
@@ -63,6 +66,8 @@ bool CellRingFull(uint c, int d)
 // The first free core cell of cell c, nearest the centre.
 bool CellCoreNext(uint c, AIFloat3& out at)
 {
+	if (CellLineOn())
+		return LineCoreNext(c, at);
 	if (gCellCoreFull[c])
 		return false;
 	const int nd = CellNanoDef();
@@ -147,6 +152,8 @@ const array<AIFloat3>@ RingOffsets(int d)
 // The nearest free ring cell of def d round cell c.
 bool CellRingNext(uint c, int d, AIFloat3& out at)
 {
+	if (CellLineOn())
+		return LineBandNext(c, d, at);
 	if (CellRingFull(c, d) || (Lattice::FootPitch(d) < 16.f))
 		return false;
 	CCircuitDef@ def = Catalog::Def(d);
@@ -162,6 +169,141 @@ bool CellRingNext(uint c, int d, AIFloat3& out at)
 		if (ai.CanPlaceCell(def, p, got)) {
 			at = p;
 			return true;
+		}
+	}
+	gCellFullDefs[c].insertLast(d);
+	return false;
+}
+
+// LINES OF TURRETS (TUNE_CELL_LINE; his 10-21: "I just made a line of nanoturrets. And as we kept getting stronger
+// and stronger, I just made that line longer and longer. And why do I choose a line? Because I know that I can build
+// above it, and I can build below it"). The core is one row of turrets along the base's across axis, grown a turret
+// at a time from the end nearer the work, flush; the buildings fill the bands on both sides, nearest the line first,
+// on ground a turret of the line reaches. A line that cannot grow and has no band cell left opens the next beside it.
+const int LINE_MAX = 40;   // turrets in one line
+bool CellLineOn() { return ai.GetTunable("apex_cell_line", TUNE_CELL_LINE) > 0.f; }
+
+AIFloat3 LineSlot(uint c, int k)
+{
+	return gCellAt[c] + gRowAcross * (float(k) * Lattice::FootPitch(CellNanoDef()));
+}
+
+bool OwnTurretAt(const AIFloat3& in p)
+{
+	NanoNear(p, 16.f);
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q)
+		if (gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < 8.f)
+			return true;
+	return false;
+}
+
+// The next slot at one end: our own turret standing there already is the line, so the end walks past it.
+bool LineEnd(uint c, bool hiEnd, AIFloat3& out at)
+{
+	const int nd = CellNanoDef();
+	CCircuitDef@ def = Catalog::Def(nd);
+	for (int guard = 0; guard < LINE_MAX; ++guard) {
+		if (gCellHi[c] - gCellLo[c] + 1 >= LINE_MAX)
+			return false;
+		const bool empty = gCellHi[c] < gCellLo[c];
+		const int k = empty ? 0 : (hiEnd ? (gCellHi[c] + 1) : (gCellLo[c] - 1));
+		const AIFloat3 p = LineSlot(c, k);
+		if (!OnMap(p))
+			break;
+		if (OwnTurretAt(p)) {
+			if (empty) { gCellLo[c] = 0; gCellHi[c] = 0; }
+			else if (hiEnd) gCellHi[c] = k;
+			else gCellLo[c] = k;
+			gCellFullDefs[c].resize(0);
+			continue;
+		}
+		AIFloat3 got;
+		if (!ai.CanPlaceCell(def, p, got))
+			break;
+		if (empty) { gCellLo[c] = 0; gCellHi[c] = 0; }
+		else if (hiEnd) gCellHi[c] = k;
+		else gCellLo[c] = k;
+		gCellFullDefs[c].resize(0);   // the bands reach further now
+		at = p;
+		return true;
+	}
+	if (hiEnd)
+		gCellHiShut[c] = true;
+	else
+		gCellLoShut[c] = true;
+	return false;
+}
+
+bool LineCoreNext(uint c, AIFloat3& out at)
+{
+	if (!RowFrame() || !Catalog::ValidId(CellNanoDef()))
+		return false;
+	if (gCellLoShut[c] && gCellHiShut[c]) {
+		gCellCoreFull[c] = true;
+		return false;
+	}
+	bool hiFirst = (gCellHi[c] - gCellLo[c]) % 2 == 0;
+	if (OnMap(gCellNear)) {
+		const AIFloat3 rel = gCellNear - gCellAt[c];
+		const float along = rel.x * gRowAcross.x + rel.z * gRowAcross.z;
+		const float pn = Lattice::FootPitch(CellNanoDef());
+		hiFirst = along >= 0.5f * float(gCellLo[c] + gCellHi[c]) * pn;
+	}
+	for (int t = 0; t < 2; ++t) {
+		const bool hiEnd = (t == 0) ? hiFirst : !hiFirst;
+		if ((hiEnd ? gCellHiShut[c] : gCellLoShut[c]))
+			continue;
+		if (LineEnd(c, hiEnd, at))
+			return true;
+	}
+	if (gCellLoShut[c] && gCellHiShut[c])
+		gCellCoreFull[c] = true;
+	return false;
+}
+
+// The band cell nearest the line, on ground a turret the line holds (or its first slot) reaches.
+bool LineBandNext(uint c, int d, AIFloat3& out at)
+{
+	if (CellRingFull(c, d) || !RowFrame())
+		return false;
+	const float pb = Lattice::FootPitch(d);
+	const int nd = CellNanoDef();
+	if ((pb < 16.f) || !Catalog::ValidId(nd))
+		return false;
+	CCircuitDef@ def = Catalog::Def(d);
+	const float pn = Lattice::FootPitch(nd);
+	const float reach = Catalog::gBuildDist[nd] + 0.5f * pb;
+	const int lo = (gCellHi[c] < gCellLo[c]) ? 0 : gCellLo[c];
+	const int hi = (gCellHi[c] < gCellLo[c]) ? 0 : gCellHi[c];
+	const float loA = float(lo) * pn, hiA = float(hi) * pn, midA = 0.5f * (loA + hiA);
+	int tried = 0;
+	for (int j = 0; ; ++j) {
+		const float perp = 0.5f * pn + 0.5f * pb + float(j) * pb;
+		if (perp > reach)
+			break;
+		const float span = sqrt(reach * reach - perp * perp);
+		const int na = int((0.5f * (hiA - loA) + span) / pb) + 1;
+		for (int side = 0; side < 2; ++side) {
+			const float pp = (side == 0) ? perp : -perp;
+			for (int i = 0; i <= 2 * na; ++i) {
+				const int ki = ((i % 2) == 0) ? (i / 2) : -((i + 1) / 2);
+				const float a = midA + float(ki) * pb;
+				const float outside = (a < loA) ? (loA - a) : ((a > hiA) ? (a - hiA) : 0.f);
+				// past an end that can still grow, by the few turrets that end will take for this frame
+				const bool open = (a < loA) ? !gCellLoShut[c] : ((a > hiA) ? !gCellHiShut[c] : false);
+				if (outside > span + (open ? 3.f * pn : 0.f))
+					continue;
+				const AIFloat3 p = gCellAt[c] + gRowAcross * a + gRowBackDir * pp;
+				if (!OnMap(p))
+					continue;
+				if (++tried > CELL_SCAN)
+					return false;
+				AIFloat3 got;
+				if (ai.CanPlaceCell(def, p, got)) {
+					at = p;
+					return true;
+				}
+			}
 		}
 	}
 	gCellFullDefs[c].insertLast(d);
@@ -203,6 +345,24 @@ bool CellOpen()
 		if (bestIdle > 0.f) {
 			CellAdd(ai.SnapToLattice(def, seed));
 			return true;
+		}
+	}
+	if (CellLineOn() && (gCellAt.length() > 0) && RowFrame()) {
+		// The next line runs beside the last, its bands meeting the last one's (his 10-21: "eventually, I get out of
+		// range of my line on the above and below. And I just make more nanoturrets over there").
+		const AIFloat3 last = gCellAt[gCellAt.length() - 1];
+		for (int side = 0; side < 2; ++side) {
+			const AIFloat3 p = ai.SnapToLattice(def, last + gRowBackDir * (((side == 0) ? 2.f : -2.f) * reach));
+			if (!OnMap(p) || Builder::PastFront(p))
+				continue;
+			bool clear = true;
+			for (uint c = 0; (c < gCellAt.length()) && clear; ++c)
+				clear = gCellAt[c].distance2D(p) >= 1.9f * reach;
+			AIFloat3 got;
+			if (clear && ai.CanPlaceCell(def, p, got)) {
+				CellAdd(p);
+				return true;
+			}
 		}
 	}
 	if (gCellAt.length() == 0) {
@@ -265,6 +425,10 @@ void CellAdd(const AIFloat3& in p)
 	gCellCoreFull.insertLast(false);
 	array<int> none;
 	gCellFullDefs.insertLast(none);
+	gCellLo.insertLast(0);
+	gCellHi.insertLast(-1);
+	gCellLoShut.insertLast(false);
+	gCellHiShut.insertLast(false);
 	AiLog("apex: cells t=" + ai.teamId + " open #" + (gCellAt.length() - 1) + " at=" + int(p.x) + "," + int(p.z));
 }
 
@@ -278,6 +442,7 @@ bool CellSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 
 	if (gCellAt.length() == 0)
 		CellOpen();
 	const bool turret = Catalog::gBuildPower[d] > 0.f;
+	gCellNear = near;
 	const AIFloat3 ref = OnMap(near) ? near : ((gCellAt.length() > 0) ? gCellAt[gCellAt.length() - 1]
 			: (gFarmSet ? gFarmPos : Base::gAnchor));
 	// A BUILDING GOES WHERE THE IDLE TURRETS ARE (his 10-21: converters "all around the same area instead of

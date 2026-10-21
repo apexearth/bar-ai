@@ -410,6 +410,7 @@ local NAMES = {
 	"apex_cell_space", -- cells.as: spacing (1)
 	"apex_cell_ring", -- cells.as: ring reach rule (0)
 	"apex_cell_home", -- cells.as: seed on idle home turrets (1)
+	"apex_cell_line", -- cells.as: lines of turrets (0)
 	"apex_eco_spend", -- price.as: spending, not income, is the eco goal (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_row_layout", -- rows of one kind behind the anchor (0)
