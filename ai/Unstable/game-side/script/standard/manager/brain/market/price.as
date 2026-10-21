@@ -668,8 +668,11 @@ float MRealizeShare(float addM, float buildSec)
 		return 1.f;
 	TrackMPull();
 	float demand = Eco::MPull();
-	if (demand < gMDemandPk)
-		demand = gMDemandPk;
+	// A bank that has sat full is the evidence the held peak is stale: the spend is what is spent.
+	if (demand < gMDemandPk) {
+		const float pkW = (ai.GetTunable("apex_m_full_smooth", TUNE_M_FULL_SMOOTH) > 0.f) ? (1.f - MFullW()) : 1.f;
+		demand += (gMDemandPk - demand) * pkW;
+	}
 	if (demand < 0.f)
 		demand = 0.f;
 	if (gMPullGrowth > 0.f) {
@@ -691,7 +694,7 @@ float MRealizeShare(float addM, float buildSec)
 	// Build power already ordered is spend on its way.
 	const float fullW = MFullW();
 	const float target = demand * (1.f + (gPrEHeadroom - 1.f) * (1.f - fullW))
-			+ BpSpendInFlightM() + fill;
+			+ BpSpendInFlightM() * (1.f - fullW) + fill;
 	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
 	// a spot claimed now is still ours when it does. The band loses the wait,
 	// not the metal -- and, as on the energy side, it keeps only the share of the

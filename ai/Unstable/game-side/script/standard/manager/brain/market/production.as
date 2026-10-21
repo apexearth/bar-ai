@@ -1191,7 +1191,7 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 					|| ConStandsIdle(Catalog::gFlyer[pd], Catalog::gAdvHand[pd] ? 2 : 1)))
 			return null;
 	}
-	if (EcoOnly() && !Catalog::gBuilder[pd])
+	if (EcoOnly() && !Catalog::gBuilder[pd] && !IsLiftDef(pd))
 		return null;   // the economy-only benchmark: hands only, every path
 	return Catalog::Def(pd);
 }
@@ -2127,7 +2127,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 		}
-		if (EcoOnly() && !Catalog::gBuilder[d])
+		if (EcoOnly() && !Catalog::gBuilder[d] && !IsLiftDef(d))
 			continue;   // the economy-only benchmark: hands only
 		if (ecoStrictOn && !EcoSeatFacKeeps(d)) {
 			++gEsFacRef;
@@ -3194,7 +3194,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		{
 			const float bpm = ai.GetTunable("apex_bp_vs_lathe", TUNE_BP_VS_LATHE);
 			const float myM = Catalog::gCostM[d];
-			if ((bpm > 0.f) && (myM > 1.f)) {
+			// A HAND THAT RAISES THE LATHE IS PRICED AS THE LATHE (TUNE_CON_RAISES_LATHE; his 10-20: "we can afford to
+			// make more of them and get more buildpower"). The turret that beats this con on build power per metal is
+			// raised by cons like it, so while metal spills the con carries the turret's rate, not a discount from it.
+			const bool raises = (over > 0.f) && HandBuildsNano(int(d))
+					&& (ai.GetTunable("apex_con_raises_lathe", TUNE_CON_RAISES_LATHE) > 0.f);
+			if ((bpm > 0.f) && (myM > 1.f) && !raises) {
 				const float latheBPM = BestLatheBPPerM();
 				float myBP = Catalog::gBuildPower[d];
 				if (ai.GetTunable("apex_bp_travel", TUNE_BP_TRAVEL) > 0.f) {

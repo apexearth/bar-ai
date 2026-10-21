@@ -106,6 +106,10 @@ air cons"; no hover lab in an eco game (0 economic benefit); the T2 lab beside t
 - [ ] Fewer mex upgrades at once, more hands on each: a new upgrade is charged for the ones it slows.
 - [ ] Turrets bought ahead of the work that will need them.
 - [ ] The T2 bot lab reclaimed once the T2 air lab stands and its metal is wanted.
+- [ ] The commander stays home on the plant and home work; every slow hand pays its share of the walk home (TUNE_FUTURE_JOB). In a war game, field defence counts as field work too.
+- [ ] T1 air cons keep coming while metal overflows (TUNE_CON_RAISES_LATHE).
+- [ ] Build near idle turret rings; while overflowing, idle ring sites take whatever is needed most (TUNE_IDLE_LATHE_SITE).
+- [ ] Transports move idle turrets to the work (TUNE_LIFT_SINK; lift.as already flies them, nothing bought a plane in eco).
 ## Teammates fund the tech seat (his 10-19)
 
 "So the right choice is to keep boosting our income until we feel more comfortable making the T2 lab. Also if

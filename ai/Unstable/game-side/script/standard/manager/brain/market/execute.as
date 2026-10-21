@@ -1443,7 +1443,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// A BIG FRAME GOES WHERE THE BUILD POWER IS (apexearth 2026-10-03: "pick
 		// eco places for buildings which have good buildpower nearby ... the
 		// eco buildings are ill-supported"). The converter branch does the same.
-		if ((unit !is null) && !floats && OnMap(slot) && NanoSinkWorthy(int(w.def.id)))
+		if ((unit !is null) && !floats && OnMap(slot) && (NanoSinkWorthy(int(w.def.id)) || IdleLatheWorthy(int(w.def.id))))
 			slot = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		// Cross-def: an elected advsol joins the fusion being built. Not a
 		// zero-E rung mid-stall: "make a basic solar" was routed onto a
@@ -1501,6 +1501,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (adef is null)
 				continue;
 			AIFloat3 aslot = gFarmSet ? FarmSlot(ad, unit) : BigEnergySite();
+			if (OnMap(aslot) && (NanoSinkWorthy(ad) || IdleLatheWorthy(ad)))
+				aslot = LatheSite(adef, Catalog::Def(int(unit.circuitDef.id)), aslot);
 			if (OnMap(aslot))
 				aslot = ClearOfSpots(aslot, 120.f);
 			bool acrtd = false;

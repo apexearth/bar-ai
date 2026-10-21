@@ -830,8 +830,12 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 	// and a big footprint fits nowhere near a block's middle.
 	array<float> ringBP;
 	ringBP.resize(gOwnNanoPos.length());
-	for (uint i = 0; i < gOwnNanoPos.length(); ++i)
+	const bool idleRank = IdleLatheSiteOn();
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
 		ringBP[i] = RingBPAt(gOwnNanoPos[i]);
+		if (idleRank)
+			ringBP[i] /= float(1 + RisingNear(gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
+	}
 	array<int> top;
 	for (int k = 0; k < LATHE_SITE_PROBES; ++k) {
 		int pick = -1;
@@ -2326,6 +2330,18 @@ float LatheBuildTime()
 			gLatheBt = Catalog::gBuildTime[i];
 	}
 	return gLatheBt;
+}
+
+// BUILD WHERE THE TURRETS STAND IDLE (TUNE_IDLE_LATHE_SITE; his 10-20: "make buildings near idle nano turret
+// areas... if we are still overflowing, pick idle nano turret sites and build whatever we need most"). An idle
+// turret is free build power, so while one stands any static build is worth its ring, and the rings are ranked
+// by what is idle in them -- the busiest ring stops drawing every frame to itself.
+bool IdleLatheSiteOn() { return ai.GetTunable("apex_idle_lathe_site", TUNE_IDLE_LATHE_SITE) > 0.f; }
+
+bool IdleLatheWorthy(int bd)
+{
+	return IdleLatheSiteOn() && Catalog::ValidId(bd) && !Catalog::gMobile[bd] && (Catalog::gBuildPower[bd] <= 0.f)
+		&& (Catalog::gExtractsM[bd] <= 0.f) && (IdleNanoLatheM() > 0.f);
 }
 
 bool NanoSinkWorthy(int bd)
