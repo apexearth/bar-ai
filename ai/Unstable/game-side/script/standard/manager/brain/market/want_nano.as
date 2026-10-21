@@ -550,13 +550,15 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	} else if ((armyNeed >= over) && OnMap(armyPos)) {
 		site = armyPos;
 		src = NS_ARMY;
-	} else if (haveLine && (lineNeed >= sinkNeed)) {
+	} else if (haveLine && (lineNeed >= sinkNeed) && !(RowLayoutOn() && (lineNeed <= 0.f))) {
 		site = linePos;
 		src = NS_LINE;
 	} else if ((sinkNeed > 0.f) && OnMap(sinkPos)) {
 		site = sinkPos;
 		src = NS_SINK;
-	} else if (haveLine) {
+	} else if (haveLine && !RowLayoutOn()) {
+		// A turret bought for waste alone stands on the turret rows when they are laid (TUNE_ROW_LAYOUT): at
+		// the line it only crowded the plant, which no line need asked for.
 		site = linePos;
 		src = NS_LINE;
 	}
