@@ -477,13 +477,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			dem = gEDemandPk;
 		eDem = dem;
 		eFlight = EDrainInFlight() + LineDrainE();
-		// A frame being built draws inside the pull already: charged again as in-flight drain, the spare read
-		// negative while turrets would have run (eSpare=-164 beside 44 m/s spilt). TUNE_NANO_SPARE_PULL counts the
-		// in-flight drain only past what the pull already holds of it.
-		if (ai.GetTunable("apex_nano_spare_pull", TUNE_NANO_SPARE_PULL) > 0.f) {
-			const float inPull = Eco::EPull() - ConvUseE();
-			eFlight = (eFlight > inPull) ? (eFlight - inPull) : 0.f;
-		}
 		nanoSpareE -= dem + eFlight;
 		// The bank over the stall horizon, as MetalFreeRate counts metal's: 11,000 stored read as nothing
 		// and held every lathe off for minutes with 7,000 metal banked (his 10-12 watch game 8).
