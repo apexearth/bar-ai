@@ -613,7 +613,7 @@ int gMRealLogAt = 0;
 // would spend it on, and in a real game the army is that sink; economy-only mode removes it, so once both banks
 // overflowed every income build read near zero and idle air cons assisted each other "over nothing" (assist won
 // 302 of 602 offers; turrets were offered in 245 of 687 elections). Here more income is the objective itself.
-bool EcoIncomeGoal() { return EcoOnly() && (ai.GetTunable("apex_eco_income_goal", TUNE_ECO_INCOME_GOAL) > 0.f); }
+bool EcoIncomeGoal() { return EcoOnly(); }
 
 float MRealizeShare(float addM, float buildSec)
 {

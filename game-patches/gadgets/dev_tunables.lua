@@ -404,7 +404,6 @@ local NAMES = {
 	"apex_e_feed_waste",     -- price.as: energy priced by the spendable feed while metal overflows (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
-	"apex_eco_income_goal", -- price.as: economy-only mode values income as the goal (1)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
