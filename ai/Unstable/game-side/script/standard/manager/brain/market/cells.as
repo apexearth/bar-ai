@@ -188,6 +188,20 @@ AIFloat3 LineSlot(uint c, int k)
 	return gCellAt[c] + gRowAcross * (float(k) * Lattice::FootPitch(CellNanoDef()));
 }
 
+// A turret ordered on the slot: the request's site within half a pitch.
+bool LiveTurretAt(const AIFloat3& in p)
+{
+	const float tol = 0.5f * Lattice::FootPitch(CellNanoDef());
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null) || (Catalog::gBuildPower[int(t.buildDef.id)] <= 0.f))
+			continue;
+		if (t.GetBuildPos().distance2D(p) < tol)
+			return true;
+	}
+	return false;
+}
+
 // A flown turret is set down a few elmos off its slot: half a pitch is still the slot.
 bool OwnTurretAt(const AIFloat3& in p)
 {
@@ -214,7 +228,7 @@ bool LineEnd(uint c, bool hiEnd, AIFloat3& out at)
 		const AIFloat3 p = LineSlot(c, k);
 		if (!OnMap(p))
 			break;
-		if (OwnTurretAt(p)) {
+		if (OwnTurretAt(p) || LiveTurretAt(p)) {
 			if (empty) { gCellLo[c] = 0; gCellHi[c] = 0; }
 			else if (hiEnd) gCellHi[c] = k;
 			else gCellLo[c] = k;
@@ -224,18 +238,16 @@ bool LineEnd(uint c, bool hiEnd, AIFloat3& out at)
 		AIFloat3 got;
 		if (!ai.CanPlaceCell(def, p, got)) {
 			// a building on the line's path: the line steps past it, up to three slots, and is shut only by a wall
-			if ((++skipped > 3) || empty) {
+			if (++skipped > 3) {
 				blockedAt = p;
 				break;
 			}
-			if (hiEnd) gCellHi[c] = k;
+			if (empty) { gCellLo[c] = 0; gCellHi[c] = 0; }
+			else if (hiEnd) gCellHi[c] = k;
 			else gCellLo[c] = k;
 			continue;
 		}
-		if (empty) { gCellLo[c] = 0; gCellHi[c] = 0; }
-		else if (hiEnd) gCellHi[c] = k;
-		else gCellLo[c] = k;
-		gCellFullDefs[c].resize(0);   // the bands reach further now
+		// handed, not held: the end moves over this slot once a turret stands or is ordered on it
 		at = p;
 		return true;
 	}
