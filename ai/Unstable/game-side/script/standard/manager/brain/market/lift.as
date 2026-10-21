@@ -840,6 +840,7 @@ float LiftHandsWorthFor(int d)
 	return best;
 }
 
+float gLiftTookDist = 0.f;   // the summed flight of the turrets LiftTurretWorth took, for the fleet's throughput
 float LiftGainFor(int d, float fillSec)
 {
 	++gLiftAsk;
@@ -847,13 +848,26 @@ float LiftGainFor(int d, float fillSec)
 		return 0.f;
 	// A free plane already answers the cargo: ten were bought for jobs two
 	// planes were doing, the rest hovering over the air plant (10-01).
-	for (uint i = 0; i < gLift.length(); ++i) {
-		if ((gLift[i] !is null) && (gLift[i].plane !is null) && (gLift[i].stage == 0))
-			return 0.f;
+	// ...with TUNE_LIFT_TURRETS the fleet answers what it can carry in the fill, not whether one plane is free this
+	// instant: between trips one always was, and six planes served 578 turrets with 305 idle (his 10-20 game).
+	if (!LiftTurretsOn()) {
+		for (uint i = 0; i < gLift.length(); ++i) {
+			if ((gLift[i] !is null) && (gLift[i].plane !is null) && (gLift[i].stage == 0))
+				return 0.f;
+		}
 	}
 	const float fill = (fillSec > 1.f) ? fillSec : 180.f;
 	float took = 0.f;
-	const float worth = LiftTurretWorth(d, took) + LiftHandsWorthFor(d);
+	float worth = LiftTurretWorth(d, took) + LiftHandsWorthFor(d);
+	if (LiftTurretsOn() && (took > 0.f)) {
+		const float v = (Catalog::gSpeed[d] > 1.f) ? Catalog::gSpeed[d] : 100.f;
+		const float planeSec = took * (2.f * gLiftTookDist / took / v + LIFT_HAND_OVERHEAD_S);
+		const float needPlanes = planeSec / fill;
+		const float have = float(gLift.length());
+		if (needPlanes <= have)
+			return 0.f;
+		worth *= (needPlanes - have) / needPlanes;
+	}
 	gLiftPriced = (worth + FerryMissedFor(d, fill)) / fill;
 	gLiftPricedTurrets = int(took);
 	return gLiftPriced;
@@ -869,6 +883,7 @@ bool LiftTurretsOn() { return ai.GetTunable("apex_lift_turrets", TUNE_LIFT_TURRE
 float LiftTurretWorth(int d, float& out took)
 {
 	took = 0.f;
+	gLiftTookDist = 0.f;
 	AIFloat3 lp;
 	float net = 0.f;
 	CCircuitUnit@ line = null;
@@ -902,6 +917,7 @@ float LiftTurretWorth(int d, float& out took)
 			continue;
 		worth += Catalog::gCostM[c];
 		took += 1.f;
+		gLiftTookDist += up.distance2D(lp);
 	}
 	return worth;
 }
