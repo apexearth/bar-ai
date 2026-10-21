@@ -207,6 +207,9 @@ float NanoEBlockGain(float makeE)
 	return gNebM * ((makeE < gNebE) ? (makeE / gNebE) : 1.f);
 }
 
+const float NANO_BACKLOG_S = 60.f;   // the backlog is to be finished within a minute
+float gNanoBacklogM = 0.f;
+
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -451,6 +454,26 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
+	// THE BACKLOG IS THE DEMAND (TUNE_NANO_BACKLOG; his 10-21: attack metal excess at every point; his reference
+	// stood 265 turrets by minute 14 against our 15-20). Answering only the metal already spilling bought a turret
+	// or two at minute 10. The work waiting on lathe is the metal left in every frame standing or asked for: what
+	// finishing it within a minute needs, less the lathe we own, is lathe short.
+	if (ai.GetTunable("apex_nano_backlog", TUNE_NANO_BACKLOG) > 0.f) {
+		float backlog = 0.f;
+		for (uint li = 0; li < Requests::gLive.length(); ++li) {
+			IUnitTask@ lt = Requests::gLive[li];
+			if ((lt is null) || lt.IsDead() || (lt.buildDef is null))
+				continue;
+			const int bd = int(lt.buildDef.id);
+			if (Catalog::gMobile[bd])
+				continue;
+			backlog += Catalog::gCostM[bd] * (1.f - Requests::Progress(lt));
+		}
+		const float shortM = backlog / NANO_BACKLOG_S - BPCapacity();
+		if (shortM > over)
+			over = shortM;
+		gNanoBacklogM = shortM;
+	}
 	float labNeed = 0.f;
 	if (LabNanoOn()) {
 		LabNanoScan();
@@ -515,6 +538,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
+			+ " backlog=" + formatFloat(gNanoBacklogM, "", 0, 1)
 			+ " lab=" + formatFloat(labNeed, "", 0, 1)
 			+ " floor=" + floorShort
 			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
