@@ -253,6 +253,15 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 			const float B = float(Requests::Workers(t)) * Requests::DRAIN + NanoLatheReaching(p);
 			const float R = t.buildDef.costM * (1.f - Requests::Progress(t));
 			g = (B > 0.f) ? (R / B) : R;
+			// A REACTOR'S RING FILLS FIRST (his 10-21: "we don't totally fill up the area around an afus with nanos but
+			// we should"). Its turrets keep working at completion -- the next reactor rises in the same block -- so
+			// while a slot in its reach is free it outranks every frame whose turrets leave with it; R/B spread one
+			// turret at a time over every frame rising.
+			if (LiftReserveOn() && BigEcoDef(int(t.buildDef.id)) && (gOwnNano.length() > 0) && (gOwnNano[0] !is null)) {
+				array<AIFloat3> one;
+				if (PackSlots(int(gOwnNano[0].circuitDef.id), p, int(t.buildDef.id), 1, one, true) > 0)
+					g = R * 1000.f;
+			}
 		} else
 			g = NanoGap(p);
 		if (g <= gap)
@@ -276,7 +285,8 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
 {
 	array<AIFloat3> slots;
-	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
+	// the whole ring the reach holds, not the first four: four taken sent the rest to the 300-elmo square search
+	PackSlots(cd, lp, AnchorDefAt(lp), LiftReserveOn() ? 32 : 4, slots);
 	int si = 0;
 	while ((si < int(slots.length())) && LiftSlotTaken(slots[si]))
 		++si;
