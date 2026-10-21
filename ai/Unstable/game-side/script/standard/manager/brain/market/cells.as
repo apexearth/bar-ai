@@ -239,11 +239,16 @@ bool CellSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 
 	}
 	const AIFloat3 ref = OnMap(near) ? near : ((gCellAt.length() > 0) ? gCellAt[gCellAt.length() - 1]
 			: (gFarmSet ? gFarmPos : Base::gAnchor));
+	// A BUILDING GOES WHERE THE IDLE TURRETS ARE (his 10-21: converters "all around the same area instead of
+	// spreading out to use more build power from different locations"; "we made a nano farm and then didn't use it
+	// for 5m"). Nearest-first sent a burst to one ring while idle cores stood elsewhere: the idle lathe a cell's core
+	// holds ranks it first, distance breaks the tie. A turret still takes the cell nearest its frame.
 	array<uint> order;
 	array<float> key;
 	for (uint c = 0; c < gCellAt.length(); ++c) {
 		order.insertLast(c);
-		key.insertLast(gCellAt[c].distance2D(ref));
+		const float dist = gCellAt[c].distance2D(ref);
+		key.insertLast(turret ? dist : (dist - 1e4f * IdleNanoLatheNear(gCellAt[c])));
 	}
 	for (uint a = 0; a < order.length(); ++a) {
 		uint bi = a;
@@ -256,7 +261,10 @@ bool CellSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 
 		if (turret ? CellCoreNext(c, at) : CellRingNext(c, d, at))
 			return CellHanded(d, c);
 	}
+	// Every core full: the turret seeds the next cell rather than join the blob.
 	if (turret) {
+		if (CellOpen() && CellCoreNext(gCellAt.length() - 1, at))
+			return CellHanded(d, gCellAt.length() - 1);
 		++gCellsRefused;
 		return false;
 	}
