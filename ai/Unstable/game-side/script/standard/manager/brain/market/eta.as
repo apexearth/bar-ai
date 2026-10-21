@@ -572,10 +572,6 @@ float EtaWith(int d, float gainM, float addBP, bool tech)
 // request layer will admit plus the nano turrets in reach -- when the caller
 // knows it. The fleet's whole build power put an advanced fusion up in 104 s in
 // the simulator; two T2 constructors took 15 minutes over it in the game.
-// THE GROUND A RUNG STANDS ON, in metal per cell (TUNE_ETA_SPACE; his 10-21: "space efficiency is where it
-// should lose to an AFUS. We grow too wide, run out of room, and need to keep making more and more nanos"). The
-// caller sets the market's own cell price at its site; the ETA had charged a rung its metal and build alone.
-float gEtaCellM = 0.f;
 float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 {
 	double _tE = Perf::T0();
@@ -615,7 +611,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 			bp1 = firstBP;
 		bp1 = RungBP(d, bp1);
 		for (int u = 0; u < k; ++u) {
-			t += StepSec(d, Catalog::gCostM[d] + gEtaCellM * float(Catalog::gAreaCells[d]), P, bank, bp1, eAvail) / surv;
+			t += StepSec(d, Catalog::gCostM[d], P, bank, bp1, eAvail) / surv;
 			if (u > 0) {
 				t += lat;   // the first unit's walk is the asker's own, charged by the caller
 				gLadderLatS += lat;
