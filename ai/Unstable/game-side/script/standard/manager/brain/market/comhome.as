@@ -45,7 +45,11 @@ bool ComHomeDgKills(int d)
 float ComHomeLathe(CCircuitUnit@ u)
 {
 	const int uid = int(u.circuitDef.id);
-	const float eFeed = AssistEFeed();
+	float eFeed = 1.f;
+	const float eInc = Eco::EInc();
+	const float ePull = Eco::EPull();
+	if ((ePull > 1.f) && (eInc < ePull))
+		eFeed = eInc / ePull;
 	const float lathe = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const float feed = Eco::MInc() + Eco::MCur() / 60.f;
 	return (lathe < feed) ? lathe : feed;

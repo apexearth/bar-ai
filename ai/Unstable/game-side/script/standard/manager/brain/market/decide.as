@@ -2427,7 +2427,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// by the 400 bar while the metal bank sat full for twelve minutes
 	// (Isthmus seed 13, 2026-09-08). Above the bar the market's energy price
 	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
-	const bool hoistWorth = ai.GetTunable("apex_estall_hoist", TUNE_ESTALL_HOIST) > 0.f;
+	const bool hoistWorth = true;
 	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)
 		) {
 		// WHAT IS ORDERED COVERS IT ONCE FED: then the stall wants hands on
@@ -3117,9 +3117,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))
 	{
 		const double _tUa = Perf::T0();
+		// No hand is hoisted onto the metal unlock at a fixed v=1000 (his 10-20 eco game: free cons onto a 29,000-E
+		// T2 plant over energy, the energy bank at 119/1975); the plant's assist is its priced want. The defence
+		// join below still answers.
 		Want@ ua = null;
-		if (ai.GetTunable("apex_unlock_hoist", TUNE_UNLOCK_HOIST) > 0.f)
-			@ua = ProposeUnlockAssist(unit, false);
 		Perf::Add("dr.unlock", _tUa);
 		string uaWhy = "metalfirst";
 		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {

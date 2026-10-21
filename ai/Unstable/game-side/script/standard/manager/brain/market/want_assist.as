@@ -253,15 +253,6 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 	return w;
 }
 
-// The share of a hand's lathe the energy income feeds: income over pull. One copy for the priced assist, the
-// factory guards and the commander at home.
-float AssistEFeed()
-{
-	const float eInc = Eco::EInc();
-	const float ePull = Eco::EPull();
-	return ((ePull > 1.f) && (eInc < ePull)) ? (eInc / ePull) : 1.f;
-}
-
 Want@ ProposeAssist(CCircuitUnit@ unit)
 {
 	Want w;
@@ -850,7 +841,13 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	if (fac is null)
 		return w;
 	const int uid = int(unit.circuitDef.id);
-	const float eFeed = AssistEFeed();
+	float eFeed = 1.f;
+	{
+		const float eInc = Eco::EInc();
+		const float ePull = Eco::EPull();
+		if ((ePull > 1.f) && (eInc < ePull))
+			eFeed = eInc / ePull;
+	}
 	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const float mFree = FreeMetalFlow();
 	// Under the army gap his pull at the lab takes metal from economy into army, which is what the
@@ -913,7 +910,13 @@ Want@ LabAssistGuard(CCircuitUnit@ unit, const Want& in priced)
 {
 	Want w = priced;
 	const int uid = int(unit.circuitDef.id);
-	const float eFeed = AssistEFeed();
+	float eFeed = 1.f;
+	{
+		const float eInc = Eco::EInc();
+		const float ePull = Eco::EPull();
+		if ((ePull > 1.f) && (eInc < ePull))
+			eFeed = eInc / ePull;
+	}
 	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const float mFree = FreeMetalFlow();
 	if (mFree < drain)

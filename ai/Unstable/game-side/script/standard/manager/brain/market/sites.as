@@ -830,19 +830,10 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 	// and a big footprint fits nowhere near a block's middle.
 	array<float> ringBP;
 	ringBP.resize(gOwnNanoPos.length());
-	const bool idleRank = IdleLatheSiteOn();
-	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i)
 		ringBP[i] = RingBPAt(gOwnNanoPos[i]);
-		if (idleRank)
-			ringBP[i] /= float(1 + RisingNear(gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
-	}
 	array<int> top;
-	// A block packed solid with turrets has no ground left in its reach, and the six richest were exactly those:
-	// every frame fell to the one block with room while the rest stood idle (his 10-20: "huge amounts of nano
-	// turrets underutilized"). Idle-ranked, the probe walks on until six blocks fit.
-	const int probeCap = idleRank ? (LATHE_SITE_PROBES * 3) : LATHE_SITE_PROBES;
-	int fits = 0;
-	for (int k = 0; k < probeCap; ++k) {
+	for (int k = 0; k < LATHE_SITE_PROBES; ++k) {
 		int pick = -1;
 		for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
 			if ((ringBP[i] <= 0.f) || ((pick >= 0) && (ringBP[i] <= ringBP[uint(pick)])))
@@ -913,7 +904,7 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 	}
 	int fwdRefused = 0;
 	string why;
-	for (uint t = 0; (t < top.length()) && (fits < LATHE_SITE_PROBES); ++t) {
+	for (uint t = 0; t < top.length(); ++t) {
 		const uint i = uint(top[t]);
 		// The window is the block's width: the nearest legal footprint to
 		// a block's centre is on its rim, and the score below still demands
@@ -959,7 +950,6 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		// The ring's lathe over the frames already rising in it: several
 		// groups, one build beside each -- or, concentrated (TUNE_LATHE_CONCENTRATE, his 10-18: build what is
 		// important, not many things at once; we waste a lot of room), the richest lathe whatever rises there.
-		++fits;
 		const float stand = RingBPAt(s);
 		const float room = RoomBPAt(did, nanoDef, due, s);
 		const float bp = (stand + room) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s, r)));
@@ -2336,18 +2326,6 @@ float LatheBuildTime()
 			gLatheBt = Catalog::gBuildTime[i];
 	}
 	return gLatheBt;
-}
-
-// BUILD WHERE THE TURRETS STAND IDLE (TUNE_IDLE_LATHE_SITE; his 10-20: "make buildings near idle nano turret
-// areas... if we are still overflowing, pick idle nano turret sites and build whatever we need most"). An idle
-// turret is free build power, so while one stands any static build is worth its ring, and the rings are ranked
-// by what is idle in them -- the busiest ring stops drawing every frame to itself.
-bool IdleLatheSiteOn() { return ai.GetTunable("apex_idle_lathe_site", TUNE_IDLE_LATHE_SITE) > 0.f; }
-
-bool IdleLatheWorthy(int bd)
-{
-	return IdleLatheSiteOn() && Catalog::ValidId(bd) && !Catalog::gMobile[bd] && (Catalog::gBuildPower[bd] <= 0.f)
-		&& (Catalog::gExtractsM[bd] <= 0.f) && (IdleNanoLatheM() > 0.f);
 }
 
 bool NanoSinkWorthy(int bd)

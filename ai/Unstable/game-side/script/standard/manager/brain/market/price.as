@@ -172,45 +172,7 @@ float WalkSecTo(CCircuitUnit@ unit, const AIFloat3& in to)
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
 	if (speed <= 1.f)
 		return 60.f;
-	return (unit.GetPos(ai.frame).distance2D(to) + WalkBackDist(unit, to)) / speed;
-}
-
-// THE NEXT JOB (TUNE_FUTURE_JOB, his 10-20: "back home is where his build power can be put to much more future
-// work... the commander out in the field capping mexes gets less and less important"; "this same ruling applies
-// to any slow constructor"). A hand sent out walks on to its next job, and that job is out there only while the
-// field holds work for it. It walks home once, when the open extractor spots run out, so each field job carries
-// its share of that walk: builders over open spots, all of it once the builders outnumber the spots. At the hand's
-// own speed, billed at its own lathe (a commander's 300 build power walks dearest).
-float gFjShareAt = -1, gFjShare = 0.f;
-float FutureHomeShare()
-{
-	if (ai.frame < gFjShareAt)
-		return gFjShare;
-	gFjShareAt = ai.frame + 5 * SECOND;
-	CacheSpots();
-	int open = 0;
-	for (uint si = 0; si < gAllSpots.length(); ++si)
-		if (OnMap(gAllSpots[si]) && (LedgerFind(int(si)) < 0))
-			++open;
-	const float hands = float(gWorkers.length());
-	gFjShare = (float(open) > hands) ? (hands / float(open)) : 1.f;
-	return gFjShare;
-}
-
-float WalkBackDist(CCircuitUnit@ unit, const AIFloat3& in to)
-{
-	if (ai.GetTunable("apex_future_job", TUNE_FUTURE_JOB) <= 0.f)
-		return 0.f;
-	float best = -1.f;
-	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
-		CCircuitUnit@ f = Factory::gFacUnits[fi];
-		if (f is null)
-			continue;
-		const float d = f.GetPos(ai.frame).distance2D(to);
-		if ((best < 0.f) || (d < best))
-			best = d;
-	}
-	return (best > 0.f) ? (best * FutureHomeShare()) : 0.f;
+	return unit.GetPos(ai.frame).distance2D(to) / speed;
 }
 
 // The floor exchange rate for energy: what a standing E/s is worth in metal
@@ -268,7 +230,6 @@ float gMPullPrev = -1.f;
 int gMPullPrevAt = 0;
 float gMPullGrowth = 0.f;
 float gMDemandPk = 0.f;
-float gMFullEma = 0.f;
 void TrackMPull()
 {
 	if (ai.frame < gMPullPrevAt + 5 * SECOND)
@@ -285,17 +246,6 @@ void TrackMPull()
 	// energy side needed: metal pull dips to nothing between jobs.
 	const float md0 = (pull > 0.f) ? pull : 0.f;
 	gMDemandPk = (md0 > gMDemandPk) ? md0 : (0.97f * gMDemandPk + 0.03f * md0);
-	gMFullEma = 0.8f * gMFullEma + 0.2f * (aiEconomyMgr.isMetalFull ? 1.f : 0.f);
-}
-
-// HOW FULL THE BANK HAS BEEN, not whether it is full this tick (TUNE_M_FULL_SMOOTH). A bank hovering at the brim
-// read full one sample and short the next, and the realize share flipped 0.02 <-> 1.00 with it: the extractor
-// walks were bought on the 1.00 samples while the bank sat full most of the game. ~25 s of memory.
-float MFullW()
-{
-	if (ai.GetTunable("apex_m_full_smooth", TUNE_M_FULL_SMOOTH) <= 0.f)
-		return aiEconomyMgr.isMetalFull ? 1.f : 0.f;
-	return gMFullEma;
 }
 
 // A conversion ratio is not a price until a converter stands (apexearth:
@@ -668,11 +618,8 @@ float MRealizeShare(float addM, float buildSec)
 		return 1.f;
 	TrackMPull();
 	float demand = Eco::MPull();
-	// A bank that has sat full is the evidence the held peak is stale: the spend is what is spent.
-	if (demand < gMDemandPk) {
-		const float pkW = (ai.GetTunable("apex_m_full_smooth", TUNE_M_FULL_SMOOTH) > 0.f) ? (1.f - MFullW()) : 1.f;
-		demand += (gMDemandPk - demand) * pkW;
-	}
+	if (demand < gMDemandPk)
+		demand = gMDemandPk;
 	if (demand < 0.f)
 		demand = 0.f;
 	if (gMPullGrowth > 0.f) {
@@ -692,10 +639,8 @@ float MRealizeShare(float addM, float buildSec)
 	// the bank full the pull is the whole spend, and 1.75x of it read a seat
 	// spilling 35 m/s as short of metal (his 10-18 2v2: share 1.0 at a full bank).
 	// Build power already ordered is spend on its way.
-	const float fullW = MFullW();
-	const float target = demand * (1.f + (gPrEHeadroom - 1.f) * (1.f - fullW))
-			+ BpSpendInFlightM() * (1.f - fullW) + fill
-			+ (IdleLatheSiteOn() ? IdleNanoLatheM() : 0.f);   // idle turrets are spend waiting for a site (his 10-20: 45k banked, 486 idle)
+	const float target = (aiEconomyMgr.isMetalFull ? demand : demand * gPrEHeadroom)
+			+ BpSpendInFlightM() + fill;
 	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
 	// a spot claimed now is still ours when it does. The band loses the wait,
 	// not the metal -- and, as on the energy side, it keeps only the share of the
@@ -704,14 +649,13 @@ float MRealizeShare(float addM, float buildSec)
 	float floorShare = gPrMWasteWorth;
 	{
 		const float wasteM = Eco::MInc() - Eco::MPull();
-		if ((fullW > 0.f) && (wasteM > 1.f)) {
+		if (aiEconomyMgr.isMetalFull && (wasteM > 1.f)) {
 			float follow = BpSpendInFlightM() / wasteM;
 			if (follow > 1.f)
 				follow = 1.f;
-			float wasteFloor = gPrMWasteWorth * follow;
-			if (wasteFloor < 0.02f)
-				wasteFloor = 0.02f;
-			floorShare = fullW * wasteFloor + (1.f - fullW) * gPrMWasteWorth;
+			floorShare = gPrMWasteWorth * follow;
+			if (floorShare < 0.02f)
+				floorShare = 0.02f;
 		}
 	}
 	const float room = target - Eco::MInc();
@@ -730,7 +674,6 @@ float MRealizeShare(float addM, float buildSec)
 			+ " pk=" + int(gMDemandPk)
 			+ " growth=" + formatFloat(gMPullGrowth, "", 0, 2)
 			+ " target=" + int(target)
-			+ " fullW=" + formatFloat(fullW, "", 0, 2)
 			+ " bank%=" + int((mst > 1.f) ? (100.f * Eco::MCur() / mst) : -1.f));
 	}
 	return share;

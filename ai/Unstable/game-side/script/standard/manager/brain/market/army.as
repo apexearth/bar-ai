@@ -2622,9 +2622,9 @@ void StallWatch()
 		{ double _t = Perf::T0(); RetreatRefresh(); Perf::Add("think.retreat", _t); }
 		{ double _t = Perf::T0(); GuardSweep(); SupportSweep(); Perf::Add("think.guard", _t); }
 	}
-	if ((ai.frame < gNextStallDry) || (ai.GetTunable("apex_estall_hoist", TUNE_ESTALL_HOIST) <= 0.f))
+	if (ai.frame < gNextStallDry)
 		return;
-	const float everyS =ai.GetTunable("apex_stall_answer_s", TUNE_STALL_ANSWER_S);
+	const float everyS = ai.GetTunable("apex_stall_answer_s", TUNE_STALL_ANSWER_S);
 	const int fast = int(((everyS > 0.1f) ? everyS : 1.f) * 30.f);
 	// BACK OFF WHEN THERE IS NO ANSWER. Stopping at the first qualifying worker
 	// only helps when one exists; a scan that finds nobody still dry-runs every
