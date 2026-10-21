@@ -1627,7 +1627,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (wantC > 1) {
 					const double _tC = Perf::T0();
 					array<AIFloat3> packC;
-					if (RowLayoutOn() && RowFamily(cvd)) {
+					if (LayoutOn() && RowFamily(cvd)) {
 						for (int rk = 1; rk < wantC; ++rk) {
 							AIFloat3 rc;
 							if (!RowSlot(cvd, rc))
@@ -1642,7 +1642,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						IUnitTask@ ct = Requests::Take(null, w.def, Task::BuildType::CONVERT,
 								Task::Priority::NORMAL, packC[ci], cell, 0.f,
 								mkc, true);
-						if ((ct !is null) && mkc && RowLayoutOn())
+						if ((ct !is null) && mkc && LayoutOn())
 							ct.SetExactSite();
 						if (mkc)
 							++cOpen;

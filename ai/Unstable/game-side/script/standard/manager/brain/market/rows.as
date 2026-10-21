@@ -14,6 +14,7 @@ const float ROW_START = 160.f;   // depth of the first row behind the anchor, el
 const int ROW_SCAN = 40;         // cells tried per ask
 
 bool RowLayoutOn() { return ai.GetTunable("apex_row_layout", TUNE_ROW_LAYOUT) > 0.f; }
+bool LayoutOn() { return RowLayoutOn() || CellLayoutOn(); }
 
 array<int> gRowDef;
 array<float> gRowDepth;    // front edge, elmos behind the origin
@@ -128,6 +129,8 @@ int RowTurretNear(float c, float& out dist)
 // eco row.
 bool RowSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 0.f, -1.f))
 {
+	if (CellLayoutOn())
+		return CellSlot(d, at, near);
 	if (!RowLayoutOn() || !RowFamily(d) || !RowFrame())
 		return false;
 	const bool turret = Catalog::gBuildPower[d] > 0.f;

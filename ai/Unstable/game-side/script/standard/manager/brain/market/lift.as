@@ -284,6 +284,11 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 // A free nano-ring slot by the line at lp, legal for def, off doorways and allies.
 AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
 {
+	{
+		AIFloat3 cellAt;
+		if (CellLayoutOn() && CellSlot(cd, cellAt, lp))
+			return cellAt;
+	}
 	array<AIFloat3> slots;
 	// the whole ring the reach holds, not the first four: four taken sent the rest to the 300-elmo square search
 	PackSlots(cd, lp, AnchorDefAt(lp), LiftReserveOn() ? 32 : 4, slots);
