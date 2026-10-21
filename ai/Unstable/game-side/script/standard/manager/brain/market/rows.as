@@ -21,6 +21,7 @@ array<float> gRowPitch;
 array<bool> gRowFull;
 float gRowBack = 0.f;      // back edge of the last row
 bool gRowFrameSet = false;
+bool gRowExhausted = false;   // a new row stood on no buildable cell: the block has met the map's edge or a cliff
 AIFloat3 gRowOrigin, gRowBackDir, gRowAcross;
 int gRowsHanded = 0, gRowsRefused = 0, gRowLogAt = 0;
 
@@ -69,7 +70,7 @@ AIFloat3 RowCell(uint r, int k)
 int RowOpen(int d)
 {
 	const float p = Lattice::FootPitch(d);
-	if (p < 16.f)
+	if ((p < 16.f) || gRowExhausted)
 		return -1;
 	gRowDef.insertLast(d);
 	gRowDepth.insertLast(gRowBack);
@@ -176,8 +177,25 @@ bool RowSlot(int d, AIFloat3& out at, const AIFloat3& in near = AIFloat3(-1.f, 0
 	const int nr = RowOpen(d);
 	if ((nr >= 0) && RowNext(uint(nr), at))
 		return RowHanded(d, uint(nr));
+	// A row with no buildable cell is no row: taken back, and the block grows no further. Kept, every miss opened
+	// another -- 634 rows reaching 40,448 elmos back, 527 asks refused (his 10-21 watch game).
+	if (nr >= 0) {
+		RowDrop(uint(nr));
+		gRowExhausted = true;
+	}
 	++gRowsRefused;
 	return false;
+}
+
+void RowDrop(uint r)
+{
+	if (r + 1 != gRowDef.length())
+		return;
+	gRowBack -= gRowPitch[r];
+	gRowDef.removeLast();
+	gRowDepth.removeLast();
+	gRowPitch.removeLast();
+	gRowFull.removeLast();
 }
 
 bool RowHanded(int d, uint r)
