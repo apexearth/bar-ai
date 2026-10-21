@@ -2236,6 +2236,11 @@ float ArmyFloor(float full)
 
 float ArmyTarget()
 {
+	// NO ARMY IN AN ECONOMY-ONLY GAME (TUNE_ECO_NO_ARMY): its labs make constructors alone, so the gap never closed and
+	// bought turrets at the plants for an army that cannot exist -- army need 64 m/s through minutes 12-20 of his
+	// 10-21 watch, the turrets round the labs he called out ("plenty more around factories").
+	if (EcoOnly() && (ai.GetTunable("apex_eco_no_army", TUNE_ECO_NO_ARMY) > 0.f))
+		return 0.f;
 	// No `(hold > 0) ? hold : default` guard: GetTunable already returns the
 	// compiled default when nothing overrides it, so the guard only ever
 	// stopped a deliberate ZERO -- which is the control arm of the sweep.

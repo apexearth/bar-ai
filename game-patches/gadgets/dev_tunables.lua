@@ -407,6 +407,7 @@ local NAMES = {
 	"apex_lift_compact", -- lift.as: stray turrets set flush (0)
 	"apex_crew_lathe", -- want_energy.as: reactor crew with turrets in BP and flyable lathe (0)
 	"apex_nano_at_work", -- execute.as: turrets stand where priced (0)
+	"apex_eco_no_army", -- army.as: no army target in eco-only games (0)
 	"apex_cell_layout", -- cells.as: eco cells (0)
 	"apex_cell_core", -- cells.as: core side (4)
 	"apex_cell_space", -- cells.as: spacing (1)
