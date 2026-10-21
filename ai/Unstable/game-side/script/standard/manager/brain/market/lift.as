@@ -878,7 +878,11 @@ float LiftGainFor(int d, float fillSec)
 		const float v = (Catalog::gSpeed[d] > 1.f) ? Catalog::gSpeed[d] : 100.f;
 		const float planeSec = took * (2.f * gLiftTookDist / took / v + LIFT_HAND_OVERHEAD_S);
 		const float needPlanes = planeSec / fill;
-		const float have = float(gLift.length());
+		// Planes queued in any plant are fleet already: counted only once flown, 42 were bought for 24 trips.
+		float have = float(gLift.length());
+		LiftDefsList();
+		for (uint q = 0; q < gLiftDefs.length(); ++q)
+			have += float(Brain::PendAnyOf(gLiftDefs[q]));
 		if (needPlanes <= have) {
 			LiftPriceLog(d, "covered", took, needPlanes, have, worth);
 			return 0.f;
