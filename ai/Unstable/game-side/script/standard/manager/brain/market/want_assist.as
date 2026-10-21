@@ -760,19 +760,38 @@ bool LabAssistOn()
 }
 array<int> gLaFac;
 array<int> gLaDef;
+array<float> gLaGain;
 array<float> gPlantBoughtG;
+// THE ORDER'S OWN PRICE (TUNE_LAB_ORDER_GAIN; his 10-20: the commander "can pump out four or five times more air
+// constructors than the factory alone"). A hand on the lab was priced off the plant's purchase gain over the
+// builders held (3.94/7 at minute 3) while the line's own ranking priced the same air con at 140: the guard
+// carries what the lab is making, as the production market priced it when it queued it.
+int gOrderGainDef = -1;
+float gOrderGainNote = 0.f;
+bool LabOrderGainOn() { return ai.GetTunable("apex_lab_order_gain", TUNE_LAB_ORDER_GAIN) > 0.f; }
 void LabOrderNote(CCircuitUnit@ fac, CCircuitDef@ o)
 {
 	if ((fac is null) || (o is null))
 		return;
+	const float g = (gOrderGainDef == int(o.id)) ? gOrderGainNote : 0.f;
+	gOrderGainDef = -1;
 	for (uint i = 0; i < gLaFac.length(); ++i) {
 		if (gLaFac[i] == int(fac.id)) {
 			gLaDef[i] = int(o.id);
+			gLaGain[i] = g;
 			return;
 		}
 	}
 	gLaFac.insertLast(int(fac.id));
 	gLaDef.insertLast(int(o.id));
+	gLaGain.insertLast(g);
+}
+float LabOrderGainOf(int facId)
+{
+	for (uint i = 0; i < gLaFac.length(); ++i)
+		if (gLaFac[i] == facId)
+			return gLaGain[i];
+	return 0.f;
 }
 int LabOrderOf(CCircuitUnit@ f)
 {
@@ -834,7 +853,8 @@ float LabOrdersGainM()
 
 Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 {
-	if (LabAssistOn() && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+	if (LabAssistOn() && (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			|| (LabOrderGainOn() && (SmallHardComArmyW() <= 0.f))))
 		return LabAssistGuard(unit, priced);
 	Want w = priced;
 	// Short contact: the commander's lathe at the lab is army owed now, a standing rate
@@ -946,7 +966,12 @@ Want@ LabAssistGuard(CCircuitUnit@ unit, const Want& in priced)
 		if (d <= 0)
 			continue;
 		const int fd = int(f.circuitDef.id);
-		const float G = LabProductG(fd, d);
+		float G = LabProductG(fd, d);
+		if (LabOrderGainOn() && Catalog::gBuilder[d]) {
+			const float og = LabOrderGainOf(int(f.id));
+			if (og > G)
+				G = og;
+		}
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		const float B = Catalog::gBuildPower[fd] * (7.f / 80.f) + NanoLatheReaching(fp);
 		if (B <= 0.f)

@@ -1788,6 +1788,7 @@ const float TUNE_NANO_E_COST = 0.f;   // [toggle 0/1] want_nano.as: a turret's e
 const float TUNE_IDLE_LATHE_SITE = 0.f;   // [toggle 0/1] sites.as: turret rings ranked by their idle build power, and while a turret stands idle any static build is sited at a ring (his 10-20)
 const float TUNE_LIFT_SINK = 0.f;   // [toggle 0/1] lift.as: with no line short of lathe, a transport is priced on the idle turrets it can fly to the big frame nobody lathes (his 10-20)
 const float TUNE_CONV_ANTICIPATE = 0.f;   // [toggle 0/1] want_energy.as: converters are bought for generator output arriving within a converter's build time, not only for energy already spilling (his 10-20)
+const float TUNE_LAB_ORDER_GAIN = 0.f;   // [toggle 0/1] want_assist.as: a hand on a lab is priced on the gain the production market gave the order it is building; the commander takes the same guard while no army is owed (his 10-20)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;
