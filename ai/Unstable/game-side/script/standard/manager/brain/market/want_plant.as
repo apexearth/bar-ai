@@ -1586,6 +1586,7 @@ int HandKinOf(int d, int con)
 	return n;
 }
 
+int gPlantPaybackCut = 0, gPlantPaybackLogAt = 0;
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
@@ -2118,6 +2119,21 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			w.pos = lands;
 			winAsk = OnMap(site) ? AIFloat3(-1.f, 0.f, -1.f) : askAt;
+		}
+	}
+	// A PLANT THAT NEVER PAYS IS NOT BOUGHT (TUNE_PLANT_PAYBACK; his 10-20 ruling: a hand whose best buy cannot earn
+	// back its cost within the payback horizon helps a build instead). With nothing else on offer an amphibious
+	// complex won at v=0.00 -- 46 hours to repay -- and every ground lab beside the air plants at 0.02-0.07.
+	if ((w.def !is null) && (ai.GetTunable("apex_plant_payback", TUNE_PLANT_PAYBACK) > 0.f)) {
+		const float h = PayH();
+		if ((h > 1.f) && (w.gain * h < w.mCost + w.tCost)) {
+			++gPlantPaybackCut;
+			if (ai.frame >= gPlantPaybackLogAt) {
+				gPlantPaybackLogAt = ai.frame + 30 * SECOND;
+				AiLog("apex: plant-payback t=" + ai.teamId + " " + w.def.GetName() + " gain=" + formatFloat(w.gain, "", 0, 2)
+					+ " cost=" + int(w.mCost + w.tCost) + " h=" + int(h) + " cut=" + gPlantPaybackCut);
+			}
+			return Want();
 		}
 	}
 	if ((w.def !is null) && OnMap(winAsk)) {

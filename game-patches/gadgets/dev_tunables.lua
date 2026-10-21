@@ -411,6 +411,7 @@ local NAMES = {
 	"apex_idle_lathe_site", -- sites.as: build at idle turret rings (0)
 	"apex_lift_sink", -- lift.as: a transport priced on turrets for the unlathed big frame (0)
 	"apex_conv_anticipate", -- want_energy.as: converters for energy on its way (0)
+	"apex_plant_payback", -- want_plant.as: no plant that cannot pay back within the horizon (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)

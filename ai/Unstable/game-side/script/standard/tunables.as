@@ -1785,6 +1785,7 @@ const float TUNE_CON_RAISES_LATHE = 0.f;   // [toggle 0/1] production.as: while 
 const float TUNE_IDLE_LATHE_SITE = 0.f;   // [toggle 0/1] sites.as: turret rings ranked by their idle build power, and while a turret stands idle any static build is sited at a ring (his 10-20)
 const float TUNE_LIFT_SINK = 0.f;   // [toggle 0/1] lift.as: with no line short of lathe, a transport is priced on the idle turrets it can fly to the big frame nobody lathes (his 10-20)
 const float TUNE_CONV_ANTICIPATE = 0.f;   // [toggle 0/1] want_energy.as: converters are bought for generator output arriving within a converter's build time, not only for energy already spilling (his 10-20)
+const float TUNE_PLANT_PAYBACK = 0.f;   // [toggle 0/1] want_plant.as: a plant whose gain cannot repay its cost within the payback horizon is not offered (his 10-20 ruling)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;
