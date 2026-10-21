@@ -1137,6 +1137,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			// enemy. Reported twice as wrong from a watched game, so it is
 			// measured rather than reasoned about.
 			AiLog("apex: techsite " + Catalog::Def(d).GetName()
+				+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2) + " gain=" + formatFloat(w.gain, "", 0, 2)
+				+ " m=" + int(w.mCost) + " t=" + int(w.tCost)
 				+ " at " + int(w.pos.x) + "," + int(w.pos.z)
 				+ " fwd=" + formatFloat(Military::ForwardFraction(w.pos), "", 0, 2)
 				+ " askerFwd=" + formatFloat(Military::ForwardFraction(here), "", 0, 2)

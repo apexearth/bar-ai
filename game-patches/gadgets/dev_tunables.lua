@@ -406,6 +406,7 @@ local NAMES = {
 	"apex_lift_reserve", -- lift.as: idle turrets held in the air (0)
 	"apex_lift_compact", -- lift.as: stray turrets set flush (0)
 	"apex_duel_eco", -- worth.as: no duel air hold in eco-only games (0)
+	"apex_eta_target", -- eta.as: target multiple (4)
 	"apex_cell_layout", -- cells.as: eco cells (0)
 	"apex_cell_core", -- cells.as: core side (4)
 	"apex_cell_space", -- cells.as: spacing (1)

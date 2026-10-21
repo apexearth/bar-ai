@@ -1787,6 +1787,7 @@ const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder w
 const float TUNE_LIFT_RESERVE = 0.f;   // [toggle 0/1] lift.as: a free transport holds the longest-idle turret over the base and drops it where lathe is wanted (his 10-21)
 const float TUNE_LIFT_COMPACT = 0.f;   // [toggle 0/1] lift.as: a free transport moves an idle turret with no flush neighbour into a cell core or flush beside a turret group (his 10-21)
 const float TUNE_DUEL_ECO = 0.f;   // [toggle 0/1] worth.as DuelAirTechHeld: no duel hold on the T2 air lab in economy-only games (10-21)
+const float TUNE_ETA_TARGET = 4.f;   // [x] eta.as: the ETA's target as a multiple of today's economic power (under test, 10-21)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;
