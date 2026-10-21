@@ -1212,7 +1212,7 @@ const float TUNE_ESCORT_SPEED = 1.f;
 
 // A spot is worth what it RAISES us by, not what it yields (apexearth: "when a
 //   mex would double our income it is very important. See docs/tunables.md.
-const float TUNE_MEX_GROWTH = 8.f;
+const float TUNE_MEX_GROWTH = 6.f;
 
 // [toggle 0/1] -- Discount a generator by how much better a one any
 //   constructor we own could build instead, so a worker restricted to the
@@ -1220,7 +1220,7 @@ const float TUNE_MEX_GROWTH = 8.f;
 //   docs/tunables.md.
 const float TUNE_INFERIOR_DISCOUNT = 1.f;
 
-const float TUNE_ENERGY_GROWTH = 8.f;
+const float TUNE_ENERGY_GROWTH = 10.f;
 
 // [toggle 0/1] DEFAULT OFF -- charge the energy growth premium above on the
 //   share of the plan's own horizon a generator would actually be paying over,
@@ -1776,9 +1776,9 @@ const float TUNE_RETREAT_SCALE = 1.f;
 const float TUNE_ETA_COMMIT_BONUS = 0.f;
 const float TUNE_BP_VS_LATHE = 1.f;
 const float TUNE_BP_TRAVEL = 0.f;
-const float TUNE_IDLE_LATHE = 0.f;   // [toggle 0/1] sites.as/joinnet.as/governed.as: work goes where turrets stand idle -- blocks ranked by idle build power and probed until six fit, every static build sited at one while a turret idles, a new frame there over a join, no wait for a full crew (his 10-20)
-const float TUNE_NANO_E_INHERIT = 0.f;   // [toggle 0/1] want_nano.as/want_energy.as: a generator inherits the gain the energy cap took from a turret, for the share of the gap it closes (his 10-20)
-const float TUNE_M_FULL_SMOOTH = 0.f;   // [toggle 0/1] price.as MRealizeShare: the metal bank's fullness is a ~25 s average, and a bank that has sat full discounts the held peak and the spend in flight (his 10-20)
+const float TUNE_IDLE_LATHE = 1.f;   // [toggle 0/1] sites.as/joinnet.as/governed.as: work goes where turrets stand idle -- blocks ranked by idle build power and probed until six fit, every static build sited at one while a turret idles, a new frame there over a join, no wait for a full crew (his 10-20)
+const float TUNE_NANO_E_INHERIT = 1.f;   // [toggle 0/1] want_nano.as/want_energy.as: a generator inherits the gain the energy cap took from a turret, for the share of the gap it closes (his 10-20)
+const float TUNE_M_FULL_SMOOTH = 1.f;   // [toggle 0/1] price.as MRealizeShare: the metal bank's fullness is a ~25 s average, and a bank that has sat full discounts the held peak and the spend in flight (his 10-20)
 const float TUNE_LIFT_TURRETS = 0.f;   // [toggle 0/1] lift.as: with no line short of lathe a transport is priced on the idle turrets it can fly to the frame furthest from done, and eco-only mode may build it (his 10-20)
 const float TUNE_LIFT_HANDS = 0.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
