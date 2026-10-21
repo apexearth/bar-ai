@@ -55,16 +55,10 @@ bool EnergyWasting()
 }
 
 int gGenHeldLogAt = 0;
-// The crew a generator's site would get, in build power. The turrets reaching the site were added in metal a second
-// (NanoLatheReaching: 17.5 a turret) beside hands in build power (200 a turret), a ring of turrets read as a twelfth
-// of itself; TUNE_CREW_LATHE counts them in build power and adds what the transports can fly in over the build.
+// The crew a generator's site would get.
 float GenCrewBP(int uid, int d, float nanoLathe)
 {
-	const float hands = Catalog::gBuildPower[uid] * float(Requests::SiteWorkerCap(Catalog::Def(d)));
-	if (ai.GetTunable("apex_crew_lathe", TUNE_CREW_LATHE) <= 0.f)
-		return hands + nanoLathe;
-	const float standing = hands + nanoLathe * (80.f / 7.f);
-	return standing + FlyableLatheBP(Catalog::BuildSecondsAt(d, (standing > 1.f) ? standing : 1.f));
+	return Catalog::gBuildPower[uid] * float(Requests::SiteWorkerCap(Catalog::Def(d))) + nanoLathe;
 }
 
 Want@ ProposeEnergy(CCircuitUnit@ unit)
@@ -1538,14 +1532,12 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// walk again (apexearth's call, twice). Overflow = the surplus the E bank
 	// cannot absorb.
 	const float eStore2 = Eco::EStor();
-	// THE OVERFLOW ON ITS WAY (TUNE_CONV_AHEAD; his 10-20 "making the converters before you've finished the afus",
+	// THE OVERFLOW ON ITS WAY (his 10-20 "making the converters before you've finished the afus",
 	// 10-21 "we are clearly not anticipating energy overflow"). Converters answered only a full bank and a surplus
 	// already spilling; the generation being built arrives as overflow unless its converters rise beside it. The
 	// forward surplus is income and that generation, less pull, the energy builds under way will draw, and the
 	// converters already ordered.
-	float eAhead = 0.f;
-	if (ai.GetTunable("apex_conv_ahead", TUNE_CONV_AHEAD) > 0.f)
-		eAhead = Eco::EInc() + EMakeInFlight() - Eco::EPull() - EDrainInFlight() - ConvCapInFlight();
+	const float eAhead = Eco::EInc() + EMakeInFlight() - Eco::EPull() - EDrainInFlight() - ConvCapInFlight();
 	// WHY THERE IS NO CONVERTER. Measured 2026-08-31 on Red Comet 1v1 +100%:
 	// 46-56% of all energy thrown away, the bank pinned at 87-99% of storage
 	// for the whole game, and `energy/convert` winning ZERO elections while

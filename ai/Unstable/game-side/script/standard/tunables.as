@@ -1372,7 +1372,6 @@ const float TUNE_JOIN_MIN_M = 354.f;
 // ECO_LEASH: work radius of the quiet rear's builders from home -- the safe
 //   radius it prices everything else against.
 const float TUNE_ECO_LEASH = 2500.f;
-const float TUNE_ECO_SPEND = 0.f;   // [toggle 0/1] price.as EcoIncomeGoal: eco-only games price income by what will be spent, as real games do (his 10-21)
 
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets and
 //   small works still need hands (his floor-of-3 number).
@@ -1787,10 +1786,6 @@ const float TUNE_LIFT_TURRETS = 1.f;   // [toggle 0/1] lift.as: with no line sho
 const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
 const float TUNE_LIFT_RESERVE = 0.f;   // [toggle 0/1] lift.as: a free transport holds the longest-idle turret over the base and drops it where lathe is wanted (his 10-21)
 const float TUNE_LIFT_COMPACT = 0.f;   // [toggle 0/1] lift.as: a free transport moves an idle turret with no flush neighbour into a cell core or flush beside a turret group (his 10-21)
-const float TUNE_CREW_LATHE = 0.f;   // [toggle 0/1] want_energy.as GenCrewBP: a reactor's crew counts its turrets in build power and the turrets the transports can fly in (his 10-21)
-const float TUNE_NANO_AT_WORK = 0.f;   // [toggle 0/1] execute.as: a turret bought for a frame stands at the frame, one bought for the spill at the eco site, not at the neediest plant line (his 10-21)
-const float TUNE_ECO_NO_ARMY = 0.f;   // [toggle 0/1] army.as: the army target is zero in economy-only games, whose labs make constructors alone (his 10-21)
-const float TUNE_CONV_AHEAD = 0.f;   // [toggle 0/1] want_energy.as ProposeConvert: converters answer the forward surplus (income + generation building - pull - draws building - converters ordered) (his 10-20/21)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;

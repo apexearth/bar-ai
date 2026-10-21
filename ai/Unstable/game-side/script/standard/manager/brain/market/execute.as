@@ -976,12 +976,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// the turret; failing either, it parks beside any factory.
 		AIFloat3 slot = w.pos;
 		// A floor turret stands at its factory; nothing below re-sites it.
-		// A TURRET STANDS WHERE IT WAS PRICED (TUNE_NANO_AT_WORK; his 10-21: "we have 100+ turrets around our labs,
-		// few around the eco we're building"). Re-sited at the neediest line first, a turret bought for a frame or for
-		// the spill went to a plant whenever any line read short: 64 of 114 turrets in a plant's reach at minute 20,
-		// 257 of 581 at 30. On, a frame's turret stands at its frame and a spill turret at the eco site.
-		const bool atWork = (ai.GetTunable("apex_nano_at_work", TUNE_NANO_AT_WORK) > 0.f)
-				&& ((w.spotId == NS_SINK) || (w.spotId == NS_FARM));
+		// A TURRET STANDS WHERE IT WAS PRICED (his 10-21: "we have 100+ turrets around our labs, few around the eco
+		// we're building"). Re-sited at the neediest line first, a turret bought for a frame or for the spill went to a
+		// plant whenever any line read short: 64 of 114 turrets in a plant's reach at minute 20, 257 of 581 at 30.
+		const bool atWork = (w.spotId == NS_SINK) || (w.spotId == NS_FARM);
 		bool sited = (((w.spotId == NS_FLOOR) || (w.spotId == NS_LAB)) || atWork) && OnMap(w.pos);
 		// The line's pull is priced ONCE, in NeediestLine, so the turret is
 		// sited by the same arithmetic that bought it.

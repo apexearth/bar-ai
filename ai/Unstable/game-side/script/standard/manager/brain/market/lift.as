@@ -631,40 +631,6 @@ bool CompactDispatch(LiftJob@ jb)
 	return false;
 }
 
-// BUILD POWER THE FLEET CAN FLY IN (TUNE_CREW_LATHE; his 10-21: "I bet our choice to make AFUS doesn't take in to
-// account transport capability. You could really make that shit anywhere if you rely on transports to get your build
-// power there"). Over a build of `sec` seconds the planes we hold bring idle turrets one a trip, a trip being out and
-// back over the idle turrets' mean distance from the anchor plus the load and drop; the lathe is their mean presence
-// over the build, never more than the idle turrets themselves. In build power.
-float gFlyIdleN = 0.f, gFlyTripS = 0.f;
-int gFlyAt = -999999;
-float FlyableLatheBP(float sec)
-{
-	if (!LiftTurretsOn() || (gLift.length() == 0) || (sec <= 1.f) || !Base::gAnchorSet)
-		return 0.f;
-	if (ai.frame - gFlyAt >= 5 * SECOND) {
-		gFlyAt = ai.frame;
-		IdleNanoLatheM();
-		float n = 0.f, dist = 0.f;
-		for (uint i = 0; (i < gOwnNanoPos.length()) && (i < gIdleNanoFlag.length()); ++i) {
-			if (!gIdleNanoFlag[i])
-				continue;
-			n += 1.f;
-			dist += gOwnNanoPos[i].distance2D(Base::gAnchor);
-		}
-		gFlyIdleN = n;
-		CCircuitUnit@ pl = gLift[0].plane;
-		const float v = (pl !is null) ? LiftSpeed(pl) : 100.f;
-		gFlyTripS = ((n > 0.f) ? (2.f * dist / n / v) : 0.f) + LIFT_HAND_OVERHEAD_S;
-	}
-	if ((gFlyIdleN <= 0.f) || (gFlyTripS <= 0.f))
-		return 0.f;
-	const float rate = float(gLift.length()) / gFlyTripS;   // turrets per second
-	const float tFull = gFlyIdleN / rate;
-	const float mean = (tFull >= sec) ? (0.5f * rate * sec) : (gFlyIdleN * (1.f - 0.5f * tFull / sec));
-	return mean * NANO_ABSORB * (80.f / 7.f);
-}
-
 void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
 {
 	const AIFloat3 at = cargo.GetPos(ai.frame);

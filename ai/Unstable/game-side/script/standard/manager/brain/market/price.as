@@ -514,7 +514,7 @@ float EPriceCostAt(float buildSec, float costE)
 float ERealizeShare(float addE, float buildSec)
 {
 	PrTuneFill();
-	if ((addE <= 0.f) || EcoIncomeGoal())
+	if (addE <= 0.f)
 		return 1.f;
 	if (!gPrERealizeOn)
 		return 1.f;
@@ -546,7 +546,7 @@ float ERealizeShare(float addE, float buildSec)
 	}
 	float target = demand * gPrEHeadroom
 			+ ConvCapE() + fill;
-	// SPENDING IS DEMAND (TUNE_ECO_SPEND): the metal now spilling is spent only by lathe that does not stand yet, and
+	// SPENDING IS DEMAND (eco-only): the metal now spilling is spent only by lathe that does not stand yet, and
 	// that lathe draws energy. Without it the share read the standing fleet's ask alone, so spending mode bought less
 	// energy (minute 10: 1,243 e/s against 1,506) and the turrets that would have spent the spill never ran.
 	if (EcoSpendOn()) {
@@ -601,20 +601,14 @@ float ERealizeShare(float addE, float buildSec)
 // the energy side's on purpose -- a lookahead is a property of the question,
 // not of the resource. See docs/tunables.md.
 int gMRealLogAt = 0;
-// INCOME IS THE GOAL IN ECONOMY-ONLY MODE (his 10-20 ruling). The realize shares price income by what something
-// would spend it on, and in a real game the army is that sink; economy-only mode removes it, so once both banks
-// overflowed every income build read near zero and idle air cons assisted each other "over nothing" (assist won
-// 302 of 602 offers; turrets were offered in 245 of 687 elections). Here more income is the objective itself.
-// SPENDING IS THE GOAL (TUNE_ECO_SPEND, his 10-21: "the goal of eco should perhaps be all about metal and energy
-// SPENDING instead of income"; "we still go out looking for more mexes when they'll only help us overflow"). On, the
-// realize shares price income by what will be spent in eco-only games too, as in a real one.
-bool EcoSpendOn() { return EcoOnly() && (ai.GetTunable("apex_eco_spend", TUNE_ECO_SPEND) > 0.f); }
-bool EcoIncomeGoal() { return EcoOnly() && !EcoSpendOn(); }
+// SPENDING IS THE GOAL (his 10-21: "the goal of eco should perhaps be all about metal and energy SPENDING instead of
+// income"): the realize shares price income by what will be spent in eco-only games as in real ones.
+bool EcoSpendOn() { return EcoOnly(); }
 
 float MRealizeShare(float addM, float buildSec)
 {
 	PrTuneFill();
-	if ((addM <= 0.f) || EcoIncomeGoal())
+	if (addM <= 0.f)
 		return 1.f;
 	if (!gPrMRealizeOn)
 		return 1.f;

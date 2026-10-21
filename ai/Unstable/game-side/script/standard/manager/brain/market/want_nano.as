@@ -556,11 +556,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	} else if ((sinkNeed > 0.f) && OnMap(sinkPos)) {
 		site = sinkPos;
 		src = NS_SINK;
-	} else if (haveLine && !LayoutOn() && (ai.GetTunable("apex_nano_at_work", TUNE_NANO_AT_WORK) <= 0.f)) {
-		// A turret bought for waste alone stands on the turret rows when they are laid (TUNE_ROW_LAYOUT): at
-		// the line it only crowded the plant, which no line need asked for.
-		site = linePos;
-		src = NS_LINE;
 	}
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
