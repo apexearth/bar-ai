@@ -1535,6 +1535,34 @@ bool HandsOnceOn()
 	return gHoOn > 0;
 }
 
+// A DOMINATED BUILDER ADDS NO HANDS (TUNE_PLANT_PAYBACK; his 10-20: "why do we believe the vehicle plant pays
+// its cost within the horizon? Its vehicles are all too slow to keep up"). A plant standing or manned that already
+// makes a builder reaching as far and moving at least as fast answers every job this plant's builder could: its
+// constructor half is worth nothing here, whatever domain it is in.
+bool HandsDominated(int d, int con)
+{
+	if (!Catalog::ValidId(con))
+		return false;
+	const float myReach = PlantReachOf(d);
+	const float myMob = MobilityMult(con);
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		const int rd = gComDef[ci];
+		if ((rd == d) || (Catalog::gBuildsList[rd].length() == 0) || (PlantReachOf(rd) < myReach))
+			continue;
+		if ((gComState[ci] != CS_FINISHED)
+			&& ((gComTask[ci] is null) || (Requests::Workers(gComTask[ci]) == 0)))
+			continue;
+		const array<int>@ ps = Catalog::gBuildsList[rd];
+		for (uint p = 0; p < ps.length(); ++p) {
+			const int pd = ps[p];
+			if (Catalog::gAvailable[pd] && Catalog::gMobile[pd] && Catalog::gBuilder[pd]
+				&& (MobilityMult(pd) >= myMob) && (DefTier(pd) >= DefTier(con)))
+				return true;
+		}
+	}
+	return false;
+}
+
 int HandKinOf(int d, int con)
 {
 	if (!Catalog::ValidId(con))
@@ -1828,7 +1856,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const int handKin = HandsOnceOn() ? HandKinOf(d, bestCon) : 0;
 		if (handKin > 0)
 			pipeT /= float(1 + handKin);
-		const float conHalf = (pipeT + expTerm) * rateMul;
+		const bool dominated = (ai.GetTunable("apex_plant_payback", TUNE_PLANT_PAYBACK) > 0.f) && HandsDominated(d, bestCon);
+		const float conHalf = dominated ? 0.f : ((pipeT + expTerm) * rateMul);
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
@@ -1998,8 +2027,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// is substituted too -- the cons claim the ground, not the plant, and
 		// nanos on the standing kin deliver the same cons cheaper. A new
 		// capability keeps its expansion at full value.
-		const float conSub = (pipeT * subMul * dupSubst
-				+ expTerm * subMul * (isCopy ? dupSubst : 1.f)) * rateMul;
+		const float conSub = dominated ? 0.f : ((pipeT * subMul * dupSubst
+				+ expTerm * subMul * (isCopy ? dupSubst : 1.f)) * rateMul);
 		// The seat caution (an air army before the ground army fills, in a duel) holds the PRODUCTION half only:
 		// the air constructors are the hands that raise the turrets (his 10-20: "we don't have nano turrets because
 		// we don't have the air cons building them"). On the whole price it zeroed the plant while no army stood.
