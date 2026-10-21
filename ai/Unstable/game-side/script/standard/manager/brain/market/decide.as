@@ -293,6 +293,8 @@ Want@ WantCopy(Want@ s)
 	c.walkSec = s.walkSec;
 	c.walkSlope = s.walkSlope;
 	c.wfDelta = s.wfDelta;
+	c.backM = s.backM;   // inside tCost when the detour is on, so a copy is not billed twice
+	c.awayM = s.awayM;
 	c.src = s.src;
 	c.funded = s.funded;
 	return c;
@@ -1302,6 +1304,36 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 				w.value *= c0 / c1;
 		}
 	}
+	// THE WALK HOME IS OWED WHATEVER HE DOES (TUNE_WALK_DETOUR, his 10-20: "back home is where his build power can
+	// be put to much more future work"). Each job pays the detour it adds to that walk, d(job, home) - d(here, home),
+	// signed: a job nearer home is credited, up to its own walk out. Billed on the walk out alone, a commander 69-129 s
+	// out read a home solar at t=700-1,400 against t=200 for the next spot beyond him, and stepped on outward.
+	const bool detourOn = ai.GetTunable("apex_walk_detour", TUNE_WALK_DETOUR) > 0.f;
+	if (detourOn) {
+		const int dd = int(unit.circuitDef.id);
+		const AIFloat3 hp = unit.GetPos(ai.frame);
+		float back = 0.f;
+		if (Builder::gHomeSet && (Catalog::gSpeed[dd] > 1.f) && OnMap(hp)) {
+			const float rate = WalkRate(Catalog::gBuildPower[dd]);
+			const float outM = hp.distance2D(w.pos) / Catalog::gSpeed[dd] * rate;
+			back = (w.pos.distance2D(Builder::gHomePos) - hp.distance2D(Builder::gHomePos))
+					/ Catalog::gSpeed[dd] * rate;
+			if (back < -outM)
+				back = -outM;
+		}
+		if (back != w.backM) {
+			const float c0 = w.mCost + w.tCost;
+			float t1 = w.tCost + back - w.backM;
+			if (w.mCost + t1 < 0.1f * c0)
+				t1 = 0.1f * c0 - w.mCost;
+			const float applied = t1 - w.tCost;
+			w.tCost = t1;
+			w.backM += applied;
+			const float c1 = w.mCost + w.tCost;
+			if ((c0 > 0.f) && (c1 > 0.f))
+				w.value *= c0 / c1;
+		}
+	}
 	if (w.kind == WK_MEX)
 		return;
 	const float c = w.mCost + w.tCost;
@@ -1320,8 +1352,9 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 	// tCost bills the walk out only; the builder also walks back to base,
 	// so the job pays for however much farther from home it leaves him.
 	const int ud = int(unit.circuitDef.id);
-	w.backM = 0.f;
-	if (Builder::gHomeSet && (Catalog::gSpeed[ud] > 1.f) && OnMap(up)) {
+	if (!detourOn)
+		w.backM = 0.f;
+	if (!detourOn && Builder::gHomeSet && (Catalog::gSpeed[ud] > 1.f) && OnMap(up)) {
 		const float further = w.pos.distance2D(Builder::gHomePos) - up.distance2D(Builder::gHomePos);
 		if (further > 0.f)
 			w.backM = further / Catalog::gSpeed[ud] * WalkRate(Catalog::gBuildPower[ud]);
@@ -3685,6 +3718,8 @@ int DefJoinPrice(CCircuitUnit@ unit, array<Want@>@ ranked, Want@ w, CCircuitUnit
 		w.mCost += Requests::gJaRisk;
 	}
 	w.tCost = (walkSec + remSec) * WageOf(unit) + w.gain * walkSec;
+	w.backM = 0.f;
+	w.awayM = 0.f;
 	w.walkSec = walkSec;
 	w.value = w.gain / (w.mCost + w.tCost);
 	return 1;

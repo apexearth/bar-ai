@@ -948,6 +948,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	w.tCost = gPrLastWalkC + gPrLastBuildC
 			+ displacedM * gVwDisp
 			+ riskM;   // the builder's expected loss on the trip, see TripRisk
+	w.backM = 0.f;
+	w.awayM = 0.f;
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
 	// sec is ALSO the amount of metal you'd have lost from all that walk time
 	// you'd make as metal income if you had built the closer one"). Wage above
