@@ -1535,7 +1535,7 @@ bool HandsOnceOn()
 	return gHoOn > 0;
 }
 
-// A DOMINATED BUILDER ADDS NO HANDS (TUNE_PLANT_PAYBACK; his 10-20: "why do we believe the vehicle plant pays
+// A DOMINATED BUILDER ADDS NO HANDS (his 10-20: "why do we believe the vehicle plant pays
 // its cost within the horizon? Its vehicles are all too slow to keep up"). A plant standing or manned that already
 // makes a builder reaching as far and moving at least as fast answers every job this plant's builder could: its
 // constructor half is worth nothing here, whatever domain it is in.
@@ -1856,7 +1856,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const int handKin = HandsOnceOn() ? HandKinOf(d, bestCon) : 0;
 		if (handKin > 0)
 			pipeT /= float(1 + handKin);
-		const bool dominated = (ai.GetTunable("apex_plant_payback", TUNE_PLANT_PAYBACK) > 0.f) && HandsDominated(d, bestCon);
+		const bool dominated = HandsDominated(d, bestCon);
 		const float conHalf = dominated ? 0.f : ((pipeT + expTerm) * rateMul);
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
@@ -2128,10 +2128,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			winAsk = OnMap(site) ? AIFloat3(-1.f, 0.f, -1.f) : askAt;
 		}
 	}
-	// A PLANT THAT NEVER PAYS IS NOT BOUGHT (TUNE_PLANT_PAYBACK; his 10-20 ruling: a hand whose best buy cannot earn
+	// A PLANT THAT NEVER PAYS IS NOT BOUGHT (his 10-20 ruling: a hand whose best buy cannot earn
 	// back its cost within the payback horizon helps a build instead). With nothing else on offer an amphibious
 	// complex won at v=0.00 -- 46 hours to repay -- and every ground lab beside the air plants at 0.02-0.07.
-	if ((w.def !is null) && (ai.GetTunable("apex_plant_payback", TUNE_PLANT_PAYBACK) > 0.f)) {
+	if (w.def !is null) {
 		const float h = PayH();
 		if ((h > 1.f) && (w.gain * h < w.mCost + w.tCost)) {
 			++gPlantPaybackCut;

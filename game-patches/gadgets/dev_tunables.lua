@@ -402,7 +402,6 @@ local NAMES = {
 	"apex_crew_split",       -- crew.as: field and home crews (1)
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_e_feed_waste",     -- price.as: energy priced by the spendable feed while metal overflows (0)
-	"apex_plant_payback", -- want_plant.as: no plant that cannot pay back within the horizon (0)
 	"apex_idle_lathe", -- work goes where turrets stand idle (0)
 	"apex_nano_e_inherit", -- a generator inherits the turret value its energy unblocks (0)
 	"apex_m_full_smooth", -- price.as: metal bank fullness averaged (0)
