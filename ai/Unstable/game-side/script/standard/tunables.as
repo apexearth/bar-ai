@@ -235,7 +235,6 @@ const float TUNE_MEXUP_HORIZON = 1.f;    // a mex upgrade's walk and build cost 
 const float TUNE_ECO_HORIZON = 1.f;     // energy and converters priced on the payback-horizon share, not gain x late seconds (his 10-15 eco seat: fusions at v=0.00)
 const float TUNE_ASSIST_ECO = 1.f;       // an assist on an economy frame is priced at the frame's gain x the seconds this hand saves it (want_assist.as)
 const float TUNE_WALK_FORGONE = 0.f;     // a builder's walk and build seconds cost its own BP at what the economy can feed per BP-second, not income / worker count (price.as BuilderRate)
-const float TUNE_WALK_DETOUR = 0.f;   // [toggle 0/1] decide.as ChargeTrip: every job, extractor claims too, pays the signed detour it adds to the walk home, in tCost (his 10-20)
 
 // [toggle 0/1] -- A factory line's unserved spend counts the army's budget
 //   shortfall (target share - actual share) x metal income, so nanos are bought
@@ -1367,6 +1366,7 @@ const float TUNE_JOIN_MIN_M = 354.f;
 // ECO_LEASH: work radius of the quiet rear's builders from home -- the safe
 //   radius it prices everything else against.
 const float TUNE_ECO_LEASH = 2500.f;
+const float TUNE_COM_CLAIM_LEASH = 0.f;   // [toggle 0/1] MEASUREMENT (10-21): the leash holds the commander's extractor claims too -- what his staying home is worth
 
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets and
 //   small works still need hands (his floor-of-3 number).

@@ -293,8 +293,6 @@ Want@ WantCopy(Want@ s)
 	c.walkSec = s.walkSec;
 	c.walkSlope = s.walkSlope;
 	c.wfDelta = s.wfDelta;
-	c.backM = s.backM;   // inside tCost when the detour is on, so a copy is not billed twice
-	c.awayM = s.awayM;
 	c.src = s.src;
 	c.funded = s.funded;
 	return c;
@@ -1278,7 +1276,8 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 	const bool comClaim = (w.kind == WK_MEX)
 			|| ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT));
 	return ComFar(at) && (at.distance2D(unit.GetPos(ai.frame)) > HERE_R)
-		&& !(comClaim && !gCsT2 && ComClaimOk(unit, at));
+		&& !(comClaim && !gCsT2 && ComClaimOk(unit, at)
+			&& (ai.GetTunable("apex_com_claim_leash", TUNE_COM_CLAIM_LEASH) <= 0.f));
 }
 
 // EVERY WANT PAYS THE ASKER'S ROAD, not only the mex want: a T2 con walked
@@ -1287,7 +1286,6 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 // trip -- TripRisk times what the asker is worth, the commander being worth
 // everything we own -- and it is assigned, not accumulated, because memoed
 // wants come back as the same object.
-array<int> gDetourLogAt(2, 0);
 void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 {
 	if ((w is null) || (w.kind == WK_NONE) || !OnMap(w.pos) || (w.value <= 0.f))
@@ -1303,43 +1301,6 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 			const float c1 = w.mCost + w.tCost;
 			if ((c0 > 0.f) && (c1 > 0.f))
 				w.value *= c0 / c1;
-		}
-	}
-	// THE WALK HOME IS OWED WHATEVER HE DOES (TUNE_WALK_DETOUR, his 10-20: "back home is where his build power can
-	// be put to much more future work"). Each job pays the detour it adds to that walk, d(job, home) - d(here, home),
-	// signed: a job nearer home is credited, up to its own walk out. Billed on the walk out alone, a commander 69-129 s
-	// out read a home solar at t=700-1,400 against t=200 for the next spot beyond him, and stepped on outward.
-	const bool detourOn = ai.GetTunable("apex_walk_detour", TUNE_WALK_DETOUR) > 0.f;
-	if (detourOn) {
-		const int dd = int(unit.circuitDef.id);
-		const AIFloat3 hp = unit.GetPos(ai.frame);
-		float back = 0.f;
-		if (Builder::gHomeSet && (Catalog::gSpeed[dd] > 1.f) && OnMap(hp)) {
-			const float rate = WalkRate(Catalog::gBuildPower[dd]);
-			const float outM = hp.distance2D(w.pos) / Catalog::gSpeed[dd] * rate;
-			back = (w.pos.distance2D(Builder::gHomePos) - hp.distance2D(Builder::gHomePos))
-					/ Catalog::gSpeed[dd] * rate;
-			if (back < -outM)
-				back = -outM;
-		}
-		if (back != w.backM) {
-			const float c0 = w.mCost + w.tCost;
-			float t1 = w.tCost + back - w.backM;
-			if (w.mCost + t1 < 0.1f * c0)
-				t1 = 0.1f * c0 - w.mCost;
-			const float applied = t1 - w.tCost;
-			w.tCost = t1;
-			w.backM += applied;
-			const float c1 = w.mCost + w.tCost;
-			if ((c0 > 0.f) && (c1 > 0.f))
-				w.value *= c0 / c1;
-		}
-		const uint lk = (w.kind == WK_MEX) ? 0 : 1;
-		if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (ai.frame >= gDetourLogAt[lk])) {
-			gDetourLogAt[lk] = ai.frame + 10 * SECOND;
-			AiLog("apex: detour t=" + ai.teamId + " " + KindName(w.kind) + ":" + ((w.def is null) ? "-" : w.def.GetName())
-				+ " backM=" + int(w.backM) + " tCost=" + int(w.tCost) + " v=" + formatFloat(w.value, "", 0, 2)
-				+ " homeD=" + int(hp.distance2D(Builder::gHomePos)) + " jobHomeD=" + int(w.pos.distance2D(Builder::gHomePos)));
 		}
 	}
 	if (w.kind == WK_MEX)
@@ -1360,9 +1321,8 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 	// tCost bills the walk out only; the builder also walks back to base,
 	// so the job pays for however much farther from home it leaves him.
 	const int ud = int(unit.circuitDef.id);
-	if (!detourOn)
-		w.backM = 0.f;
-	if (!detourOn && Builder::gHomeSet && (Catalog::gSpeed[ud] > 1.f) && OnMap(up)) {
+	w.backM = 0.f;
+	if (Builder::gHomeSet && (Catalog::gSpeed[ud] > 1.f) && OnMap(up)) {
 		const float further = w.pos.distance2D(Builder::gHomePos) - up.distance2D(Builder::gHomePos);
 		if (further > 0.f)
 			w.backM = further / Catalog::gSpeed[ud] * WalkRate(Catalog::gBuildPower[ud]);
@@ -3726,8 +3686,6 @@ int DefJoinPrice(CCircuitUnit@ unit, array<Want@>@ ranked, Want@ w, CCircuitUnit
 		w.mCost += Requests::gJaRisk;
 	}
 	w.tCost = (walkSec + remSec) * WageOf(unit) + w.gain * walkSec;
-	w.backM = 0.f;
-	w.awayM = 0.f;
 	w.walkSec = walkSec;
 	w.value = w.gain / (w.mCost + w.tCost);
 	return 1;
