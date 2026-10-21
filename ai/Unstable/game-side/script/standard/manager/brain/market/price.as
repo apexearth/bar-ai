@@ -231,6 +231,8 @@ int gMPullPrevAt = 0;
 float gMPullGrowth = 0.f;
 float gMDemandPk = 0.f;
 float gMFullEma = 0.f;
+float gMIncGrowth = 0.f, gMIncPrev = 0.f;
+int gMIncPrevAt = -1;
 void TrackMPull()
 {
 	if (ai.frame < gMPullPrevAt + 5 * SECOND)
@@ -248,7 +250,17 @@ void TrackMPull()
 	const float md0 = (pull > 0.f) ? pull : 0.f;
 	gMDemandPk = (md0 > gMDemandPk) ? md0 : (0.97f * gMDemandPk + 0.03f * md0);
 	gMFullEma = 0.8f * gMFullEma + 0.2f * (aiEconomyMgr.isMetalFull ? 1.f : 0.f);
+	const float inc = Eco::MInc();
+	if (gMIncPrevAt >= 0) {
+		const float dt = float(ai.frame - gMIncPrevAt) / float(SECOND);
+		if (dt > 1.f)
+			gMIncGrowth = 0.7f * gMIncGrowth + 0.3f * ((inc - gMIncPrev) / dt);
+	}
+	gMIncPrev = inc;
+	gMIncPrevAt = ai.frame;
 }
+// Metal income growth, m/s per second, smoothed over the same 5 s samples as the pull.
+float MIncGrowth() { return gMIncGrowth; }
 
 // HOW FULL THE BANK HAS BEEN, not whether it is full this tick (his 10-20: "we have air going
 // out to get more mexes when we can't even spend the metal we have"). A bank at the brim read full one sample and

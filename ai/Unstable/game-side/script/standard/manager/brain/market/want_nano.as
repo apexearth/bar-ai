@@ -451,6 +451,21 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
+	// THE TURRETS THE INCOME WILL NEED (TUNE_NANO_AHEAD; his 10-20: "anticipating future nanoturret needs ahead of
+	// time would allow us to scale more properly"). Bought on overflow that has already begun, the first turret
+	// stood at minute 7-8; his reference had seven by minute 4. The need is the income a turret ordered now will
+	// meet when it stands, less the build power that will be there -- growth times its own build seconds.
+	if (ai.GetTunable("apex_nano_ahead", TUNE_NANO_AHEAD) > 0.f) {
+		TrackMPull();
+		const float g = MIncGrowth();
+		if (g > 0.f) {
+			const int nd = NanoDefOf(Catalog::Def(int(unit.circuitDef.id)));
+			const float t = (Catalog::ValidId(nd) ? Catalog::BuildSecondsAt(nd, EffBP(Catalog::gBuildPower[int(unit.circuitDef.id)])) : 60.f) + 30.f;
+			const float ahead = Eco::MInc() + g * t - BPCapacity();
+			if (ahead > over)
+				over = ahead;
+		}
+	}
 	float labNeed = 0.f;
 	if (LabNanoOn()) {
 		LabNanoScan();
