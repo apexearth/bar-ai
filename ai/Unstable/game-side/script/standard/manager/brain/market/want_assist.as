@@ -854,7 +854,7 @@ float LabOrdersGainM()
 Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 {
 	if (LabAssistOn() && (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-			|| (LabOrderGainOn() && (SmallHardComArmyW() <= 0.f))))
+			|| (LabOrderGainOn() && (EcoOnly() || (SmallHardComArmyW() <= 0.f)))))
 		return LabAssistGuard(unit, priced);
 	Want w = priced;
 	// Short contact: the commander's lathe at the lab is army owed now, a standing rate
