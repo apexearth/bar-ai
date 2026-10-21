@@ -188,11 +188,13 @@ AIFloat3 LineSlot(uint c, int k)
 	return gCellAt[c] + gRowAcross * (float(k) * Lattice::FootPitch(CellNanoDef()));
 }
 
+// A flown turret is set down a few elmos off its slot: half a pitch is still the slot.
 bool OwnTurretAt(const AIFloat3& in p)
 {
-	NanoNear(p, 16.f);
+	const float tol = 0.5f * Lattice::FootPitch(CellNanoDef());
+	NanoNear(p, tol + 8.f);
 	for (uint q = 0; q < gNanoGrid.hit.length(); ++q)
-		if (gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < 8.f)
+		if (gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < tol)
 			return true;
 	return false;
 }
@@ -202,6 +204,8 @@ bool LineEnd(uint c, bool hiEnd, AIFloat3& out at)
 {
 	const int nd = CellNanoDef();
 	CCircuitDef@ def = Catalog::Def(nd);
+	int skipped = 0;
+	AIFloat3 blockedAt(-1.f, 0.f, -1.f);
 	for (int guard = 0; guard < LINE_MAX; ++guard) {
 		if (gCellHi[c] - gCellLo[c] + 1 >= LINE_MAX)
 			return false;
@@ -218,8 +222,16 @@ bool LineEnd(uint c, bool hiEnd, AIFloat3& out at)
 			continue;
 		}
 		AIFloat3 got;
-		if (!ai.CanPlaceCell(def, p, got))
-			break;
+		if (!ai.CanPlaceCell(def, p, got)) {
+			// a building on the line's path: the line steps past it, up to three slots, and is shut only by a wall
+			if ((++skipped > 3) || empty) {
+				blockedAt = p;
+				break;
+			}
+			if (hiEnd) gCellHi[c] = k;
+			else gCellLo[c] = k;
+			continue;
+		}
 		if (empty) { gCellLo[c] = 0; gCellHi[c] = 0; }
 		else if (hiEnd) gCellHi[c] = k;
 		else gCellLo[c] = k;
@@ -231,6 +243,8 @@ bool LineEnd(uint c, bool hiEnd, AIFloat3& out at)
 		gCellHiShut[c] = true;
 	else
 		gCellLoShut[c] = true;
+	AiLog("apex: cells t=" + ai.teamId + " line #" + c + (hiEnd ? " hi" : " lo") + " shut len=" + (gCellHi[c] - gCellLo[c] + 1)
+		+ (OnMap(blockedAt) ? (" by " + StandingNear(blockedAt, 40.f) + " at=" + int(blockedAt.x) + "," + int(blockedAt.z)) : " off map"));
 	return false;
 }
 
