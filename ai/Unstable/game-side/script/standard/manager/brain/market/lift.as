@@ -895,9 +895,10 @@ float LiftTurretWorth(int d, float& out took)
 		float gap = 0.f;
 		if (!LiftTurretsOn() || !SinkSiteFor(lp, gap) || (gSinkJob is null) || (gSinkJob.buildDef is null))
 			return 0.f;
-		need = gSinkJob.buildDef.costM * (1.f - Requests::Progress(gSinkJob)) / (NANO_ABSORB * 60.f);
-		if (need < 1.f)
-			need = 1.f;
+		// Every idle turret the fleet could put to work, not the few that finish one frame in a minute: priced on
+		// those, two planes read as plenty beside 194 idle turrets (his 10-20 game). Each lifted turret works the
+		// next frame furthest from done in its turn.
+		need = float(gOwnNano.length());
 	}
 	const float speed = (Catalog::gSpeed[d] > 1.f) ? Catalog::gSpeed[d] : 100.f;
 	float worth = 0.f;
