@@ -876,7 +876,6 @@ const float TUNE_DRAW_BEST = 1.f;   // [toggle 0/1] decide.as CategoryDraw: a bu
 const float TUNE_CREW_SPLIT = 1.f;   // [toggle 0/1] crew.as: the field crew and the home crew (his 10-01); 0 lets pricing alone send hands out
 const float TUNE_LAB_RATE = 0.f;   // [toggle 0/1] production.as: a constructor bids its gain rate in the lab, the army's currency, not gain per metal
 const float TUNE_E_FEED_WASTE = 0.f;   // [toggle 0/1] price.as EPrice: with metal overflowing, energy is worth the metal it lets us spend (the feed), not today's lathe
-const float TUNE_UPGRADE_HELP_COST = 0.f;   // [toggle 0/1] want_tech.as: while metal overflows, a new mex upgrade pays for the help it withholds from one in flight
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets
@@ -1017,7 +1016,6 @@ const float TUNE_UNLOCK_ONCE = 1.f;   // [toggle 0/1] a T2/T3 plant is the metal
 const float TUNE_UNLOCK_HOIST = 0.f;   // [toggle 0/1] decide.as: a free hand is hoisted onto the metal unlock in flight (why=metalfirst, v=1000); 0 leaves the lab's assist to its priced want
 const float TUNE_ESTALL_HOIST = 1.f;   // [toggle 0/1] decide.as: in a hard energy stall a hand is hoisted onto the fastest generator (why=estall) over its priced work; 0 leaves the stall to the energy price
 const float TUNE_FUTURE_JOB = 0.f;   // [toggle 0/1] price.as WalkSecTo: every hand pays the walk on to its likely next job -- home to the plants by the share of builders the open spots cannot employ (his 10-20)
-const float TUNE_ASSIST_EFEED = 0.f;   // [toggle 0/1] want_assist.as AssistEFeed: an assist's and a factory guard's lathe is scaled by income over the fleet's full-speed energy ask, not over the throttled pull; the commander's home guard too
 const float TUNE_CON_PRICED = 0.f;   // [toggle 0/1] the con floors yield the lab to an army under its target share as measured, not under target / the con multiplier (production.as armyBehind; his 2026-10-18: a third of their army, the lab making cons). Floored to stand down entirely, a priced con never won: army gains are in gap metal, a con's in m/s
 const float TUNE_MEMO_REPRICE = 1.f;   // [toggle 0/1] position-keyed memo answers are shared over a region four cells wide and their walk re-priced per asker (decide.as MemoServe; perf, his scav 8v8 at 3.9x the frame budget)
 const float TUNE_REELECT_TTL = 1.f;   // [toggle 0/1] (C++ apex_reelect_ttl; needs the rebuilt DLL) a walking builder re-confirms its job no more often than the prices refresh (apex_memo_ttl), not every 3 s; with an enemy near it keeps 3 s (BuilderTask.cpp Reevaluate; perf)
@@ -1784,7 +1782,6 @@ const float TUNE_ETA_COMMIT_BONUS = 0.f;
 const float TUNE_BP_VS_LATHE = 1.f;
 const float TUNE_BP_TRAVEL = 0.f;
 const float TUNE_CON_RAISES_LATHE = 0.f;   // [toggle 0/1] production.as: while metal spills, a con that can raise nano turrets skips the build-power-per-metal discount against them
-const float TUNE_NANO_E_COST = 0.f;   // [toggle 0/1] want_nano.as: a turret's energy beyond the spare is charged as the cheapest generators that feed it, instead of zeroing its gain
 const float TUNE_IDLE_LATHE_SITE = 0.f;   // [toggle 0/1] sites.as: turret rings ranked by their idle build power, and while a turret stands idle any static build is sited at a ring (his 10-20)
 const float TUNE_LIFT_SINK = 0.f;   // [toggle 0/1] lift.as: with no line short of lathe, a transport is priced on the idle turrets it can fly to the big frame nobody lathes (his 10-20)
 const float TUNE_CONV_ANTICIPATE = 0.f;   // [toggle 0/1] want_energy.as: converters are bought for generator output arriving within a converter's build time, not only for energy already spilling (his 10-20)

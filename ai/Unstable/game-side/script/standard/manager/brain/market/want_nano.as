@@ -182,26 +182,6 @@ AIFloat3 WetNanoSite(int d, const AIFloat3& in yard, float radius = -1.f)
 	return gWetNanoSite[k];
 }
 
-// A LATHE NEEDS ITS ENERGY, AND THAT IS A PRICE, NOT A VETO (TUNE_NANO_E_COST; no hard vetoes). The energy a
-// turret would draw beyond what is spare is charged as the generators that feed it: the cheapest metal per e/s
-// this hand can raise. Zeroed, the turret lost every election while 30-47 m/s spilled (his 10-20 eco games: no
-// nano before minute 7, his reference 7 by minute 4).
-bool NanoECostOn() { return ai.GetTunable("apex_nano_e_cost", TUNE_NANO_E_COST) > 0.f; }
-float GenMPerE(CCircuitUnit@ unit)
-{
-	const array<int>@ b = Catalog::gBuildsList[int(unit.circuitDef.id)];
-	float best = 0.f;
-	for (uint i = 0; i < b.length(); ++i) {
-		const int g = b[i];
-		if (!Catalog::gAvailable[g] || Catalog::gMobile[g] || (Catalog::gMakeE[g] <= 1.f) || (Catalog::gCostM[g] <= 0.f))
-			continue;
-		const float r = Catalog::gCostM[g] / Catalog::gMakeE[g];
-		if ((best <= 0.f) || (r < best))
-			best = r;
-	}
-	return (best > 0.f) ? best : 10.f;
-}
-
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -586,7 +566,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if (LatheObsoleteFor(unit, d))
 			continue;
 		float gainN = 0.f;
-		float nanoGenM = 0.f;
 		if (src == NS_LAB) {
 			gainN = LabNanoGain(d, labNeed);
 		} else {
@@ -596,15 +575,11 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// its ask the energy economy can feed: overflow caused by an e-stall
 			// bought the nanos that deepened it (apexearth, watching: "even our
 			// nano turrets... are stalling because we lack energy").
-			float shortE = 0.f;
 			{
 				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-				if (NanoECostOn())
-					shortE = (askE > nanoSpareE) ? (askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f)) : 0.f;
-				else if (askE > 1.f)
+				if (askE > 1.f)
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
 			}
-			nanoGenM = shortE * GenMPerE(unit);
 			// ...and no more than the metal feed has left over: while what is asked
 			// already exceeds what income and bank can feed, more lathe adds nothing.
 			if (gainN > nanoFreeM) {
@@ -615,10 +590,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		Want c;
 		ValueOf(d, gainN, WalkSecTo(unit, dSite),
 				Catalog::gBuildPower[uid], c);
-		if (nanoGenM > 0.f) {
-			c.mCost += nanoGenM;
-			c.value = c.gain / (c.mCost + c.tCost);
-		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_NANO;
