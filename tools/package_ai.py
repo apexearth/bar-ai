@@ -43,8 +43,9 @@ WHO NEEDS THIS
 
 INSTALL
   Extract this zip (right-click, "Extract All..."), then double-click
-  Install.bat. It finds BAR, copies the AI into the engine folder and says
-  where it went. Run it again after a BAR engine update.
+  Install.bat. It finds BAR, copies the AI into the engine folder, and
+  switches the lobby to the full AI list (the simple list hides this AI).
+  Close BAR first. Run it again after a BAR engine update.
 
 INSTALL BY HAND
   1. Find your BAR install's engine folder:
@@ -55,8 +56,9 @@ INSTALL BY HAND
        <BAR install>\\data\\engine\\{engine}\\AI\\Skirmish\\
      so that this file exists:
        ...\\AI\\Skirmish\\{short}\\{variant}\\AIInfo.lua
-  3. Restart BAR. In the lobby's AI list, untick "simplified AI list"
-     if you do not see it; the AI appears under the name from AIInfo.lua.
+  3. The lobby's simple AI list hides this AI. With BAR closed, make an
+     empty file named devmode.txt in <BAR install>\\data\\ . Start BAR,
+     open Settings > Developer and untick "Simple AI list".
 
 IMPORTANT
   - The engine version MUST be exactly {engine}. On any other engine the AI
