@@ -687,7 +687,14 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 			const bool ew = (facing & 1) != 0;
 			const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
 			const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
-			std::vector<AIFloat3> cands;
+			// apex_flush_kin (his 10-20: "snapping to nearby same-size buildings if they can"; blocks of one
+			// kind): a candidate beside the same def ranks ahead of one beside the same footprint, and that ahead
+			// of any building -- each rank worth two of this building's own footprints of distance, so a block
+			// grows from its own kind without drifting off the lathe the script chose. Beside a foreign
+			// footprint the other three sides are left as strips: 191 such gaps against 555 flush in his game.
+			const bool kin = circuit->GetTunable("apex_flush_kin", 0.f) > 0.f;
+			const float rankStep = 4.f * std::max(hx, hz);
+			std::vector<std::pair<AIFloat3, float>> cands;
 			const auto& ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(snapped, FLUSH_REACH, false);
 			for (ICoreUnit::Id id : ids) {
 				CCircuitUnit* nu = circuit->GetTeamUnit(id);
@@ -699,18 +706,23 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 				const float nhx = float(nEw ? nd->GetFootZ() : nd->GetFootX()) * SQUARE_SIZE;
 				const float nhz = float(nEw ? nd->GetFootX() : nd->GetFootZ()) * SQUARE_SIZE;
 				const AIFloat3 np = nu->GetPos(frame);
+				const float rank = !kin ? .0f
+						: ((nd == buildDef) ? .0f : (((nhx == hx) && (nhz == hz)) ? 1.f : 2.f));
 				for (float s : {-1.f, 1.f}) {
-					cands.emplace_back(np.x + s * (nhx + hx), np.y, np.z - nhz + hz);
-					cands.emplace_back(np.x + s * (nhx + hx), np.y, np.z + nhz - hz);
-					cands.emplace_back(np.x - nhx + hx, np.y, np.z + s * (nhz + hz));
-					cands.emplace_back(np.x + nhx - hx, np.y, np.z + s * (nhz + hz));
+					cands.emplace_back(AIFloat3(np.x + s * (nhx + hx), np.y, np.z - nhz + hz), rank);
+					cands.emplace_back(AIFloat3(np.x + s * (nhx + hx), np.y, np.z + nhz - hz), rank);
+					cands.emplace_back(AIFloat3(np.x - nhx + hx, np.y, np.z + s * (nhz + hz)), rank);
+					cands.emplace_back(AIFloat3(np.x + nhx - hx, np.y, np.z + s * (nhz + hz)), rank);
 				}
 			}
-			std::sort(cands.begin(), cands.end(), [&snapped](const AIFloat3& a, const AIFloat3& b) {
-				return a.SqDistance2D(snapped) < b.SqDistance2D(snapped);
-			});
+			std::sort(cands.begin(), cands.end(),
+				[&snapped, rankStep](const std::pair<AIFloat3, float>& a, const std::pair<AIFloat3, float>& b) {
+					return (a.first.distance2D(snapped) + a.second * rankStep)
+						< (b.first.distance2D(snapped) + b.second * rankStep);
+				});
 			int probes = FLUSH_PROBES;
-			for (const AIFloat3& c : cands) {
+			for (const auto& cr : cands) {
+				const AIFloat3& c = cr.first;
 				if ((c.x < hx) || (c.z < hz) || (c.x > float(CTerrainManager::GetTerrainWidth()) - hx)
 					|| (c.z > float(CTerrainManager::GetTerrainHeight()) - hz))
 				{
