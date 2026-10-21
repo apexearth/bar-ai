@@ -403,7 +403,7 @@ local NAMES = {
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
-	"apex_nano_backlog", -- want_nano.as: turrets for the backlog of live frames (0)
+	"apex_nano_spare_pull", -- want_nano.as: in-flight drain past the pull (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_row_layout", -- rows of one kind behind the anchor (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
