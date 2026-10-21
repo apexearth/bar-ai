@@ -103,6 +103,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// ground a reactor competes for is the ground around where it would stand.
 	const float genCrowdCell = PfCrowdAt(eSite, 400.f) * PfMetalPerCell()
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+	const float genEtaCellM = (ai.GetTunable("apex_eta_space", TUNE_ETA_SPACE) > 0.f)
+			? (genCrowdCell + genRentCell) : 0.f;
 	// A STALL IS ENDED BY WHAT ARRIVES SOONEST, not by the best rate of return:
 	// the growth premium scales with a generator's size, so an afus out-valued
 	// a fusion 4:1 while taking four times as long to close the same deficit
@@ -397,7 +399,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			if (crewBP <= 0.f)
 				crewBP = Catalog::gBuildPower[uid]
 						* float(Requests::SiteWorkerCap(Catalog::Def(d))) + genNanoBP;
+			gEtaCellM = genEtaCellM;
 			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
+			gEtaCellM = 0.f;
 			Perf::Add("en.eta", _tEt);
 			if ((etaD < 0) || (s < etaS)) {
 				etaS = s;
@@ -426,11 +430,12 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			+ " local=" + formatFloat(PfCrowdAt(eSite, 400.f), "", 0, 3)
 			+ " m/cell=" + formatFloat(PfMetalPerCell(), "", 0, 1));
 	}
-	if (etaOn && (ai.GetTunable("apex_epick_eta", TUNE_EPICK_ETA) > 0.f)
-		&& (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
+	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
+		gEtaCellM = genEtaCellM;
 		const float mktS = w.walkSec + EtaWithN(int(w.def.id),
 				Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
 				EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f);
+		gEtaCellM = 0.f;
 		// A TIE GOES TO THE MARKET. The ladder's seconds carry a per-order
 		// latency guess on every rung of the plan; a reactor it calls sooner
 		// by less than that guess is not sooner (measured: fusion 7800 s

@@ -200,6 +200,12 @@ float EffBPFor(int defId)
 {
 	if ((defId < 0) || (defId >= int(gEffBPN.length())))
 		return 0.f;
+	// ONE RECORD FOR BIG ENERGY, as one crew rule (SiteWorkerCapFed: the whole pool, whichever reactor). Per def,
+	// the fusion's record froze at its minute-12 build once the cloakable fusion, reading the class's later and
+	// richer builds, out-timed it in the ETA: 1,545 s against 2,015, and no fusion was built again (his 10-21).
+	if ((ai.GetTunable("apex_big_eff_pool", TUNE_BIG_EFF_POOL) > 0.f)
+		&& (gEffBPBigN > 0.f) && IsBigEnergy(Catalog::Def(defId)))
+		return gEffBPBigSum / gEffBPBigN;
 	if (gEffBPN[defId] > 0.f)
 		return gEffBPSum[defId] / gEffBPN[defId];
 	if ((gEffBPBigN > 0.f) && IsBigEnergy(Catalog::Def(defId)))

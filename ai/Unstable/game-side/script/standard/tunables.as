@@ -1366,7 +1366,8 @@ const float TUNE_JOIN_MIN_M = 354.f;
 // ECO_LEASH: work radius of the quiet rear's builders from home -- the safe
 //   radius it prices everything else against.
 const float TUNE_ECO_LEASH = 2500.f;
-const float TUNE_EPICK_ETA = 1.f;   // [toggle 0/1] want_energy.as: the ETA may replace the market's generator; its crew grows with cost, so the dearer cloakable fusion read 1,545 s against the fusion's 2,015 and displaced the market's AFUS (his 10-21)
+const float TUNE_BIG_EFF_POOL = 0.f;   // [toggle 0/1] register.as EffBPFor: every big-energy rung reads the class's recent build power, not its own record (his 10-21)
+const float TUNE_ETA_SPACE = 0.f;   // [toggle 0/1] eta.as: a generator rung's ETA pays its footprint at the market's cell price (his 10-21)
 const float TUNE_FAC_BUSY = 0.f;   // [toggle 0/1] sites.as RisingNear: a working factory holds the turrets in its reach, as the idle census counts it (his 10-21)
 
 // ECO_CON_KEEP: land T1 cons the quiet rear always keeps -- nano turrets and
