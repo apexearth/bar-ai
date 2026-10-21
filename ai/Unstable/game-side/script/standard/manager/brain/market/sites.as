@@ -636,6 +636,15 @@ int RisingNear(const AIFloat3& in at, float r)
 		if (OnMap(lp) && (lp.distance2D(at) < r))
 			++n;
 	}
+	// A factory turning out units holds the turrets beside it, as IdleNanoLatheM counts it (his 10-21: "if the nano
+	// turrets have a factory nearby they may not help what we're building so that isn't a good location").
+	if (ai.GetTunable("apex_fac_busy", TUNE_FAC_BUSY) > 0.f) {
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f = Factory::gFacUnits[fi];
+			if ((f !is null) && LineWorking(f) && (f.GetPos(ai.frame).distance2D(at) < r))
+				++n;
+		}
+	}
 	return n;
 }
 
