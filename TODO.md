@@ -112,6 +112,7 @@ air cons"; no hover lab in an eco game (0 economic benefit); the T2 lab beside t
 - [ ] Transports move idle turrets to the work (lift.as flies them; in eco no plane is priced, and the sink is "outside every turret circle", which a big base never has).
 - [ ] Anticipate needs: converters before the AFUS finishes; the same look-ahead for turrets, storage and the next generator.
 - [ ] No plant whose builder is dominated: a slower builder at the same or lower reach than one we already make adds no hands (his 10-20, the vehicle plant beside the air plants).
+- [ ] Tight packing (his 10-20: "snapping to nearby same-size buildings"). Within a def the lattice already tiles; the waste is between defs -- each def has its own lattice at its footprint pitch, so a 3-cell turret block meeting a 5-cell fusion block leaves 1-4 square strips (his watch game: 191 such gaps against 555 flush; 107 off-lattice, 79 of them turrets filling those gaps after 22 lattice cells taken). His layout is blocks of one kind scaling in one direction; that is a placement redesign, mostly in the C++ cell choice -- ask him first.
 
 Tried 10-20 as switches, each one per symptom, and deleted: paired eco games found none of them better
 (future job, smoothed fullness, reach once, cons as lathe raisers, idle-ring siting, lift sink, converter
