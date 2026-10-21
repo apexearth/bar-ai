@@ -19,7 +19,7 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 
 ## Constructors, build power, nanos
 
-- `TUNE_WALK_FORGONE` = 0. A builder's time is priced at its own build power x the share of fleet spend the economy can feed, not income / every worker (wage 3.4 m/s at 4 workers; commander 26 m/s under the new rate). Applies to walk and build seconds in ValueOf, OppTimeReprice and every WageOf. Off until an A/B; `apex: walkforgone-stat`.
+- `TUNE_WALK_FORGONE` = 0. A builder's time is priced at its own build power x the share of fleet spend the economy can feed, not income / every worker (wage 3.4 m/s at 4 workers; commander 26 m/s under the new rate). Applies to walk and build seconds in ValueOf, OppTimeReprice and every WageOf. Off until an A/B; `apex: walkforgone-stat`. Measured 10-20 (eco +0 air-first, 28 min, seeds 161-164), aimed at his "commander out for 4-5 minutes, then home for energy and turrets": mean income minutes 8-26 -14% (se 4%, 0/4); the commander spent 81% of minutes 5-10 on extractors against 49%, assist 0% against 18%. Pricing build seconds at his rate too made the long home builds dearer than a short extractor, which the walk did not offset. Stays off.
 - `TUNE_CON_LOG_T1_A` = 4.6. T1 constructor curve: cons = A x ln(income) + B, ~4 at 10 m/s, ~14 at 100; the dashboard edits it as anchor points.
 - `TUNE_SITE_COST_PER_WORKER` = 215.8. 300 -> 215.8 by the 10-04 valuation search (see TUNE_CONV_HORIZON).
 - `TUNE_SITE_BT_PER_WORKER` = 4700. Site crew from build time (max with the cost arm): set from a fusion (70,000 bt / 4,700 = its ~15 hands); moves the advanced converter from 2 hands to 8. Unswept.
