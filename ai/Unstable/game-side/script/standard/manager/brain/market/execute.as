@@ -1678,25 +1678,31 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					const double _tC = Perf::T0();
 					array<AIFloat3> packC;
 					bool cvBanded = false;
+					int cvBandOpen = 0;
 					if (ZoneBandsOn() && ZoneBandFamily(cvd)) {
+						// each cell taken before the next is asked (review: asked first, all fifteen were one cell)
+						cvBanded = true;
 						for (int rk = 1; rk < wantC; ++rk) {
 							AIFloat3 rc;
 							if (!ZoneBandSlot(cvd, cAt, rc))
 								break;
-							packC.insertLast(rc);
-							cvBanded = true;
+							bool mkb = false;
+							IUnitTask@ cb = Requests::Take(null, w.def, Task::BuildType::CONVERT,
+									Task::Priority::NORMAL, rc, cell, 0.f, mkb, true);
+							if (!mkb)
+								break;
+							cb.SetExactSite();
+							++cvBandOpen;
 						}
 					}
 					if (!cvBanded)
 						PackSlots(cvd, cAt, -1, wantC - 1, packC);
-					int cOpen = 0;
+					int cOpen = cvBandOpen;
 					for (uint ci = 0; ci < packC.length(); ++ci) {
 						bool mkc = false;
 						IUnitTask@ ct = Requests::Take(null, w.def, Task::BuildType::CONVERT,
 								Task::Priority::NORMAL, packC[ci], cell, 0.f,
 								mkc, true);
-						if ((ct !is null) && mkc && cvBanded)
-							ct.SetExactSite();
 						if (mkc)
 							++cOpen;
 					}

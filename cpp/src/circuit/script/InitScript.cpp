@@ -2218,7 +2218,9 @@ static bool IUnitTask_SetExactSite(IUnitTask* task)
 		return false;
 	}
 	CCircuitAI* circuit = bt->GetManager()->GetCircuit();
-	if (!circuit->GetMap()->IsPossibleToBuildAt(bt->GetBuildDef()->GetDef(), p, bt->GetFacing())) {
+	if (!circuit->GetMap()->IsPossibleToBuildAt(bt->GetBuildDef()->GetDef(), p, bt->GetFacing())
+		|| circuit->GetTerrainManager()->ZoneRefuses(bt->GetBuildDef(), p, bt->GetFacing()))   // held ground (apex zones)
+	{
 		return false;
 	}
 	bt->SetBuildPos(p);

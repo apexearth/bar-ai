@@ -163,6 +163,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	// spot, which the spiral below would refuse (a corlab on its own mex spot).
 	if ((facing != UNIT_NO_FACING) && clearsBuilder(pos)
 		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing)
+		&& !exitTerrain->ZoneRefuses(buildDef, pos, facing)   // held ground (apex zones)
 		&& !exitTerrain->FootprintOnSpot(buildDef, pos, facing) && exitOpen(pos)) {
 		circuit->LOG("apex: fac-site-taken t=%i %s asked=%.0f,%.0f fails=%i at=%.0f,%.0f facing=%i",
 				circuit->GetTeamId(), buildDef->GetDef()->GetName(), position.x, position.z, buildFails, pos.x, pos.z, facing);

@@ -2000,9 +2000,7 @@ bool CTerrainManager::ZoneRefuses(CCircuitDef* cdef, const AIFloat3& pos, int fa
 		if (!((pos.x + hx > z.x1 + 1.f) && (pos.x - hx < z.x2 - 1.f) && (pos.z + hz > z.z1 + 1.f) && (pos.z - hz < z.z2 - 1.f))) {
 			continue;
 		}
-		if ((cdef->GetId() == z.allowId)
-			|| ((z.allowX > 0) && (cdef->GetDef()->GetXSize() == z.allowX) && (cdef->GetDef()->GetZSize() == z.allowZ)))
-		{
+		if (cdef->GetId() == z.allowId) {   // the defs the script reserved for, never a building of the same size
 			return false;
 		}
 		overlaps = true;

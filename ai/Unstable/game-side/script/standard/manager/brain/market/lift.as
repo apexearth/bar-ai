@@ -277,7 +277,8 @@ AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
 {
 	{
 		AIFloat3 zAt;
-		if (ZoneSlotFor(cd, lp, zAt))
+		// a slot another plane is already flying to is not this one's (review: two drops on one slot)
+		if (ZoneSlotFor(cd, lp, zAt) && !LiftSlotTaken(zAt))
 			return zAt;
 	}
 	array<AIFloat3> slots;
