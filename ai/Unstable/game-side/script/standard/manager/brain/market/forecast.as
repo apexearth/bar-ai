@@ -11,8 +11,9 @@ namespace Market {
 const float FC_STEP_S = 2.f;
 const float FC_HORIZON_S = 60.f;
 
-array<float> gFcEta;     // per ledger row: seconds to finish, -1 never
+array<float> gFcEta;     // per coming row: seconds to finish, -1 never
 array<int> gFcDef;
+array<float> gFcEtaRow;  // the same, indexed by ledger row (rows shift between refreshes: at most 2 s stale)
 int gFcAt = -999999;
 float gFcMetalPerX = 0.f;   // metal a second per unit of extractsMetal we stand on
 
@@ -30,8 +31,10 @@ float FcRowEta(uint i)
 				if ((crew[c] !is null) && (crew[c].circuitDef !is null))
 					bp += Catalog::gBuildPower[int(crew[c].circuitDef.id)];
 	}
+	// the turrets free to help: one at work elsewhere is not this row's crew (every turret in reach read as crew
+	// over-forecast build power 75% once, twelve turrets that did not come)
 	if (OnMap(gComPos[i]))
-		bp += NanoLatheReaching(gComPos[i]) * (80.f / 7.f);
+		bp += IdleNanoLatheNear(gComPos[i]) * (80.f / 7.f);
 	if (bp <= 1.f)
 		return -1.f;
 	// An energy stall shares income across every build.
@@ -50,11 +53,15 @@ void FcRefresh()
 	gFcAt = ai.frame;
 	gFcEta.resize(0);
 	gFcDef.resize(0);
+	gFcEtaRow.resize(ComLen());
 	for (uint i = 0; i < ComLen(); ++i) {
+		gFcEtaRow[i] = 1e9f;
 		if ((gComState[i] & CS_COMING) == 0)
 			continue;
-		gFcEta.insertLast(FcRowEta(i));
+		const float eta = FcRowEta(i);
+		gFcEta.insertLast(eta);
 		gFcDef.insertLast(gComDef[i]);
+		gFcEtaRow[i] = (eta < 0.f) ? 1e9f : eta;
 	}
 	// What one unit of extractsMetal yields here, off what our extractors make now: income less what the
 	// converters chew.
@@ -69,6 +76,12 @@ void FcRefresh()
 	if (mex < 0.f)
 		mex = 0.f;
 	gFcMetalPerX = (x > 0.f) ? (mex / x) : 0.f;
+}
+
+// Seconds to finish of ledger row i as of the last refresh; a row the refresh has not seen is far off.
+float FcEtaOf(uint i)
+{
+	return (i < gFcEtaRow.length()) ? gFcEtaRow[i] : 1e9f;
 }
 
 // The basic extractor's rate: an upgrade adds only what it extracts beyond it. Found once.

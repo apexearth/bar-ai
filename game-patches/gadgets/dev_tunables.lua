@@ -408,6 +408,7 @@ local NAMES = {
 	"apex_duel_eco", -- worth.as: no duel air hold in eco-only games (0)
 	"apex_eta_target", -- eta.as: target multiple (4)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
+	"apex_fc_emake", -- want_energy.as: coming energy from the forecast (0)
 	"apex_cell_layout", -- cells.as: eco cells (0)
 	"apex_cell_core", -- cells.as: core side (4)
 	"apex_cell_space", -- cells.as: spacing (1)
