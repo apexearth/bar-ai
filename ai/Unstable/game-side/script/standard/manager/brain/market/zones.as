@@ -19,6 +19,8 @@ AIFloat3 gZoneAcross, gZoneBack;
 int gZoneNano = -1;
 bool gZoneShut = false;
 int gZoneRetryAt = 0, gZoneNoGroundLogAt = 0;
+AIFloat3 gZonePlantAsk(-1.f, 0.f, -1.f);
+array<int> gZonePlantDone;   // plants a strip was planned beside
 int gZoneLogAt = 0;
 
 bool ZoneFrame()
@@ -77,6 +79,17 @@ bool ZonePlan()
 	// rows, every building between two of them). The next strip lies one turret and one row of the widest eco building
 	// beyond an outer strip, the block growing row on row.
 	const float step = pn + ZoneRowPitch();
+	// a plant with no strip in its turrets' reach asks for one flush along its side (the blob round the T2 plant)
+	if (OnMap(gZonePlantAsk)) {
+		const int pd = AnchorDefAt(gZonePlantAsk);
+		const float half = Catalog::ValidId(pd)
+				? 8.f * float((Catalog::gFootX[pd] > Catalog::gFootZ[pd]) ? Catalog::gFootX[pd] : Catalog::gFootZ[pd]) : 48.f;
+		cand.insertLast(gZonePlantAsk + gZoneBack * (half + 0.5f * pn));
+		cand.insertLast(gZonePlantAsk - gZoneBack * (half + 0.5f * pn));
+		cand.insertLast(gZonePlantAsk + gZoneAcross * (half + 0.5f * pn));
+		cand.insertLast(gZonePlantAsk - gZoneAcross * (half + 0.5f * pn));
+		gZonePlantAsk = AIFloat3(-1.f, 0.f, -1.f);
+	}
 	if (gZoneAt.length() > 0) {
 		for (uint z = gZoneAt.length(); z > 0; --z) {
 			cand.insertLast(gZoneAt[z - 1] + gZoneBack * step);
@@ -344,10 +357,30 @@ bool ZoneSlotWithin(int d, const AIFloat3& in near, float maxD, AIFloat3& out at
 			}
 		}
 	}
-	if (bz < 0)
+	if (bz < 0) {
+		// no strip reaches this plant: plan one along its side, once a plant
+		const int pid = PlantIdAt(near);
+		if ((pid >= 0) && (gZonePlantDone.find(pid) < 0)) {
+			gZonePlantDone.insertLast(pid);
+			gZonePlantAsk = near;
+			gZoneRetryAt = 0;
+			ZonePlan();
+		}
 		return false;
+	}
 	++gZoneTaken[uint(bz)];
 	return true;
+}
+
+// The id of our plant standing at p, -1 with none.
+int PlantIdAt(const AIFloat3& in p)
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && (f.GetPos(ai.frame).distance2D(p) < 96.f))
+			return int(f.id);
+	}
+	return -1;
 }
 
 // Half the footprint of the plant standing at p, for a turret's reach to its edge; 0 with none there.
