@@ -547,13 +547,13 @@ float gLadderLatS = 0.f;
 // in reach of the reactor site plus the mobile hands the site admits (its cost-scaled cap) at the fleet's mean
 // builder power, never beyond the fleet; how much of it to divert is the ladder's own comparison.
 bool CrewNowOn() { return ai.GetTunable("apex_crew_now", TUNE_CREW_NOW) > 0.f; }
-float gCnRing = 0.f, gCnMobBP = 0.f, gCnMobMean = 0.f;
-int gCnAt = -999999;
+float gCrewRing = 0.f, gCrewMobBP = 0.f, gCrewMobMean = 0.f;
+int gCrewAt = -999999;
 float CrewNowBP(int d)
 {
-	if (ai.frame - gCnAt >= 5 * SECOND) {
-		gCnAt = ai.frame;
-		gCnRing = RingBPAt(BigEnergySite());
+	if (ai.frame - gCrewAt >= 5 * SECOND) {
+		gCrewAt = ai.frame;
+		gCrewRing = RingBPAt(BigEnergySite());
 		float sum = 0.f, n = 0.f;
 		const array<int>@ own = OwnedDefs();
 		for (uint oi = 0; oi < own.length(); ++oi) {
@@ -563,13 +563,13 @@ float CrewNowBP(int d)
 			sum += float(gOwnCount[od]) * Catalog::gBuildPower[od];
 			n += float(gOwnCount[od]);
 		}
-		gCnMobBP = sum;
-		gCnMobMean = (n > 0.f) ? (sum / n) : 0.f;
+		gCrewMobBP = sum;
+		gCrewMobMean = (n > 0.f) ? (sum / n) : 0.f;
 	}
-	float mob = gCnMobMean * float(Requests::SiteWorkerCap(Catalog::Def(d)));
-	if (mob > gCnMobBP)
-		mob = gCnMobBP;
-	return gCnRing + mob;
+	float mob = gCrewMobMean * float(Requests::SiteWorkerCap(Catalog::Def(d)));
+	if (mob > gCrewMobBP)
+		mob = gCrewMobBP;
+	return gCrewRing + mob;
 }
 
 float RungBP(int d, float bp)
