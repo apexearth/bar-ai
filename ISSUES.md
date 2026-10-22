@@ -84,6 +84,22 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 62 | A teammate with no commander, no base and no income kept getting our units (10-19) | a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap (TUNE_GIFT_STAKE, off) | `apex: gift-stake`; gift metal to a seat after its commander dies | UNTESTED -- his watch games: single gifts of 111 units / 62k m and 123 units / 91k m |
 | 63 | Not enough anti-nukes while the enemy launches a lot of nukes (10-19; "about 6 at once... ~10 nukes all on your base you WILL die") | survive their worst salvo by arithmetic: every seen silo full (its stockpilelimit), fired together, / TUNE_ANTI_AT_ONCE (6) = antis each target needs -- the core and any cluster worth more than those antis; launches seen floor the salvo for unseen silos and lift the income floor | `apex: nukemath facts` (startup: armamd=20/90s armsilo=10/120s corsilo=10/180s), `apex: nukepress`; antis over the core vs ceil(salvo/6) | BUILT -- math checked against the unit files; no game test (his 10-19: "you can get it all through math") |
 
+## ECO AT HALF HIS CURVE; WHAT 10-21/10-22 MEASURED (2026-10-22)
+
+At +50 like for like (his ask: "Test at +50 to match"; 8 seeds, b50-base-s3100..3107): minute 4 we stand 11-13
+extractors, 3-4 basic solars, 0 turrets to his 15 / 11 / 7; T2 at 8.0-9.3 to his 6; 0 mohos at minute 8 to his 6;
+0-2 mohos and 8-23 turrets at minute 10 to his 15 and 62; 531-879 m/s at minute 16 to his 1,570. Extractors are
+close throughout -- the gap is energy and build power from minute 2 (his: "focusing too much on metal extractors,
+not enough on energy and build power"). The first five minutes are extractors by the ladder and solars only under
+a stall; the T2 plant is built by one hand for ~220 s (seed 2913: ordered 4.0, standing 7.75, cap 11).
+
+Run-to-run noise: identical settings and seeds read -20.4% and +6.3% (6 seeds); 12 seeds flipped sign twice.
+Score on the mean of minutes 16-20 over 24 paired seeds. Measured and removed (commit messages have the detail):
+zone stack -16.8% (12; code kept, off); eco turret energy density +1.0% (12); bot opening +0.3% (24); stall race
+counting energy payback ~0 (24); spend-capped ETA ladder with turret steps -10.7% (24); forced canon pattern
+(solars only on short energy) stalled the economy (smoke, reverted); ETA energy output at the bills' rate -4.9%
+(24). Each moved its decision; none moved income.
+
 ## HIS +100 SCAV 8v8 FAILS THE FRAME BUDGET 4.3x (2026-10-18)
 
 **10-19: the 16-AI benchmark passes again** (Greenest Fields, 8 Apex per side, +100, seed 1, solo, his watch-lane
