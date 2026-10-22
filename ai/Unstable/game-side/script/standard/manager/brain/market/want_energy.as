@@ -126,7 +126,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			TUNE_ENERGY_GROWTH_ARRIVE) > 0.f;
 	// One number for every rung; the ETA arm below asked the turret grid for it
 	// once per generator.
-	float genNanoBP = (genArriveOn || etaOn) ? NanoLatheReaching(eSite) : 0.f;
+	// build power in reach, in build power: NanoLatheReaching counts a turret at its metal rate (17.5), and GenCrewBP
+	// added that to builder build power (a turret is 200)
+	float genNanoBP = (genArriveOn || etaOn) ? (CrewNowOn() ? RingBPAt(eSite) : NanoLatheReaching(eSite)) : 0.f;
 	if ((genArriveOn || etaOn) && (ai.GetTunable("apex_band_crew", TUNE_BAND_CREW) > 0.f) && (ZoneBandLathe() > genNanoBP))
 		genNanoBP = ZoneBandLathe();
 	// Seconds to the target following the ladder AS IT STANDS: the window new
