@@ -373,7 +373,7 @@ bool LiftDispatch(LiftJob@ jb)
 		if (up.distance2D(lp) < Catalog::gBuildDist[c])
 			continue;
 		const float sec = (pp.distance2D(up) + up.distance2D(lp)) / speed;
-		if (!LiftIdleEnough(i, sec) || InLiftJob(u) || LiftRefused(u) || Builder::SiteHot(up))
+		if (!LiftIdleEnough(i, sec) || InLiftJob(u) || LiftRefused(u) || Builder::SiteHot(up) || OnStrip(up))
 			continue;
 		if ((best < 0) || (sec < bestSec)) {
 			best = int(i);

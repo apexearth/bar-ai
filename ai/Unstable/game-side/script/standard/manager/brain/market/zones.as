@@ -121,6 +121,23 @@ bool ZonePlan()
 }
 
 // The free strip slot nearest `near` (or the newest strip's middle) for turret def d.
+// A turret standing on a strip, which the transports leave where it is.
+bool OnStrip(const AIFloat3& in p)
+{
+	if (!ZonesOn() || !Catalog::ValidId(gZoneNano))
+		return false;
+	const float pn = Lattice::FootPitch(gZoneNano);
+	const float halfLen = 0.5f * float(ZONE_LEN) * pn;
+	for (uint z = 0; z < gZoneAt.length(); ++z) {
+		const AIFloat3 r = p - gZoneAt[z];
+		const float a = r.x * gZoneAcross.x + r.z * gZoneAcross.z;
+		const float b = r.x * gZoneBack.x + r.z * gZoneBack.z;
+		if ((abs(a) <= halfLen) && (abs(b) <= 0.75f * pn))
+			return true;
+	}
+	return false;
+}
+
 bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 {
 	if (!ZonesOn() || (Catalog::gBuildPower[d] <= 0.f) || Catalog::gMobile[d])
@@ -148,15 +165,13 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 			}
 		}
 	}
-	// the work is out of the strips' reach, or they are full: the next strip when this one is mostly taken
-	if ((bz < 0) || (OnMap(near) && (best > Catalog::gBuildDist[d]))) {
-		if ((gZoneAt.length() > 0) && (float(gZoneTaken[gZoneAt.length() - 1]) >= ZONE_NEXT_FULL * float(ZONE_LEN)))
-			ZonePlan();
-		if (bz < 0)
-			return false;
-		if (OnMap(near) && (best > Catalog::gBuildDist[d]))
-			return false;
-	}
+	// TURRETS STAY ON THE STRIPS (his 10-21 watch: 714 turrets strewn over the base, the strips near empty -- a turret
+	// sent beside every frame out of a strip's reach). The work comes to the strip, in its bands; the turret takes the
+	// strip slot nearest it whatever the distance, and the next strip is planned once this one is mostly taken.
+	if ((gZoneAt.length() > 0) && (float(gZoneTaken[gZoneAt.length() - 1]) >= ZONE_NEXT_FULL * float(ZONE_LEN)))
+		ZonePlan();
+	if (bz < 0)
+		return false;
 	++gZoneTaken[uint(bz)];
 	if (ai.frame >= gZoneLogAt) {
 		gZoneLogAt = ai.frame + 30 * SECOND;
