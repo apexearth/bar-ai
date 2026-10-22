@@ -9,7 +9,7 @@ namespace Market {
 // planned beside the last, two reaches over so their bands meet, once this one's slots are mostly taken.
 
 const int ZONE_LEN = 24;            // turret slots in a strip: shorter strips side by side pass the ground check more often
-const float ZONE_NEXT_FULL = 0.5f;  // share of slots standing that plans the next strip: his block raised many rows at once
+const float ZONE_NEXT_FULL = 0.9f;  // share of slots standing that plans the next strip: solid before the next (his 10-21)
 
 bool ZonesOn() { return ai.GetTunable("apex_zones", TUNE_ZONES) > 0.f; }
 
@@ -88,6 +88,14 @@ bool ZonePlan()
 	// rows, every building between two of them). The next strip lies one turret and one row of the widest eco building
 	// beyond an outer strip, the block growing row on row.
 	const float step = pn + ZoneRowPitch();
+	// DOUBLE ROWS (his base: two rows of turrets, then a row of converters or reactors): a strip without its partner
+	// gets one laid flush against it first.
+	if ((gZoneAt.length() > 0) && ((gZoneAt.length() % 2) == 1)) {
+		const AIFloat3 last = gZoneAt[gZoneAt.length() - 1];
+		cand.insertLast(last + gZoneBack * pn);
+		cand.insertLast(last - gZoneBack * pn);
+	}
+	const uint nPair = cand.length();
 	// a plant with no strip in its turrets' reach asks for one flush along its side (the blob round the T2 plant)
 	if (OnMap(gZonePlantAsk)) {
 		const int pd = AnchorDefAt(gZonePlantAsk);
@@ -144,7 +152,7 @@ bool ZonePlan()
 			continue;
 		bool clear = true;
 		for (uint z = 0; (z < gZoneAt.length()) && clear; ++z)
-			clear = gZoneAt[z].distance2D(c) >= 0.9f * step;
+			clear = gZoneAt[z].distance2D(c) >= 0.9f * ((ci < nPair) ? pn : step);
 		if (!clear)
 			continue;
 		// most of the strip must be buildable ground
@@ -175,6 +183,27 @@ bool ZonePlan()
 	if (ai.frame >= gZoneNoGroundLogAt) {
 		gZoneNoGroundLogAt = ai.frame + 120 * SECOND;
 		AiLog("apex: zone t=" + ai.teamId + " no ground for strip #" + gZoneAt.length() + " (retrying)");
+	}
+	return false;
+}
+
+// Slot k of strip z holds a turret, standing or ordered.
+bool SlotFilled(uint z, int k)
+{
+	if ((k < 0) || (k >= ZONE_LEN))
+		return false;
+	const AIFloat3 p = ZoneSlot(z, k);
+	const float tol = 0.5f * Lattice::FootPitch(gZoneNano);
+	NanoNear(p, tol + 8.f);
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q)
+		if (gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < tol)
+			return true;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null) || (Catalog::gBuildPower[int(t.buildDef.id)] <= 0.f))
+			continue;
+		if (t.GetBuildPos().distance2D(p) < tol)
+			return true;
 	}
 	return false;
 }
@@ -266,9 +295,14 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 		const uint z = zo[bi];
 		zo[bi] = zo[o];
 		zk[bi] = zk[o];
+		// TOUCHING, NO SPACING (his 10-21: "throw them all as close as you can to each other"): the free slot beside
+		// a turret standing or ordered, nearest the middle; an empty strip starts at its middle.
+		const bool any = SlotFilled(z, ZONE_LEN / 2) || (ZoneStanding(z) > 0);
 		for (int i = 0; i < ZONE_LEN; ++i) {
 			const int k = (ZONE_LEN / 2) + (((i % 2) == 0) ? (i / 2) : -((i + 1) / 2));
 			if ((k < 0) || (k >= ZONE_LEN))
+				continue;
+			if (any && !SlotFilled(z, k - 1) && !SlotFilled(z, k + 1))
 				continue;
 			const AIFloat3 s = ZoneSlot(z, k);
 			AIFloat3 got;
@@ -375,9 +409,18 @@ bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
 				if (outside > span)
 					continue;
 				for (int side = 0; side < 2; ++side) {
-					const AIFloat3 c = gZoneAt[z] + gZoneAcross * a + gZoneBack * ((side == 0) ? perp : -perp);
+					const float sg = (side == 0) ? 1.f : -1.f;
+					const AIFloat3 c = gZoneAt[z] + gZoneAcross * a + gZoneBack * (sg * perp);
 					if (!OnMap(c) || (++tried > 400))
 						continue;
+					// TOUCHING (his 10-21: "build all the buildings as close as you can to the turrets. Don't have any
+					// spacing"): an outer row only where the cell between it and the strip is taken
+					if (j > 0) {
+						const AIFloat3 inner = c - gZoneBack * (sg * pb);
+						AIFloat3 g2;
+						if (ai.CanPlaceCell(def, inner, g2))
+							continue;
+					}
 					AIFloat3 got;
 					if (ai.CanPlaceCell(def, c, got)) {
 						at = c;
