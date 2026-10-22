@@ -3046,6 +3046,31 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	// SPILLING METAL BUYS THE FIRST T2 PLANT (apex_t2_spillbuy; his 10-22: "Making the air plant is a good way to spend
+	// metal"). The ladder rated it 436 s to target against 256 for more T1 at minute 5.5 (base seed 3600) -- a 4x target
+	// near enough that cheap T1 steps reach it first -- so it waited for them to run out: ordered at 7.75 (median of
+	// 24) with ~2,200 metal already thrown away. While the bank spills, energy holds and no T2 plant stands or is
+	// ordered, a T2 plant in this hand's list is taken, not drawn.
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
+		&& (ai.GetTunable("apex_t2_spillbuy", TUNE_T2_SPILLBUY) > 0.f) && !Factory::gHaveT2
+		&& MetalWasting() && !HardEStall() && !T2PlantOrdered()) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (((ranked[ri].kind != WK_PLANT) && (ranked[ri].kind != WK_TECH)) || (ranked[ri].def is null))
+				continue;
+			const int td = int(ranked[ri].def.id);
+			if ((Catalog::gBuildsList[td].length() == 0)
+				|| ((Factory::userData[td].attr & (Factory::Attr::T2 | Factory::Attr::T3)) == 0))
+				continue;
+			if (ri > 0) {
+				Want@ tw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, tw);
+			}
+			floorPush = true;
+			why = "t2spillbuy";
+			break;
+		}
+	}
 	// THE T2 SWITCH'S OWN PURPOSE, TAKEN AND NOT SAMPLED. The switch names
 	// fusions as what it is for and then only removes army from the target;
 	// the freed metal went to the draw, which bought wind 48 times to the

@@ -1270,6 +1270,21 @@ int gBpGapLogAt = 0;
 // fleet draws. In that state metal is not the cost of anything, hands and
 // energy are (canon game 2026-09-08: 34k of 65k metal made was wasted by
 // minute 20 against an inactive opponent while 35 stall answers were held).
+// A T2+ plant in the request book: the first one is on its way.
+bool T2PlantOrdered()
+{
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if ((Catalog::gBuildsList[d].length() > 0)
+			&& ((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
+			return true;
+	}
+	return false;
+}
+
 bool MetalWasting()
 {
 	return aiEconomyMgr.isMetalFull
