@@ -293,6 +293,44 @@ bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
 	return false;
 }
 
+// A strip slot within maxD of `near` for turret def d -- a plant's turret, which must reach its plant. No strip is
+// planned for it.
+bool ZoneSlotWithin(int d, const AIFloat3& in near, float maxD, AIFloat3& out at)
+{
+	if (!ZonesOn() || !NanoDefLike(d) || (gZoneAt.length() == 0) || !OnMap(near))
+		return false;
+	CCircuitDef@ def = Catalog::Def(d);
+	float best = -1.f;
+	int bz = -1;
+	for (uint z = 0; z < gZoneAt.length(); ++z) {
+		for (int k = 0; k < ZONE_LEN; ++k) {
+			const AIFloat3 s = ZoneSlot(z, k);
+			const float dd = s.distance2D(near);
+			if ((dd > maxD) || ((best >= 0.f) && (dd >= best)))
+				continue;
+			AIFloat3 got;
+			if (OnMap(s) && ai.CanPlaceCell(def, s, got)) {
+				best = dd;
+				at = s;
+				bz = int(z);
+			}
+		}
+	}
+	if (bz < 0)
+		return false;
+	++gZoneTaken[uint(bz)];
+	return true;
+}
+
+// Half the footprint of the plant standing at p, for a turret's reach to its edge; 0 with none there.
+float PlantHalf(const AIFloat3& in p)
+{
+	const int d = AnchorDefAt(p);
+	if (!Catalog::ValidId(d) || (Catalog::gBuildsList[d].length() == 0))
+		return 0.f;
+	return 8.f * float((Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d]);
+}
+
 // The first strip is planned as soon as the anchor stands, before anything else can take its ground.
 void ZoneStep()
 {

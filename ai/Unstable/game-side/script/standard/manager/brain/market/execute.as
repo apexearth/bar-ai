@@ -1179,8 +1179,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			NoteNanoDry(nAnchor, nPacked.length() == 0);
 		// An eco turret takes a slot on a turret strip (TUNE_ZONES), nearest the frame it was bought for.
 		AIFloat3 nZone;
-		const bool nZoned = ((w.spotId == NS_SINK) || (w.spotId == NS_FARM))
-				&& ZoneSlotFor(int(w.def.id), (w.spotId == NS_SINK) ? w.pos : AIFloat3(-1.f, 0.f, -1.f), nZone);
+		const bool nEco = (w.spotId == NS_SINK) || (w.spotId == NS_FARM);
+		// ...and a plant's turret takes a strip slot that still reaches its plant (his 10-21: the plants grew their
+		// own blob of 120 turrets beside the strips)
+		const bool nZoned = nEco
+				? ZoneSlotFor(int(w.def.id), (w.spotId == NS_SINK) ? w.pos : AIFloat3(-1.f, 0.f, -1.f), nZone)
+				: (OnMap(slot) && ZoneSlotWithin(int(w.def.id), slot, Catalog::gBuildDist[int(w.def.id)] + PlantHalf(slot), nZone));
 		if (nZoned) {
 			slot = nZone;
 		} else if (nPacked.length() > 0) {
@@ -1291,7 +1295,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					}
 					// A strip turret's burst stays on the strips (his 10-21: the burst shared its turrets over the plant
 					// lines, the blob round the plants he called out).
-					if (nZoned) {
+					if (nZoned && nEco) {
 						int zFold = 0;
 						while (left > 0) {
 							AIFloat3 zk;
@@ -1310,7 +1314,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						}
 						walkLog += " zone:" + opened;
 					}
-					for (uint fi2 = 0; !nZoned && (fi2 < lines) && (left > 0); ++fi2) {
+					for (uint fi2 = 0; !(nZoned && nEco) && (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
 						int anchorK = nAnchor;
 						int askK = left / int(lines - fi2);
@@ -1341,7 +1345,28 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						if (askK < 1)
 							askK = 1;
 						array<AIFloat3> packK;
-						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						// a plant's share goes to the strip slots that reach it first
+						if (ZonesOn() && OnMap(baseK)) {
+							const float zr = Catalog::gBuildDist[int(w.def.id)] + PlantHalf(baseK);
+							int zGot = 0;
+							while (zGot < askK) {
+								AIFloat3 zk;
+								if (!ZoneSlotWithin(int(w.def.id), baseK, zr, zk))
+									break;
+								bool mkz = false;
+								IUnitTask@ tz = Requests::Take(null, w.def, Task::BuildType::NANO,
+										Task::Priority::NORMAL, zk, nCover, 0.f, mkz, true);
+								if (!mkz)
+									break;
+								tz.SetExactSite();
+								++zGot;
+								++opened;
+								--left;
+							}
+							askK -= zGot;
+						}
+						if (askK > 0)
+							PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
 						if (nLines > 0)
 							NoteNanoDry(anchorK, packK.length() == 0);
 						// No factory standing leaves the anchor at -1.
