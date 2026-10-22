@@ -90,6 +90,7 @@ bool ZonePlan()
 		cand.insertLast(gZonePlantAsk - gZoneAcross * (half + 0.5f * pn));
 		gZonePlantAsk = AIFloat3(-1.f, 0.f, -1.f);
 	}
+	const uint nPlantCand = cand.length();
 	if (gZoneAt.length() > 0) {
 		for (uint z = gZoneAt.length(); z > 0; --z) {
 			cand.insertLast(gZoneAt[z - 1] + gZoneBack * step);
@@ -138,7 +139,8 @@ bool ZonePlan()
 			if (OnMap(s) && ai.CanPlaceCell(def, s, got))
 				++ok;
 		}
-		if (ok * 2 < ZONE_LEN * 3 / 4)
+		// beside a plant the ground is crowded: half the strip clear will do
+		if (ok * 2 < ((ci < nPlantCand) ? (ZONE_LEN / 2) : (ZONE_LEN * 3 / 4)))
 			continue;
 		gZoneAt.insertLast(c);
 		gZoneTaken.insertLast(0);
