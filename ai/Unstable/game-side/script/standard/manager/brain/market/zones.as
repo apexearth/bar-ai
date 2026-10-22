@@ -8,7 +8,7 @@ namespace Market {
 // keeps its own siting, which already seeks standing lathe and now cannot stand on the strip. The next strip is
 // planned beside the last, two reaches over so their bands meet, once this one's slots are mostly taken.
 
-const int ZONE_LEN = 40;            // turret slots in a strip: his block ran long rows across its whole width
+const int ZONE_LEN = 24;            // turret slots in a strip: shorter strips side by side pass the ground check more often
 const float ZONE_NEXT_FULL = 0.5f;  // share of slots standing that plans the next strip: his block raised many rows at once
 
 bool ZonesOn() { return ai.GetTunable("apex_zones", TUNE_ZONES) > 0.f; }
@@ -100,10 +100,17 @@ bool ZonePlan()
 		gZonePlantAsk = AIFloat3(-1.f, 0.f, -1.f);
 	}
 	const uint nPlantCand = cand.length();
+	// one row over first, then two and three -- the block stays one block; rings round home only after (seed 2802 opened
+	// a strip 432 elmos from the last when the spot one row over failed its ground check)
 	if (gZoneAt.length() > 0) {
-		for (uint z = gZoneAt.length(); z > 0; --z) {
-			cand.insertLast(gZoneAt[z - 1] + gZoneBack * step);
-			cand.insertLast(gZoneAt[z - 1] - gZoneBack * step);
+		for (int mul = 1; mul <= 3; ++mul) {
+			for (uint zi = gZoneAt.length(); zi > 0; --zi) {
+				const AIFloat3 zc = gZoneAt[zi - 1];
+				cand.insertLast(zc + gZoneBack * (step * float(mul)));
+				cand.insertLast(zc - gZoneBack * (step * float(mul)));
+				cand.insertLast(zc + gZoneAcross * (float(ZONE_LEN) * pn * float(mul)));
+				cand.insertLast(zc - gZoneAcross * (float(ZONE_LEN) * pn * float(mul)));
+			}
 		}
 	}
 	// The first strip runs flush along a plant's side (his line started at his plant), so the plant's turrets
