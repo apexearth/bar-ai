@@ -21,7 +21,7 @@ array<int> gZoneFullAt;      // no free slot found on this strip until this fram
 AIFloat3 gZoneAcross, gZoneBack;
 int gZoneNano = -1;
 bool gZoneShut = false;
-int gZoneRetryAt = 0, gZoneNoGroundLogAt = 0;
+int gZoneRetryAt = 0, gZoneNoGroundLogAt = 0, gZoneLastPlanAt = -999999;
 AIFloat3 gZonePlantAsk(-1.f, 0.f, -1.f);
 array<int> gZonePlantDone;   // plants a strip was planned beside
 int gZoneLogAt = 0;
@@ -273,10 +273,12 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 		return true;
 	if (!ZonesOn() || !NanoDefLike(d) || (gZoneAt.length() == 0))
 		return false;
-	// only when the newest strip is really standing half full (review: any failed search -- a wider turret, a
-	// threatened base -- planned a strip per election)
-	if (ZoneStanding(gZoneAt.length() - 1) * 2 < ZONE_SLOTS)
+	// at most one new strip in 5 s (review: any failed search planned a strip per election), but not held for the
+	// newest to stand half full -- a late burst of turrets emptied every strip at once and scattered (his 10-21 watch:
+	// 97% on strips at minute 20, 28% of 755 at minute 30)
+	if (ai.frame < gZoneLastPlanAt + 5 * SECOND)
 		return false;
+	gZoneLastPlanAt = ai.frame;
 	gZoneRetryAt = 0;
 	return ZonePlan() && ZoneSlotForOnce(d, near, at);
 }
@@ -395,13 +397,15 @@ bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
 		return false;
 	const float reach = Catalog::gBuildDist[gZoneNano] + 0.5f * pb;
 	const float halfLen = 0.5f * float(ZONE_LEN) * pn;
-	// strips nearest the work first
+	// strips nearest the work first -- but while metal spills, the strip with the most idle turrets (his 10-21 watch:
+	// 1,060 m/s of metal and 19,500 e/s spilling beside ~600 idle turrets, nothing in their reach to build)
 	array<uint> order;
 	array<float> key;
 	const AIFloat3 ref = OnMap(near) ? near : gZoneAt[gZoneAt.length() - 1];
+	const bool spill = MetalWasting();
 	for (uint z = 0; z < gZoneAt.length(); ++z) {
 		order.insertLast(z);
-		key.insertLast(gZoneAt[z].distance2D(ref));
+		key.insertLast(spill ? -IdleNanoLatheNear(gZoneAt[z]) : gZoneAt[z].distance2D(ref));
 	}
 	for (uint o = 0; o < order.length(); ++o) {
 		uint bi = o;
