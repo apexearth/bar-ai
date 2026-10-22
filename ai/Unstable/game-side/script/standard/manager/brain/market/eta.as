@@ -54,6 +54,20 @@ float ConvRate()
 	return (own > 0.f) ? own : BestConvRatio();
 }
 
+// WHAT AN E/S IS WORTH TO THE LADDER, ON BOTH SIDES OF ITS BOOKS (apex_eta_erate). A bill was charged at the feeds'
+// metal per energy (gPoolMPerE, ~0.22 at +50 minute 4) and a generator's output valued at the converter rate (~1/70):
+// energy cost fifteen times what it was worth, so the ladder climbed extractors while every build waited on energy
+// (his 10-22: "you are focusing too much on metal extractors, not enough on energy and build power"; at +50 minute 4
+// we stood 3-4 basic solars to his 11). Output is worth the larger of the two: what it unlocks while energy is short,
+// what it converts to once it is plentiful.
+float EtaERate()
+{
+	const float r = ConvRate();
+	if (ai.GetTunable("apex_eta_erate", TUNE_ETA_ERATE) <= 0.f)
+		return r;
+	return (gPoolMPerE > r) ? gPoolMPerE : r;
+}
+
 // Sorted insert by payback. Feed-bound steps have rate dI*P/cost, so ranking by
 // cost/dI is EXACT and P-independent while metal is the binding constraint --
 // which is what lets the ladder walk the pool in order instead of re-scanning it
@@ -180,7 +194,7 @@ void PoolFill(Pool@ p, bool anyTier)
 		gPoolMobBP = (mb > 1.f) ? mb : 1.f;
 		gPoolP = (pm > 0.5f) ? pm : 0.5f;
 	}
-	const float rate = ConvRate();
+	const float rate = EtaERate();
 	const float im = IncomeMult();
 
 	// OPEN GROUND. Priced at the last probed spot yield; per-spot yields differ
@@ -853,7 +867,7 @@ float DPowerOf(Want@ w, int d)
 	}
 	float dI = Catalog::gMakeM[d];
 	if (Catalog::gMakeE[d] > 0.f)
-		dI += Catalog::gMakeE[d] * ConvRate();
+		dI += Catalog::gMakeE[d] * EtaERate();
 	return (dI > 0.f) ? dI : 0.f;
 }
 

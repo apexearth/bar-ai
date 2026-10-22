@@ -400,7 +400,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// where the ladder's energy arm makes a 69,000 E bill wait its turn.
 		if (etaOn && !barred && (c.value > 0.f)) {
 			const double _tEt = Perf::T0();
-			const float gM = Catalog::gMakeE[d] * ConvRate();
+			const float gM = Catalog::gMakeE[d] * EtaERate();
 			if (crewBP <= 0.f)
 				crewBP = GenCrewBP(uid, d, genNanoBP);
 			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
@@ -434,8 +434,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	}
 	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
 		const float mktS = w.walkSec + EtaWithN(int(w.def.id),
-				Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
-				EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f);
+				Catalog::gMakeE[int(w.def.id)] * EtaERate(), 0.f, false,
+				EtaBatchN(Catalog::gMakeE[int(w.def.id)] * EtaERate(), etaP), 0.f);
 		// A TIE GOES TO THE MARKET. The ladder's seconds carry a per-order
 		// latency guess on every rung of the plan; a reactor it calls sooner
 		// by less than that guess is not sooner (measured: fusion 7800 s
