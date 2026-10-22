@@ -430,7 +430,8 @@ float MobileBPShareNow()
 // now. Capacity is rebuilt from the run's own build power and energy each step, so a turret or a generator raises
 // it and an extractor does not; a spend-bound step is turrets (hands bind) or the next generator (energy binds).
 bool gLsOn = false;
-int gLsBindAt = -1;  // the frame the spend cap last bound at the ladder's start
+int gLsBindAt = -1;
+float gLsQ0 = 0.f, gLsCapB0 = 0.f, gLsCapE0 = 0.f;   // the last ladder start's spending power and its two caps  // the frame the spend cap last bound at the ladder's start
 // Spending, not income, holds the economy back now: the ladder then sees what the market's waste-based prices miss.
 bool SpendBinds() { return gLsBindAt == ai.frame; }
 float gLsW = 0.f;    // how full the metal bank is, 0..1: the cap's weight
@@ -473,7 +474,9 @@ void LsSetup(float bp)
 	float demand = Eco::MPull();
 	if (demand < gMDemandPk)
 		demand += (gMDemandPk - demand) * (1.f - gLsW);
-	if (demand < 1.f)
+	// NO SPILL, NO CAP: a full bank with income under what is spent (the opening's starting grant) is not metal we
+	// cannot use, as the metal share's own guard says
+	if ((demand < 1.f) || (Eco::MInc() <= demand))
 		return;
 	gLsRB = demand / bp;
 	const float eBuild = Eco::EPull() - ConvUseE();
@@ -690,6 +693,9 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	LsSetup(bp);
 	if (gLsOn && (LsPower(P, bp, eAvail) < P - 0.01f))
 		gLsBindAt = ai.frame;
+	gLsQ0 = LsPower(P, bp, eAvail);
+	gLsCapB0 = gLsOn ? LsBPCap(bp) : -1.f;
+	gLsCapE0 = gLsOn ? LsECap(eAvail) : -1.f;
 	float target = LsPower(P, bp, eAvail) * ETA_TARGET_MUL;
 	if (target < 0.5f)
 		target = 0.5f;
@@ -1126,6 +1132,7 @@ void EtaLog(array<Want@>@ ranked, CCircuitUnit@ unit)
 		+ " tgt=" + formatFloat(P * ETA_TARGET_MUL, "", 0, 1)
 		+ " cheap=" + formatFloat(cheap, "", 0, 2)
 		+ " base=" + formatFloat(EtaWith(0, 0.f, 0.f, false), "", 0, 0)
+		+ " Q=" + formatFloat(gLsQ0, "", 0, 1) + " capB=" + int(gLsCapB0) + " capE=" + int(gLsCapE0)
 		+ " mkt=" + ((mktAt < 0) ? "-"
 			: (KindName(ranked[mktAt].kind) + ":"
 				+ ranked[mktAt].def.GetName()))
