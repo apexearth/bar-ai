@@ -548,7 +548,8 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		return true;
 	}
 	if (utils::is_valid(buildPos)
-		&& circuit->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), buildPos, facing))
+		&& circuit->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), buildPos, facing)
+		&& !circuit->GetTerrainManager()->ZoneRefuses(buildDef, buildPos, facing))   // held ground (apex zones)
 	{
 		TRY_UNIT(circuit, unit,
 			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);

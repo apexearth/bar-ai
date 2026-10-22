@@ -639,18 +639,10 @@ float EMakeInFlight()
 			s = have / need;
 	}
 	float e = 0.f;
-	// ON ITS WAY MEANS ARRIVING (TUNE_FC_EMAKE): every generator ordered read as coming, an AFUS minutes from done as
-	// much as a solar about to finish, so energy read richer than it would be when anything priced on it arrived.
-	// On, only what the forecast finishes within its horizon.
-	const bool fc = ai.GetTunable("apex_fc_emake", TUNE_FC_EMAKE) > 0.f;
-	if (fc)
-		FcRefresh();
 	for (uint i = 0; i < ComLen(); ++i) {
 		if (gComState[i] == CS_FINISHED)
 			continue;
 		const int d = gComDef[i];
-		if (fc && (FcEtaOf(i) > FC_HORIZON_S))
-			continue;
 		e += Catalog::gMakeE[d] * ((Catalog::gCostE[d] > 1.f) ? s : 1.f);
 	}
 	gEMakeFrame = ai.frame;
