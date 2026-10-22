@@ -451,9 +451,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
-	const float handsNeed = HandsDemandM();
-	if (handsNeed > over)
-		over = handsNeed;
 	float labNeed = 0.f;
 	if (LabNanoOn()) {
 		LabNanoScan();
@@ -518,7 +515,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
-			+ " handsNeed=" + formatFloat(HandsDemandM(), "", 0, 1)
 			+ " lab=" + formatFloat(labNeed, "", 0, 1)
 			+ " floor=" + floorShort
 			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
@@ -603,8 +599,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// nano turrets... are stalling because we lack energy").
 			{
 				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-				// hands demand already reads the energy feed (EtaHandsShare with apex_hands_demand)
-				if ((askE > 1.f) && !((handsNeed > 0.f) && (handsNeed >= over))) {
+				if (askE > 1.f) {
 					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
 					NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));

@@ -735,11 +735,7 @@ float EtaHandsShareNow()
 		// rungs and bought 147 more advanced constructors (his watched eco
 		// seat: "we have like 100 advanced bot cons, way too many").
 		tBuild += float(k) * bt;
-		// ...and the feed in both currencies when hands demand reads it: more hands do nothing while energy binds
-		float fd = p.cost[i] / P;
-		if (HandsDemandOn() && (p.costE[i] > 0.f) && (eAvail > 1.f) && (p.costE[i] / eAvail > fd))
-			fd = p.costE[i] / eAvail;
-		tFeed += float(k) * fd;
+		tFeed += float(k) * p.cost[i] / P;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
 		n[i] -= k;
@@ -754,30 +750,6 @@ float EtaHandsShareNow()
 	if ((tBuild <= 0.f) || (tFeed >= tBuild))
 		return 0.f;
 	return 1.f - tFeed / tBuild;
-}
-
-// THE LADDER SAYS WHEN IT IS WAITING ON HANDS, AND TURRETS LISTEN (apex_hands_demand; his 10-22: "you are focusing too
-// much on metal extractors, not enough on energy and build power"; "AFUS require a lot lot lot of build power"). In a
-// base game the ladder's lathe time ran 4-12x its feed time from minute 2 to 20 while turret demand read only metal
-// waste. The build power that brings the plan level with its feed is bp * (tBuild/tFeed - 1): ~16 turrets at minute 8,
-// ~65 at minute 14 (his census: 6 and 63).
-bool HandsDemandOn() { return ai.GetTunable("apex_hands_demand", TUNE_HANDS_DEMAND) > 0.f; }
-int gHdAt = -999999;
-float gHdVal = 0.f;
-float HandsDemandM()
-{
-	if (!HandsDemandOn())
-		return 0.f;
-	if (ai.frame - gHdAt < 2 * SECOND)
-		return gHdVal;
-	gHdAt = ai.frame;
-	float hs = EtaHandsShare();
-	if (hs > 0.95f)
-		hs = 0.95f;
-	float need = (hs > 0.f) ? (EffBP(0.f) * hs / (1.f - hs)) * (7.f / 80.f) : 0.f;
-	need -= BpOrderedM();
-	gHdVal = (need > 0.f) ? need : 0.f;
-	return gHdVal;
 }
 
 bool EtaOn()
