@@ -42,6 +42,17 @@ public:
 	CTerrainManager(CCircuitAI* circuit, terrain::CTerrainData* terrainData);
 	~CTerrainManager();
 
+	// Ground held for one kind of building (apex): his turret strips. A building of any other def whose
+	// footprint overlaps a zone is refused by every site search.
+	void AddZone(float x1, float z1, float x2, float z2, int allowId);
+	void ClearZones() { zones.clear(); }
+	int GetZoneCount() const { return (int)zones.size(); }
+	bool ZoneRefuses(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing) const;
+private:
+	struct SZone { float x1, z1, x2, z2; int allowId; };
+	std::vector<SZone> zones;
+public:
+
 	void InitAnalyzer();
 private:
 	CCircuitAI* circuit;

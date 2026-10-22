@@ -456,6 +456,20 @@ void CellAdd(const AIFloat3& in p)
 	gCellLoShut.insertLast(false);
 	gCellHiShut.insertLast(false);
 	AiLog("apex: cells t=" + ai.teamId + " open #" + (gCellAt.length() - 1) + " at=" + int(p.x) + "," + int(p.z));
+	// THE STRIP IS TURRETS' GROUND BEFORE A TURRET STANDS ON IT (TUNE_CELL_ZONE; his 10-21: "this x-axis between here
+	// and here, that's entirely about construction turrets. I'm not going to put anything else there"). The line's
+	// whole length is held for the turret def in every site search (C++ CTerrainManager zones).
+	if (CellLineOn() && (ai.GetTunable("apex_cell_zone", TUNE_CELL_ZONE) > 0.f) && RowFrame()) {
+		const int nd = CellNanoDef();
+		if (Catalog::ValidId(nd)) {
+			const float pn = Lattice::FootPitch(nd);
+			const AIFloat3 a = p - gRowAcross * (0.5f * float(LINE_MAX) * pn) - gRowBackDir * (0.5f * pn);
+			const AIFloat3 b = p + gRowAcross * (0.5f * float(LINE_MAX) * pn) + gRowBackDir * (0.5f * pn);
+			ai.ReserveZone(a.x, a.z, b.x, b.z, Catalog::Def(nd));
+			AiLog("apex: cells t=" + ai.teamId + " zone #" + (gCellAt.length() - 1) + " " + int(a.x) + "," + int(a.z)
+				+ " .. " + int(b.x) + "," + int(b.z) + " for " + Catalog::Def(nd).GetName());
+		}
+	}
 }
 
 // A slot in a cell for def d. A turret takes the core of the cell nearest `near` (the frame it was bought for, or

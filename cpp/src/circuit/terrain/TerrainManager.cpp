@@ -711,7 +711,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
 
 		probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
 		probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
-		if (CanBeBuiltAtSafe(cdef, probePos) && map->IsPossibleToBuildAt(unitDef, probePos, facing)) {
+		if (CanBeBuiltAtSafe(cdef, probePos) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {
 			probePos.y = map->GetElevationAt(probePos.x, probePos.z);
 			if (predicate(probePos)) {
 				return probePos;
@@ -1026,7 +1026,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
 
 			probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
 			probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
-			if (CanBeBuiltAtSafe(cdef, probePos) && map->IsPossibleToBuildAt(unitDef, probePos, facing)) {
+			if (CanBeBuiltAtSafe(cdef, probePos) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {
 				probePos.y = map->GetElevationAt(probePos.x, probePos.z);
 				if (predicate(probePos)) {
 					return probePos;
@@ -1124,7 +1124,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
 			continue;																					\
 		}																								\
 																										\
-		if (map->IsPossibleToBuildAt(unitDef, probePos, facing)) {										\
+		if (map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {	\
 			probePos.y = map->GetElevationAt(probePos.x, probePos.z);									\
 			if (predicate(probePos)) {																	\
 				return probePos;																		\
@@ -1262,7 +1262,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloa
 				continue;																						\
 			}																									\
 																												\
-			if (map->IsPossibleToBuildAt(unitDef, probePos, facing)) {											\
+			if (map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {		\
 				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
 				if (predicate(probePos)) {																		\
 					return probePos;																			\
@@ -1974,6 +1974,32 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
 		}
 	}
 	return true;
+}
+
+void CTerrainManager::AddZone(float x1, float z1, float x2, float z2, int allowId)
+{
+	zones.push_back({std::min(x1, x2), std::min(z1, z2), std::max(x1, x2), std::max(z1, z2), allowId});
+}
+
+bool CTerrainManager::ZoneRefuses(CCircuitDef* cdef, const AIFloat3& pos, int facing) const
+{
+	if (zones.empty() || (cdef == nullptr) || cdef->IsMobile()) {
+		return false;
+	}
+	float hx = cdef->GetDef()->GetXSize() * SQUARE_SIZE * 0.5f;
+	float hz = cdef->GetDef()->GetZSize() * SQUARE_SIZE * 0.5f;
+	if ((facing & 1) != 0) {
+		std::swap(hx, hz);
+	}
+	for (const SZone& z : zones) {
+		if (cdef->GetId() == z.allowId) {
+			continue;
+		}
+		if ((pos.x + hx > z.x1 + 1.f) && (pos.x - hx < z.x2 - 1.f) && (pos.z + hz > z.z1 + 1.f) && (pos.z - hz < z.z2 - 1.f)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)

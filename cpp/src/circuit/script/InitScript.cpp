@@ -1378,6 +1378,16 @@ static AIFloat3 CCircuitAI_FindBuildSiteNear(CCircuitAI* circuit, CCircuitDef* d
 	return circuit->FindBuildSiteNear(def, pos, radius);
 }
 
+static void CCircuitAI_ReserveZone(CCircuitAI* circuit, float x1, float z1, float x2, float z2, CCircuitDef* allow)
+{
+	circuit->GetTerrainManager()->AddZone(x1, z1, x2, z2, (allow != nullptr) ? allow->GetId() : -1);
+}
+
+static void CCircuitAI_ClearZones(CCircuitAI* circuit)
+{
+	circuit->GetTerrainManager()->ClearZones();
+}
+
 static bool CCircuitAI_CanPlaceCell(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos, AIFloat3& outCell)
 {
 	return circuit->CanPlaceCell(def, pos, outCell);
@@ -2570,6 +2580,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawErase(const AIFloat3& in)", asMETHOD(CCircuitAI, DrawErase), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 FindBuildSiteNear(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_FindBuildSiteNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanPlaceCell(CCircuitDef@, const AIFloat3& in, AIFloat3& out)", asFUNCTION(CCircuitAI_CanPlaceCell), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void ReserveZone(float, float, float, float, CCircuitDef@)", asFUNCTION(CCircuitAI_ReserveZone), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void ClearZones()", asFUNCTION(CCircuitAI_ClearZones), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int FactorySiteFacing(CCircuitDef@, const AIFloat3& in)", asMETHOD(CCircuitAI, FactorySiteFacing), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

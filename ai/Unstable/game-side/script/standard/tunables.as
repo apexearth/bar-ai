@@ -1015,6 +1015,7 @@ const float TUNE_CELL_SPACE = 1.f;   // [x] cells.as: spacing between cells over
 const float TUNE_CELL_RING = 0.f;    // [toggle 0/1] cells.as: 1 the core's farthest turret must reach the ring (under test, 10-21)
 const float TUNE_CELL_HOME = 1.f;    // [toggle 0/1] cells.as: new cells seed on idle turrets at home first (under test, 10-21)
 const float TUNE_CELL_LINE = 0.f;    // [toggle 0/1] cells.as: the core is a line of turrets grown at its ends, buildings in bands both sides (his 10-21)
+const float TUNE_CELL_ZONE = 0.f;    // [toggle 0/1] cells.as: a line's whole strip is held for turrets in every site search (needs the zone DLL; his 10-21)
 const float TUNE_CON_USE = 0.f;   // [toggle 0/1] constructors sized by use: the con floors honour the idle ruling, a hand on the only job offered counts as idle, spot hands never exceed open spots (production.as; his 2026-10-18: con counts too high, walking all over)
 const float TUNE_HOIST_WAITS = 1.f;   // [toggle 0/1] a hoist (floor, role, field, defjoin, metalfirst...) waits while the hand is still walking to a live job; the draw and the emergencies still move it (decide.as; his 2026-10-18: cons walk far, work 2 s, walk back)
 const float TUNE_DRAW_WAITS = 0.f;   // [toggle 0/1] with TUNE_HOIST_WAITS: the draw also leaves a hand on a live job it is walking to unless the drawn job outbids its walk-paid value -- drawn once per job, not per election (decide.as; the cost of switching roles stand in for)
