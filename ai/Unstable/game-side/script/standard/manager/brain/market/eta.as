@@ -430,9 +430,6 @@ float MobileBPShareNow()
 // now. Capacity is rebuilt from the run's own build power and energy each step, so a turret or a generator raises
 // it and an extractor does not; a spend-bound step is turrets (hands bind) or the next generator (energy binds).
 bool gLsOn = false;
-int gLsBindAt = -1;  // the frame the spend cap last bound at the ladder's start
-// Spending, not income, holds the economy back now: the ladder then sees what the market's waste-based prices miss.
-bool SpendBinds() { return gLsBindAt == ai.frame; }
 float gLsW = 0.f;    // how full the metal bank is, 0..1: the cap's weight
 float gLsRB = 0.f;   // metal spent per build-second of the fleet's build power
 float gLsRE = 0.f;   // metal spent per e/s of energy feed
@@ -688,8 +685,6 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 		bpMob = 1.f;
 	float eAvail = EtaEnergyAvail();
 	LsSetup(bp);
-	if (gLsOn && (LsPower(P, bp, eAvail) < P - 0.01f))
-		gLsBindAt = ai.frame;
 	float target = LsPower(P, bp, eAvail) * ETA_TARGET_MUL;
 	if (target < 0.5f)
 		target = 0.5f;

@@ -1782,8 +1782,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 						+ " eta=" + int(EtaOfWant(ranked[vb]))
 						+ " v=" + formatFloat(ranked[vb].value, "", 0, 2)
 						+ " P=" + formatFloat(EcoPowerM(), "", 0, 1)
-						+ " eAvail=" + formatFloat(EtaEnergyAvail(), "", 0, 0)
-						+ " spendBind=" + (SpendBinds() ? 1 : 0));
+						+ " eAvail=" + formatFloat(EtaEnergyAvail(), "", 0, 0));
 					if ((ranked[vb].kind == WK_MEXUP) && (ai.frame >= gEtaPickTraceAt)) {
 						gEtaPickTraceAt = ai.frame + 30 * SECOND;
 						gLadderTrace = true;
@@ -1796,7 +1795,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 						gLadderTrace = false;
 					}
 				}
-				if ((vb >= 0) && (vb != pick) && (ranked[pick].value < DRAW_CLOSE * ranked[vb].value) && !SpendBinds()) {
+				if ((vb >= 0) && (vb != pick) && (ranked[pick].value < DRAW_CLOSE * ranked[vb].value)) {
 					++gDrawCloseLadder;
 					catBest[pc] = -1;
 					pick = vb;
