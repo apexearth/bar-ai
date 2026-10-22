@@ -44,8 +44,6 @@ void SweepDead()
 			if (i < gLiveSample.length()) gLiveSample.removeAt(i);
 			if (i < gLiveSampleAt.length()) gLiveSampleAt.removeAt(i);
 			if (i < gLiveRingBP.length()) gLiveRingBP.removeAt(i);
-			if (i < gLiveHandSum.length()) gLiveHandSum.removeAt(i);
-			if (i < gLiveHandN.length()) gLiveHandN.removeAt(i);
 			if (i < gLiveVal.length()) gLiveVal.removeAt(i);
 			if (i < gLiveGain.length()) gLiveGain.removeAt(i);
 			gLive.removeAt(i);
