@@ -462,8 +462,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
-	if (CanonExp() && (ai.frame >= 180 * SECOND) && CanonMPlenty()) {
-		const float cf = FreeMetalFlow();
+	// his census: 7 turrets by minute 4 at ~40 m/s, about a third of the income into turrets from minute 3
+	if (CanonExp() && (ai.frame >= 180 * SECOND)) {
+		const float cf = Eco::MInc() / 3.f;
 		if (cf > over)
 			over = cf;
 	}
@@ -617,7 +618,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// nano turrets... are stalling because we lack energy").
 			{
 				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-				if ((askE > 1.f) && !(CanonExp() && CanonMPlenty())) {
+				if ((askE > 1.f) && !(CanonExp() && (ai.frame >= 180 * SECOND))) {
 					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
 					NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));
