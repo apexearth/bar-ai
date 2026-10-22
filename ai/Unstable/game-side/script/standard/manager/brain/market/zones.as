@@ -8,7 +8,8 @@ namespace Market {
 // keeps its own siting, which already seeks standing lathe and now cannot stand on the strip. The next strip is
 // planned beside the last, two reaches over so their bands meet, once this one's slots are mostly taken.
 
-const int ZONE_LEN = 24;            // turret slots in a strip: shorter strips side by side pass the ground check more often
+const int ZONE_LEN = 24;            // turret slots along a strip: shorter strips side by side pass the ground check more often
+const int ZONE_SLOTS = 2 * ZONE_LEN; // a strip is two turrets wide (his double rows), reserved whole
 const float ZONE_NEXT_FULL = 0.9f;  // share of slots standing that plans the next strip: solid before the next (his 10-21)
 
 bool ZonesOn() { return ai.GetTunable("apex_zones", TUNE_ZONES) > 0.f; }
@@ -52,7 +53,9 @@ bool ZoneFrame()
 AIFloat3 ZoneSlot(uint z, int k)
 {
 	const float pn = Lattice::FootPitch(gZoneNano);
-	return gZoneAt[z] + gZoneAcross * ((float(k) - 0.5f * float(ZONE_LEN - 1)) * pn);
+	// slot k: column k % 2 either side of the strip's centre line, position k / 2 along it
+	const float col = ((k % 2) == 0) ? -0.5f : 0.5f;
+	return gZoneAt[z] + gZoneAcross * ((float(k / 2) - 0.5f * float(ZONE_LEN - 1)) * pn) + gZoneBack * (col * pn);
 }
 
 // The widest eco building a constructor we own can raise, in elmos: the row between two strips is sized for it.
@@ -87,24 +90,16 @@ bool ZonePlan()
 	// ONE ECO ROW BETWEEN STRIPS (his base at 16:15, 2,032 m/s: turret rows, a row of converters or reactors, turret
 	// rows, every building between two of them). The next strip lies one turret and one row of the widest eco building
 	// beyond an outer strip, the block growing row on row.
-	const float step = pn + ZoneRowPitch();
-	// DOUBLE ROWS (his base: two rows of turrets, then a row of converters or reactors): a strip without its partner
-	// gets one laid flush against it first.
-	if ((gZoneAt.length() > 0) && ((gZoneAt.length() % 2) == 1)) {
-		const AIFloat3 last = gZoneAt[gZoneAt.length() - 1];
-		cand.insertLast(last + gZoneBack * pn);
-		cand.insertLast(last - gZoneBack * pn);
-	}
-	const uint nPair = cand.length();
+	const float step = 2.f * pn + ZoneRowPitch();
 	// a plant with no strip in its turrets' reach asks for one flush along its side (the blob round the T2 plant)
 	if (OnMap(gZonePlantAsk)) {
 		const int pd = AnchorDefAt(gZonePlantAsk);
 		const float half = Catalog::ValidId(pd)
 				? 8.f * float((Catalog::gFootX[pd] > Catalog::gFootZ[pd]) ? Catalog::gFootX[pd] : Catalog::gFootZ[pd]) : 48.f;
-		cand.insertLast(gZonePlantAsk + gZoneBack * (half + 0.5f * pn));
-		cand.insertLast(gZonePlantAsk - gZoneBack * (half + 0.5f * pn));
-		cand.insertLast(gZonePlantAsk + gZoneAcross * (half + 0.5f * pn));
-		cand.insertLast(gZonePlantAsk - gZoneAcross * (half + 0.5f * pn));
+		cand.insertLast(gZonePlantAsk + gZoneBack * (half + pn));
+		cand.insertLast(gZonePlantAsk - gZoneBack * (half + pn));
+		cand.insertLast(gZonePlantAsk + gZoneAcross * (half + pn));
+		cand.insertLast(gZonePlantAsk - gZoneAcross * (half + pn));
 		gZonePlantAsk = AIFloat3(-1.f, 0.f, -1.f);
 	}
 	const uint nPlantCand = cand.length();
@@ -131,7 +126,7 @@ bool ZonePlan()
 			const int fd = int(f.circuitDef.id);
 			const AIFloat3 fp = f.GetPos(ai.frame);
 			const float off = 8.f * float((Catalog::gFootX[fd] > Catalog::gFootZ[fd]) ? Catalog::gFootX[fd] : Catalog::gFootZ[fd])
-					+ 0.5f * pn;
+					+ pn;
 			cand.insertLast(fp + gZoneBack * off);
 			cand.insertLast(fp - gZoneBack * off);
 		}
@@ -147,12 +142,13 @@ bool ZonePlan()
 			}
 	}
 	for (uint ci = 0; ci < cand.length(); ++ci) {
-		const AIFloat3 c = ai.SnapToLattice(def, cand[ci]);
+		// the centre line runs between the two columns: half a turret off the lattice, so each column is on it
+		const AIFloat3 c = ai.SnapToLattice(def, cand[ci]) + gZoneBack * (0.5f * pn);
 		if (!OnMap(c) || Builder::PastFront(c))
 			continue;
 		bool clear = true;
 		for (uint z = 0; (z < gZoneAt.length()) && clear; ++z)
-			clear = gZoneAt[z].distance2D(c) >= 0.9f * ((ci < nPair) ? pn : step);
+			clear = gZoneAt[z].distance2D(c) >= 0.9f * step;
 		if (!clear)
 			continue;
 		// most of the strip must be buildable ground
@@ -168,8 +164,8 @@ bool ZonePlan()
 			continue;
 		gZoneAt.insertLast(c);
 		gZoneTaken.insertLast(0);
-		const AIFloat3 a = c - gZoneAcross * (0.5f * float(ZONE_LEN) * pn) - gZoneBack * (0.5f * pn);
-		const AIFloat3 b = c + gZoneAcross * (0.5f * float(ZONE_LEN) * pn) + gZoneBack * (0.5f * pn);
+		const AIFloat3 a = c - gZoneAcross * (0.5f * float(ZONE_LEN) * pn) - gZoneBack * pn;
+		const AIFloat3 b = c + gZoneAcross * (0.5f * float(ZONE_LEN) * pn) + gZoneBack * pn;
 		ai.ReserveZone(a.x, a.z, b.x, b.z, def);
 		// every other turret may stand here too -- the advanced one from the extra units (his 10-21)
 		for (int ti = 1; ti <= Catalog::gDefCount; ++ti)
@@ -190,7 +186,7 @@ bool ZonePlan()
 // Slot k of strip z holds a turret, standing or ordered.
 bool SlotFilled(uint z, int k)
 {
-	if ((k < 0) || (k >= ZONE_LEN))
+	if ((k < 0) || (k >= ZONE_SLOTS))
 		return false;
 	const AIFloat3 p = ZoneSlot(z, k);
 	const float tol = 0.5f * Lattice::FootPitch(gZoneNano);
@@ -214,7 +210,7 @@ bool StripExtent(uint z, float& out lo, float& out hi)
 	const float pn = Lattice::FootPitch(gZoneNano);
 	const float tol = 0.5f * pn;
 	bool any = false;
-	for (int k = 0; k < ZONE_LEN; ++k) {
+	for (int k = 0; k < ZONE_SLOTS; ++k) {
 		const AIFloat3 p = ZoneSlot(z, k);
 		NanoNear(p, tol + 8.f);
 		bool here = false;
@@ -222,7 +218,7 @@ bool StripExtent(uint z, float& out lo, float& out hi)
 			here = gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < tol;
 		if (!here)
 			continue;
-		const float a = (float(k) - 0.5f * float(ZONE_LEN - 1)) * pn;
+		const float a = (float(k / 2) - 0.5f * float(ZONE_LEN - 1)) * pn;
 		if (!any || (a < lo)) lo = a;
 		if (!any || (a > hi)) hi = a;
 		any = true;
@@ -235,7 +231,7 @@ int ZoneStanding(uint z)
 {
 	const float tol = 0.5f * Lattice::FootPitch(gZoneNano);
 	int n = 0;
-	for (int k = 0; k < ZONE_LEN; ++k) {
+	for (int k = 0; k < ZONE_SLOTS; ++k) {
 		const AIFloat3 p = ZoneSlot(z, k);
 		NanoNear(p, tol + 8.f);
 		for (uint q = 0; q < gNanoGrid.hit.length(); ++q)
@@ -259,7 +255,7 @@ bool OnStrip(const AIFloat3& in p)
 		const AIFloat3 r = p - gZoneAt[z];
 		const float a = r.x * gZoneAcross.x + r.z * gZoneAcross.z;
 		const float b = r.x * gZoneBack.x + r.z * gZoneBack.z;
-		if ((abs(a) <= halfLen) && (abs(b) <= 0.75f * pn))
+		if ((abs(a) <= halfLen) && (abs(b) <= 1.25f * pn))
 			return true;
 	}
 	return false;
@@ -297,27 +293,35 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 		zk[bi] = zk[o];
 		// TOUCHING, NO SPACING (his 10-21: "throw them all as close as you can to each other"): the free slot beside
 		// a turret standing or ordered, nearest the middle; an empty strip starts at its middle.
-		const bool any = SlotFilled(z, ZONE_LEN / 2) || (ZoneStanding(z) > 0);
-		for (int i = 0; i < ZONE_LEN; ++i) {
-			const int k = (ZONE_LEN / 2) + (((i % 2) == 0) ? (i / 2) : -((i + 1) / 2));
-			if ((k < 0) || (k >= ZONE_LEN))
-				continue;
-			if (any && !SlotFilled(z, k - 1) && !SlotFilled(z, k + 1))
-				continue;
-			const AIFloat3 s = ZoneSlot(z, k);
-			AIFloat3 got;
-			if (OnMap(s) && ai.CanPlaceCell(def, s, got)) {
-				best = s.distance2D(ref);
-				at = s;
-				bz = int(z);
-				break;
+		// two passes: a slot touching a turret first, any slot after -- a strip with no touching slot free still
+		// takes the turret (refused, 65-80% of turrets went off the strips)
+		const bool any = ZoneStanding(z) > 0;
+		for (int pass = (any ? 0 : 1); (pass < 2) && (bz < 0); ++pass) {
+			for (int i = 0; i < ZONE_LEN; ++i) {
+				const int idx = (ZONE_LEN / 2) + (((i % 2) == 0) ? (i / 2) : -((i + 1) / 2));
+				if ((idx < 0) || (idx >= ZONE_LEN))
+					continue;
+				for (int col = 0; (col < 2) && (bz < 0); ++col) {
+					const int k = 2 * idx + col;
+					if ((pass == 0) && !SlotFilled(z, k - 2) && !SlotFilled(z, k + 2) && !SlotFilled(z, (col == 0) ? (k + 1) : (k - 1)))
+						continue;
+					const AIFloat3 s = ZoneSlot(z, k);
+					AIFloat3 got;
+					if (OnMap(s) && ai.CanPlaceCell(def, s, got)) {
+						best = s.distance2D(ref);
+						at = s;
+						bz = int(z);
+					}
+				}
+				if (bz >= 0)
+					break;
 			}
 		}
 	}
 	// TURRETS STAY ON THE STRIPS (his 10-21 watch: 714 turrets strewn over the base, the strips near empty -- a turret
 	// sent beside every frame out of a strip's reach). The work comes to the strip, in its bands; the turret takes the
 	// strip slot nearest it whatever the distance, and the next strip is planned once this one is mostly taken.
-	if ((gZoneAt.length() > 0) && (float(ZoneStanding(gZoneAt.length() - 1)) >= ZONE_NEXT_FULL * float(ZONE_LEN)))
+	if ((gZoneAt.length() > 0) && (float(ZoneStanding(gZoneAt.length() - 1)) >= ZONE_NEXT_FULL * float(ZONE_SLOTS)))
 		ZonePlan();
 	if (bz < 0)
 		return false;
@@ -395,7 +399,7 @@ bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
 		const bool manned = StripExtent(z, loA, hiA);
 		int tried = 0;
 		for (int j = 0; ; ++j) {
-			const float perp = 0.5f * pn + 0.5f * pb + float(j) * pb;
+			const float perp = pn + 0.5f * pb + float(j) * pb;
 			if (perp > reach)
 				break;
 			const float span = sqrt(reach * reach - perp * perp);
@@ -447,7 +451,7 @@ bool ZoneSlotWithin(int d, const AIFloat3& in near, float maxD, AIFloat3& out at
 	float best = -1.f;
 	int bz = -1;
 	for (uint z = 0; z < gZoneAt.length(); ++z) {
-		for (int k = 0; k < ZONE_LEN; ++k) {
+		for (int k = 0; k < ZONE_SLOTS; ++k) {
 			const AIFloat3 s = ZoneSlot(z, k);
 			const float dd = s.distance2D(near);
 			if ((dd > maxD) || ((best >= 0.f) && (dd >= best)))
