@@ -323,28 +323,8 @@ void PoolRefresh()
 // a solar shortens the lab.
 // One unit's share of a batch of k built `wide` at a time: the metal and
 // energy feeds are charged for all k, the lathe for k/wide of them.
-// ROOM IN THE LADDER (apex_crew_now; his 10-22: a fusion "should lose more on space and how quickly it gets out of
-// range from useful nanoturrets and then incurs additional nano turret cost"). The market charged a generator its
-// footprint at the local crowd's metal per cell (want_energy.as rent); the ladder, which overrides it, charged nothing,
-// so a fusion's four-fold sprawl per e/s against an advanced fusion was free where the choice was made. A static
-// non-extractor step pays the same room price, read at the reactor site.
-float gEtaRoomCell = 0.f;
-int gEtaRoomAt = -999999;
-float EtaRoomM(int d)
-{
-	if (!CrewNowOn() || Catalog::gMobile[d] || (Catalog::gExtractsM[d] > 0.f) || (Catalog::gAreaCells[d] <= 0))
-		return 0.f;
-	if (ai.frame - gEtaRoomAt >= 5 * SECOND) {
-		gEtaRoomAt = ai.frame;
-		gEtaRoomCell = PfCrowdAt(BigEnergySite(), 400.f) * PfMetalPerCell()
-				* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
-	}
-	return gEtaRoomCell * float(Catalog::gAreaCells[d]);
-}
-
 float StepSecWide(int d, float cost, float P, float bank, float bp, float eAvail, int k, int wide)
 {
-	cost += EtaRoomM(d);
 	float bt = Catalog::BuildSecondsAt(d, bp) / float(wide);
 	if (bt < 0.1f)
 		bt = 0.1f;
@@ -363,7 +343,6 @@ float StepSecWide(int d, float cost, float P, float bank, float bp, float eAvail
 
 float StepSec(int d, float cost, float P, float bank, float bp, float eAvail)
 {
-	cost += EtaRoomM(d);
 	float bt = Catalog::BuildSecondsAt(d, bp);
 	if (bt < 0.1f)
 		bt = 0.1f;
