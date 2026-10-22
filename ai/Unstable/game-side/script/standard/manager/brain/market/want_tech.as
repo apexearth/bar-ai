@@ -21,6 +21,10 @@ float TechHomeRisk()
 	gTsRisk = 0.f;
 	if (ai.GetTunable("apex_tech_survival", TUNE_TECH_SURVIVAL) <= 0.f)
 		return 0.f;
+	// No army in the eco test (ArmyTarget is 0 there), so no siege: the discount taxed every long build -- the advanced
+	// fusion most, ~0.78 to the fusion's 0.86 -- against a threat the test never sends.
+	if (EcoOnly())
+		return 0.f;
 	if (!Builder::gHomeSet)
 		return 0.f;
 	const AIFloat3 home = Builder::gHomePos;
