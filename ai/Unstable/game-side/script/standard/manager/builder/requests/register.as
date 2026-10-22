@@ -187,6 +187,8 @@ array<int> gLiveProgAt;           // ...and when
 array<float> gLiveSample;         // progress at the last rate sample
 array<int> gLiveSampleAt;
 array<float> gLiveRingBP;         // lathe SEEN on the frame beyond its crew
+array<float> gLiveHandSum;        // hands on the frame per 5 s sample, a stall's slowing taken out
+array<float> gLiveHandN;
 array<float> gLiveVal;            // the market's value and gain for the job (Market::NoteJob), -1 unpriced
 array<float> gLiveGain;
 array<float> gEffBPSum(ai.GetDefCount() + 1, 0.f);
@@ -354,6 +356,8 @@ void Register(IUnitTask@ task)
 	gLiveSample.insertLast(0.f);
 	gLiveSampleAt.insertLast(ai.frame);
 	gLiveRingBP.insertLast(0.f);
+	gLiveHandSum.insertLast(0.f);
+	gLiveHandN.insertLast(0.f);
 	gLiveVal.insertLast(Market::JobValue(task));
 	gLiveGain.insertLast(Market::JobGain(task));
 	if (IsBigEnergy(task.buildDef))
@@ -439,7 +443,15 @@ void Forget(IUnitTask@ task)
 						gEffBPSum[did] = gEffBPSum[did] * 0.5f + Catalog::gBuildTime[did] / secs;
 						gEffBPN[did] = gEffBPN[did] * 0.5f + 1.f;
 						if (IsBigEnergy(task.buildDef)) {
-							gEffBPBigSum = gEffBPBigSum * 0.5f + Catalog::gBuildTime[did] / secs;
+							// THE HANDS, NOT THE WAIT (apex_hands_rec): build time over seconds counts a metal wait as
+							// missing hands, and the ETA's feed then charges the wait again -- a fusion waiting on
+							// metal read half the hands, priced onto the advanced fusion, which needs half the metal
+							// per build-second (diag seed 2850: AFUS 10-50% slower in every ETA, none built).
+							float rec = Catalog::gBuildTime[did] / secs;
+							if ((ai.GetTunable("apex_hands_rec", TUNE_HANDS_REC) > 0.f) && (i < gLiveHandN.length())
+								&& (gLiveHandN[i] > 0.f))
+								rec = gLiveHandSum[i] / gLiveHandN[i];
+							gEffBPBigSum = gEffBPBigSum * 0.5f + rec;
 							gEffBPBigN = gEffBPBigN * 0.5f + 1.f;
 						}
 					}
@@ -456,6 +468,10 @@ void Forget(IUnitTask@ task)
 					gLiveSampleAt.removeAt(i);
 				if (i < gLiveRingBP.length())
 					gLiveRingBP.removeAt(i);
+				if (i < gLiveHandSum.length())
+					gLiveHandSum.removeAt(i);
+				if (i < gLiveHandN.length())
+					gLiveHandN.removeAt(i);
 				if (i < gLiveVal.length())
 					gLiveVal.removeAt(i);
 				if (i < gLiveGain.length())
@@ -710,6 +726,17 @@ void StallSweep()
 			uint arrived = 0;
 			const float crewBP = ArrivedLathe(t, arrived);
 			const float ring = (gotBP > crewBP) ? gotBP - crewBP : 0.f;
+			// a dry bank slows every build in the game to income over pull
+			float k = 1.f;
+			if ((Eco::MCur() < 0.05f * Eco::MStor()) && (Eco::MPull() > Eco::MInc()) && (Eco::MPull() > 1.f))
+				k = Eco::MInc() / Eco::MPull();
+			if ((Eco::ECur() < 0.05f * Eco::EStor()) && (Eco::EPull() > Eco::EInc()) && (Eco::EPull() > 1.f)
+				&& (Eco::EInc() / Eco::EPull() < k))
+				k = Eco::EInc() / Eco::EPull();
+			if ((k > 0.05f) && (gotBP > 0.f) && (i < gLiveHandN.length())) {
+				gLiveHandSum[i] += gotBP / k;
+				gLiveHandN[i] += 1.f;
+			}
 			gLiveRingBP[i] = 0.5f * gLiveRingBP[i] + 0.5f * ring;
 			const int fid = int(t.target.id);
 			if ((fid >= 0) && (fid < int(gRingOfFrame.length())))
