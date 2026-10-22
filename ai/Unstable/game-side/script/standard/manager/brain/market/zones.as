@@ -261,7 +261,19 @@ bool OnStrip(const AIFloat3& in p)
 	return false;
 }
 
+// Every strip full: the next is planned on the spot and the turret takes it (his 10-21 watch at minute 30: 873
+// turrets, 17% on a strip -- the late buying outran the 90%-standing rule and packed the rest anywhere).
 bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
+{
+	if (ZoneSlotForOnce(d, near, at))
+		return true;
+	if (!ZonesOn() || !NanoDefLike(d) || (gZoneAt.length() == 0))
+		return false;
+	gZoneRetryAt = 0;
+	return ZonePlan() && ZoneSlotForOnce(d, near, at);
+}
+
+bool ZoneSlotForOnce(int d, const AIFloat3& in near, AIFloat3& out at)
 {
 	if (!ZonesOn() || (Catalog::gBuildPower[d] <= 0.f) || Catalog::gMobile[d])
 		return false;
