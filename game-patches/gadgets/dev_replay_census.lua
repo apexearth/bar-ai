@@ -74,6 +74,21 @@ function gadget:GameFrame(frame)
 				parts[#parts + 1] = name .. ":" .. n
 			end
 			table.sort(parts)
+			-- WHERE IT STOOD (his 10-21: draw his base to compare ours with): every building's position, every
+			-- two minutes from minute 8, for tools/baseplot.py.
+			if (frame >= 8 * INTERVAL) and (frame % (2 * INTERVAL) == 0) then
+				for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+					local udid = Spring.GetUnitDefID(uid)
+					local ud = udid and UnitDefs[udid]
+					if ud ~= nil and (ud.isBuilding or ud.isFactory or (ud.speed or 0) == 0) then
+						local x, _, z = Spring.GetUnitPosition(uid)
+						if x then
+							BARAI_Echo(string.format("[BARAI_PLACE] frame=%d team=%d unit=%s x=%.0f z=%.0f uid=%d",
+								frame, teamID, ud.name, x, z, uid))
+						end
+					end
+				end
+			end
 			BARAI_Echo(string.format(
 				"[BARAI_CENSUS] frame=%d team=%d mInc=%.1f mPull=%.1f mCur=%.0f/%.0f eInc=%.1f ePull=%.1f eCur=%.0f/%.0f builders=%d busy=%d units=%s",
 				frame, teamID, mi or 0, mp or 0, mc or 0, ms or 0, ei or 0, ep or 0, ec or 0, es or 0,

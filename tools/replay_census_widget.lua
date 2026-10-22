@@ -38,6 +38,19 @@ function widget:GameFrame(frame)
 			local parts = {}
 			for name, n in pairs(counts) do parts[#parts + 1] = name .. ":" .. n end
 			table.sort(parts)
+			-- every building's position every two minutes from minute 8, for tools/baseplot.py
+			if frame >= 14400 and frame % 3600 == 0 then
+				for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+					local ud = UnitDefs[Spring.GetUnitDefID(uid) or -1]
+					if ud and (ud.isBuilding or ud.isFactory or not ud.canMove) then
+						local x, _, z = Spring.GetUnitPosition(uid)
+						if x then
+							Spring.Echo(string.format("[BARAI_PLACE] frame=%d team=%d unit=%s x=%.0f z=%.0f uid=%d",
+								frame, teamID, ud.name, x, z, uid))
+						end
+					end
+				end
+			end
 			Spring.Echo(string.format("[BARAI_CENSUS] frame=%d team=%d mInc=%.1f eInc=%.1f builders=%d busy=%d units=%s",
 				frame, teamID, mi or 0, ei or 0, builders, busy, table.concat(parts, ",")))
 		end

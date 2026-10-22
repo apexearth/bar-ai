@@ -8,7 +8,7 @@ namespace Market {
 // keeps its own siting, which already seeks standing lathe and now cannot stand on the strip. The next strip is
 // planned beside the last, two reaches over so their bands meet, once this one's slots are mostly taken.
 
-const int ZONE_LEN = 20;            // turret slots in a strip
+const int ZONE_LEN = 40;            // turret slots in a strip: his block ran long rows across its whole width
 const float ZONE_NEXT_FULL = 0.75f; // share of slots taken that plans the next strip
 
 bool ZonesOn() { return ai.GetTunable("apex_zones", TUNE_ZONES) > 0.f; }
@@ -53,6 +53,16 @@ AIFloat3 ZoneSlot(uint z, int k)
 	return gZoneAt[z] + gZoneAcross * ((float(k) - 0.5f * float(ZONE_LEN - 1)) * pn);
 }
 
+// The widest eco building we can raise, in elmos: the row between two strips is sized for it.
+float ZoneRowPitch()
+{
+	float w = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d)
+		if (Catalog::gAvailable[d] && ZoneBandFamily(d) && (Lattice::FootPitch(d) > w))
+			w = Lattice::FootPitch(d);
+	return (w > 16.f) ? w : 96.f;
+}
+
 bool ZonePlan()
 {
 	if (gZoneShut || (ai.frame < gZoneRetryAt) || !ZoneFrame())
@@ -63,12 +73,15 @@ bool ZonePlan()
 	// Candidates: beside the last strip first (bands meeting), then outward from home in rings of half a reach,
 	// the rear first. A seed whose three fixed points were all rough ground planned no strip at all.
 	array<AIFloat3> cand;
+	// ONE ECO ROW BETWEEN STRIPS (his base at 16:15, 2,032 m/s: turret rows, a row of converters or reactors, turret
+	// rows, every building between two of them). The next strip lies one turret and one row of the widest eco building
+	// beyond an outer strip, the block growing row on row.
+	const float step = pn + ZoneRowPitch();
 	if (gZoneAt.length() > 0) {
-		const AIFloat3 last = gZoneAt[gZoneAt.length() - 1];
-		cand.insertLast(last + gZoneBack * (2.f * reach));
-		cand.insertLast(last - gZoneBack * (2.f * reach));
-		cand.insertLast(last + gZoneAcross * (float(ZONE_LEN) * pn + 2.f * reach));
-		cand.insertLast(last - gZoneAcross * (float(ZONE_LEN) * pn + 2.f * reach));
+		for (uint z = gZoneAt.length(); z > 0; --z) {
+			cand.insertLast(gZoneAt[z - 1] + gZoneBack * step);
+			cand.insertLast(gZoneAt[z - 1] - gZoneBack * step);
+		}
 	}
 	// The first strip runs flush along a plant's side (his line started at his plant), so the plant's turrets
 	// stand on it: smoke seed 1690 had both strips 400 elmos from the air plant and its turrets packed round it.
@@ -101,7 +114,7 @@ bool ZonePlan()
 			continue;
 		bool clear = true;
 		for (uint z = 0; (z < gZoneAt.length()) && clear; ++z)
-			clear = gZoneAt[z].distance2D(c) >= 1.5f * reach;
+			clear = gZoneAt[z].distance2D(c) >= 0.9f * step;
 		if (!clear)
 			continue;
 		// most of the strip must be buildable ground

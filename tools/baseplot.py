@@ -59,9 +59,20 @@ def unit_foot(u):
     return _unit_foot[u]
 
 
+PLACE = re.compile(r"BARAI_PLACE\] frame=(\d+) team=0 unit=([a-z0-9_]+) x=(-?\d+) z=(-?\d+)")
+
+
 def read(match_dir, minute):
     cut = minute * 1800 if minute else 1 << 40
     built, foot, zones = {}, {}, []
+    # A replay's census snapshot (dev_replay_census.lua) is the base as it stood: the latest one at or before the cut.
+    snaps = {}
+    for line in open(Path(match_dir) / "infolog.txt", encoding="utf-8", errors="replace"):
+        m = PLACE.search(line)
+        if m and int(m.group(1)) <= cut:
+            snaps.setdefault(int(m.group(1)), []).append([m.group(2), float(m.group(3)), float(m.group(4))])
+    if snaps:
+        return snaps[max(snaps)], foot, zones
     for line in open(Path(match_dir) / "infolog.txt", encoding="utf-8", errors="replace"):
         m = LATTICE.search(line)
         if m:
