@@ -55,13 +55,22 @@ AIFloat3 ZoneSlot(uint z, int k)
 	return gZoneAt[z] + gZoneAcross * ((float(k) - 0.5f * float(ZONE_LEN - 1)) * pn);
 }
 
-// The widest eco building we can raise, in elmos: the row between two strips is sized for it.
+// The widest eco building a constructor we own can raise, in elmos: the row between two strips is sized for it.
+// Read off every def available it measured 176 -- an 11-cell reactor nothing we had could build -- and the strips
+// stood 240 apart.
 float ZoneRowPitch()
 {
 	float w = 0.f;
-	for (int d = 1; d <= Catalog::gDefCount; ++d)
-		if (Catalog::gAvailable[d] && ZoneBandFamily(d) && (Lattice::FootPitch(d) > w))
-			w = Lattice::FootPitch(d);
+	const array<int>@ own = OwnedDefs();
+	for (uint oi = 0; oi < own.length(); ++oi) {
+		const int bd = own[oi];
+		if ((gOwnCount[bd] <= 0) || !Catalog::gBuilder[bd] || !Catalog::gMobile[bd])
+			continue;
+		const array<int>@ bl = Catalog::gBuildsList[bd];
+		for (uint k = 0; k < bl.length(); ++k)
+			if (Catalog::gAvailable[bl[k]] && ZoneBandFamily(bl[k]) && (Lattice::FootPitch(bl[k]) > w))
+				w = Lattice::FootPitch(bl[k]);
+	}
 	return (w > 16.f) ? w : 96.f;
 }
 
@@ -163,6 +172,28 @@ bool ZonePlan()
 	return false;
 }
 
+// The along-strip extent of strip z's standing turrets, from its middle; false with none standing.
+bool StripExtent(uint z, float& out lo, float& out hi)
+{
+	const float pn = Lattice::FootPitch(gZoneNano);
+	const float tol = 0.5f * pn;
+	bool any = false;
+	for (int k = 0; k < ZONE_LEN; ++k) {
+		const AIFloat3 p = ZoneSlot(z, k);
+		NanoNear(p, tol + 8.f);
+		bool here = false;
+		for (uint q = 0; (q < gNanoGrid.hit.length()) && !here; ++q)
+			here = gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < tol;
+		if (!here)
+			continue;
+		const float a = (float(k) - 0.5f * float(ZONE_LEN - 1)) * pn;
+		if (!any || (a < lo)) lo = a;
+		if (!any || (a > hi)) hi = a;
+		any = true;
+	}
+	return any;
+}
+
 // Turrets standing on strip z (handed slots planned a new strip while the old one stood near empty: six by minute 22).
 int ZoneStanding(uint z)
 {
@@ -209,19 +240,36 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 		return false;
 	CCircuitDef@ def = Catalog::Def(d);
 	const AIFloat3 ref = OnMap(near) ? near : gZoneAt[gZoneAt.length() - 1];
+	// A STRIP FILLS OUTWARD FROM ITS MIDDLE, solid (his 10-21: "hilariously space inefficient"): the slot nearest the
+	// work strewed turrets along a 40-slot strip wherever the builders stood. The strip nearest the work, then its free
+	// slot nearest the middle; a full strip passes to the next nearest.
 	float best = -1.f;
 	int bz = -1;
+	array<uint> zo;
+	array<float> zk;
 	for (uint z = 0; z < gZoneAt.length(); ++z) {
-		for (int k = 0; k < ZONE_LEN; ++k) {
-			const AIFloat3 s = ZoneSlot(z, k);
-			const float dd = s.distance2D(ref);
-			if ((best >= 0.f) && (dd >= best))
+		zo.insertLast(z);
+		zk.insertLast(gZoneAt[z].distance2D(ref));
+	}
+	for (uint o = 0; (o < zo.length()) && (bz < 0); ++o) {
+		uint bi = o;
+		for (uint q = o + 1; q < zo.length(); ++q)
+			if (zk[q] < zk[bi])
+				bi = q;
+		const uint z = zo[bi];
+		zo[bi] = zo[o];
+		zk[bi] = zk[o];
+		for (int i = 0; i < ZONE_LEN; ++i) {
+			const int k = (ZONE_LEN / 2) + (((i % 2) == 0) ? (i / 2) : -((i + 1) / 2));
+			if ((k < 0) || (k >= ZONE_LEN))
 				continue;
+			const AIFloat3 s = ZoneSlot(z, k);
 			AIFloat3 got;
 			if (OnMap(s) && ai.CanPlaceCell(def, s, got)) {
-				best = dd;
+				best = s.distance2D(ref);
 				at = s;
 				bz = int(z);
+				break;
 			}
 		}
 	}
@@ -299,10 +347,11 @@ bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
 			full = (gZbFullStrip[f] == int(z)) && (gZbFullPitch[f] == int(pb));
 		if (full)
 			continue;
-		const AIFloat3 rel = ref - gZoneAt[z];
-		float refA = rel.x * gZoneAcross.x + rel.z * gZoneAcross.z;
-		if (refA > halfLen) refA = halfLen;
-		if (refA < -halfLen) refA = -halfLen;
+		// outward from the strip's middle, row by row: the asker's position strewed the bands along the whole strip.
+		// And no further along than the strip's standing turrets reach, plus a slot: the block grows as its line does.
+		const float refA = 0.f;
+		float loA = 0.f, hiA = 0.f;
+		const bool manned = StripExtent(z, loA, hiA);
 		int tried = 0;
 		for (int j = 0; ; ++j) {
 			const float perp = 0.5f * pn + 0.5f * pb + float(j) * pb;
@@ -313,7 +362,9 @@ bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
 			for (int i = 0; i <= 2 * na; ++i) {
 				const int ki = ((i % 2) == 0) ? (i / 2) : -((i + 1) / 2);
 				const float a = refA + float(ki) * pb;
-				const float outside = (a < -halfLen) ? (-halfLen - a) : ((a > halfLen) ? (a - halfLen) : 0.f);
+				const float lo = manned ? (loA - pn) : -pn;
+				const float hi = manned ? (hiA + pn) : pn;
+				const float outside = (a < lo) ? (lo - a) : ((a > hi) ? (a - hi) : 0.f);
 				if (outside > span)
 					continue;
 				for (int side = 0; side < 2; ++side) {
