@@ -109,6 +109,15 @@ minute 10 (we waste 14-18 m/s at minutes 6-8, he none); from minute 12 he stops 
 solars / 18 advanced solars and builds only mohos, AFUS, advanced converters and turrets -- minute 20: 10 AFUS,
 2 fusions, 48 converters, 238 turrets to our 0 / 12 / 6 / 141. Target since 10-22: 750+ m/s reliably.
 
+WHERE THE METAL GOES (his replay vs the median of 24 base games, tmp spend.py): by minute 10 both made 23.3k metal;
+he spent 20.4k and wasted 0, we spent 16.0k and wasted 3.8k (16%, the bank full from ~5.5 min). By 14: 66k spent
+to our 45k. His T2 air plant at 8.34 (ours 9.25 median, 8.1-11.3), a T2 constructor every ~18 s from 8.64 (ours
+every 24-36 s from 9.78): 5 by minute 10 to our 1, so 8 mohos at 12 to our 2. Basic air constructors are level.
+Also measured and removed: a big generator priced with its turret ring (no decision moved: fusion won 51/51);
+turret demand from the ladder's lathe/feed ratio -35.1% over 24 seeds (turrets at his count, 30 at minute 12, but
+extractors 38 to 55 and mohos 6 to 20 at 16 -- turrets cannot claim spots). The ladder's tBuild/tFeed reads 4-12x
+all game because P counts unconverted energy as metal; it is not a turret signal as it stands.
+
 ## HIS +100 SCAV 8v8 FAILS THE FRAME BUDGET 4.3x (2026-10-18)
 
 **10-19: the 16-AI benchmark passes again** (Greenest Fields, 8 Apex per side, +100, seed 1, solo, his watch-lane
