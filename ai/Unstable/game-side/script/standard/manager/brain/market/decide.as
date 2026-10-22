@@ -3121,8 +3121,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// T2 plant over energy, the energy bank at 119/1975); the plant's assist is its priced want. The defence
 		// join below still answers.
 		Want@ ua = null;
-		Perf::Add("dr.unlock", _tUa);
 		string uaWhy = "metalfirst";
+		if (CanonExp() && !CanonEShort()) {
+			@ua = ProposeUnlockAssist(unit, false);
+			uaWhy = "canonT2";
+		}
+		Perf::Add("dr.unlock", _tUa);
 		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
 			if (DefJoinPriceOn()) {
 				@ua = null;
