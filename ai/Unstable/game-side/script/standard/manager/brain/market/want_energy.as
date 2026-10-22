@@ -54,13 +54,6 @@ bool EnergyWasting()
 	return EnergyUnconverted() >= ConverterUnitE();
 }
 
-// EXPERIMENT ONLY, NEVER SHIPPED (apex_canon_exp, his 10-22): his early pattern played directly, to measure what it
-// is worth before pricing it. Energy short with metal plentiful: generators that cost no energy (basic solars); turrets
-// from minute 3 while metal is plentiful, without the energy cut; free hands on the T2 plant while energy is healthy.
-bool CanonExp() { return ai.GetTunable("apex_canon_exp", TUNE_CANON_EXP) > 0.f; }
-bool CanonEShort() { return HardEStall() || (Eco::ECur() < 0.25f * Eco::EStor()); }
-bool CanonMPlenty() { return Eco::MCur() > 0.5f * Eco::MStor(); }
-
 int gGenHeldLogAt = 0;
 // The crew a generator's site would get.
 float GenCrewBP(int uid, int d, float nanoLathe)
@@ -150,8 +143,6 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
 			continue;
 		if (Catalog::gMakeE[d] <= 1.f)
-			continue;
-		if (CanonExp() && (Catalog::gCostE[d] > 0.f) && CanonEShort() && CanonMPlenty())
 			continue;
 		// A floater is priced at water this hand can build from, and placed
 		// there (execute.as) -- never at the land farm (the armfmkr churn).

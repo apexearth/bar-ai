@@ -462,11 +462,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
-	if (CanonExp() && (ai.frame >= 180 * SECOND) && CanonMPlenty()) {
-		const float cf = FreeMetalFlow();
-		if (cf > over)
-			over = cf;
-	}
 	float labNeed = 0.f;
 	if (LabNanoOn()) {
 		LabNanoScan();
@@ -617,7 +612,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// nano turrets... are stalling because we lack energy").
 			{
 				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-				if ((askE > 1.f) && !(CanonExp() && CanonMPlenty())) {
+				if (askE > 1.f) {
 					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
 					NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));
