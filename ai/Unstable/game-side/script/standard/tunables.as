@@ -1777,7 +1777,6 @@ const float TUNE_BP_VS_LATHE = 1.f;
 const float TUNE_BP_TRAVEL = 0.f;
 const float TUNE_LIFT_TURRETS = 1.f;   // [toggle 0/1] lift.as: with no line short of lathe a transport is priced on the idle turrets it can fly to the frame furthest from done, and eco-only mode may build it (his 10-20)
 const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
-const float TUNE_ECO_EDENS = 0.f;   // [toggle 0/1] want_nano.as: an eco-site turret's energy ask at the eco work's density, not the factories'
 const float TUNE_BAND_CREW = 0.f;   // [toggle 0/1] want_energy.as: a generator's crew is the lathe reaching the best band cell (bands on)
 const float TUNE_HANDS_REC = 0.f;   // [toggle 0/1] register.as: the big-energy crew record counts hands, a stall's slowing taken out
 const float TUNE_FC_NANO = 0.f;   // [toggle 0/1] want_nano.as: turrets bought for the metal spill the 60-second forecast sees
