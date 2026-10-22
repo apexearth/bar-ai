@@ -775,9 +775,7 @@ float HandsDemandM()
 	if (hs > 0.95f)
 		hs = 0.95f;
 	float need = (hs > 0.f) ? (EffBP(0.f) * hs / (1.f - hs)) * (7.f / 80.f) : 0.f;
-	// net of the turrets standing idle, as the waste term is (smoke seed 3400: 717 m/s of turrets idle at minute 16, the
-	// metal bank empty, and the demand still asking for more)
-	need -= BpOrderedM() + IdleNanoLatheM();
+	need -= BpOrderedM();
 	gHdVal = (need > 0.f) ? need : 0.f;
 	return gHdVal;
 }
