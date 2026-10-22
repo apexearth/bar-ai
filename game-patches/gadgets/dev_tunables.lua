@@ -403,6 +403,7 @@ local NAMES = {
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
+	"apex_fc_nano", -- want_nano.as: turrets for the forecast metal spill (0)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
 	"apex_zones", -- zones.as: turret strips (0)
 	"apex_zone_bands", -- zones.as: eco bands beside the strips (0)

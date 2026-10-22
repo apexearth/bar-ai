@@ -89,10 +89,12 @@ bool ZonePlan()
 	// Candidates: beside the last strip first (bands meeting), then outward from home in rings of half a reach,
 	// the rear first. A seed whose three fixed points were all rough ground planned no strip at all.
 	array<AIFloat3> cand;
-	// ONE ECO ROW BETWEEN STRIPS (his base at 16:15, 2,032 m/s: turret rows, a row of converters or reactors, turret
-	// rows, every building between two of them). The next strip lies one turret and one row of the widest eco building
-	// beyond an outer strip, the block growing row on row.
-	const float step = 2.f * pn + ZoneRowPitch();
+	// ONE REACH OF ECO BETWEEN STRIPS: as many rows of the widest eco building as fit in a turret's reach, so every
+	// building between two strips is in reach of both (his 10-22: with one row between them, "most of the extra nano
+	// turrets ... only supported the creation of each other" -- a turret's reach fell mostly on other turrets).
+	const float rowP = ZoneRowPitch();
+	const float rows = floor(reach / rowP);
+	const float step = 2.f * pn + ((rows >= 1.f) ? rows : 1.f) * rowP;
 	// a plant with no strip in its turrets' reach asks for one flush along its side (the blob round the T2 plant)
 	if (OnMap(gZonePlantAsk)) {
 		const int pd = AnchorDefAt(gZonePlantAsk);
