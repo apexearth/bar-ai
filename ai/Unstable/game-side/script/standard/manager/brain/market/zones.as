@@ -18,6 +18,7 @@ array<int> gZoneTaken;       // slots handed out per strip
 AIFloat3 gZoneAcross, gZoneBack;
 int gZoneNano = -1;
 bool gZoneShut = false;
+int gZoneRetryAt = 0, gZoneNoGroundLogAt = 0;
 int gZoneLogAt = 0;
 
 bool ZoneFrame()
@@ -54,23 +55,30 @@ AIFloat3 ZoneSlot(uint z, int k)
 
 bool ZonePlan()
 {
-	if (gZoneShut || !ZoneFrame())
+	if (gZoneShut || (ai.frame < gZoneRetryAt) || !ZoneFrame())
 		return false;
 	CCircuitDef@ def = Catalog::Def(gZoneNano);
 	const float reach = Catalog::gBuildDist[gZoneNano];
 	const float pn = Lattice::FootPitch(gZoneNano);
+	// Candidates: beside the last strip first (bands meeting), then outward from home in rings of half a reach,
+	// the rear first. A seed whose three fixed points were all rough ground planned no strip at all.
 	array<AIFloat3> cand;
-	if (gZoneAt.length() == 0) {
-		const AIFloat3 home = gFarmSet ? gFarmPos : Base::gAnchor;
-		cand.insertLast(home);
-		cand.insertLast(home + gZoneBack * reach);
-		cand.insertLast(home - gZoneBack * reach);
-	} else {
+	if (gZoneAt.length() > 0) {
 		const AIFloat3 last = gZoneAt[gZoneAt.length() - 1];
 		cand.insertLast(last + gZoneBack * (2.f * reach));
 		cand.insertLast(last - gZoneBack * (2.f * reach));
 		cand.insertLast(last + gZoneAcross * (float(ZONE_LEN) * pn + 2.f * reach));
 		cand.insertLast(last - gZoneAcross * (float(ZONE_LEN) * pn + 2.f * reach));
+	}
+	{
+		const AIFloat3 home = gFarmSet ? gFarmPos : Base::gAnchor;
+		cand.insertLast(home);
+		for (int ring = 1; ring <= 8; ++ring)
+			for (int q = 0; q < 8; ++q) {
+				const float ang = float(q) * 0.785398f;
+				const AIFloat3 dir = gZoneBack * cos(ang) + gZoneAcross * sin(ang);
+				cand.insertLast(home + dir * (0.5f * reach * float(ring)));
+			}
 	}
 	for (uint ci = 0; ci < cand.length(); ++ci) {
 		const AIFloat3 c = ai.SnapToLattice(def, cand[ci]);
@@ -104,8 +112,11 @@ bool ZonePlan()
 			+ " .. " + int(b.x) + "," + int(b.z) + " for " + def.GetName());
 		return true;
 	}
-	gZoneShut = true;
-	AiLog("apex: zone t=" + ai.teamId + " no ground for strip #" + gZoneAt.length());
+	gZoneRetryAt = ai.frame + 30 * SECOND;
+	if (ai.frame >= gZoneNoGroundLogAt) {
+		gZoneNoGroundLogAt = ai.frame + 120 * SECOND;
+		AiLog("apex: zone t=" + ai.teamId + " no ground for strip #" + gZoneAt.length() + " (retrying)");
+	}
 	return false;
 }
 
