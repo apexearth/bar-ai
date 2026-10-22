@@ -243,7 +243,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	bool haveLine = (lineNeed > 0.f) && OnMap(linePos);
 	AIFloat3 sinkPos = AIFloat3(-1.f, 0.f, -1.f);
-	int sinkDef = -1;
 	float sinkNeed = 0.f;
 	// The free flow and the two shares are the same question for every site --
 	// they were re-asked once per live request.
@@ -316,7 +315,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if (need > sinkNeed) {
 			sinkNeed = need;
 			sinkPos = sp3;
-			sinkDef = bd;
 		}
 	}
 	// AN ARMY SHORTFALL IS NANO DEMAND (apexearth: "if we have need for more
@@ -601,9 +599,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// nano turrets... are stalling because we lack energy").
 			{
 				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-				// the ring of a big generator was bought with its energy already charged by the ladder (apex_ring_bundle)
-				const bool ringPriced = RingBundleOn() && (src == NS_SINK) && BigEcoDef(sinkDef);
-				if ((askE > 1.f) && !ringPriced) {
+				if (askE > 1.f) {
 					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
 					NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));

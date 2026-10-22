@@ -54,67 +54,6 @@ bool EnergyWasting()
 	return EnergyUnconverted() >= ConverterUnitE();
 }
 
-// A BIG GENERATOR AND THE TURRETS THAT BUILD IT, PRICED AS ONE MOVE (apex_ring_bundle; his 10-22: "maybe you just
-// don't have enough nanoturrets nearby to have a good enough time to completion. But you can fix that by making more
-// nano turrets nearby while you work on the AFUS"; "AFUS require a lot lot lot of build power"). The ETA priced an
-// advanced fusion at the hands standing by it now and lost to the fusion every time; his census stands ~30 turrets per
-// AFUS. Each big generator is also priced after k turrets beside it -- their build first, then it with their lathe,
-// which stays for every later rung -- and keeps its fastest k. Cached per def for 5 s: four ladder runs a def.
-bool RingBundleOn() { return ai.GetTunable("apex_ring_bundle", TUNE_RING_BUNDLE) > 0.f; }
-int gRbNano = -1;
-int gRbNanoAt = -999999;
-int RbNanoDef()
-{
-	if (ai.frame - gRbNanoAt < 30 * SECOND)
-		return gRbNano;
-	gRbNanoAt = ai.frame;
-	gRbNano = -1;
-	for (int d = 1; d <= Catalog::gDefCount; ++d)
-		if (Catalog::gAvailable[d] && IsLatheDef(d) && CanBuildEver(d)
-			&& ((gRbNano < 0) || (Catalog::gCostM[d] < Catalog::gCostM[gRbNano])))
-			gRbNano = d;
-	return gRbNano;
-}
-array<float> gRbSave;   // per def: seconds the best bundle saves over the bare build (>= 0)
-array<int> gRbK;
-array<int> gRbAt;
-float RingBundleSave(int d, float gM, int batchN, float crewBP)
-{
-	if (gRbSave.length() <= uint(d)) {
-		gRbSave.resize(d + 1);
-		gRbK.resize(d + 1);
-		gRbAt.resize(d + 1);
-		for (uint i = 0; i < gRbAt.length(); ++i)
-			if (gRbAt[i] == 0)
-				gRbAt[i] = -999999;
-	}
-	if (ai.frame - gRbAt[d] < 5 * SECOND)
-		return gRbSave[d];
-	gRbAt[d] = ai.frame;
-	gRbSave[d] = 0.f;
-	gRbK[d] = 0;
-	const int nd = RbNanoDef();
-	if (nd <= 0)
-		return 0.f;
-	const float s0 = EtaWithN(d, gM, 0.f, false, batchN, crewBP);
-	const float P = EcoPowerM();
-	const float eA = EtaEnergyAvail();
-	const int workers = int(aiBuilderMgr.GetWorkerCount());
-	const array<int> ks = {16, 48, 96};
-	for (uint ki = 0; ki < ks.length(); ++ki) {
-		const int k = ks[ki];
-		const float addB = float(k) * Catalog::gBuildPower[nd];
-		const int wide = (k < workers) ? k : ((workers > 0) ? workers : 1);
-		const float tN = float(k) * StepSecWide(nd, Catalog::gCostM[nd], P, Eco::MCur(), crewBP, eA, k, wide);
-		const float sk = tN + EtaWithN(d, gM, addB, false, batchN, crewBP + addB);
-		if (s0 - sk > gRbSave[d]) {
-			gRbSave[d] = s0 - sk;
-			gRbK[d] = k;
-		}
-	}
-	return gRbSave[d];
-}
-
 int gGenHeldLogAt = 0;
 // The crew a generator's site would get.
 float GenCrewBP(int uid, int d, float nanoLathe)
@@ -462,9 +401,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			const float gM = Catalog::gMakeE[d] * ConvRate();
 			if (crewBP <= 0.f)
 				crewBP = GenCrewBP(uid, d, genNanoBP);
-			float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
-			if (RingBundleOn() && BigEcoDef(d))
-				s -= RingBundleSave(d, gM, EtaBatchN(gM, etaP), crewBP);
+			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
 			Perf::Add("en.eta", _tEt);
 			if ((etaD < 0) || (s < etaS)) {
 				etaS = s;
@@ -473,8 +410,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				etaSite = site;
 			}
 			if (Catalog::gCostM[d] > 3000.f)
-				bigLine += " " + Catalog::Def(d).GetName() + "=" + int(s)
-					+ ((RingBundleOn() && (uint(d) < gRbK.length())) ? ("(k" + gRbK[d] + ")") : "");
+				bigLine += " " + Catalog::Def(d).GetName() + "=" + int(s);
 		}
 	}
 	// A reactor-class election is logged whether or not the two agree: the
