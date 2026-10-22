@@ -79,6 +79,30 @@ float ZoneRowPitch()
 	return (w > 16.f) ? w : 96.f;
 }
 
+// The lathe reaching the best band cell: the first row beside the strip with the most turrets, either side. What a
+// big build placed in the bands is built with -- priced at the generic eco site, an advanced fusion's crew read as a
+// few hands and the fusion out-timed it every time (diag seed 2850: 15 fusions, no AFUS, the value pick AFUS).
+float gZoneLatheVal = 0.f;
+int gZoneLatheAt = -999999;
+float ZoneBandLathe()
+{
+	if (!ZoneBandsOn() || (gZoneAt.length() == 0))
+		return 0.f;
+	if (ai.frame - gZoneLatheAt < 5 * SECOND)
+		return gZoneLatheVal;
+	gZoneLatheAt = ai.frame;
+	const float off = Lattice::FootPitch(gZoneNano) + 0.5f * ZoneRowPitch();
+	float best = 0.f;
+	for (uint z = 0; z < gZoneAt.length(); ++z)
+		for (int sg = -1; sg <= 1; sg += 2) {
+			const float l = NanoLatheReaching(gZoneAt[z] + gZoneBack * (float(sg) * off));
+			if (l > best)
+				best = l;
+		}
+	gZoneLatheVal = best;
+	return best;
+}
+
 bool ZonePlan()
 {
 	if (gZoneShut || (ai.frame < gZoneRetryAt) || !ZoneFrame())

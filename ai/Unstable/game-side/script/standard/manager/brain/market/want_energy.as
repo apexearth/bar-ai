@@ -126,7 +126,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			TUNE_ENERGY_GROWTH_ARRIVE) > 0.f;
 	// One number for every rung; the ETA arm below asked the turret grid for it
 	// once per generator.
-	const float genNanoBP = (genArriveOn || etaOn) ? NanoLatheReaching(eSite) : 0.f;
+	float genNanoBP = (genArriveOn || etaOn) ? NanoLatheReaching(eSite) : 0.f;
+	if ((genArriveOn || etaOn) && (ZoneBandLathe() > genNanoBP))
+		genNanoBP = ZoneBandLathe();
 	// Seconds to the target following the ladder AS IT STANDS: the window new
 	// income has to compound in before the plan is over.
 	const float genHorizonS = genArriveOn ? EtaWith(0, 0.f, 0.f, false) : 0.f;
