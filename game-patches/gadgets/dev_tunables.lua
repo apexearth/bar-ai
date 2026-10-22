@@ -403,6 +403,7 @@ local NAMES = {
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
+	"apex_ring_bundle", -- want_energy.as: big generator + its turret ring as one move (0)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
