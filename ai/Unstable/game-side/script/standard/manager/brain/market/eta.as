@@ -540,44 +540,8 @@ float CeilingHandsBP()
 // a per-order guess, not lathe or feed -- the resolution two plans can be
 // told apart at.
 float gLadderLatS = 0.f;
-// CAPACITY NOW, NOT PAST CREWS (apex_crew_now; his 10-22: "you should be estimating not on past builds but on what
-// your current capacity is ... build power within range and mobile build power that you could contribute"). The
-// record of past reactors said what reactors placed where few hands reached had got, and priced the advanced fusion on
-// it: his +0 game stood 10 AFUS and 2 fusions at minute 20, ours 0 and 12. A big generator's crew is the turret lathe
-// in reach of the reactor site plus the mobile hands the site admits (its cost-scaled cap) at the fleet's mean
-// builder power, never beyond the fleet; how much of it to divert is the ladder's own comparison.
-bool CrewNowOn() { return ai.GetTunable("apex_crew_now", TUNE_CREW_NOW) > 0.f; }
-float gCrewRing = 0.f, gCrewMobBP = 0.f, gCrewMobMean = 0.f;
-int gCrewAt = -999999;
-float CrewNowBP(int d)
-{
-	if (ai.frame - gCrewAt >= 5 * SECOND) {
-		gCrewAt = ai.frame;
-		gCrewRing = RingBPAt(BigEnergySite());
-		float sum = 0.f, n = 0.f;
-		const array<int>@ own = OwnedDefs();
-		for (uint oi = 0; oi < own.length(); ++oi) {
-			const int od = own[oi];
-			if ((gOwnCount[od] <= 0) || !Catalog::gMobile[od] || !Catalog::gBuilder[od] || (Catalog::gBuildPower[od] <= 0.f))
-				continue;
-			sum += float(gOwnCount[od]) * Catalog::gBuildPower[od];
-			n += float(gOwnCount[od]);
-		}
-		gCrewMobBP = sum;
-		gCrewMobMean = (n > 0.f) ? (sum / n) : 0.f;
-	}
-	float mob = gCrewMobMean * float(Requests::SiteWorkerCap(Catalog::Def(d)));
-	if (mob > gCrewMobBP)
-		mob = gCrewMobBP;
-	return gCrewRing + mob;
-}
-
 float RungBP(int d, float bp)
 {
-	if (CrewNowOn() && Requests::IsBigEnergy(Catalog::Def(d))) {
-		const float c = CrewNowBP(d) + gLadderAddBP;
-		return ((c > 1.f) && (c < bp)) ? c : bp;
-	}
 	const float eff = Requests::EffBPFor(d) + gLadderAddBP;
 	return ((eff > 1.f) && (eff < bp)) ? eff : bp;
 }
@@ -645,9 +609,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 		float bp1 = (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp;
 		if ((firstBP > 1.f) && (firstBP < bp1))
 			bp1 = firstBP;
-		// the first move's own site was measured by the asker: capacity there, not at the reactor site
-		if (!(CrewNowOn() && (firstBP > 1.f) && Requests::IsBigEnergy(Catalog::Def(d))))
-			bp1 = RungBP(d, bp1);
+		bp1 = RungBP(d, bp1);
 		for (int u = 0; u < k; ++u) {
 			t += StepSec(d, Catalog::gCostM[d], P, bank, bp1, eAvail) / surv;
 			if (u > 0) {
