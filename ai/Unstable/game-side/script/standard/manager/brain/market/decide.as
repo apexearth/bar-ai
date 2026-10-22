@@ -3121,17 +3121,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// T2 plant over energy, the energy bank at 119/1975); the plant's assist is its priced want. The defence
 		// join below still answers.
 		Want@ ua = null;
-		string uaWhy = "metalfirst";
-		// SPILLING METAL GOES INTO THE T2 PLANT (apex_t2_assist; his 10-22: "Making the air plant is a good way to spend
-		// metal"; turrets and constructors both assist it). The base games ordered it at 7.45 min (median of 24), built
-		// it with one hand for 107 s (46-208) against a cap of 11, and had thrown ~900 metal away by the order; his stood
-		// at 8.34. A free hand assists the frame while the bank spills -- metal that is lost otherwise -- and not while
-		// energy stalls (the hoist this replaces starved the energy bank, 119/1975, his 10-20).
-		if ((ai.GetTunable("apex_t2_assist", TUNE_T2_ASSIST) > 0.f) && MetalWasting() && !HardEStall()) {
-			@ua = ProposeUnlockAssist(unit, false);
-			uaWhy = "t2spill";
-		}
 		Perf::Add("dr.unlock", _tUa);
+		string uaWhy = "metalfirst";
 		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
 			if (DefJoinPriceOn()) {
 				@ua = null;
