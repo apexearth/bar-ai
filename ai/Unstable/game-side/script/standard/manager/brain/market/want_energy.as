@@ -376,6 +376,12 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			// energy-costing rung builds slower, not never: bSec carries that
 			// (EStretch), and a bill income cannot pay at all is `barred`.
 			float wait = walkSec + ((bSec > c.buildSec) ? bSec : c.buildSec);
+			// ...AND UNTIL IT HAS PAID BACK ITS OWN BILL: a generator's energy cost deepens the stall it is bought to
+			// end, so it closes nothing until its output has repaid that cost. An advanced solar's 5,000 E is 67 s of
+			// its own output, a basic solar's 0 is none (his order: "basic solars while metal is plentiful, advanced
+			// solars once overflowing"; ours chose advanced solars eight times running at minute 2.5 under a stall).
+			if ((Catalog::gMakeE[d] > 0.f) && (ai.GetTunable("apex_stall_payback", TUNE_STALL_PAYBACK) > 0.f))
+				wait += Catalog::gCostE[d] / Catalog::gMakeE[d];
 			const float closes = (Catalog::gMakeE[d] < stallDef) ? Catalog::gMakeE[d] : stallDef;
 			const float close = closes / ((wait > 1.f) ? wait : 1.f);
 			wins = (close > bestClose);
