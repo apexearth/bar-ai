@@ -422,62 +422,6 @@ float MobileBPShareNow()
 	return (all > 0.f) ? (mobile / all) : 1.f;
 }
 
-// THE TARGET IS WHAT WE CAN SPEND (apex_eta_spend; his 10-22: "Storing a bank of metal that you aren't even really
-// using is pointless, but you focus a lot on getting more metal when you can't even use it"). The ladder counted
-// metal income as power, so the cheapest income -- an extractor -- led it while the bank spilled and the turrets and
-// the T2 lab waited for hands and energy. While metal spills (MFullW), power is income capped by what is spent,
-// measured: build power at the metal it spends per build-second now, energy at the metal it lets be spent per e/s
-// now. Capacity is rebuilt from the run's own build power and energy each step, so a turret or a generator raises
-// it and an extractor does not; a spend-bound step is turrets (hands bind) or the next generator (energy binds).
-bool gLsOn = false;
-float gLsW = 0.f;    // how full the metal bank is, 0..1: the cap's weight
-float gLsRB = 0.f;   // metal spent per build-second of the fleet's build power
-float gLsRE = 0.f;   // metal spent per e/s of energy feed
-int gLsNano = -1;    // the cheapest turret we can raise: a hands step
-int gLsNanoAt = -999999;
-int LsNanoDef()
-{
-	if (ai.frame - gLsNanoAt < 30 * SECOND)
-		return gLsNano;
-	gLsNanoAt = ai.frame;
-	gLsNano = -1;
-	for (int d = 1; d <= Catalog::gDefCount; ++d)
-		if (Catalog::gAvailable[d] && IsLatheDef(d) && CanBuildEver(d)
-			&& ((gLsNano < 0) || (Catalog::gCostM[d] < Catalog::gCostM[gLsNano])))
-			gLsNano = d;
-	return gLsNano;
-}
-float LsBPCap(float bp) { return bp * gLsRB; }
-float LsECap(float eAvail) { return (gLsRE > 0.f) ? (eAvail * gLsRE) : 1e9f; }
-float LsPower(float P, float bp, float eAvail)
-{
-	if (!gLsOn)
-		return P;
-	const float bc = LsBPCap(bp);
-	const float ec = LsECap(eAvail);
-	const float cap = (bc < ec) ? bc : ec;
-	return (P > cap) ? (P - gLsW * (P - cap)) : P;
-}
-void LsSetup(float bp)
-{
-	gLsOn = false;
-	if (ai.GetTunable("apex_eta_spend", TUNE_ETA_SPEND) <= 0.f)
-		return;
-	TrackMPull();
-	gLsW = MFullW();
-	if ((gLsW <= 0.f) || (bp < 1.f))
-		return;
-	float demand = Eco::MPull();
-	if (demand < gMDemandPk)
-		demand += (gMDemandPk - demand) * (1.f - gLsW);
-	if (demand < 1.f)
-		return;
-	gLsRB = demand / bp;
-	const float eBuild = Eco::EPull() - ConvUseE();
-	gLsRE = (eBuild > 1.f) ? (demand / eBuild) : 0.f;
-	gLsOn = true;
-}
-
 float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvail, float target, int consumed)
 {
 	if (p is null)
@@ -511,54 +455,16 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 	// whatever the pool holds. Priced at the batch's STARTING power, which
 	// understates the speedup within a batch and so overestimates time -- the
 	// conservative direction.
-	while ((LsPower(P, bp, eAvail) < target) && (steps < ETA_MAX_STEPS)) {
+	while ((P < target) && (steps < ETA_MAX_STEPS)) {
 		while ((i < n.length()) && (n[i] <= 0))
 			++i;
-		uint ri = i;
-		if (gLsOn && (P > LsPower(P, bp, eAvail) + 0.01f)) {
-			const float q = LsPower(P, bp, eAvail);
-			if ((LsBPCap(bp) <= LsECap(eAvail)) && (LsNanoDef() > 0)) {
-				// hands bind: a batch of turrets, each adding its build power at the measured spend
-				const int nd = LsNanoDef();
-				const float per = Catalog::gBuildPower[nd] * gLsRB * gLsW;
-				if (per <= 0.0001f)
-					return ETA_BIG;
-				float want = q * ETA_CHUNK;
-				if (q + want > target)
-					want = target - q;
-				int kn = int(want / per) + 1;
-				if (kn > 500)
-					kn = 500;
-				const int workers = int(aiBuilderMgr.GetWorkerCount());
-				const int wideN = (kn < workers) ? kn : ((workers > 0) ? workers : 1);
-				const float stepN = StepSecWide(nd, Catalog::gCostM[nd], P, bank, bp, eAvail, kn, wideN);
-				if (gLadderTrace)
-					gLadderTraceS += " " + Catalog::Def(nd).GetName() + "x" + kn + "@" + int(stepN) + "(Q" + int(q) + ",bp" + int(bp) + ")";
-				t += float(kn) * (stepN + lat);
-				gLadderLatS += float(kn) * lat;
-				bank = 0.f;
-				bp += float(kn) * Catalog::gBuildPower[nd];
-				++steps;
-				continue;
-			}
-			// energy binds: the next generator on the board
-			uint j = i;
-			while ((j < n.length()) && ((n[j] <= 0) || (p.makeE[j] <= 0.f)))
-				++j;
-			if (j < n.length())
-				ri = j;
-		}
-		if (ri >= n.length())
+		if (i >= n.length())
 			return ETA_BIG;   // nothing left on the board that grows
-		const uint i0 = i;   // the ladder's place: a generator taken out of order leaves it where it was
-		i = ri;
 		const float g = p.gain[i];
 		float want = P * ETA_CHUNK;
 		if (P + want > target)
 			want = target - P;
 		int k = int(want / g) + 1;
-		if (k < 1)
-			k = 1;   // a generator taken for energy while income is already past the target
 		if (k > n[i])
 			k = n[i];
 		// A rung nothing we own can build yet is the new tier's: its hands
@@ -595,9 +501,8 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		eAvail += float(k) * p.makeE[i];
 		n[i] -= k;
 		++steps;
-		i = i0;
 	}
-	return (LsPower(P, bp, eAvail) >= target) ? t : ETA_BIG;
+	return (P >= target) ? t : ETA_BIG;
 }
 
 // THE LATHE A RUNG REALLY GETS. The fleet's whole build power is what the
@@ -676,6 +581,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	float P = EcoPowerM();
 	if (P < 0.5f)
 		P = 0.5f;
+	const float target = P * ETA_TARGET_MUL;
 	float bank = Eco::MCur();
 	float bp = EffBP(0.f);
 	if (bp < 1.f)
@@ -684,10 +590,6 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	if (bpMob < 1.f)
 		bpMob = 1.f;
 	float eAvail = EtaEnergyAvail();
-	LsSetup(bp);
-	float target = LsPower(P, bp, eAvail) * ETA_TARGET_MUL;
-	if (target < 0.5f)
-		target = 0.5f;
 	float t = 0.f;
 	gLadderAddBP = 0.f;
 	gLadderLatS = 0.f;
@@ -753,7 +655,6 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	Perf::Add("et.head", _tE);
 	_tE = Perf::T0();
 	const float eta = t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
-	gLsOn = false;
 	Perf::Add("et.ladder", _tE);
 	gLadderAddBP = 0.f;
 	gLadderTierBP = 0.f;

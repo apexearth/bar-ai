@@ -403,7 +403,6 @@ local NAMES = {
 	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
-	"apex_eta_spend", -- eta.as: spend-capped ladder power with turret steps (0)
 	"apex_band_crew", -- want_energy.as: generator crew at the best band cell (0)
 	"apex_hands_rec", -- register.as: big-energy crew record in hands, stall removed (0)
 	"apex_fc_nano", -- want_nano.as: turrets for the forecast metal spill (0)
