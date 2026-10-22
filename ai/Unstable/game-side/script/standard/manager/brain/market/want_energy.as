@@ -801,6 +801,34 @@ float LineEnergyDensity()
 	return dens;
 }
 
+// Energy per build-second of the eco work under way: what a turret at the eco site would draw. A solar costs no
+// energy, so a turret building solars draws none -- charged at the factories' density, the turrets that would have
+// turned spilling metal into energy were held off by the energy they would not have used (his reference at +50:
+// 62 turrets by minute 10; ours 4-12, eSpare -74..-254 with the metal bank full). Remaining build time weights each
+// job; no eco work falls back to the factories' density.
+float gEcoDensVal = 0.f;
+int gEcoDensAt = -999999;
+float EcoWorkEnergyDensity()
+{
+	if (ai.frame - gEcoDensAt < SECOND)
+		return gEcoDensVal;
+	gEcoDensAt = ai.frame;
+	float e = 0.f, bt = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() > 0) || (Catalog::gBuildTime[d] <= 1.f))
+			continue;
+		const float left = 1.f - Requests::Progress(t);
+		e += Catalog::gCostE[d] * left;
+		bt += Catalog::gBuildTime[d] * left;
+	}
+	gEcoDensVal = (bt > 1.f) ? (e / bt) : LineEnergyDensity();
+	return gEcoDensVal;
+}
+
 float gLineDrainComVal = 0.f;
 int   gLineDrainComFrame = -1;
 int   gLineDrainComStamp = -1;

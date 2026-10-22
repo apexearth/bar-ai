@@ -611,7 +611,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// bought the nanos that deepened it (apexearth, watching: "even our
 			// nano turrets... are stalling because we lack energy").
 			{
-				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
+				const bool ecoSite = ((src == NS_FARM) || (src == NS_SINK))
+						&& (ai.GetTunable("apex_eco_edens", TUNE_ECO_EDENS) > 0.f);
+				const float askE = Catalog::gBuildPower[d] * (ecoSite ? EcoWorkEnergyDensity() : LineEnergyDensity())
+						* gainN / drain;
 				if (askE > 1.f) {
 					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
