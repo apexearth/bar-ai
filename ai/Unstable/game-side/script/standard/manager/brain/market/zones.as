@@ -155,6 +155,101 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 	return true;
 }
 
+// THE BANDS BESIDE A STRIP (TUNE_ZONE_BANDS): generators, converters and stores stand in the cells either side of a
+// strip, inside its turrets' reach, nearest the strip first and along it nearest the work. A cell is the footprint's,
+// not a def's (his 10-21: an anti-nuke slots where an advanced converter would). Exact site.
+bool ZoneBandsOn() { return ZonesOn() && (ai.GetTunable("apex_zone_bands", TUNE_ZONE_BANDS) > 0.f); }
+
+bool ZoneBandFamily(int d)
+{
+	if (!Catalog::ValidId(d) || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d]
+		|| (Catalog::gExtractsM[d] > 0.f) || (Catalog::gBuildsList[d].length() > 0) || (Catalog::gPower[d] > 1.f)
+		|| Catalog::gShield[d] || (Catalog::gBuildPower[d] > 0.f) || Catalog::gNeedGeo[d])
+		return false;
+	return (Catalog::gMakeE[d] > 1.f) || (Catalog::gConvCapacity[d] > 0.f) || (Catalog::gStoreE[d] >= 1000.f);
+}
+
+array<int> gZbFullPitch;   // per strip, the pitches whose bands had no free cell
+array<int> gZbFullStrip;
+int gZbFullAt = 0;
+
+bool ZoneBandSlot(int d, const AIFloat3& in near, AIFloat3& out at)
+{
+	if (!ZoneBandsOn() || !ZoneBandFamily(d))
+		return false;
+	if ((gZoneAt.length() == 0) && !ZonePlan())
+		return false;
+	// a full band is re-read every 30 s: buildings die and frames are cancelled
+	if (ai.frame >= gZbFullAt + 30 * SECOND) {
+		gZbFullAt = ai.frame;
+		gZbFullPitch.resize(0);
+		gZbFullStrip.resize(0);
+	}
+	CCircuitDef@ def = Catalog::Def(d);
+	const float pn = Lattice::FootPitch(gZoneNano);
+	const float pb = Lattice::FootPitch(d);
+	if (pb < 16.f)
+		return false;
+	const float reach = Catalog::gBuildDist[gZoneNano] + 0.5f * pb;
+	const float halfLen = 0.5f * float(ZONE_LEN) * pn;
+	// strips nearest the work first
+	array<uint> order;
+	array<float> key;
+	const AIFloat3 ref = OnMap(near) ? near : gZoneAt[gZoneAt.length() - 1];
+	for (uint z = 0; z < gZoneAt.length(); ++z) {
+		order.insertLast(z);
+		key.insertLast(gZoneAt[z].distance2D(ref));
+	}
+	for (uint o = 0; o < order.length(); ++o) {
+		uint bi = o;
+		for (uint q = o + 1; q < order.length(); ++q)
+			if (key[q] < key[bi])
+				bi = q;
+		const uint z = order[bi];
+		order[bi] = order[o];
+		key[bi] = key[o];
+		bool full = false;
+		for (uint f = 0; (f < gZbFullStrip.length()) && !full; ++f)
+			full = (gZbFullStrip[f] == int(z)) && (gZbFullPitch[f] == int(pb));
+		if (full)
+			continue;
+		const AIFloat3 rel = ref - gZoneAt[z];
+		float refA = rel.x * gZoneAcross.x + rel.z * gZoneAcross.z;
+		if (refA > halfLen) refA = halfLen;
+		if (refA < -halfLen) refA = -halfLen;
+		int tried = 0;
+		for (int j = 0; ; ++j) {
+			const float perp = 0.5f * pn + 0.5f * pb + float(j) * pb;
+			if (perp > reach)
+				break;
+			const float span = sqrt(reach * reach - perp * perp);
+			const int na = int((halfLen + span) / pb) + 1;
+			for (int i = 0; i <= 2 * na; ++i) {
+				const int ki = ((i % 2) == 0) ? (i / 2) : -((i + 1) / 2);
+				const float a = refA + float(ki) * pb;
+				const float outside = (a < -halfLen) ? (-halfLen - a) : ((a > halfLen) ? (a - halfLen) : 0.f);
+				if (outside > span)
+					continue;
+				for (int side = 0; side < 2; ++side) {
+					const AIFloat3 c = gZoneAt[z] + gZoneAcross * a + gZoneBack * ((side == 0) ? perp : -perp);
+					if (!OnMap(c) || (++tried > 400))
+						continue;
+					AIFloat3 got;
+					if (ai.CanPlaceCell(def, c, got)) {
+						at = c;
+						return true;
+					}
+				}
+			}
+		}
+		gZbFullStrip.insertLast(int(z));
+		gZbFullPitch.insertLast(int(pb));
+	}
+	// every band full: the next strip, and its band next time
+	ZonePlan();
+	return false;
+}
+
 // The first strip is planned as soon as the anchor stands, before anything else can take its ground.
 void ZoneStep()
 {

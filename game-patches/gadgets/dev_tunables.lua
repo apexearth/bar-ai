@@ -405,6 +405,7 @@ local NAMES = {
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
 	"apex_zones", -- zones.as: turret strips (0)
+	"apex_zone_bands", -- zones.as: eco bands beside the strips (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)

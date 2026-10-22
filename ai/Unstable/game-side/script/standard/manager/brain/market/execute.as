@@ -1480,9 +1480,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				+ " slot=" + int(slot.x) + "," + int(slot.z)
 				+ " ring=" + int(RingBPAt(slot))
 				+ " farm=" + int(w.pos.x) + "," + int(w.pos.z));
+		AIFloat3 zbAt;
+		const bool zBanded = !floats && ZoneBandSlot(int(w.def.id), unit.GetPos(ai.frame), zbAt);
+		if (zBanded)
+			slot = zbAt;
 		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
+		if ((et !is null) && zBanded && crtd)
+			et.SetExactSite();
 		if (et !is null)
 			return et;
 		// REFUSED IS NOT "NOTHING TO DO" WHILE WE ARE STALLED. The rung the
@@ -1518,9 +1524,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (OnMap(aslot))
 				aslot = ClearOfSpots(aslot, 120.f);
 			bool acrtd = false;
+			AIFloat3 zbA;
+			const bool aBanded = ZoneBandSlot(ad, unit.GetPos(ai.frame), zbA);
+			if (aBanded)
+				aslot = zbA;
 			IUnitTask@ at = Requests::Take(unit, adef, Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, OnMap(aslot) ? aslot : w.pos,
 					Lattice::StrideOf(ad), 0.f, acrtd, par);
+			if ((at !is null) && aBanded && acrtd)
+				at.SetExactSite();
 			if (at is null)
 				continue;
 			if (ai.frame >= gNextELadderLog) {
@@ -1549,8 +1561,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if ((unit !is null) && OnMap(slot))
 			slot = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		const AIFloat3 cAt = OffFactoryExit(ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f));
+		AIFloat3 zbC;
+		const bool cBanded = ZoneBandSlot(int(w.def.id), unit.GetPos(ai.frame), zbC);
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
+				Task::Priority::NORMAL, cBanded ? zbC : cAt, cell, 0.f, crtd, par);
+		if ((cFirst !is null) && cBanded && crtd)
+			cFirst.SetExactSite();
 		// HOW MANY, NOT WHETHER -- the same law the nano burst already uses,
 		// with the SURPLUS in place of the bank (apexearth, on the nanos: "the
 		// single build request could expand out into 2, 5, 10, 20, whatever we
@@ -1615,13 +1631,26 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (wantC > 1) {
 					const double _tC = Perf::T0();
 					array<AIFloat3> packC;
-					PackSlots(cvd, cAt, -1, wantC - 1, packC);
+					bool cvBanded = false;
+					if (ZoneBandsOn() && ZoneBandFamily(cvd)) {
+						for (int rk = 1; rk < wantC; ++rk) {
+							AIFloat3 rc;
+							if (!ZoneBandSlot(cvd, cAt, rc))
+								break;
+							packC.insertLast(rc);
+							cvBanded = true;
+						}
+					}
+					if (!cvBanded)
+						PackSlots(cvd, cAt, -1, wantC - 1, packC);
 					int cOpen = 0;
 					for (uint ci = 0; ci < packC.length(); ++ci) {
 						bool mkc = false;
 						IUnitTask@ ct = Requests::Take(null, w.def, Task::BuildType::CONVERT,
 								Task::Priority::NORMAL, packC[ci], cell, 0.f,
 								mkc, true);
+						if ((ct !is null) && mkc && cvBanded)
+							ct.SetExactSite();
 						if (mkc)
 							++cOpen;
 					}

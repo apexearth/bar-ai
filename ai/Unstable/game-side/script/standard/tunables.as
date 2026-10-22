@@ -1779,6 +1779,7 @@ const float TUNE_LIFT_TURRETS = 1.f;   // [toggle 0/1] lift.as: with no line sho
 const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
 const float TUNE_FORECAST_LOG = 0.f;   // [toggle 0/1] forecast.as: log the 60-second forecast's error outside eco-only games too
 const float TUNE_ZONES = 0.f;   // [toggle 0/1] zones.as: turret strips held for turrets in every site search; eco turrets take strip slots (needs the zone DLL; his 10-21)
+const float TUNE_ZONE_BANDS = 0.f;   // [toggle 0/1] zones.as: generators, converters and stores take the nearest free cell beside a turret strip (his 10-21)
 const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
 const float TUNE_SUPPORT_PER_METAL = 1.f;
 const float TUNE_CONV_FEED_CAP = 1.f;
