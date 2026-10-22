@@ -9,7 +9,7 @@ namespace Market {
 // planned beside the last, two reaches over so their bands meet, once this one's slots are mostly taken.
 
 const int ZONE_LEN = 40;            // turret slots in a strip: his block ran long rows across its whole width
-const float ZONE_NEXT_FULL = 0.75f; // share of slots taken that plans the next strip
+const float ZONE_NEXT_FULL = 0.5f;  // share of slots standing that plans the next strip: his block raised many rows at once
 
 bool ZonesOn() { return ai.GetTunable("apex_zones", TUNE_ZONES) > 0.f; }
 
