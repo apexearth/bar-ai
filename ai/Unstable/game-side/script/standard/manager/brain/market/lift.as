@@ -64,7 +64,7 @@ final class LiftJob {
 	AIFloat3 src;
 	AIFloat3 to;
 	AIFloat3 last;
-	int stage = 0;      // 0 free, 1 flying to load, 2 carrying, 3 loading for the reserve, 4 holding in reserve
+	int stage = 0;      // 0 free, 1 flying to load, 2 carrying
 	int deadline = 0;
 	bool retried = false;
 	int drops = 0;
@@ -164,7 +164,7 @@ void LiftNoteDead(CCircuitUnit@ unit)
 	for (uint j = 0; j < gLift.length(); ++j) {
 		LiftJob@ jb = gLift[j];
 		if (jb.plane is unit) {
-			if (((jb.stage == 2) || (jb.stage == 4)) && (jb.cargo !is null)) {
+			if ((jb.stage == 2) && (jb.cargo !is null)) {
 				gLiftSettle.insertLast(jb.cargo);
 				gLiftSettleFrom.insertLast(jb.src);
 				gLiftSettleLast.insertLast(jb.cargo.GetPos(ai.frame));
@@ -253,15 +253,6 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 			const float B = float(Requests::Workers(t)) * Requests::DRAIN + NanoLatheReaching(p);
 			const float R = t.buildDef.costM * (1.f - Requests::Progress(t));
 			g = (B > 0.f) ? (R / B) : R;
-			// A REACTOR'S RING FILLS FIRST (his 10-21: "we don't totally fill up the area around an afus with nanos but
-			// we should"). Its turrets keep working at completion -- the next reactor rises in the same block -- so
-			// while a slot in its reach is free it outranks every frame whose turrets leave with it; R/B spread one
-			// turret at a time over every frame rising.
-			if (LiftReserveOn() && BigEcoDef(int(t.buildDef.id)) && (gOwnNano.length() > 0) && (gOwnNano[0] !is null)) {
-				array<AIFloat3> one;
-				if (PackSlots(int(gOwnNano[0].circuitDef.id), p, int(t.buildDef.id), 1, one, true) > 0)
-					g = R * 1000.f;
-			}
 		} else
 			g = NanoGap(p);
 		if (g <= gap)
@@ -284,14 +275,8 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 // A free nano-ring slot by the line at lp, legal for def, off doorways and allies.
 AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
 {
-	{
-		AIFloat3 cellAt;
-		if (CellLayoutOn() && CellSlot(cd, cellAt, lp))
-			return cellAt;
-	}
 	array<AIFloat3> slots;
-	// the whole ring the reach holds, not the first four: four taken sent the rest to the 300-elmo square search
-	PackSlots(cd, lp, AnchorDefAt(lp), LiftReserveOn() ? 32 : 4, slots);
+	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
 	int si = 0;
 	while ((si < int(slots.length())) && LiftSlotTaken(slots[si]))
 		++si;
@@ -422,215 +407,6 @@ bool LiftDispatch(LiftJob@ jb)
 	return true;
 }
 
-// TURRETS HELD IN THE AIR (TUNE_LIFT_RESERVE; his 10-21: "transports can just pick up idle nano turrets and wait for
-// the right area to drop them for instant build power"). A free plane with no drop to make lifts the longest-idle
-// turret and hovers over the base with it; the moment a line or a frame wants lathe, it flies straight there, the
-// pickup already paid. Held while the seconds that saves, at the turret's own lathe, beat the AA we have seen over the
-// hover point against the plane and its cargo; set down where it was when they stop.
-int gReserveHeld = 0, gReserveSent = 0, gReserveDown = 0;
-bool LiftReserveOn() { return LiftTurretsOn() && (ai.GetTunable("apex_lift_reserve", TUNE_LIFT_RESERVE) > 0.f); }
-
-bool ReserveWorth(CCircuitUnit@ plane, CCircuitUnit@ cargo, const AIFloat3& in at)
-{
-	const int cd = int(cargo.circuitDef.id);
-	const float saved = WalkRate(Catalog::gBuildPower[cd])
-			* (LIFT_HAND_OVERHEAD_S + plane.GetPos(ai.frame).distance2D(cargo.GetPos(ai.frame)) / LiftSpeed(plane));
-	const float stake = Catalog::gCostM[int(plane.circuitDef.id)] + Catalog::gCostM[cd];
-	return saved > LiftRouteLossP(plane, at, at) * stake;
-}
-
-bool ReserveLoad(LiftJob@ jb)
-{
-	if (!LiftReserveOn() || !Base::gAnchorSet)
-		return false;
-	const int pd = int(jb.plane.circuitDef.id);
-	int best = -1;
-	int oldest = 0;
-	for (uint i = 0; i < gOwnNano.length(); ++i) {
-		CCircuitUnit@ u = gOwnNano[i];
-		if ((u is null) || !LiftFits(pd, int(u.circuitDef.id)) || (i >= gOwnNanoWorkAt.length()))
-			continue;
-		const float sec = jb.plane.GetPos(ai.frame).distance2D(gOwnNanoPos[i]) / LiftSpeed(jb.plane);
-		if (!LiftIdleEnough(i, sec + LIFT_HAND_OVERHEAD_S) || InLiftJob(u) || LiftRefused(u) || Builder::SiteHot(gOwnNanoPos[i]))
-			continue;
-		if ((best < 0) || (gOwnNanoWorkAt[i] < oldest)) {
-			best = int(i);
-			oldest = gOwnNanoWorkAt[i];
-		}
-	}
-	if (best < 0)
-		return false;
-	CCircuitUnit@ cargo = gOwnNano[best];
-	if (!ReserveWorth(jb.plane, cargo, Base::gAnchor))
-		return false;
-	@jb.cargo = cargo;
-	jb.src = cargo.GetPos(ai.frame);
-	jb.to = Base::gAnchor;
-	jb.stage = 3;
-	jb.retried = false;
-	jb.drops = 0;
-	jb.overAt = -1;
-	jb.homeSent = false;
-	jb.deadline = ai.frame + int((jb.plane.GetPos(ai.frame).distance2D(jb.src) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
-	// join-arrive: an idle turret is lifted into the reserve; the drop onto work asks JoinOkTask (ReserveStep)
-	jb.plane.CmdLoadUnit(cargo);
-	++gReserveHeld;
-	AiLog("apex: lift reserve t=" + ai.teamId + " #" + jb.plane.id + " lifts " + cargo.circuitDef.GetName()
-			+ " #" + cargo.id + " idle=" + ((ai.frame - oldest) / SECOND) + "s held=" + gReserveHeld);
-	return true;
-}
-
-void ReserveStep(LiftJob@ jb)
-{
-	if (jb.stage == 3) {
-		if (Carried(jb.cargo, jb.plane)) {
-			jb.stage = 4;
-			jb.plane.CmdMoveTo(Base::gAnchor);
-		} else if (ai.frame > jb.deadline) {
-			jb.plane.CmdStop();
-			++gLiftAborted;
-			gLiftRefusedIds.insertLast(jb.cargo.id);
-			LiftEnd(jb);
-		}
-		return;
-	}
-	if (!Carried(jb.cargo, jb.plane)) {
-		LiftLanded(jb.cargo, jb.src);
-		LiftEnd(jb);
-		return;
-	}
-	AIFloat3 lp;
-	float net = 0.f;
-	CCircuitUnit@ line = null;
-	const bool lined = LineSiteFor(lp, net, line) && (net > 0.f);
-	const bool want = lined || SinkSiteFor(lp, net, jb.plane);
-	IUnitTask@ sinkJob = lined ? null : gSinkJob;
-	const int cd = int(jb.cargo.circuitDef.id);
-	const float flight = jb.plane.GetPos(ai.frame).distance2D(lp) / LiftSpeed(jb.plane);
-	if (want && (sinkJob !is null) && Requests::JoinArriveOn()
-		&& !Requests::JoinOkTask(Requests::JA_LIFT, jb.plane, sinkJob, JobGain(sinkJob), false,
-			flight, Catalog::gBuildPower[cd]))
-		return;
-	if (want) {
-		const AIFloat3 to = LiftSlotNear(cd, lp);
-		if (OnMap(to) && !Builder::SiteHot(to)) {
-			if (sinkJob !is null)
-				Requests::JoinTaken(Requests::JA_LIFT, jb.cargo, sinkJob, null, lp);
-			jb.to = to;
-			jb.stage = 2;
-			jb.deadline = ai.frame + int((jb.plane.GetPos(ai.frame).distance2D(to) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
-			jb.plane.CmdUnloadAt(to, jb.cargo);
-			NanoCensusMove(jb.cargo, to);
-			++gReserveSent;
-			AiLog("apex: lift reserve-drop t=" + ai.teamId + " #" + jb.cargo.id + " to=" + int(to.x) + "," + int(to.z)
-					+ " net=" + formatFloat(net, "", 0, 1) + " sent=" + gReserveSent);
-			return;
-		}
-	}
-	if (!ReserveWorth(jb.plane, jb.cargo, jb.plane.GetPos(ai.frame))) {
-		jb.to = jb.src;
-		jb.stage = 2;
-		jb.deadline = ai.frame + int((jb.plane.GetPos(ai.frame).distance2D(jb.src) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
-		jb.plane.CmdUnloadAt(jb.src, jb.cargo);
-		++gReserveDown;
-		AiLog("apex: lift reserve-down t=" + ai.teamId + " #" + jb.cargo.id + " risk over the hold");
-	}
-}
-
-// TURRETS SET FLUSH (TUNE_LIFT_COMPACT; his 10-21: "another task for transports should be to 'fix' nano turret
-// placement. If they are not properly grouped up with 0 spacing between them the transports can attempt to fix
-// that"). A free plane with no work to carry takes an idle turret with no turret flush beside it and sets it in the
-// core of the nearest cell, or else on the nearest free cell flush against a turret that already has a neighbour.
-int gCompactMoved = 0;
-uint gCompactI = 0;
-const int COMPACT_SCAN = 40;      // turrets read per dispatch, round robin
-bool LiftCompactOn() { return LiftTurretsOn() && (ai.GetTunable("apex_lift_compact", TUNE_LIFT_COMPACT) > 0.f); }
-
-int TurretNeighbours(uint i, float pitch)
-{
-	int n = 0;
-	const AIFloat3 a = gOwnNanoPos[i];
-	NanoNear(a, pitch * 1.5f);
-	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
-		const uint j = uint(gNanoGrid.hit[q]);
-		if (j == i)
-			continue;
-		const float dx = abs(gOwnNanoPos[j].x - a.x), dz = abs(gOwnNanoPos[j].z - a.z);
-		if (((abs(dx - pitch) < 4.f) && (dz < 0.5f * pitch)) || ((abs(dz - pitch) < 4.f) && (dx < 0.5f * pitch)))
-			++n;
-	}
-	return n;
-}
-
-bool CompactSlot(uint i, AIFloat3& out at)
-{
-	const int cd = int(gOwnNano[i].circuitDef.id);
-	if (CellLayoutOn() && CellSlot(cd, at, gOwnNanoPos[i]))
-		return true;
-	const float pitch = Lattice::FootPitch(cd);
-	CCircuitDef@ def = Catalog::Def(cd);
-	float best = -1.f;
-	NanoNear(gOwnNanoPos[i], 1200.f);
-	array<int> near = gNanoGrid.hit;   // TurretNeighbours reuses the grid's hit list
-	for (uint q = 0; q < near.length(); ++q) {
-		const uint j = uint(near[q]);
-		if ((j == i) || (TurretNeighbours(j, pitch) == 0))
-			continue;
-		for (int k = 0; k < 4; ++k) {
-			const AIFloat3 c = gOwnNanoPos[j] + AIFloat3(((k == 0) ? pitch : ((k == 1) ? -pitch : 0.f)), 0.f,
-					((k == 2) ? pitch : ((k == 3) ? -pitch : 0.f)));
-			const float dd = c.distance2D(gOwnNanoPos[i]);
-			if ((best >= 0.f) && (dd >= best))
-				continue;
-			AIFloat3 got;
-			if (OnMap(c) && !LiftSlotTaken(c) && ai.CanPlaceCell(def, c, got)) {
-				best = dd;
-				at = c;
-			}
-		}
-	}
-	return best >= 0.f;
-}
-
-bool CompactDispatch(LiftJob@ jb)
-{
-	if (!LiftCompactOn() || (gOwnNano.length() == 0))
-		return false;
-	const int pd = int(jb.plane.circuitDef.id);
-	const float speed = LiftSpeed(jb.plane);
-	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
-	const uint n = gOwnNano.length();
-	for (int k = 0; k < COMPACT_SCAN; ++k) {
-		const uint i = (gCompactI++) % n;
-		CCircuitUnit@ u = gOwnNano[i];
-		if ((u is null) || !LiftFits(pd, int(u.circuitDef.id)))
-			continue;
-		const float pitch = Lattice::FootPitch(int(u.circuitDef.id));
-		const float sec = pp.distance2D(gOwnNanoPos[i]) / speed;
-		if (!LiftIdleEnough(i, sec + LIFT_HAND_OVERHEAD_S) || InLiftJob(u) || LiftRefused(u)
-			|| Builder::SiteHot(gOwnNanoPos[i]) || (TurretNeighbours(i, pitch) > 0))
-			continue;
-		AIFloat3 to;
-		if (!CompactSlot(i, to) || (to.distance2D(gOwnNanoPos[i]) < pitch))
-			continue;
-		@jb.cargo = u;
-		jb.src = u.GetPos(ai.frame);
-		jb.to = to;
-		jb.stage = 1;
-		jb.retried = false;
-		jb.deadline = ai.frame + int((pp.distance2D(jb.src) / speed * 3.f + 30.f) * float(SECOND));
-		// join-arrive: an idle turret moved flush beside its kin; no work under way is joined
-		jb.plane.CmdLoadUnit(u);
-		NanoCensusMove(u, to);
-		++gCompactMoved;
-		AiLog("apex: lift compact t=" + ai.teamId + " #" + jb.plane.id + " takes #" + u.id
-				+ " from=" + int(jb.src.x) + "," + int(jb.src.z) + " to=" + int(to.x) + "," + int(to.z)
-				+ " moved=" + gCompactMoved);
-		return true;
-	}
-	return false;
-}
-
 void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
 {
 	const AIFloat3 at = cargo.GetPos(ai.frame);
@@ -720,14 +496,10 @@ void LiftStep(LiftJob@ jb)
 			LiftGoHome(jb);
 			return;
 		}
-		if (!FerryDispatch(jb) && !LiftDispatch(jb) && !HandDispatch(jb) && !CompactDispatch(jb) && !ReserveLoad(jb)) {
+		if (!FerryDispatch(jb) && !LiftDispatch(jb) && !HandDispatch(jb)) {
 			gLiftIdleMiss.insertLast(pdef);
 			LiftGoHome(jb);
 		}
-		return;
-	}
-	if ((jb.stage == 3) || (jb.stage == 4)) {
-		ReserveStep(jb);
 		return;
 	}
 	const AIFloat3 cp = jb.cargo.GetPos(ai.frame);
@@ -943,9 +715,7 @@ void LiftUpdate()
 			+ " ferryDropped=" + gFerryDropped + " ferryOnsite=" + gFerryOnsite
 			+ " repriced=" + gFerryRepriced + " ferryHeld=" + gFerryHeld
 			+ " missSlots=" + gFerryMissM.length() + " missM=" + formatFloat(FerryMissSum(), "", 0, 1)
-			+ " plantLift=" + formatFloat(gPlantLiftLast, "", 0, 3)
-			+ " reserveHeld=" + gReserveHeld + " reserveSent=" + gReserveSent + " reserveDown=" + gReserveDown
-			+ " compacted=" + gCompactMoved);
+			+ " plantLift=" + formatFloat(gPlantLiftLast, "", 0, 3));
 }
 
 // What a transport of def d is worth [metal/s over the fill]: the turrets it

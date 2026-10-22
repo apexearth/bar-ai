@@ -550,7 +550,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	} else if ((armyNeed >= over) && OnMap(armyPos)) {
 		site = armyPos;
 		src = NS_ARMY;
-	} else if (haveLine && (lineNeed >= sinkNeed) && !(LayoutOn() && (lineNeed <= 0.f))) {
+	} else if (haveLine && (lineNeed >= sinkNeed)) {
 		site = linePos;
 		src = NS_LINE;
 	} else if ((sinkNeed > 0.f) && OnMap(sinkPos)) {
