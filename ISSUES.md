@@ -98,7 +98,16 @@ Score on the mean of minutes 16-20 over 24 paired seeds. Measured and removed (c
 zone stack -16.8% (12; code kept, off); eco turret energy density +1.0% (12); bot opening +0.3% (24); stall race
 counting energy payback ~0 (24); spend-capped ETA ladder with turret steps -10.7% (24); forced canon pattern
 (solars only on short energy) stalled the economy (smoke, reverted); ETA energy output at the bills' rate -4.9%
-(24). Each moved its decision; none moved income.
+(24); hands-only crew record and band crew (only inside the zone stack); a big generator's crew from current
+capacity plus the market's room price in the ladder -0.5% (24; AFUS within 2-8% of the fusion in the ETA, still
+1 AFUS and 12 fusions at minute 20). Each moved its decision; none moved income. The zone stack is deleted (his
+10-22: his rectangles are a UI aid for human APM, not a layout for the AI); the C++ zone hooks (ZoneRefuses,
+ReserveZone/ClearZones) are inert and left for the next DLL build to drop.
+
+His own +0 air game, replayed (matches/_replay-his0, his 10-22): 869 m/s at 20:02, 4,100 at 30. Level with us to
+minute 10 (we waste 14-18 m/s at minutes 6-8, he none); from minute 12 he stops small eco at 53 extractors / 11
+solars / 18 advanced solars and builds only mohos, AFUS, advanced converters and turrets -- minute 20: 10 AFUS,
+2 fusions, 48 converters, 238 turrets to our 0 / 12 / 6 / 141. Target since 10-22: 750+ m/s reliably.
 
 ## HIS +100 SCAV 8v8 FAILS THE FRAME BUDGET 4.3x (2026-10-18)
 

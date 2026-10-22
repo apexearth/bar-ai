@@ -1177,17 +1177,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (Catalog::ValidId(nAnchor) && (Catalog::gBuildsList[nAnchor].length() > 0))
 			NoteNanoDry(nAnchor, nPacked.length() == 0);
-		// An eco turret takes a slot on a turret strip (TUNE_ZONES), nearest the frame it was bought for.
-		AIFloat3 nZone;
-		const bool nEco = (w.spotId == NS_SINK) || (w.spotId == NS_FARM);
-		// ...and a plant's turret takes a strip slot that still reaches its plant (his 10-21: the plants grew their
-		// own blob of 120 turrets beside the strips)
-		const bool nZoned = nEco
-				? ZoneSlotFor(int(w.def.id), (w.spotId == NS_SINK) ? w.pos : AIFloat3(-1.f, 0.f, -1.f), nZone)
-				: (OnMap(slot) && ZoneSlotWithin(int(w.def.id), slot, Catalog::gBuildDist[int(w.def.id)] + PlantHalf(slot), nZone));
-		if (nZoned) {
-			slot = nZone;
-		} else if (nPacked.length() > 0) {
+		if (nPacked.length() > 0) {
 			slot = nPacked[0];
 		} else {
 			// Every cell in reach is taken. The engine's own search is the
@@ -1224,8 +1214,6 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		IUnitTask@ nFirst = Requests::Take(unit, w.def, Task::BuildType::NANO,
 				Task::Priority::NORMAL, nSlot, nCover, 0.f,
 				made, true);
-		if ((nFirst !is null) && nZoned && made)
-			nFirst.SetExactSite();
 		// HOW MANY, NOT WHETHER (apexearth: "the single build request could
 		// expand out into 2, 5, 10, 20, whatever we can afford" -- and, on
 		// the first draft's flow arithmetic: "your logic of 'each nano
@@ -1293,28 +1281,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						needK[nFacs] = 1.f;
 						needSum += 1.f;
 					}
-					// A strip turret's burst stays on the strips (his 10-21: the burst shared its turrets over the plant
-					// lines, the blob round the plants he called out).
-					if (nZoned && nEco) {
-						int zFold = 0;
-						while (left > 0) {
-							AIFloat3 zk;
-							if (!ZoneSlotFor(int(w.def.id), nSlot, zk))
-								break;
-							bool mk = false;
-							IUnitTask@ tk = Requests::Take(null, w.def, Task::BuildType::NANO,
-									Task::Priority::NORMAL, zk, nCover, 0.f, mk, true);
-							if (mk) {
-								tk.SetExactSite();
-								++opened;
-								--left;
-							} else if (++zFold > 4) {
-								break;
-							}
-						}
-						walkLog += " zone:" + opened;
-					}
-					for (uint fi2 = 0; !(nZoned && nEco) && (fi2 < lines) && (left > 0); ++fi2) {
+					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
 						int anchorK = nAnchor;
 						int askK = left / int(lines - fi2);
@@ -1345,28 +1312,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						if (askK < 1)
 							askK = 1;
 						array<AIFloat3> packK;
-						// a plant's share goes to the strip slots that reach it first
-						if (ZonesOn() && OnMap(baseK)) {
-							const float zr = Catalog::gBuildDist[int(w.def.id)] + PlantHalf(baseK);
-							int zGot = 0;
-							while (zGot < askK) {
-								AIFloat3 zk;
-								if (!ZoneSlotWithin(int(w.def.id), baseK, zr, zk))
-									break;
-								bool mkz = false;
-								IUnitTask@ tz = Requests::Take(null, w.def, Task::BuildType::NANO,
-										Task::Priority::NORMAL, zk, nCover, 0.f, mkz, true);
-								if (!mkz)
-									break;
-								tz.SetExactSite();
-								++zGot;
-								++opened;
-								--left;
-							}
-							askK -= zGot;
-						}
-						if (askK > 0)
-							PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
 						if (nLines > 0)
 							NoteNanoDry(anchorK, packK.length() == 0);
 						// No factory standing leaves the anchor at -1.
@@ -1526,15 +1472,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				+ " slot=" + int(slot.x) + "," + int(slot.z)
 				+ " ring=" + int(RingBPAt(slot))
 				+ " farm=" + int(w.pos.x) + "," + int(w.pos.z));
-		AIFloat3 zbAt;
-		const bool zBanded = !floats && ZoneBandSlot(int(w.def.id), unit.GetPos(ai.frame), zbAt);
-		if (zBanded)
-			slot = zbAt;
 		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
-		if ((et !is null) && zBanded && crtd)
-			et.SetExactSite();
 		if (et !is null)
 			return et;
 		// REFUSED IS NOT "NOTHING TO DO" WHILE WE ARE STALLED. The rung the
@@ -1570,15 +1510,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (OnMap(aslot))
 				aslot = ClearOfSpots(aslot, 120.f);
 			bool acrtd = false;
-			AIFloat3 zbA;
-			const bool aBanded = ZoneBandSlot(ad, unit.GetPos(ai.frame), zbA);
-			if (aBanded)
-				aslot = zbA;
 			IUnitTask@ at = Requests::Take(unit, adef, Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, OnMap(aslot) ? aslot : w.pos,
 					Lattice::StrideOf(ad), 0.f, acrtd, par);
-			if ((at !is null) && aBanded && acrtd)
-				at.SetExactSite();
 			if (at is null)
 				continue;
 			if (ai.frame >= gNextELadderLog) {
@@ -1607,12 +1541,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if ((unit !is null) && OnMap(slot))
 			slot = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		const AIFloat3 cAt = OffFactoryExit(ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f));
-		AIFloat3 zbC;
-		const bool cBanded = ZoneBandSlot(int(w.def.id), unit.GetPos(ai.frame), zbC);
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, cBanded ? zbC : cAt, cell, 0.f, crtd, par);
-		if ((cFirst !is null) && cBanded && crtd)
-			cFirst.SetExactSite();
+				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
 		// HOW MANY, NOT WHETHER -- the same law the nano burst already uses,
 		// with the SURPLUS in place of the bank (apexearth, on the nanos: "the
 		// single build request could expand out into 2, 5, 10, 20, whatever we
@@ -1677,27 +1607,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if (wantC > 1) {
 					const double _tC = Perf::T0();
 					array<AIFloat3> packC;
-					bool cvBanded = false;
-					int cvBandOpen = 0;
-					if (ZoneBandsOn() && ZoneBandFamily(cvd)) {
-						// each cell taken before the next is asked (review: asked first, all fifteen were one cell)
-						cvBanded = true;
-						for (int rk = 1; rk < wantC; ++rk) {
-							AIFloat3 rc;
-							if (!ZoneBandSlot(cvd, cAt, rc))
-								break;
-							bool mkb = false;
-							IUnitTask@ cb = Requests::Take(null, w.def, Task::BuildType::CONVERT,
-									Task::Priority::NORMAL, rc, cell, 0.f, mkb, true);
-							if (!mkb)
-								break;
-							cb.SetExactSite();
-							++cvBandOpen;
-						}
-					}
-					if (!cvBanded)
-						PackSlots(cvd, cAt, -1, wantC - 1, packC);
-					int cOpen = cvBandOpen;
+					PackSlots(cvd, cAt, -1, wantC - 1, packC);
+					int cOpen = 0;
 					for (uint ci = 0; ci < packC.length(); ++ci) {
 						bool mkc = false;
 						IUnitTask@ ct = Requests::Take(null, w.def, Task::BuildType::CONVERT,

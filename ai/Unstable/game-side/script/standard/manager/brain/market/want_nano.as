@@ -1,6 +1,5 @@
 namespace Market {
 int gNextNanoWantLog = 0;
-float gFcNanoNeed = 0.f;   // the forecast's turret demand at the last read, m/s
 float gArmyLinesOut = 0.f;   // army metal/s the lines delivered, at the last army-branch read
 int gNanoMetalCut = 0;   // nano candidates whose gain the metal feed cut
 // Which demand sited the want (w.spotId). Execute honours the first three
@@ -395,16 +394,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if (wasted > over)
 			over = wasted;
 	}
-	// ...AND THE SPILL A MINUTE OUT (his 10-21: forecast "so they're ready when we need them"): the metal the
-	// forecast says will come in, less what is spent now, the bank room it would fill, the idle turrets and every
-	// turret already ordered -- a turret takes its build time to stand, so one bought on today's spill stands after it.
-	gFcNanoNeed = 0.f;
-	if (ai.GetTunable("apex_fc_nano", TUNE_FC_NANO) > 0.f) {
-		const float room = (Eco::MStor() - Eco::MCur()) / FC_HORIZON_S;
-		gFcNanoNeed = FcMInc(FC_HORIZON_S) - Eco::MPull() - room - IdleNanoLatheM() - BpOrderedM();
-		if (gFcNanoNeed > over)
-			over = gFcNanoNeed;
-	}
 	// THE FORTIFICATION WANTS LATHE. apexearth 2026-08-30: "T1 cons around
 	// that frontline make the nano turrets. These are to help build faster,
 	// and to heal up these defenses when they come under attack. The result
@@ -525,8 +514,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " army=" + formatFloat(armyNeed, "", 0, 1) + " delivered=" + formatFloat(gArmyLinesOut, "", 0, 1)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
-			+ " fcNeed=" + formatFloat(gFcNanoNeed, "", 0, 1) + " fcM=" + formatFloat(FcMInc(FC_HORIZON_S), "", 0, 1)
-			+ " ordered=" + formatFloat(BpOrderedM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
 			+ " lab=" + formatFloat(labNeed, "", 0, 1)
 			+ " floor=" + floorShort

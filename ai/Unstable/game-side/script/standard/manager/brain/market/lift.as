@@ -275,12 +275,6 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 // A free nano-ring slot by the line at lp, legal for def, off doorways and allies.
 AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
 {
-	{
-		AIFloat3 zAt;
-		// a slot another plane is already flying to is not this one's (review: two drops on one slot)
-		if (ZoneSlotFor(cd, lp, zAt) && !LiftSlotTaken(zAt))
-			return zAt;
-	}
 	array<AIFloat3> slots;
 	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
 	int si = 0;
@@ -374,7 +368,7 @@ bool LiftDispatch(LiftJob@ jb)
 		if (up.distance2D(lp) < Catalog::gBuildDist[c])
 			continue;
 		const float sec = (pp.distance2D(up) + up.distance2D(lp)) / speed;
-		if (!LiftIdleEnough(i, sec) || InLiftJob(u) || LiftRefused(u) || Builder::SiteHot(up) || OnStrip(up))
+		if (!LiftIdleEnough(i, sec) || InLiftJob(u) || LiftRefused(u) || Builder::SiteHot(up))
 			continue;
 		if ((best < 0) || (sec < bestSec)) {
 			best = int(i);

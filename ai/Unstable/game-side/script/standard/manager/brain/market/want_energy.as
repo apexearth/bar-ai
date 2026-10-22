@@ -1146,27 +1146,6 @@ float BpSpendInFlightM()
 	return cap;
 }
 
-// Every turret in the request book at full nameplate, started or not: what is already on its way.
-int gBpOrdFrame = -1;
-float gBpOrdVal = 0.f;
-float BpOrderedM()
-{
-	if (gBpOrdFrame == ai.frame)
-		return gBpOrdVal;
-	gBpOrdFrame = ai.frame;
-	float cap = 0.f;
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
-			continue;
-		const int d = int(t.buildDef.id);
-		if (NanoDefLike(d))
-			cap += Catalog::gBuildPower[d] * (7.f / 80.f);
-	}
-	gBpOrdVal = cap;
-	return cap;
-}
-
 // The mobile part of BPCapacity, same discount.
 float MobileBPCapacity()
 {
