@@ -59,7 +59,7 @@ bool EnergyWasting()
 // from minute 3 while metal is plentiful, without the energy cut; free hands on the T2 plant while energy is healthy.
 bool CanonExp() { return ai.GetTunable("apex_canon_exp", TUNE_CANON_EXP) > 0.f; }
 bool CanonEShort() { return HardEStall() || (Eco::ECur() < 0.25f * Eco::EStor()); }
-bool CanonMPlenty() { return (Eco::MCur() > 0.5f * Eco::MStor()) || (Eco::MInc() > Eco::MPull()); }
+bool CanonMPlenty() { return Eco::MCur() > 0.5f * Eco::MStor(); }
 
 int gGenHeldLogAt = 0;
 // The crew a generator's site would get.
