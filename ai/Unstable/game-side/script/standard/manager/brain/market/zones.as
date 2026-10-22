@@ -70,6 +70,21 @@ bool ZonePlan()
 		cand.insertLast(last + gZoneAcross * (float(ZONE_LEN) * pn + 2.f * reach));
 		cand.insertLast(last - gZoneAcross * (float(ZONE_LEN) * pn + 2.f * reach));
 	}
+	// The first strip runs flush along a plant's side (his line started at his plant), so the plant's turrets
+	// stand on it: smoke seed 1690 had both strips 400 elmos from the air plant and its turrets packed round it.
+	if (gZoneAt.length() == 0) {
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f = Factory::gFacUnits[fi];
+			if ((f is null) || (f.circuitDef is null))
+				continue;
+			const int fd = int(f.circuitDef.id);
+			const AIFloat3 fp = f.GetPos(ai.frame);
+			const float off = 8.f * float((Catalog::gFootX[fd] > Catalog::gFootZ[fd]) ? Catalog::gFootX[fd] : Catalog::gFootZ[fd])
+					+ 0.5f * pn;
+			cand.insertLast(fp + gZoneBack * off);
+			cand.insertLast(fp - gZoneBack * off);
+		}
+	}
 	{
 		const AIFloat3 home = gFarmSet ? gFarmPos : Base::gAnchor;
 		cand.insertLast(home);
@@ -334,7 +349,8 @@ float PlantHalf(const AIFloat3& in p)
 // The first strip is planned as soon as the anchor stands, before anything else can take its ground.
 void ZoneStep()
 {
-	if (ZonesOn() && (gZoneAt.length() == 0) && !gZoneShut && Base::gAnchorSet && Base::gAnchorFinal)
+	if (ZonesOn() && (gZoneAt.length() == 0) && !gZoneShut && Base::gAnchorSet && Base::gAnchorFinal
+		&& (Factory::gFacUnits.length() > 0))
 		ZonePlan();
 }
 
