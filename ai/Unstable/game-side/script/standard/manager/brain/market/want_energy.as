@@ -127,7 +127,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// One number for every rung; the ETA arm below asked the turret grid for it
 	// once per generator.
 	float genNanoBP = (genArriveOn || etaOn) ? NanoLatheReaching(eSite) : 0.f;
-	if ((genArriveOn || etaOn) && (ai.GetTunable("apex_band_crew", TUNE_BAND_CREW) > 0.f) && (ZoneBandLathe() > genNanoBP))
+	if ((genArriveOn || etaOn) && (ZoneBandLathe() > genNanoBP))
 		genNanoBP = ZoneBandLathe();
 	// Seconds to the target following the ladder AS IT STANDS: the window new
 	// income has to compound in before the plan is over.
