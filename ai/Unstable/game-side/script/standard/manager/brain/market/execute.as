@@ -1289,7 +1289,28 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						needK[nFacs] = 1.f;
 						needSum += 1.f;
 					}
-					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {
+					// A strip turret's burst stays on the strips (his 10-21: the burst shared its turrets over the plant
+					// lines, the blob round the plants he called out).
+					if (nZoned) {
+						int zFold = 0;
+						while (left > 0) {
+							AIFloat3 zk;
+							if (!ZoneSlotFor(int(w.def.id), nSlot, zk))
+								break;
+							bool mk = false;
+							IUnitTask@ tk = Requests::Take(null, w.def, Task::BuildType::NANO,
+									Task::Priority::NORMAL, zk, nCover, 0.f, mk, true);
+							if (mk) {
+								tk.SetExactSite();
+								++opened;
+								--left;
+							} else if (++zFold > 4) {
+								break;
+							}
+						}
+						walkLog += " zone:" + opened;
+					}
+					for (uint fi2 = 0; !nZoned && (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
 						int anchorK = nAnchor;
 						int askK = left / int(lines - fi2);

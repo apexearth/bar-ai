@@ -120,6 +120,23 @@ bool ZonePlan()
 	return false;
 }
 
+// Turrets standing on strip z (handed slots planned a new strip while the old one stood near empty: six by minute 22).
+int ZoneStanding(uint z)
+{
+	const float tol = 0.5f * Lattice::FootPitch(gZoneNano);
+	int n = 0;
+	for (int k = 0; k < ZONE_LEN; ++k) {
+		const AIFloat3 p = ZoneSlot(z, k);
+		NanoNear(p, tol + 8.f);
+		for (uint q = 0; q < gNanoGrid.hit.length(); ++q)
+			if (gOwnNanoPos[uint(gNanoGrid.hit[q])].distance2D(p) < tol) {
+				++n;
+				break;
+			}
+	}
+	return n;
+}
+
 // The free strip slot nearest `near` (or the newest strip's middle) for turret def d.
 // A turret standing on a strip, which the transports leave where it is.
 bool OnStrip(const AIFloat3& in p)
@@ -168,7 +185,7 @@ bool ZoneSlotFor(int d, const AIFloat3& in near, AIFloat3& out at)
 	// TURRETS STAY ON THE STRIPS (his 10-21 watch: 714 turrets strewn over the base, the strips near empty -- a turret
 	// sent beside every frame out of a strip's reach). The work comes to the strip, in its bands; the turret takes the
 	// strip slot nearest it whatever the distance, and the next strip is planned once this one is mostly taken.
-	if ((gZoneAt.length() > 0) && (float(gZoneTaken[gZoneAt.length() - 1]) >= ZONE_NEXT_FULL * float(ZONE_LEN)))
+	if ((gZoneAt.length() > 0) && (float(ZoneStanding(gZoneAt.length() - 1)) >= ZONE_NEXT_FULL * float(ZONE_LEN)))
 		ZonePlan();
 	if (bz < 0)
 		return false;
