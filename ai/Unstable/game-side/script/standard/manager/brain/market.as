@@ -78,6 +78,7 @@
 #include "market/want_assist.as"    // the assist Want
 #include "market/vscale.as"         // the scales the market compares, logged per minute (read-only)
 #include "market/want_reclaim.as"   // the obsolete-reclaim Want
+#include "market/zones.as"          // turret strips held for turrets (TUNE_ZONES)
 #include "market/lift.as"           // idle turrets flown to the short line
 #include "market/forecast.as"       // what the economy will be in h seconds, from the builds coming
 #include "market/lift_ferry.as"     // front towers built at home and flown up

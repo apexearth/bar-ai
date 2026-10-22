@@ -275,6 +275,11 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap, CCircuitUnit@ plane = null)
 // A free nano-ring slot by the line at lp, legal for def, off doorways and allies.
 AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
 {
+	{
+		AIFloat3 zAt;
+		if (ZoneSlotFor(cd, lp, zAt))
+			return zAt;
+	}
 	array<AIFloat3> slots;
 	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
 	int si = 0;

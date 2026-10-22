@@ -229,6 +229,7 @@ void UpdateChunk(int c)
 		{ double _t = Perf::T0(); Market::NanoUpgradeAssist(); Perf::Add("up.nanoup", _t); }
 		{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
 		{ double _t = Perf::T0(); Market::ForecastStep(); Perf::Add("up.forecast", _t); }
+		{ double _t = Perf::T0(); Market::ZoneStep(); Perf::Add("up.zone", _t); }
 		{ double _t = Perf::T0(); Market::LabNanoLog(); Market::T2EcoStat(); Perf::Add("up.labnano", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
 		{ double _t = Perf::T0(); Military::FoeMemStep(); Perf::Add("up.foemem", _t); }

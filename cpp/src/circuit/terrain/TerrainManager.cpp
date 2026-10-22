@@ -1978,7 +1978,10 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
 
 void CTerrainManager::AddZone(float x1, float z1, float x2, float z2, int allowId)
 {
-	zones.push_back({std::min(x1, x2), std::min(z1, z2), std::max(x1, x2), std::max(z1, z2), allowId});
+	CCircuitDef* a = (allowId >= 0) ? circuit->GetCircuitDef(allowId) : nullptr;
+	const int ax = (a != nullptr) ? a->GetDef()->GetXSize() : -1;
+	const int az = (a != nullptr) ? a->GetDef()->GetZSize() : -1;
+	zones.push_back({std::min(x1, x2), std::min(z1, z2), std::max(x1, x2), std::max(z1, z2), allowId, ax, az});
 }
 
 bool CTerrainManager::ZoneRefuses(CCircuitDef* cdef, const AIFloat3& pos, int facing) const
@@ -1991,15 +1994,20 @@ bool CTerrainManager::ZoneRefuses(CCircuitDef* cdef, const AIFloat3& pos, int fa
 	if ((facing & 1) != 0) {
 		std::swap(hx, hz);
 	}
+	// Refused only when no zone it overlaps admits it: one strip is held once per turret it may take.
+	bool overlaps = false;
 	for (const SZone& z : zones) {
-		if (cdef->GetId() == z.allowId) {
+		if (!((pos.x + hx > z.x1 + 1.f) && (pos.x - hx < z.x2 - 1.f) && (pos.z + hz > z.z1 + 1.f) && (pos.z - hz < z.z2 - 1.f))) {
 			continue;
 		}
-		if ((pos.x + hx > z.x1 + 1.f) && (pos.x - hx < z.x2 - 1.f) && (pos.z + hz > z.z1 + 1.f) && (pos.z - hz < z.z2 - 1.f)) {
-			return true;
+		if ((cdef->GetId() == z.allowId)
+			|| ((z.allowX > 0) && (cdef->GetDef()->GetXSize() == z.allowX) && (cdef->GetDef()->GetZSize() == z.allowZ)))
+		{
+			return false;
 		}
+		overlaps = true;
 	}
-	return false;
+	return overlaps;
 }
 
 bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)

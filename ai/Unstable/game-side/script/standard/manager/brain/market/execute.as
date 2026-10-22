@@ -1177,7 +1177,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (Catalog::ValidId(nAnchor) && (Catalog::gBuildsList[nAnchor].length() > 0))
 			NoteNanoDry(nAnchor, nPacked.length() == 0);
-		if (nPacked.length() > 0) {
+		// An eco turret takes a slot on a turret strip (TUNE_ZONES), nearest the frame it was bought for.
+		AIFloat3 nZone;
+		const bool nZoned = ((w.spotId == NS_SINK) || (w.spotId == NS_FARM))
+				&& ZoneSlotFor(int(w.def.id), (w.spotId == NS_SINK) ? w.pos : AIFloat3(-1.f, 0.f, -1.f), nZone);
+		if (nZoned) {
+			slot = nZone;
+		} else if (nPacked.length() > 0) {
 			slot = nPacked[0];
 		} else {
 			// Every cell in reach is taken. The engine's own search is the
@@ -1214,6 +1220,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		IUnitTask@ nFirst = Requests::Take(unit, w.def, Task::BuildType::NANO,
 				Task::Priority::NORMAL, nSlot, nCover, 0.f,
 				made, true);
+		if ((nFirst !is null) && nZoned && made)
+			nFirst.SetExactSite();
 		// HOW MANY, NOT WHETHER (apexearth: "the single build request could
 		// expand out into 2, 5, 10, 20, whatever we can afford" -- and, on
 		// the first draft's flow arithmetic: "your logic of 'each nano

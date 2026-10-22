@@ -20,9 +20,6 @@ namespace Market {
 // away that a long build's delay is felt and near enough that the ladder still
 // terminates: 4x is about one era of this game, an opening economy to a mid one.
 const float ETA_TARGET_MUL = 4.f;
-// Under test (10-21): at 4x, T1 extraction alone reached the target and the T2 lab never sped it (etaSave=0
-// through every eco test), so the lab came only once the cheap spots ran out.
-float EtaTargetMul() { const float k = ai.GetTunable("apex_eta_target", TUNE_ETA_TARGET); return (k > 1.f) ? k : ETA_TARGET_MUL; }
 const int   ETA_MAX_STEPS = 64;
 const float ETA_BIG = 1.0e9f;
 // The generator tail is inexhaustible, so it is closed in geometric chunks
@@ -584,7 +581,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	float P = EcoPowerM();
 	if (P < 0.5f)
 		P = 0.5f;
-	const float target = P * EtaTargetMul();
+	const float target = P * ETA_TARGET_MUL;
 	float bank = Eco::MCur();
 	float bp = EffBP(0.f);
 	if (bp < 1.f)
@@ -709,7 +706,7 @@ float EtaHandsShareNow()
 	// read as hands-bound and the factories never stopped (209 air cons).
 	// Summed, the lathe time and the feed time over the same batches say
 	// which of the two the target is actually waiting on.
-	const float target = P * EtaTargetMul();
+	const float target = P * ETA_TARGET_MUL;
 	float eAvail = EtaEnergyAvail();
 	float tBuild = 0.f;
 	float tFeed = 0.f;
@@ -1022,7 +1019,7 @@ void EtaLog(array<Want@>@ ranked, CCircuitUnit@ unit)
 	const float cheap = ServableUpDemand() + OpenSpotStream();
 	AiLog(Factory::T() + "apex: eta t=" + ai.teamId
 		+ " P=" + formatFloat(P, "", 0, 1)
-		+ " tgt=" + formatFloat(P * EtaTargetMul(), "", 0, 1)
+		+ " tgt=" + formatFloat(P * ETA_TARGET_MUL, "", 0, 1)
 		+ " cheap=" + formatFloat(cheap, "", 0, 2)
 		+ " base=" + formatFloat(EtaWith(0, 0.f, 0.f, false), "", 0, 0)
 		+ " mkt=" + ((mktAt < 0) ? "-"

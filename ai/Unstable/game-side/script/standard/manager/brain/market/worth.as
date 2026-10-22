@@ -265,12 +265,10 @@ int TopGroundPlantTier()
 int gDuelAirLogAt = 0;
 bool DuelAirTechHeld(int d)
 {
-	// No duel in an economy-only game (TUNE_DUEL_ECO): the hold kept the T2 air lab off the tech lane of every air-first
-	// eco test, a 1v1 against an idle opponent -- 16 holds, the lab at minute 9-11 through the plant lane, his
-	// reference's first moho at 6.
+	// No duel in an economy-only game: the hold kept the T2 air lab off the tech lane of every air-first eco test,
+	// a 1v1 against an idle opponent (16 holds a game).
 	const bool held = AirPlant(d) && (PlantTier(d) >= 2) && (Military::AllyCount() <= 1.f)
-		&& !LandLocked() && (TopGroundPlantTier() < 2)
-		&& !(EcoOnly() && (ai.GetTunable("apex_duel_eco", TUNE_DUEL_ECO) > 0.f));
+		&& !LandLocked() && (TopGroundPlantTier() < 2) && !EcoOnly();
 	if (held && (ai.frame >= gDuelAirLogAt)) {
 		gDuelAirLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: duel-air-held t=" + ai.teamId + " " + Catalog::Def(d).GetName());
