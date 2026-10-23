@@ -21,14 +21,7 @@ namespace Market {
 // terminates: 4x is about one era of this game, an opening economy to a mid one.
 const float ETA_TARGET_MUL = 4.f;
 float gEtaTraceMul = 0.f;   // > 0 only inside eta-tech-trace: the same plans read to a farther target
-// TEST (apex_eta_target): the horizon screened again now the T2 plan's energy is fed; removed with the result.
-float EtaMul()
-{
-	if (gEtaTraceMul > 0.f)
-		return gEtaTraceMul;
-	const float t = ai.GetTunable("apex_eta_target", TUNE_ETA_TARGET);
-	return (t > 1.f) ? t : ETA_TARGET_MUL;
-}
+float EtaMul() { return (gEtaTraceMul > 0.f) ? gEtaTraceMul : ETA_TARGET_MUL; }
 
 const int   ETA_MAX_STEPS = 64;
 const float ETA_BIG = 1.0e9f;
@@ -141,8 +134,6 @@ int BestExtractDef(bool anyTier)
 			continue;
 		if (!anyTier && !CanBuildEver(d))
 			continue;
-		if (anyTier && EtaEFeedOn() && !Producible(d))   // our own tree (worth.as): the T2 plan bought Cortex's AFUS
-			continue;
 		if (Catalog::gExtractsM[d] > bx) {
 			bx = Catalog::gExtractsM[d];
 			best = d;
@@ -159,8 +150,6 @@ int ClaimExtractDef(bool anyTier)
 		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
 			continue;
 		if (!anyTier && !CanBuildEver(d))
-			continue;
-		if (anyTier && EtaEFeedOn() && !Producible(d))   // our own tree (worth.as): the T2 plan bought Cortex's AFUS
 			continue;
 		const float c = Catalog::gCostM[d];
 		if ((c > 1.f) && ((best == 0) || (c < bc))) {
@@ -290,8 +279,6 @@ void PoolFill(Pool@ p, bool anyTier)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
 			continue;
 		if (!anyTier && !CanBuildEver(d))
-			continue;
-		if (anyTier && EtaEFeedOn() && !Producible(d))   // our own tree (worth.as): the T2 plan bought Cortex's AFUS
 			continue;
 		// ...and nothing NOBODY builds (a free reactor no unit can place
 		// read as five cheap rungs of the T2 ladder).
@@ -496,57 +483,6 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		const int wide = (k < p.hands[i]) ? k : p.hands[i];
 		const float stepS = StepSecWide(p.def[i], p.cost[i], P, bank,
 				RungBP(p.def[i], rbp), eAvail, k, (wide > 0) ? wide : 1);
-		// ENERGY IS A FEED THE LADDER BUYS (apex_eta_efeed). Extractor upkeep drained the plan's energy rung by rung and
-		// nothing put it back -- generators sort last on metal payback -- so the T2 plan's mohos waited on a 1 e/s feed:
-		// 242 s, 655 s, then 7,700 s each, their whole energy bill (trace seed 3600, 16x). While a rung waits longer on
-		// energy than on hands and metal, the generator with the most energy per cost goes first, sized to close the
-		// wait; then the rung is read again.
-		if (EtaEFeedOn() && (p.costE[i] > 0.f)) {
-			const float tOther = StepSecWide(p.def[i], p.cost[i], P, bank,
-					RungBP(p.def[i], rbp), 1.0e9f, k, (wide > 0) ? wide : 1);
-			if ((stepS > 1.05f * tOther) && (tOther > 0.01f)) {
-				// the generator that adds the most energy per second of building it (his affordability: advanced solars
-				// early, an advanced fusion's 2,438 s step was the energy-per-cost pick)
-				int jb = -1;
-				float jv = 0.f;
-				for (uint j = 0; j < n.length(); ++j) {
-					if ((n[j] <= 0) || (p.makeE[j] <= 0.f) || (j == i))
-						continue;
-					const float rbpJ = p.mob[j]
-							? ((CanBuildEver(p.def[j]) || (gLadderTierBP <= 0.f)) ? bpMob : gLadderTierBP) : bp;
-					const float sJ = StepSecWide(p.def[j], p.cost[j], P, bank, RungBP(p.def[j], rbpJ), eAvail, 1, 1) + lat;
-					const float v = p.makeE[j] / ((sJ > 0.1f) ? sJ : 0.1f);
-					if (v > jv) {
-						jv = v;
-						jb = int(j);
-					}
-				}
-				if (jb >= 0) {
-					const uint j = uint(jb);
-					const float needE = p.costE[i] / tOther - eAvail;
-					int kE = int(needE / p.makeE[j]) + 1;
-					if (kE > n[j])
-						kE = n[j];
-					if (kE > 2000)
-						kE = 2000;
-					const float rbpE = p.mob[j]
-							? ((CanBuildEver(p.def[j]) || (gLadderTierBP <= 0.f)) ? bpMob : gLadderTierBP) : bp;
-					const int wideE = (kE < p.hands[j]) ? kE : p.hands[j];
-					const float stepE = StepSecWide(p.def[j], p.cost[j], P, bank, RungBP(p.def[j], rbpE), eAvail, kE,
-							(wideE > 0) ? wideE : 1);
-					if (gLadderTrace)
-						gLadderTraceS += " E:" + Catalog::Def(p.def[j]).GetName() + "x" + kE + "@" + int(stepE);
-					t += float(kE) * (stepE + lat);
-					gLadderLatS += float(kE) * lat;
-					bank = 0.f;
-					P += float(kE) * p.gain[j];
-					eAvail += float(kE) * p.makeE[j];
-					n[j] -= kE;
-					++steps;
-					continue;
-				}
-			}
-		}
 		float rlat = lat;
 		if (p.mob[i] && (Catalog::gExtractsM[p.def[i]] > 0.f) && (gPoolSpotWalkS > 0.f)) {
 			const int workers = int(aiBuilderMgr.GetWorkerCount());
@@ -571,8 +507,6 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 	}
 	return (P >= target) ? t : ETA_BIG;
 }
-
-bool EtaEFeedOn() { return ai.GetTunable("apex_eta_efeed", TUNE_ETA_EFEED) > 0.f; }
 
 // THE LATHE A RUNG REALLY GETS. The fleet's whole build power is what the
 // serial ladder assumes for every rung, and for a field of solars that is
