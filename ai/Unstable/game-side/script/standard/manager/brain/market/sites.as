@@ -692,6 +692,8 @@ int NanosDueFor(int did, int nanoDef)
 	return (bp > 0.f) ? int(ceil(bp / Catalog::gBuildPower[nanoDef])) : 0;
 }
 
+bool BigNearOn() { return ai.GetTunable("apex_big_near", TUNE_BIG_NEAR) > 0.f; }
+
 float RoomBPAt(int did, int nanoDef, int due, const AIFloat3& in s)
 {
 	if (due <= 0)
@@ -923,9 +925,13 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		AIFloat3 ask = gOwnNanoPos[i];
 		if (doorway)
 			ask = ask + exitDir * r;
-		else if (BigEcoDef(did))
-			ask = (Military::ForwardFraction(ask - exitDir * r) <= Military::ForwardFraction(ask + exitDir * r))
-				? ask - exitDir * r : ask + exitDir * r;   // a generator takes the block's back edge
+		else if (BigEcoDef(did)) {
+			// ...and under apex_big_near half a reach in, inside the block's cover: asked at the full reach the site
+			// stood at the edge of it (his 10-22 watch: AFUS with 19-51 turrets in reach while ~470 stood idle)
+			const float off = BigNearOn() ? (0.5f * r) : r;
+			ask = (Military::ForwardFraction(ask - exitDir * off) <= Military::ForwardFraction(ask + exitDir * off))
+				? ask - exitDir * off : ask + exitDir * off;   // a generator takes the block's back edge
+		}
 		AIFloat3 raw = ai.FindBuildSiteNear(def, ask, r * 2.f);
 		// The front edge can be a cliff or the map's edge; the block itself
 		// is asked next, and the exit lane backs the site out of it.
@@ -959,7 +965,16 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		// important, not many things at once; we waste a lot of room), the richest lathe whatever rises there.
 		++fits;
 		const float stand = RingBPAt(s);
-		const float room = RoomBPAt(did, nanoDef, due, s);
+		float room = RoomBPAt(did, nanoDef, due, s);
+		// room is worth only the turrets the site is still short of: ground beside standing turrets is not worth less
+		// than empty ground with space for them (apex_big_near)
+		if (BigNearOn() && Catalog::ValidId(nanoDef)) {
+			float shortBP = float(due) * Catalog::gBuildPower[nanoDef] - stand;
+			if (shortBP < 0.f)
+				shortBP = 0.f;
+			if (room > shortBP)
+				room = shortBP;
+		}
 		const float bp = (stand + room) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s, r)));
 		if (fromBlock)
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z) + ":block-fit@"
