@@ -14449,10 +14449,10 @@ index 66b8c225..5d7f4c8b 100644
  	const ModOptions& GetModOptions() const { return modoptions; }
  
 diff --git a/src/circuit/setup/SetupManager.cpp b/src/circuit/setup/SetupManager.cpp
-index 3df26d7e..bda5a56d 100644
+index 3df26d7e..036614f1 100644
 --- a/src/circuit/setup/SetupManager.cpp
 +++ b/src/circuit/setup/SetupManager.cpp
-@@ -63,7 +63,27 @@ CSetupManager::CSetupManager(CCircuitAI* circuit, CSetupData* setupData)
+@@ -63,7 +63,66 @@ CSetupManager::CSetupManager(CCircuitAI* circuit, CSetupData* setupData)
  	}
  
  	findStart = CScheduler::GameJob(&CSetupManager::FindStart, this);
@@ -14478,10 +14478,49 @@ index 3df26d7e..bda5a56d 100644
 +		return AIFloat3(-1.f, 0.f, -1.f);
 +	}
 +	return AIFloat3(sum.x / n, 0.f, sum.z / n);
++}
++
++AIFloat3 CSetupManager::GetNearestEnemyBoxCentre(const AIFloat3& pos) const
++{
++	const int myAlly = setupData->FindAllyTeamOf(circuit->GetTeamId());
++	AIFloat3 best(-1.f, 0.f, -1.f);
++	float bestD = std::numeric_limits<float>::max();
++	for (const auto& kv : setupData->GetStartBoxes()) {
++		if (kv.first == myAlly) {
++			continue;
++		}
++		const utils::SBox& b = kv.second.GetBox();
++		const AIFloat3 c(0.5f * (b.left + b.right), 0.f, 0.5f * (b.top + b.bottom));
++		const float d = c.SqDistance2D(pos);
++		if (d < bestD) {
++			bestD = d;
++			best = c;
++		}
++	}
++	return best;
++}
++
++bool CSetupManager::GetNearestEnemyBox(const AIFloat3& pos, float& left, float& right, float& top, float& bottom) const
++{
++	const int myAlly = setupData->FindAllyTeamOf(circuit->GetTeamId());
++	float bestD = std::numeric_limits<float>::max();
++	for (const auto& kv : setupData->GetStartBoxes()) {
++		if (kv.first == myAlly) {
++			continue;
++		}
++		const utils::SBox& b = kv.second.GetBox();
++		const AIFloat3 c(0.5f * (b.left + b.right), 0.f, 0.5f * (b.top + b.bottom));
++		const float d = c.SqDistance2D(pos);
++		if (d < bestD) {
++			bestD = d;
++			left = b.left; right = b.right; top = b.top; bottom = b.bottom;
++		}
++	}
++	return bestD < std::numeric_limits<float>::max();
  }
  
  CSetupManager::~CSetupManager()
-@@ -328,6 +348,11 @@ CAllyTeam* CSetupManager::GetAllyTeam() const
+@@ -328,6 +387,11 @@ CAllyTeam* CSetupManager::GetAllyTeam() const
  	return setupData->GetAllyTeam(circuit->GetAllyTeamId());
  }
  
@@ -14494,7 +14533,7 @@ index 3df26d7e..bda5a56d 100644
  {
  	const Json::Value& root = GetConfig();
 diff --git a/src/circuit/setup/SetupManager.h b/src/circuit/setup/SetupManager.h
-index 4863ac91..dc81f1fc 100644
+index 4863ac91..20800371 100644
 --- a/src/circuit/setup/SetupManager.h
 +++ b/src/circuit/setup/SetupManager.h
 @@ -78,6 +78,7 @@ public:
@@ -14505,13 +14544,17 @@ index 4863ac91..dc81f1fc 100644
  
  	void ReadConfig();
  	bool IsAntiCap() const { return antiCapProb > (float)rand() / RAND_MAX; }
-@@ -92,6 +93,10 @@ public:
+@@ -92,6 +93,14 @@ public:
  
  	void Welcome() const;
  
 +	// The mean centre of every start box that is not our ally team's;
 +	// off-map when the script carries no boxes.
 +	springai::AIFloat3 GetEnemyBoxCentre() const;
++	// ...and the centre of the enemy start box nearest pos (off-map when none)
++	springai::AIFloat3 GetNearestEnemyBoxCentre(const springai::AIFloat3& pos) const;
++	// ...and its extent: false when there is no enemy box
++	bool GetNearestEnemyBox(const springai::AIFloat3& pos, float& left, float& right, float& top, float& bottom) const;
 +
  private:
  	void FindStart();
@@ -20936,7 +20979,7 @@ index cd063e4d..a5bae80f 100644
 +
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
-index 8585fc29..5cbdf08e 100644
+index 8585fc29..1f089a58 100644
 --- a/src/circuit/task/fighter/AttackTask.h
 +++ b/src/circuit/task/fighter/AttackTask.h
 @@ -10,6 +10,8 @@
@@ -20948,7 +20991,7 @@ index 8585fc29..5cbdf08e 100644
  namespace circuit {
  
  class CAttackTask: public ISquadTask {
-@@ -26,16 +28,96 @@ public:
+@@ -26,16 +28,100 @@ public:
  
  	virtual void OnUnitIdle(CCircuitUnit* unit) override;
  
@@ -20983,6 +21026,10 @@ index 8585fc29..5cbdf08e 100644
 +	void StockApplyFrontPos(const CQueryPathMulti* query);
 +	void StockFallbackBasePos();
 +	void StockApplyBasePos(const CQueryPathSingle* query);
++	bool StockPressPos(springai::AIFloat3& out, const char*& why);
++	void StockApplyPressPos(const CQueryPathSingle* query);
++	int nextPressLog = 0;
++	int pressStep = 0;   // which point of their start box the search is walking to
 +	void RepairBreak(int frame);
 +	// apex: the one army (his 10-14) -- a squad walks to the main army and fights its target;
 +	// the main army stages short of a new target until what walks to it has come
@@ -26042,10 +26089,10 @@ index a058d598..1d61a9b3 100644
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/StockFight.inl b/src/circuit/task/fighter/StockFight.inl
 new file mode 100644
-index 00000000..8b6d16b9
+index 00000000..0007601f
 --- /dev/null
 +++ b/src/circuit/task/fighter/StockFight.inl
-@@ -0,0 +1,1248 @@
+@@ -0,0 +1,1347 @@
 +/*
 + * StockFight.inl (included by SquadTask.cpp: a new .cpp needs a cmake re-glob)
 + *
@@ -26257,6 +26304,24 @@ index 00000000..8b6d16b9
 +	}
 +
 +	if (GetTarget() == nullptr) {
++		AIFloat3 pressPos;
++		const char* why = "";
++		if ((circuit->GetTunable("apex_army_press", 1.f) > 0.f) && StockPressPos(pressPos, why)) {
++			if (frame >= nextPressLog) {
++				nextPressLog = frame + FRAMES_PER_SEC * 30;
++				circuit->LOG("apex: atk-press t=%i lead=%s n=%i pow=%.0f to=%.0f,%.0f d=%.0f why=%s",
++						circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
++						attackPower * powerMod, pressPos.x, pressPos.z, startPos.distance2D(pressPos), why);
++			}
++			CPathFinder* pf = circuit->GetPathfinder();
++			std::shared_ptr<IPathQuery> query = pf->CreatePathSingleQuery(
++					leader, circuit->GetThreatMap(), startPos, pressPos, std::max(highestRange * 0.5f, float(pf->GetSquareSize())));
++			pathQueries[leader] = query;
++			pf->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* q) {
++				this->StockApplyPressPos(static_cast<const CQueryPathSingle*>(q));
++			});
++			return;
++		}
 +		StockFallbackFrontPos();
 +		return;
 +	}
@@ -26381,6 +26446,87 @@ index 00000000..8b6d16b9
 +
 +	if (!pPath->posPath.empty()) {
 +		ActivePath(lowestSpeed);
++	} else {
++		StockFallbackFrontPos();
++	}
++}
++
++// apex: NOTHING IN SIGHT IS NOT NOTHING THERE (apex_army_press; his 10-23: "the human was completely at risk for dying
++// but the AI army retreated or walked away"). Stock targets only enemies in sight and, finding none, walks to OUR
++// front -- his 10-22 game held 300-500k of army in attack squads from minute 45 and 54% -> 96% of it was home by
++// minute 80. A player walks to where the enemy was last seen, or to where his base must be. So: the nearest
++// remembered enemy group this squad can reach and outweighs; knowing none at all, the nearest enemy start box.
++// A known group it cannot beat still sends it to the front as before.
++bool CAttackTask::StockPressPos(AIFloat3& out, const char*& why)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	SArea* area = leader->GetArea();
++	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
++	const float maxPower = attackPower * powerMod;
++	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
++	float best = std::numeric_limits<float>::max();
++	int real = 0;
++	for (const CEnemyManager::SEnemyGroup& g : groups) {
++		if (g.units.empty()) {
++			continue;   // the manager's seed group at the map centre
++		}
++		++real;
++		if ((maxPower <= g.influence) || !terrainMgr->CanMobileReachAt(area, g.pos, highestRange)) {
++			continue;
++		}
++		const float d = pos.SqDistance2D(g.pos);
++		if (d < best) {
++			best = d;
++			out = g.pos;
++		}
++	}
++	if (best < std::numeric_limits<float>::max()) {
++		why = "remembered";
++		return true;
++	}
++	if (real > 0) {
++		return false;
++	}
++	// Where their base must be: the enemy start box nearest us (every player sees the boxes), searched as a player
++	// would -- its centre, then its four quarter points, the next one once this one is in sight -- else our start
++	// mirrored through the centre.
++	AIFloat3 guess(-1.f, 0.f, -1.f);
++	float bl, br, bt, bb;
++	if (circuit->GetSetupManager()->GetNearestEnemyBox(pos, bl, br, bt, bb)) {
++		const float cx = 0.5f * (bl + br), cz = 0.5f * (bt + bb), qx = 0.25f * (br - bl), qz = 0.25f * (bb - bt);
++		const AIFloat3 pts[5] = {AIFloat3(cx, 0.f, cz), AIFloat3(cx - qx, 0.f, cz - qz), AIFloat3(cx + qx, 0.f, cz - qz),
++				AIFloat3(cx + qx, 0.f, cz + qz), AIFloat3(cx - qx, 0.f, cz + qz)};
++		const float seen = std::max(highestRange, leader->GetCircuitDef()->GetLosRadius());
++		for (int k = 0; k < 5; ++k) {
++			const AIFloat3& p = pts[pressStep % 5];
++			if ((pos.SqDistance2D(p) > SQUARE(seen)) && terrainMgr->CanMobileReachAt(area, p, highestRange)) {
++				break;
++			}
++			++pressStep;
++		}
++		guess = pts[pressStep % 5];
++		why = "box";
++	}
++	if (guess.x < 0.f) {
++		const AIFloat3& home = circuit->GetSetupManager()->GetStartPos();
++		guess = AIFloat3(CTerrainManager::GetTerrainWidth() - home.x, 0.f, CTerrainManager::GetTerrainHeight() - home.z);
++		why = "mirror";
++	}
++	if (!terrainMgr->CanMobileReachAt(area, guess, highestRange)) {
++		return false;
++	}
++	out = guess;
++	return true;
++}
++
++void CAttackTask::StockApplyPressPos(const CQueryPathSingle* query)
++{
++	pPath = query->GetPathInfo();
++	if (!pPath->path.empty()) {
++		if (pPath->path.size() > 2) {
++			ActivePath();
++		}
 +	} else {
 +		StockFallbackFrontPos();
 +	}
