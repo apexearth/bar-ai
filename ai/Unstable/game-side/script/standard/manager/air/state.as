@@ -451,6 +451,11 @@ void ObsInit()
 // "200 m/s" is read as a +100% game, so the base is 100.
 bool AirEcoReady()
 {
+	// PRICED, NOT A BAR (apex_air_eco_priced; his 10-23: "i do like things priced"). The bar zeroed every bomber
+	// below it (`wing0(eco)`); a bomber already pays for the ground war it costs -- its gain is the strike's metal
+	// against its own cost, and the target's gain carries the army gap -- so the market decides alone.
+	if (ai.GetTunable("apex_air_eco_priced", TUNE_AIR_ECO_PRICED) > 0.f)
+		return true;
 	const float need = ai.GetTunable("apex_air_eco_base", TUNE_AIR_ECO_BASE)
 			* Market::IncomeMult();
 	return Market::EcoPowerM() >= need;
