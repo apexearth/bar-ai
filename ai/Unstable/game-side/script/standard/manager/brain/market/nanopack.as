@@ -300,6 +300,66 @@ AIFloat3 PackHeart(const AIFloat3& in at, float reach, float flush, bool lane,
 // as soon as it has `n`, so the common single-slot ask still ends on ring one.
 // probe: the anchor is a site being SCORED, not a standing building -- its
 // footprint is taken and the walk leaves no resume mark behind.
+// FLUSH AGAINST THE BLOCK (apex_nano_flush; his 10-22: "why can't we place the nanos tighter?"). Turrets packed round a
+// plant until its ring was full, then the fallback was the engine's nearest free site within 300 -- singles in
+// whatever gap was left (watch seed 4100: 242 of 306 off-lattice buildings were turrets; the T2 plant asked 558
+// slots and got 107). The rest take free lattice cells touching a standing turret, nearest the asked point first.
+bool NanoFlushOn() { return ai.GetTunable("apex_nano_flush", TUNE_NANO_FLUSH) > 0.f; }
+int FlushNanoCells(int nanoDef, const AIFloat3& in near, int want, array<AIFloat3>& cells)
+{
+	if ((want <= 0) || !Catalog::ValidId(nanoDef) || !OnMap(near) || (gOwnNanoPos.length() == 0))
+		return 0;
+	CCircuitDef@ def = Catalog::Def(nanoDef);
+	const float pn = Lattice::FootPitch(nanoDef);
+	NanoNear(near, 800.f);
+	array<uint> idx;
+	array<float> dist;
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
+		if (i >= gOwnNanoPos.length())
+			continue;
+		idx.insertLast(i);
+		dist.insertLast(gOwnNanoPos[i].distance2D(near));
+	}
+	int got = 0;
+	int probes = 0;
+	const array<float> dx = {1.f, -1.f, 0.f, 0.f};
+	const array<float> dz = {0.f, 0.f, 1.f, -1.f};
+	for (uint o = 0; (o < idx.length()) && (got < want) && (probes < 64); ++o) {
+		uint bi = o;
+		for (uint q = o + 1; q < idx.length(); ++q)
+			if (dist[q] < dist[bi])
+				bi = q;
+		const uint ti = idx[bi];
+		idx[bi] = idx[o];
+		dist[bi] = dist[o];
+		const AIFloat3 tp = gOwnNanoPos[ti];
+		for (uint e = 0; (e < 4) && (got < want) && (probes < 64); ++e) {
+			const AIFloat3 c = tp + AIFloat3(dx[e] * pn, 0.f, dz[e] * pn);
+			if (!OnMap(c))
+				continue;
+			bool dup = false;
+			for (uint k = 0; (k < cells.length()) && !dup; ++k)
+				dup = cells[k].distance2D(c) < 0.5f * pn;
+			for (uint li = 0; (li < Requests::gLive.length()) && !dup; ++li) {
+				IUnitTask@ lt = Requests::gLive[li];
+				dup = (lt !is null) && !lt.IsDead() && (lt.GetBuildPos().distance2D(c) < 0.5f * pn);
+			}
+			if (dup)
+				continue;
+			++probes;
+			AIFloat3 cell;
+			if (!ai.CanPlaceCell(def, c, cell) || (cell.distance2D(c) > 1.f))
+				continue;
+			if (OffFactoryExit(c).distance2D(c) > 1.f)
+				continue;
+			cells.insertLast(c);
+			++got;
+		}
+	}
+	return got;
+}
+
 int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 		array<AIFloat3>& out slots, bool probe = false)
 {

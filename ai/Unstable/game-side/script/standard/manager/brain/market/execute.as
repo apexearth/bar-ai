@@ -1184,8 +1184,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			// fallback, cached as before -- an asker that finds no packed
 			// cell must still be able to place somewhere rather than idle.
 			const AIFloat3 raw = OnMap(slot) ? slot : w.pos;
+			array<AIFloat3> flush1;
+			if (NanoFlushOn() && (FlushNanoCells(int(w.def.id), raw, 1, flush1) > 0)) {
+				gNanoSite = flush1[0];
+				gNanoSiteAt = ai.frame;
+				gNanoSiteKey = -1;
+			}
 			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1;
-			if ((nk != gNanoSiteKey)
+			if ((flush1.length() == 0) && (nk != gNanoSiteKey)
 				|| (ai.frame - gNanoSiteAt >= 2 * SECOND))
 			{
 				gNanoSiteKey = nk;
@@ -1313,6 +1319,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 							askK = 1;
 						array<AIFloat3> packK;
 						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						if (NanoFlushOn() && (int(packK.length()) < askK))
+							FlushNanoCells(int(w.def.id), baseK, askK - int(packK.length()), packK);
 						if (nLines > 0)
 							NoteNanoDry(anchorK, packK.length() == 0);
 						// No factory standing leaves the anchor at -1.
