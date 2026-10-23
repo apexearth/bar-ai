@@ -15,6 +15,32 @@ own thinking each update (moveTo, attack, setTarget, assessThreat, join), AirSqu
 strike. Nothing else commands a squad's units. Step 1: TUNE_STOCK_ARMY (our economy, stock BARb army
 control) as the floor; then the squad layer, piece by piece, each beating the floor in a few games.
 
+# Know them, then hit with conviction (his 10-22)
+
+His 10-22, after a player said our AI is "too afraid of static defenses": *"our AI needs more scouting. It
+often doesn't understand what the enemy has and isn't sure what to do. Obvious answer is to make air scouts and
+use them to help the army understand what they're up against."* *"our air attacks stay small when they need to
+get bigger."* *"massive attacks work better than lots of small attacks. you have to fight with conviction,
+hesitation will be the downfall."* *"To fight against enemy AA we can throw cheap scouts in first."*
+
+- [ ] **Scouting the army can use.** Air scouts priced by what an unknown costs the army: a fight decision made
+  against a blind guess (FoeKnown false, stale ghosts) is worth what a look would change in it. The look feeds
+  the army's own assessment of what it faces, not only the bomber wing's target choice (LookGainFor today).
+- [ ] **Too afraid of towers** (a player, 10-22): replay his v0.3.5 game of 10-22 (the one before the hosted game
+  that night) and measure where the army stopped short of a tower line it could have taken. Likely the stock
+  threat map's read of static guns.
+- [ ] **Bigger air strikes.** A wing goes when it is big enough to finish its target, not on a cadence; small
+  repeated strikes into AA are the failure. Cheap scouts or decoys first to draw the AA.
+- [ ] **Mass, then commit.** One big attack over many small ones; once committed, no trickle-back. The army
+  waits to gather by price (what the extra mass wins), then goes and does not hesitate.
+- [ ] **A style per seat** -- *"strongly prefers air"*, not "always goes air". A modest price tilt the policy net
+  can see as an input (so training is not confused), per seat, never said in chat. Each style screened against a
+  neutral seat and its tilt cut until it costs no more than a few percent. Never forced: a liked option wins close
+  calls, never clear losers (*"we don't want to get things so out of whack that the whole AI breaks down"*).
+- [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
+  and do a massive air attack, things like that would be crazy and fun."* A team plan names a time and a kind
+  (all air, all T3 ground); each seat's tilt leans toward it until the strike, then back to its own style.
+
 # Next big job (his 10-15: "we'll do it later")
 
 ## Replace the overrides with one pricing scale -- THE CURRENT JOB (his 10-19, restated)
