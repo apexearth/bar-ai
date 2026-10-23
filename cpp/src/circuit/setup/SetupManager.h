@@ -96,6 +96,10 @@ public:
 	// The mean centre of every start box that is not our ally team's;
 	// off-map when the script carries no boxes.
 	springai::AIFloat3 GetEnemyBoxCentre() const;
+	// ...and the centre of the enemy start box nearest pos (off-map when none)
+	springai::AIFloat3 GetNearestEnemyBoxCentre(const springai::AIFloat3& pos) const;
+	// ...and its extent: false when there is no enemy box
+	bool GetNearestEnemyBox(const springai::AIFloat3& pos, float& left, float& right, float& top, float& bottom) const;
 
 private:
 	void FindStart();

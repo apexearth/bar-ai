@@ -1782,6 +1782,7 @@ const float TUNE_LIFT_TURRETS = 1.f;   // [toggle 0/1] lift.as: with no line sho
 const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
 const float TUNE_NANO_FLUSH = 0.f;   // [toggle 0/1] nanopack.as: a turret the packed ring cannot hold goes flush against a standing turret
 const float TUNE_BIG_NEAR = 0.f;   // [toggle 0/1] sites.as: a big generator probed half a reach into the turret block; room only for turrets short
+const float TUNE_ARMY_PRESS = 1.f;   // [toggle 0/1] StockFight.inl: an attack squad with nothing in sight walks to the nearest remembered group it outweighs, else the mirrored start
 const float TUNE_HOT_ROAD_MEMO = 1.f;   // [toggle 0/1] decide.as ChargeTrip: a want on a road C++ refused for heat, still hot, is worth 0 to that hand
 const float TUNE_AIR_OBS_EVIDENCE = 1.f;   // [toggle 0/1] state.as SettleStrike: a strike run weighs by bombers sent over the wing planned
 const float TUNE_KEEP_ROUTE = 1.f;   // [toggle 0/1] TravelAction.cpp: a new route ending within 64 of the one being walked keeps it (no reset, no order)

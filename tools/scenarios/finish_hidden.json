@@ -1,0 +1,18 @@
+{
+  "about": "their base out of sight -- a bot lab, 2 light towers, 4 mexes, no army -- and 14 Centurions of ours at the map centre, normal line of sight",
+  "passes": "goes and finishes what it cannot see: their lab and both towers die",
+  "map": "Geyser Plains",
+  "seconds": 300,
+  "los": "normal",
+  "units": [
+    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
+    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", -200, 0], "spacing": 120, "order": "ai"},
+    {"side": 0, "def": "armwar", "n": 14, "at": ["c", 0, 0], "spacing": 56, "order": "ai"},
+    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
+    {"side": 1, "def": "armllt", "n": 2, "at": ["s1", -250, 0], "spacing": 200, "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 4, "at": ["s1", 200, 0], "spacing": 120, "order": "ai"}
+  ],
+  "expect": [
+    {"killed:armlab": [">=", 1], "killed:armllt": [">=", 2]}
+  ]
+}

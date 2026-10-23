@@ -209,6 +209,24 @@ void CAttackTask::StockUpdate()
 	}
 
 	if (GetTarget() == nullptr) {
+		AIFloat3 pressPos;
+		const char* why = "";
+		if ((circuit->GetTunable("apex_army_press", 1.f) > 0.f) && StockPressPos(pressPos, why)) {
+			if (frame >= nextPressLog) {
+				nextPressLog = frame + FRAMES_PER_SEC * 30;
+				circuit->LOG("apex: atk-press t=%i lead=%s n=%i pow=%.0f to=%.0f,%.0f d=%.0f why=%s",
+						circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
+						attackPower * powerMod, pressPos.x, pressPos.z, startPos.distance2D(pressPos), why);
+			}
+			CPathFinder* pf = circuit->GetPathfinder();
+			std::shared_ptr<IPathQuery> query = pf->CreatePathSingleQuery(
+					leader, circuit->GetThreatMap(), startPos, pressPos, std::max(highestRange * 0.5f, float(pf->GetSquareSize())));
+			pathQueries[leader] = query;
+			pf->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* q) {
+				this->StockApplyPressPos(static_cast<const CQueryPathSingle*>(q));
+			});
+			return;
+		}
 		StockFallbackFrontPos();
 		return;
 	}
@@ -333,6 +351,87 @@ void CAttackTask::StockApplyTargetPath(const CQueryPathSingle* query)
 
 	if (!pPath->posPath.empty()) {
 		ActivePath(lowestSpeed);
+	} else {
+		StockFallbackFrontPos();
+	}
+}
+
+// apex: NOTHING IN SIGHT IS NOT NOTHING THERE (apex_army_press; his 10-23: "the human was completely at risk for dying
+// but the AI army retreated or walked away"). Stock targets only enemies in sight and, finding none, walks to OUR
+// front -- his 10-22 game held 300-500k of army in attack squads from minute 45 and 54% -> 96% of it was home by
+// minute 80. A player walks to where the enemy was last seen, or to where his base must be. So: the nearest
+// remembered enemy group this squad can reach and outweighs; knowing none at all, the nearest enemy start box.
+// A known group it cannot beat still sends it to the front as before.
+bool CAttackTask::StockPressPos(AIFloat3& out, const char*& why)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	SArea* area = leader->GetArea();
+	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
+	const float maxPower = attackPower * powerMod;
+	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
+	float best = std::numeric_limits<float>::max();
+	int real = 0;
+	for (const CEnemyManager::SEnemyGroup& g : groups) {
+		if (g.units.empty()) {
+			continue;   // the manager's seed group at the map centre
+		}
+		++real;
+		if ((maxPower <= g.influence) || !terrainMgr->CanMobileReachAt(area, g.pos, highestRange)) {
+			continue;
+		}
+		const float d = pos.SqDistance2D(g.pos);
+		if (d < best) {
+			best = d;
+			out = g.pos;
+		}
+	}
+	if (best < std::numeric_limits<float>::max()) {
+		why = "remembered";
+		return true;
+	}
+	if (real > 0) {
+		return false;
+	}
+	// Where their base must be: the enemy start box nearest us (every player sees the boxes), searched as a player
+	// would -- its centre, then its four quarter points, the next one once this one is in sight -- else our start
+	// mirrored through the centre.
+	AIFloat3 guess(-1.f, 0.f, -1.f);
+	float bl, br, bt, bb;
+	if (circuit->GetSetupManager()->GetNearestEnemyBox(pos, bl, br, bt, bb)) {
+		const float cx = 0.5f * (bl + br), cz = 0.5f * (bt + bb), qx = 0.25f * (br - bl), qz = 0.25f * (bb - bt);
+		const AIFloat3 pts[5] = {AIFloat3(cx, 0.f, cz), AIFloat3(cx - qx, 0.f, cz - qz), AIFloat3(cx + qx, 0.f, cz - qz),
+				AIFloat3(cx + qx, 0.f, cz + qz), AIFloat3(cx - qx, 0.f, cz + qz)};
+		const float seen = std::max(highestRange, leader->GetCircuitDef()->GetLosRadius());
+		for (int k = 0; k < 5; ++k) {
+			const AIFloat3& p = pts[pressStep % 5];
+			if ((pos.SqDistance2D(p) > SQUARE(seen)) && terrainMgr->CanMobileReachAt(area, p, highestRange)) {
+				break;
+			}
+			++pressStep;
+		}
+		guess = pts[pressStep % 5];
+		why = "box";
+	}
+	if (guess.x < 0.f) {
+		const AIFloat3& home = circuit->GetSetupManager()->GetStartPos();
+		guess = AIFloat3(CTerrainManager::GetTerrainWidth() - home.x, 0.f, CTerrainManager::GetTerrainHeight() - home.z);
+		why = "mirror";
+	}
+	if (!terrainMgr->CanMobileReachAt(area, guess, highestRange)) {
+		return false;
+	}
+	out = guess;
+	return true;
+}
+
+void CAttackTask::StockApplyPressPos(const CQueryPathSingle* query)
+{
+	pPath = query->GetPathInfo();
+	if (!pPath->path.empty()) {
+		if (pPath->path.size() > 2) {
+			ActivePath();
+		}
 	} else {
 		StockFallbackFrontPos();
 	}

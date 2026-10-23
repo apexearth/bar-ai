@@ -1,0 +1,107 @@
+{
+  "about": "their base nearly dead -- a bot lab, 2 light towers, 4 mexes -- and 14 Centurions of ours 900 elmos out; while 4 of their raiders hit our base",
+  "passes": "presses the kill while a small raid hits home: their lab and both towers die",
+  "map": "Geyser Plains",
+  "seconds": 300,
+  "units": [
+    {
+      "side": 0,
+      "def": "armlab",
+      "n": 1,
+      "at": [
+        "s0",
+        0,
+        0
+      ],
+      "order": "ai"
+    },
+    {
+      "side": 0,
+      "def": "armmex",
+      "n": 4,
+      "at": [
+        "s0",
+        -200,
+        0
+      ],
+      "spacing": 120,
+      "order": "ai"
+    },
+    {
+      "side": 0,
+      "def": "armwar",
+      "n": 14,
+      "at": [
+        "s1",
+        -900,
+        0
+      ],
+      "spacing": 56,
+      "order": "ai"
+    },
+    {
+      "side": 1,
+      "def": "armlab",
+      "n": 1,
+      "at": [
+        "s1",
+        0,
+        0
+      ],
+      "order": "ai"
+    },
+    {
+      "side": 1,
+      "def": "armllt",
+      "n": 2,
+      "at": [
+        "s1",
+        -250,
+        0
+      ],
+      "spacing": 200,
+      "order": "ai"
+    },
+    {
+      "side": 1,
+      "def": "armmex",
+      "n": 4,
+      "at": [
+        "s1",
+        200,
+        0
+      ],
+      "spacing": 120,
+      "order": "ai"
+    },
+    {
+      "side": 1,
+      "def": "armflash",
+      "n": 4,
+      "at": [
+        "s0",
+        700,
+        0
+      ],
+      "spacing": 48,
+      "order": "fight",
+      "to": [
+        "s0",
+        0,
+        0
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "killed:armlab": [
+        ">=",
+        1
+      ],
+      "killed:armllt": [
+        ">=",
+        2
+      ]
+    }
+  ]
+}

@@ -86,6 +86,45 @@ AIFloat3 CSetupManager::GetEnemyBoxCentre() const
 	return AIFloat3(sum.x / n, 0.f, sum.z / n);
 }
 
+AIFloat3 CSetupManager::GetNearestEnemyBoxCentre(const AIFloat3& pos) const
+{
+	const int myAlly = setupData->FindAllyTeamOf(circuit->GetTeamId());
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestD = std::numeric_limits<float>::max();
+	for (const auto& kv : setupData->GetStartBoxes()) {
+		if (kv.first == myAlly) {
+			continue;
+		}
+		const utils::SBox& b = kv.second.GetBox();
+		const AIFloat3 c(0.5f * (b.left + b.right), 0.f, 0.5f * (b.top + b.bottom));
+		const float d = c.SqDistance2D(pos);
+		if (d < bestD) {
+			bestD = d;
+			best = c;
+		}
+	}
+	return best;
+}
+
+bool CSetupManager::GetNearestEnemyBox(const AIFloat3& pos, float& left, float& right, float& top, float& bottom) const
+{
+	const int myAlly = setupData->FindAllyTeamOf(circuit->GetTeamId());
+	float bestD = std::numeric_limits<float>::max();
+	for (const auto& kv : setupData->GetStartBoxes()) {
+		if (kv.first == myAlly) {
+			continue;
+		}
+		const utils::SBox& b = kv.second.GetBox();
+		const AIFloat3 c(0.5f * (b.left + b.right), 0.f, 0.5f * (b.top + b.bottom));
+		const float d = c.SqDistance2D(pos);
+		if (d < bestD) {
+			bestD = d;
+			left = b.left; right = b.right; top = b.top; bottom = b.bottom;
+		}
+	}
+	return bestD < std::numeric_limits<float>::max();
+}
+
 CSetupManager::~CSetupManager()
 {
 	delete script;
