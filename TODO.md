@@ -37,6 +37,14 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   can see as an input (so training is not confused), per seat, never said in chat. Each style screened against a
   neutral seat and its tilt cut until it costs no more than a few percent. Never forced: a liked option wins close
   calls, never clear losers (*"we don't want to get things so out of whack that the whole AI breaks down"*).
+- [ ] **Adapt when something stops working** -- *"Right now we do a lot of air, humans realize it eventually and
+  just make tons of AA... so what we need to do is something OTHER than air at that point"*; *"Need some way to
+  better adapt to whats going on in games. if one thing isn't working, we have to learn/try something else."* As a
+  price, not a rule: each investment's worth learns from its realized return this game (an air strike's metal
+  killed per metal sent and lost, a ground push's, a nuke's), so a line that keeps failing prices itself down and
+  the money goes to what is working. Their AA seen is already an input; this closes the loop on outcomes.
+- [ ] **Some seats more aggressive** (10-22, with the style per seat): a lean toward taking fights and pushing,
+  as part of a seat's style, not a separate rule.
 - [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
   and do a massive air attack, things like that would be crazy and fun."* A team plan names a time and a kind
   (all air, all T3 ground); each seat's tilt leans toward it until the strike, then back to its own style.
