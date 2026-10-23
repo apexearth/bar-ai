@@ -67,6 +67,7 @@ his core tenet is: always be making economy. The nets decide; balances are their
 | investigate a desync | `desync-check` skill |
 | commit a change that touched comments | `python tools/comment_audit.py` |
 | judge whether a rule does anything | `python tools/deadcheck.py <run>` |
+| hear he played multiplayer games, or start a session | `python tools/trial_report.py`: the trials running in releases (ISSUES.md validation list, TRIAL RUNNING) |
 
 ## The four lists
 
