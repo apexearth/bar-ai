@@ -121,6 +121,15 @@ network and sim cost on every client in a hosted game, invisible to the AI's own
 unit kind in the C++ command wrappers; then wake a turret only when work enters its reach (a frame, a damaged
 unit, a wreck) instead of re-asking it on a clock; then slice the builder elections (ai-performance procedure).
 
+Measured 10-22/23 with the new `apex: cmds` counter (2v2 vs BARb hard, Comet/Isthmus, 30 min), commands per minute
+per AI at the peak: turrets 32-52, constructors 326-560, army 700-1,012 (moves). So turrets are NOT the flood; the
+army is, ~33 commands per army unit per minute -- one every 2 s. Repeats within 3 s are ~7% of moves, bit-identical
+ones (apex_order_dedupe's candidates) 1-6 a minute: the dedupe would buy <1%. Travel (waypoint steps) is ~2/3 of
+moves, but doubling the waypoint spacing (apex_travel_step 2, reverted) cut travel per unit only 15% and all army
+commands 6%: the orders come from units being handed fresh paths (each new TravelAction issues at once), a
+carrot re-set every couple of seconds, not from reaching waypoints. Next: find who re-paths every ~2 s (squad
+update / AttackTask / regroup) and hold a unit's order while its goal has not moved enough to change its route.
+
 ## AIR ATTACKS AN UNDERWATER EXTRACTOR (2026-10-22)
 
 His watch, 10-22: air units trying to attack a mex underwater. Aircraft that cannot hit a submerged target were
