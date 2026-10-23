@@ -567,7 +567,13 @@ float StrikeGainWing(int d, float fillSec)
 	const int pool = int(TeamWingHeld());
 	if (pool > held)
 		held = pool;
-	if ((ScaledBombers() <= 0) || (held >= ScaledBombers()))
+	// RICH SEATS BUY AIR WHILE IT PAYS (apex_air_rich; his 10-23: "when you're rich, make more T2 air labs, make
+	// more air"). ScaledBombers is a count -- a seat at 1,300 m/s read `full 120(pool120)/59` and priced the next
+	// bomber at 0, so neither bombers nor a second advanced plant were ever worth anything. Past the count the
+	// next bomber is still bought while its measured (or modelled) gain beats its cost; the count keeps its other
+	// jobs (when a held wing is massed, the commit size).
+	if ((ScaledBombers() <= 0) || ((held >= ScaledBombers())
+		&& (ai.GetTunable("apex_air_rich", TUNE_AIR_RICH) <= 0.f)))
 		return 0.f;
 	if (!MarginalWorth(d, held))
 		return 0.f;
@@ -587,7 +593,7 @@ string StrikeWhy(int d)
 		held = pool;
 	if (ScaledBombers() <= 0)
 		return "scaled0";
-	if (held >= ScaledBombers())
+	if ((held >= ScaledBombers()) && (ai.GetTunable("apex_air_rich", TUNE_AIR_RICH) <= 0.f))
 		return "full " + held + "(pool" + pool + ")/" + ScaledBombers();
 	return "worth " + int(MarginalGain(d, held)) + "<" + int(Catalog::gCostM[d]
 			* ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF)) + " obs=" + int(ObsDmg(d));
