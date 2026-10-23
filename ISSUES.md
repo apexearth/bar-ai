@@ -93,6 +93,22 @@ idle plant standing in a lane is not priced to move. The reclaim market already 
 walled in (plant-walled, PlantEnclosure); a lane it blocks for an ally belongs in the same price -- the ally's
 blocked traffic against a lab producing nothing.
 
+Audit (10-22, read-only agent): NO path checks an ally's open lanes before placing a factory. (1) C++ commit:
+FACTORY is IsFixedSite (BuilderTask.cpp:67), so SitePredicate's IsInBaseLane (1795) never runs for labs -- not
+even our own or in-process allies' TeamLanes; Execute snaps/re-origins the site (609-628); CBFactoryTask's handed-
+site test (FactoryTask.cpp:164-172) checks footprint, zones, spots and its OWN door only, no block map; the
+fallback spiral (186-245, up to 1600) checks reach, clearance, own door. (2) InteriorSite (sites.as:1348-1396)
+sets most labs sideways across our axis, ReachableBy only. (3) Gantry/air-plant branch (execute.as:843-851):
+spots + our plants only; air plant doorway=false in LatheSiteRaw (sites.as:878); the forced T1 air plant
+(want_super.as:1214-1250). (4) FirstPlantSite (execute.as:1675-1766): no AllyLaneHit/OffFactoryExit/
+OffAllyBuildings. (5) PlantNudge's second ProbedSite returned unchecked (execute.as:1770-1802). (6) Site caches
+reused unchecked (sites.as:797, 815-829, 1634-1640); ally list 5 s. Existing ally guards: AllyLaneHit (doorways
+220x100, execute.as:143-189), OffAllyBuildings (defence and lifts only), block-map aprons (engine searches only);
+the ally_base option feeds SetAllyZoneRange, never called (main.as:45 commented out); Base::InLaneAt has no callers.
+Fix: one chokepoint in CBFactoryTask::TryBuildSite (handed site and spiral) refusing our lanes, in-process allies'
+lanes, any ally factory door or apron and allied bases; one script PlantSiteOk for FirstPlantSite, PlantNudge's
+last result and the gantry/air-plant branch.
+
 ## TURRET APM AND BUILDER ELECTIONS LATE (2026-10-22)
 
 His 10-22: "one thing that lags me is probably all the con turrets... throttle it so APM doesn't go out of control."
