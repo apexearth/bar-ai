@@ -58,6 +58,7 @@ plays in `TODO.md`; the full older text is in git (`git log -p USER-FEEDBACK.md`
 
 ## Army
 
+- **Too afraid of static defences** (10-22, a player's feedback passed on by him): our army holds off fortified ground it could take. Open, unmeasured -- the army is stock BARb since 10-16, so the fear is likely its threat read of towers (C++ threat map), not our layers.
 - Multiple groups coordinate an attack, across allies too (10-07: six of ours probed a 37k tower line one 4k squad at a time). Team push built; the MASS vs NORMAL A/B is open.
 - Break a defended line: mass T3, missiles, banked nukes together, LRPCs/Starfall, combined air and ground on one point, one shared gantry in an 8v8. Built as plan options; a gantry where nanos already stand is open.
 - Games should END: decisiveness, sooner when possible.
