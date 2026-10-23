@@ -122,36 +122,6 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 	p.hands.insertAt(at, hands);
 }
 
-// OUR TREE: everything reachable from what we own through what it builds -- the unit defs say it all at game start
-// (his 10-22), so it is built once, from the first roots we own; asked before we own anything, it is asked again.
-// The T2 pool admitted any def anybody builds, so our T2 plan's energy step was Cortex's advanced fusion.
-array<bool> gOurTree;
-bool gOurTreeBuilt = false;
-bool InOurTree(int d)
-{
-	if (!gOurTreeBuilt) {
-		gOurTree.resize(0);
-		gOurTree.resize(Catalog::gDefCount + 1);
-		array<int> q;
-		const array<int>@ own = OwnedDefs();
-		for (uint oi = 0; oi < own.length(); ++oi)
-			if ((gOwnCount[own[oi]] > 0) && !gOurTree[own[oi]]) {
-				gOurTree[own[oi]] = true;
-				q.insertLast(own[oi]);
-			}
-		for (uint qi = 0; qi < q.length(); ++qi) {
-			const array<int>@ bl = Catalog::gBuildsList[q[qi]];
-			for (uint b = 0; b < bl.length(); ++b)
-				if (Catalog::ValidId(bl[b]) && !gOurTree[bl[b]]) {
-					gOurTree[bl[b]] = true;
-					q.insertLast(bl[b]);
-				}
-		}
-		gOurTreeBuilt = (q.length() > 0);
-	}
-	return Catalog::ValidId(d) && (uint(d) < gOurTree.length()) && gOurTree[d];
-}
-
 // anyTier ignores who can build it: that is the world AFTER an advanced plant,
 // and comparing the two pools is how "is T2 worth it yet" gets answered by
 // arithmetic instead of by a bar.
@@ -164,7 +134,7 @@ int BestExtractDef(bool anyTier)
 			continue;
 		if (!anyTier && !CanBuildEver(d))
 			continue;
-		if (anyTier && EtaEFeedOn() && !InOurTree(d))
+		if (anyTier && EtaEFeedOn() && !Producible(d))   // our own tree (worth.as): the T2 plan bought Cortex's AFUS
 			continue;
 		if (Catalog::gExtractsM[d] > bx) {
 			bx = Catalog::gExtractsM[d];
@@ -183,7 +153,7 @@ int ClaimExtractDef(bool anyTier)
 			continue;
 		if (!anyTier && !CanBuildEver(d))
 			continue;
-		if (anyTier && EtaEFeedOn() && !InOurTree(d))
+		if (anyTier && EtaEFeedOn() && !Producible(d))   // our own tree (worth.as): the T2 plan bought Cortex's AFUS
 			continue;
 		const float c = Catalog::gCostM[d];
 		if ((c > 1.f) && ((best == 0) || (c < bc))) {
@@ -314,7 +284,7 @@ void PoolFill(Pool@ p, bool anyTier)
 			continue;
 		if (!anyTier && !CanBuildEver(d))
 			continue;
-		if (anyTier && EtaEFeedOn() && !InOurTree(d))
+		if (anyTier && EtaEFeedOn() && !Producible(d))   // our own tree (worth.as): the T2 plan bought Cortex's AFUS
 			continue;
 		// ...and nothing NOBODY builds (a free reactor no unit can place
 		// read as five cheap rungs of the T2 ladder).
