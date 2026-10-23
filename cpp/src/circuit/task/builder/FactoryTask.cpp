@@ -156,8 +156,67 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 		utils::free(units);
 		return clear;
 	};
-	auto exitOpen = [this, exitTerrain, &laneClear](const AIFloat3& bp) {
-		return laneClear(bp) && exitTerrain->FactoryExitOpen(buildDef, bp, facing);
+	// apex: ...AND IT STANDS IN NOBODY ELSE'S WAY (his 10-22 hosted game: an unused T1 lab in an ally's open lane).
+	// The commit exempted factories from the street test every other building passes (IsFixedSite), and laneClear
+	// guards only the new lab's own door. Refused: any part of the footprint on our streets or an in-process ally's
+	// (IsInBaseLane, centre and corners), and the footprint over another factory's door -- ours or any ally's, two
+	// of its footprints ahead at its own facing, its width. apex_fac_lanes 0 is the old commit.
+	const bool othersOn = circuit->GetTunable("apex_fac_lanes", 1.f) > 0.f;
+	auto othersClear = [this, circuit, othersOn](const AIFloat3& bp) {
+		if (!othersOn) {
+			return true;
+		}
+		const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
+		const float hx = (turned ? buildDef->GetDef()->GetZSize() : buildDef->GetDef()->GetXSize()) * SQUARE_SIZE * 0.5f;
+		const float hz = (turned ? buildDef->GetDef()->GetXSize() : buildDef->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f;
+		const AIFloat3 pts[5] = {bp, AIFloat3(bp.x - hx, bp.y, bp.z - hz), AIFloat3(bp.x + hx, bp.y, bp.z - hz),
+				AIFloat3(bp.x - hx, bp.y, bp.z + hz), AIFloat3(bp.x + hx, bp.y, bp.z + hz)};
+		for (const AIFloat3& q : pts) {
+			if (circuit->IsInBaseLane(q)) {
+				return false;
+			}
+		}
+		circuit->UpdateFriendlyUnits();
+		auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(bp, 700.f);
+		bool clear = true;
+		for (springai::Unit* u : units) {
+			if (!clear) {
+				break;
+			}
+			auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+			if (cand == nullptr) {
+				continue;
+			}
+			CCircuitDef* cd = cand->GetCircuitDef();
+			if ((cd == nullptr) || cd->IsMobile() || !cd->IsBuilder()) {
+				continue;
+			}
+			AIFloat3 fwd(0.f, 0.f, 0.f);
+			switch (u->GetBuildingFacing()) {
+				default:
+				case UNIT_FACING_SOUTH: fwd.z = 1.f; break;
+				case UNIT_FACING_EAST:  fwd.x = 1.f; break;
+				case UNIT_FACING_NORTH: fwd.z = -1.f; break;
+				case UNIT_FACING_WEST:  fwd.x = -1.f; break;
+			}
+			const float usz = std::max(cd->GetDef()->GetXSize(), cd->GetDef()->GetZSize()) * SQUARE_SIZE;
+			const float uh = usz * 0.5f;
+			const AIFloat3& up = cand->GetPos(circuit->GetLastFrame());
+			const float rx = bp.x - up.x;
+			const float rz = bp.z - up.z;
+			const float ahead = rx * fwd.x + rz * fwd.z;
+			const float side = std::fabs(rx * fwd.z - rz * fwd.x);
+			const float extAhead = (fwd.x != 0.f) ? hx : hz;
+			const float extSide = (fwd.x != 0.f) ? hz : hx;
+			if ((ahead + extAhead > uh) && (ahead - extAhead < uh + 2.f * usz) && (side - extSide < uh)) {
+				clear = false;
+			}
+		}
+		utils::free(units);
+		return clear;
+	};
+	auto exitOpen = [this, exitTerrain, &laneClear, &othersClear](const AIFloat3& bp) {
+		return laneClear(bp) && othersClear(bp) && exitTerrain->FactoryExitOpen(buildDef, bp, facing);
 	};
 	// The handed site as is -- but the engine's test passes an unclaimed metal
 	// spot, which the spiral below would refuse (a corlab on its own mex spot).
@@ -171,11 +230,11 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 		return true;
 	}
 	if ((facing != UNIT_NO_FACING) && (selfBar > 0.f)) {
-		circuit->LOG("apex: fac-site-moved t=%i %s asked=%.0f,%.0f fails=%i at=%.0f,%.0f facing=%i clears=%i possible=%i spot=%i lane=%i exit=%i",
+		circuit->LOG("apex: fac-site-moved t=%i %s asked=%.0f,%.0f fails=%i at=%.0f,%.0f facing=%i clears=%i possible=%i spot=%i lane=%i exit=%i others=%i",
 				circuit->GetTeamId(), buildDef->GetDef()->GetName(), position.x, position.z, buildFails, pos.x, pos.z, facing,
 				clearsBuilder(pos) ? 1 : 0, map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing) ? 1 : 0,
 				exitTerrain->FootprintOnSpot(buildDef, pos, facing) ? 1 : 0, laneClear(pos) ? 1 : 0,
-				exitTerrain->FactoryExitOpen(buildDef, pos, facing) ? 1 : 0);
+				exitTerrain->FactoryExitOpen(buildDef, pos, facing) ? 1 : 0, othersClear(pos) ? 1 : 0);
 	}
 
 	FindFacing(pos);
