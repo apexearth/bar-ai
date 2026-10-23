@@ -84,6 +84,18 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 62 | A teammate with no commander, no base and no income kept getting our units (10-19) | a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap (TUNE_GIFT_STAKE, off) | `apex: gift-stake`; gift metal to a seat after its commander dies | UNTESTED -- his watch games: single gifts of 111 units / 62k m and 123 units / 91k m |
 | 63 | Not enough anti-nukes while the enemy launches a lot of nukes (10-19; "about 6 at once... ~10 nukes all on your base you WILL die") | survive their worst salvo by arithmetic: every seen silo full (its stockpilelimit), fired together, / TUNE_ANTI_AT_ONCE (6) = antis each target needs -- the core and any cluster worth more than those antis; launches seen floor the salvo for unseen silos and lift the income floor | `apex: nukemath facts` (startup: armamd=20/90s armsilo=10/120s corsilo=10/180s), `apex: nukepress`; antis over the core vs ceil(salvo/6) | BUILT -- math checked against the unit files; no game test (his 10-19: "you can get it all through math") |
 
+## TURRET APM AND BUILDER ELECTIONS LATE (2026-10-22)
+
+His 10-22: "one thing that lags me is probably all the con turrets... throttle it so APM doesn't go out of control."
+Measured in the v0.3.5/v0.3.4 4v4s (Supreme Isthmus, 50 min), ms per AI per frame after minute 30: the turrets'
+own idle job facIdle 0.031/0.032 -- cheap; the constructors' idle job bldIdle 0.337 (v0.3.4) / 0.414 (v0.3.5),
+nearly the 0.417 budget alone. Command volume is NOT measured: `apex: orders`/`order-src` count army orders only;
+repair/assist/reclaim/guard commands to turrets and constructors are uncounted. Every idle unit is re-asked each
+15 frames (CIdleTask, apex_idle_ask_f), so hundreds of idle turrets could issue hundreds of commands a second --
+network and sim cost on every client in a hosted game, invisible to the AI's own timing. Next: count commands by
+unit kind in the C++ command wrappers; then wake a turret only when work enters its reach (a frame, a damaged
+unit, a wreck) instead of re-asking it on a clock; then slice the builder elections (ai-performance procedure).
+
 ## AIR ATTACKS AN UNDERWATER EXTRACTOR (2026-10-22)
 
 His watch, 10-22: air units trying to attack a mex underwater. Aircraft that cannot hit a submerged target were
