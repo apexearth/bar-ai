@@ -406,6 +406,7 @@ array<float> gObsDmg;    // per def: measured metal destroyed per bomber sent
 array<float> gObsLost;   // per def: measured planes lost per run, <0 unmeasured
 int   gRunDef      = -1;
 int   gRunSent     = 0;
+int   gRunPlan     = 0;  // the wing the model sized for this type at launch (0 = none)
 float gRunKilled = 0.f;  // enemy structure metal that died in the target cell, by us
 AIFloat3 gRunAt;         // the cell the run was sent at
 int   gRunSettleAt = 0;
@@ -868,6 +869,10 @@ void NoteStrikeLaunched()
 	ObsInit();
 	gRunDef = DominantBomberDef();
 	gRunSent = gWaveBombers;
+	gRunPlan = 0;
+	for (uint k = 0; (k < gNaNeedN.length()) && (k < gNaNeedDef.length()); ++k)
+		if ((gNaNeedDef[k] == gRunDef) && (gNaNeedN[k] > gRunPlan))
+			gRunPlan = gNaNeedN[k];
 	gRunAt = gStrikeHas ? gStrikeAt : aiEnemyMgr.GetEnemyStructPos();
 	gRunKilled = 0.f;
 	gRunSettleAt = ai.frame
@@ -897,7 +902,15 @@ void SettleStrike()
 	const float per = dmg / float(sent);
 	if ((d < 0) || (d >= int(gObsSurv.length())))
 		return;
-	const float w = ai.GetTunable("apex_air_obs_w", TUNE_AIR_OBS_W);
+	float w = ai.GetTunable("apex_air_obs_w", TUNE_AIR_OBS_W);
+	// A RUN IS AS MUCH EVIDENCE AS IT RISKED (apex_air_obs_evidence; his 10-22: humans mass AA and we keep
+	// sending air). His 10-22 game: 89 Shadows in four runs killed nothing and the price still read 177-1,296
+	// metal a bomber, because each run halved the model's prior whatever its size. Now a run of the wing the
+	// model planned moves the estimate by w, as before, and one of k times that wing by 1-(1-w)^k.
+	if ((ai.GetTunable("apex_air_obs_evidence", TUNE_AIR_OBS_EVIDENCE) > 0.f) && (w > 0.f) && (w < 1.f)) {
+		const float k = float(sent) / float((gRunPlan > 0) ? gRunPlan : sent);
+		w = 1.f - pow(1.f - w, k);
+	}
 	gObsSurv[d] = (gObsSurv[d] < 0.f) ? surv : (1.f - w) * gObsSurv[d] + w * surv;
 	const float lost = float(sent - left);
 	gObsLost[d] = (gObsLost[d] < 0.f) ? lost : (1.f - w) * gObsLost[d] + w * lost;
@@ -921,7 +934,8 @@ void SettleStrike()
 		+ " sent=" + sent + " home=" + left
 		+ " surv=" + formatFloat(gObsSurv[d], "", 0, 2)
 		+ " lost=" + formatFloat(gObsLost[d], "", 0, 1)
-		+ " dmg/bomber=" + formatFloat(gObsDmg[d], "", 0, 0));
+		+ " dmg/bomber=" + formatFloat(gObsDmg[d], "", 0, 0)
+		+ " plan=" + gRunPlan + " w=" + formatFloat(w, "", 0, 2));
 }
 
 float ObsSurv(int defId)

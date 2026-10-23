@@ -1585,6 +1585,7 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 	// How hot: the worst square on the road that exists, against the bar it
 	// was held to, in units of one Pawn's threat (scout-hot or squad-hot).
 	float roadMax = 0.f;
+	springai::AIFloat3 roadHot = endPos;
 	{
 		CThreatMap* tm = circuit->GetThreatMap();
 		tm->SetThreatType(unit);
@@ -1592,6 +1593,7 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 			const float th = tm->GetThreatAt(unit, p);
 			if (th > roadMax) {
 				roadMax = th;
+				roadHot = p;
 			}
 		}
 	}
@@ -1606,6 +1608,9 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 			roadMax, roadBarLog, pawn);
 	// No NoteBuildBlocked: a road refused for threat is read live next election, never banned for
 	// three minutes (his ruling; the same fix as the reach test above, lost here once).
+	unit->hotRoadEnd = endPos;
+	unit->hotRoadAt = roadHot;
+	unit->hotRoadBar = roadBarLog;
 	SetDeathNote("hot-road");
 	manager->AbortTask(this);
 }

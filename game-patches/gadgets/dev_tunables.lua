@@ -409,6 +409,8 @@ local NAMES = {
 	"apex_air_finish", -- nnair.as: cadence launch waits for a finishing wing (1)
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
 	"apex_lane_reclaim", -- want_reclaim.as: idle plants in a lane priced for reclaim (1)
+	"apex_hot_road_memo", -- decide.as ChargeTrip: a still-hot refused road zeroes that hand's want (1)
+	"apex_air_obs_evidence", -- state.as SettleStrike: run weight by bombers sent over the planned wing (1)
 	"apex_keep_route", -- TravelAction.cpp: same-place re-routes keep the route (1)
 	"apex_fac_lanes", -- FactoryTask.cpp: the lab site test refuses lanes and other factories' doors (1)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)

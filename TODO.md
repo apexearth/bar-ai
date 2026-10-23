@@ -43,6 +43,10 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   price, not a rule: each investment's worth learns from its realized return this game (an air strike's metal
   killed per metal sent and lost, a ground push's, a nuke's), so a line that keeps failing prices itself down and
   the money goes to what is working. Their AA seen is already an input; this closes the loop on outcomes.
+  Measured 10-23 (his game): bombers already learn from scored runs, too slowly -- a run's damage per bomber moved
+  the model's prior by half whatever its size, so 89 Shadows lost in four runs for nothing still priced at 177-1,296
+  metal each, above their cost. A run now weighs by bombers sent over the wing planned (apex_air_obs_evidence, on).
+  Ground types have the record (worth.as RecordMul); gunship runs are not scored yet.
 - [ ] **Some seats more aggressive** (10-22, with the style per seat): a lean toward taking fights and pushing,
   as part of a seat's style, not a separate rule.
 - [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
@@ -52,9 +56,9 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   Air is still a good way to end a game. We should invest more into air in ultra late game and do huge air raids,
   something to try to end the game. Instead it feels like we do less."* His 10-22 hosted game (8 seats, v0.3.5):
   air orders per 5 min 70-80 to minute 45, then 23 and 22 while T3 took 61-70; 12 air plants ordered in minutes
-  50-55. Lag from minute 35 (sim 0.94-0.96, LAG/HOSTSHORT lines, thinner slices) -- check whether it cuts air
-  more than the rest: the lag ladder (perf.as) deliberately stops lower-tier army lines once T3 runs when severity
-  passes 2 ("T2 army stops when T3 runs"), which would cut T2 air exactly when it went. As a price: a mass strike that can end the game (their economy or commander) carries its
+  50-55. Lag from minute 35 (sim 0.94-0.96). NOT the lag ladder: its lower-tier stop (production.as) exempts air
+  lines; the cause is still open (his 10-23 game, 4 seats: air peaked at minutes 15-20 and fell as ground rose).
+  As a price: a mass strike that can end the game (their economy or commander) carries its
   decisive worth, not a unit's trade value, and pairs with the team timing below.
 - [ ] **Stop re-nuking blind** -- *"we keep nuking spots we've already landed several nukes on. If we landed 2+ nukes
   there but we haven't rescouted there and don't know what's up, then we should stop nuking there."* As a price,

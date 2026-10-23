@@ -184,6 +184,9 @@ void NaSnapEnemy(const AIFloat3& in foe)
 				|| (Catalog::gMakeM[d] > 0.f) || (Catalog::gConvCapacity[d] > 0.f)
 				|| (Catalog::gBuildPower[d] > 0.f))) {
 			const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+			// a submerged building is no prize to bombs or gunship guns (his 10-22)
+			if (!Catalog::gFloater[d] && (Catalog::gSub[d] || (p.y < -16.f)))
+				continue;
 			gNaEcoP.insertLast(p);
 			gNaEcoD.insertLast(d);
 			gNaEcoV.insertLast(NaPrizeOf(d, p, foe, gNaSpotInc));

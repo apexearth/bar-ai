@@ -1285,6 +1285,7 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 // trip -- TripRisk times what the asker is worth, the commander being worth
 // everything we own -- and it is assigned, not accumulated, because memoed
 // wants come back as the same object.
+int gHotRoadHeld = 0;
 void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 {
 	if ((w is null) || (w.kind == WK_NONE) || !OnMap(w.pos) || (w.value <= 0.f))
@@ -1307,6 +1308,13 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 	const float c = w.mCost + w.tCost;
 	if ((c <= 0.f) || (w.value <= 0.f))
 		return;
+	// The road C++ refused this hand for heat a moment ago is still hot: the job cannot be done by it now
+	// (apex_hot_road_memo).
+	if ((ai.GetTunable("apex_hot_road_memo", TUNE_HOT_ROAD_MEMO) > 0.f) && unit.HotRoadTo(w.pos)) {
+		w.value = 0.f;
+		++gHotRoadHeld;
+		return;
+	}
 	if (w.tripM <= 0.f)
 		w.valueRaw = w.value;
 	const float worth = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
@@ -1535,7 +1543,7 @@ void ElecLog()
 		return;
 	gNextElecLog = ai.frame + 60 * SECOND;
 	AiLog("apex: elec-slice done=" + gElecDone + " partial=" + gElecPartial
-		+ " held=" + gElecHeld + " bounce=" + gDecBounce
+		+ " held=" + gElecHeld + " bounce=" + gDecBounce + " hotRoad=" + gHotRoadHeld
 		+ " dropped=" + gElecDropped + " (lapse=" + gElecDropLapse
 		+ " task=" + gElecDropTask + ") queued=" + gElecQ.length()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
@@ -1556,6 +1564,7 @@ void ElecLog()
 	gElecDropTask = 0;
 	gElecHeld = 0;
 	gDecBounce = 0;
+	gHotRoadHeld = 0;
 	gElecWorstWait = 0;
 }
 

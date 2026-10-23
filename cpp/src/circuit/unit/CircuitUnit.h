@@ -369,6 +369,13 @@ private:
 	// being handed to a new task IS the redirection we want to measure.
 	springai::AIFloat3 travelGoal = -RgtVector;
 	int travelGoalFrame = 0;
+public:
+	// apex: the last road refused for heat (IBuilderTask::ApplyPathUnbounded): where it went, its hottest
+	// square and the bar it was held to. Read live by the script's next election (HotRoadTo).
+	springai::AIFloat3 hotRoadEnd = springai::AIFloat3(-1.f, 0.f, -1.f);
+	springai::AIFloat3 hotRoadAt = springai::AIFloat3(-1.f, 0.f, -1.f);
+	float hotRoadBar = 0.f;
+private:
 	float goalDistStart = -1.f;
 	float goalDistMin = -1.f;
 	ETaskState taskState;

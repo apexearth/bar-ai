@@ -712,6 +712,12 @@ void CBombTask::FindTarget()
 				++nCat;
 				continue;
 			}
+			// apex: a building on a shallow seabed is under water above y=-40 too (his 10-22: air on an
+			// underwater mex); the engine's own test, as AttackTask and RaidTask use
+			if (notAW && edef->IsInWater(circuit->GetMap()->GetElevationAt(ePos.x, ePos.z), ePos.y)) {
+				++nPower;
+				continue;
+			}
 			health = enemy->GetHealth();
 //			altitude = edef->GetAltitude();
 		} else {

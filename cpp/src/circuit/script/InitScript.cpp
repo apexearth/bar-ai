@@ -1399,6 +1399,28 @@ static void CCircuitAI_SetBaseGrid(CCircuitAI* circuit, const AIFloat3& anchor,
 	circuit->SetBaseGrid(anchor, fwd, cell, lanePitch, laneHalf, range);
 }
 
+// apex: THE ROAD C++ REFUSED IS STILL HOT (his 10-22 game: one con re-elected the same far T1 lab 74 times in
+// five minutes, each refused for a hot road a second later -- the script's own trip risk read that road as safe).
+// True while `site` is within 512 of the last refused road's end and its hottest square is still over the bar
+// it was refused at: a live read, no clock (his ruling: a hot road is never banned for minutes).
+static bool CCircuitUnit_HotRoadTo(CCircuitUnit* unit, const AIFloat3& site)
+{
+	if ((unit == nullptr) || (unit->hotRoadEnd.x < 0.f) || (unit->hotRoadEnd.SqDistance2D(site) > SQUARE(512.f))) {
+		return false;
+	}
+	ITaskModule* mgr = unit->GetManager();
+	if (mgr == nullptr) {
+		return false;
+	}
+	CThreatMap* tm = mgr->GetCircuit()->GetThreatMap();
+	tm->SetThreatType(unit);
+	if (tm->GetThreatAt(unit, unit->hotRoadAt) > unit->hotRoadBar) {
+		return true;
+	}
+	unit->hotRoadEnd.x = -1.f;
+	return false;
+}
+
 // Our streets or an in-process ally's (CCircuitAI::IsInBaseLane): the lanes the script cannot see.
 static bool CCircuitAI_InAnyBaseLane(CCircuitAI* circuit, const AIFloat3& pos)
 {
@@ -2741,6 +2763,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "string GetActTrace() const", asMETHOD(CCircuitUnit, GetActTrace), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedWeapon() const", asMETHOD(CCircuitUnit, GetDamagedWeapon), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedFrame() const", asMETHOD(CCircuitUnit, GetDamagedFrame), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "bool HotRoadTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_HotRoadTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreE() const", asMETHOD(CCircuitDef, GetStoreE), asCALL_THISCALL); ASSERT(r >= 0);
