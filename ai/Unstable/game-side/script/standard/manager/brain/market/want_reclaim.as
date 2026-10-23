@@ -1763,11 +1763,18 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	// great"; ~50 a team stood late in his Odderon game, each a unit the engine runs all game). Idle past the
 	// horizon a reclaim pays back on, it is priced like an idle plant; one the lift is moving is not.
 	if (!EcoDangerNear() && (ai.GetTunable("apex_reclaim_idle_nano", TUNE_RECLAIM_IDLE_NANO) > 0.f)) {
+		// ...SOONER WHILE THE HOST LAGS (apex_lag_reclaim; his 10-22: "when the host is lagging, reclaim nano turrets
+		// which are idle"). Every unit the engine runs is a share of the lag; on the lag ladder (0-3) an idle turret's
+		// keep is worth that much less, so the idle time a reclaim waits for falls with it: hz at no lag, a quarter
+		// at the worst.
+		float idleS = hz;
+		if (ai.GetTunable("apex_lag_reclaim", TUNE_LAG_RECLAIM) > 0.f)
+			idleS = hz / (1.f + Perf::gLagSev);
 		for (uint ni = 0; (ni < gOwnNano.length()) && (ni < gOwnNanoWorkAt.length()); ++ni) {
 			CCircuitUnit@ nu = gOwnNano[ni];
 			if ((nu is null) || (nu.circuitDef is null))
 				continue;
-			if (float(ai.frame - gOwnNanoWorkAt[ni]) < hz * float(SECOND))
+			if (float(ai.frame - gOwnNanoWorkAt[ni]) < idleS * float(SECOND))
 				continue;
 			if (InLiftJob(nu) || ReclaimClaimed(nu.id, unit.id))
 				continue;
