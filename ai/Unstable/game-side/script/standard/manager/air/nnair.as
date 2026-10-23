@@ -709,7 +709,7 @@ int NaDecide(int kind, const string why)
 		if (gNaWaitFrom < 0)
 			gNaWaitFrom = ai.frame;
 		if (have && (chosen == NA_WAIT) && (ai.frame - gNaWaitFrom >= AIR_CADENCE)
-			&& (BomberMass() >= DeadlineBombBar()))
+			&& (BomberMass() >= DeadlineBombBar()) && (BomberMass() >= NaFinishBar()))
 		{
 			chosen = NA_GO;
 			pr[NA_WAIT] = 0.f;
@@ -1003,6 +1003,28 @@ AIFloat3 gNaPAAFrom;
 // takes -- and, in the army's own currency, the army gap at the rate this run
 // returns metal for metal: a line unit trades about its cost, a Phoenix that
 // kills an undefended fusion returns several times its own.
+// BIG ENOUGH TO FINISH IT (apex_air_finish; his 10-22: "our air attacks stay small when they need to get bigger";
+// "massive attacks work better than lots of small attacks"). The cadence launch went at DeadlineBombBar, which falls
+// to AIR_BOMBERS the longer it is past due, so late wings flew at a dozen whatever the cell needed. It now also waits
+// for the smallest wing that finishes the best known cell (gNaNeedN, the same need NaTargetGain prices bombers
+// toward); with no need known the old bar stands alone.
+float NaFinishBar()
+{
+	if (ai.GetTunable("apex_air_finish", TUNE_AIR_FINISH) <= 0.f)
+		return 0.f;
+	// in BomberMass's units: the need is a count of one bomber type, weighed as BomberMass weighs it
+	float need = 0.f;
+	for (uint k = 0; k < gNaNeedN.length(); ++k) {
+		if ((gNaNeedV.length() <= k) || (gNaNeedDef.length() <= k) || (gNaNeedV[k] <= 0.f) || (gNaNeedN[k] <= 0)
+			|| !Catalog::ValidId(gNaNeedDef[k]))
+			continue;
+		const float m = float(gNaNeedN[k]) * BomberUnits(Catalog::Def(gNaNeedDef[k]));
+		if (m > need)
+			need = m;
+	}
+	return need;
+}
+
 float NaTargetGain(int d, float fillSec, float armyGap)
 {
 	int held = HeldBombers();

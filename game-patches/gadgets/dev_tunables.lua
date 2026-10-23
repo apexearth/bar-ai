@@ -405,6 +405,7 @@ local NAMES = {
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
 	"apex_nano_flush", -- nanopack.as: overflow turrets flush against the block (0)
 	"apex_big_near", -- sites.as: big generators inside the turret block (0)
+	"apex_air_finish", -- nnair.as: cadence launch waits for a finishing wing (1)
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
 	"apex_lane_reclaim", -- want_reclaim.as: idle plants in a lane priced for reclaim (1)
 	"apex_fac_lanes", -- FactoryTask.cpp: the lab site test refuses lanes and other factories' doors (1)
