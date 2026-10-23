@@ -762,6 +762,8 @@ public:
 	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
 	void NoteOrder(int kind, int bucket, bool suppressed, int src = 0);
 	void NoteCmd(const CCircuitUnit* u, int kind);
+	void NoteRouteKept() { ++routeKept; }
+	unsigned routeKept = 0;
 	// apex: orders the arbiter refused, per call site -- what a centre TRIED to
 	// do while a higher-ranked decision was still running.
 	void NoteOrderRefused(int src, int byPrio);

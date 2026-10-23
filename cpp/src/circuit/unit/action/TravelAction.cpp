@@ -66,6 +66,22 @@ void ITravelAction::OnEnd()
 
 void ITravelAction::SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed)
 {
+	// apex: THE SAME ROAD, NOT A NEW ONE (apex_keep_route; his 10-22: "throttle it so APM doesn't go out of control").
+	// A traced 2v2 (20 min): 20,125 route changes, 55% by builders at 115 a builder, and 70-90% of the builder, scout,
+	// retreat and raid ones moved the goal under 64 elmos -- each reset the walk and sent a fresh move for the same
+	// place. While this action is walking a route, a new one ending within 64 of where the old one ends is the old one:
+	// kept, no reset, no order. A goal that really moves goes through; a stuck unit is the watchdog's.
+	if ((pPath != nullptr) && !pPath->posPath.empty() && (this->pPath != nullptr) && !this->pPath->posPath.empty()
+		&& IsActive() && (pPath->posPath.back().SqDistance2D(this->pPath->posPath.back()) < SQUARE(64.f)))
+	{
+		CCircuitUnit* ku = static_cast<CCircuitUnit*>(ownerList);
+		ITaskModule* kmgr = (ku != nullptr) ? ku->GetManager() : nullptr;
+		if ((kmgr != nullptr) && (kmgr->GetCircuit()->GetTunable("apex_keep_route", 1.f) > 0.f)) {
+			kmgr->GetCircuit()->NoteRouteKept();
+			this->speed = speed;
+			return;
+		}
+	}
 	// NOTE: pPath can be null. Caller uses StateWait() after this call in such cases
 	pathIterator = 0;
 	lastQueued = -1;
