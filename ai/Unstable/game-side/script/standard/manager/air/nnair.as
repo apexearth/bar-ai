@@ -1015,15 +1015,20 @@ float NaFinishBar()
 {
 	if (ai.GetTunable("apex_air_finish", TUNE_AIR_FINISH) <= 0.f)
 		return 0.f;
-	// in BomberMass's units: the need is a count of one bomber type, weighed as BomberMass weighs it
+	// in BomberMass's units: the need is a count of one bomber type, weighed as BomberMass weighs it. The wing to
+	// wait for is the best-paying type's, not the largest: the max made a strike that 3 Thunders finish for 6,330
+	// wait on 58 Phoenixes netting 106 (his 10-23: "you don't need to wait for as big an air wing when enemy has
+	// little or no AA").
 	float need = 0.f;
+	float bestV = 0.f;
 	for (uint k = 0; k < gNaNeedN.length(); ++k) {
 		if ((gNaNeedV.length() <= k) || (gNaNeedDef.length() <= k) || (gNaNeedV[k] <= 0.f) || (gNaNeedN[k] <= 0)
 			|| !Catalog::ValidId(gNaNeedDef[k]))
 			continue;
-		const float m = float(gNaNeedN[k]) * BomberUnits(Catalog::Def(gNaNeedDef[k]));
-		if (m > need)
-			need = m;
+		if (gNaNeedV[k] > bestV) {
+			bestV = gNaNeedV[k];
+			need = float(gNaNeedN[k]) * BomberUnits(Catalog::Def(gNaNeedDef[k]));
+		}
 	}
 	return need;
 }

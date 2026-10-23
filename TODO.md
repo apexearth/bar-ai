@@ -52,6 +52,27 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
 - [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
   and do a massive air attack, things like that would be crazy and fun."* A team plan names a time and a kind
   (all air, all T3 ground); each seat's tilt leans toward it until the strike, then back to its own style.
+- [ ] **Rich: more T2 air plants, more air** (his 10-23: "when you're rich, make more T2 air labs, make more air").
+  His 10-23 watch game, seat 0 at 1,238-1,310 m/s: one advanced air plant (a second at minute 35); the plant's
+  line read `armblade: wing0(full 120(pool120)/59)` -- ScaledBombers (state.as) is a COUNT, AIR_BOMBERS plus one
+  per AIR_SCALE_INCOME of income plus an AA soak, and past it StrikeGainWing prices the next bomber at 0, so
+  neither more bombers nor another plant is ever worth anything however rich we are. As a price: the next bomber
+  is worth what it adds to the strike (MarginalGain, measured per bomber once runs are scored), no count; spilled
+  metal is cheap (MCostScale), so a rich seat buys air while it pays and plants follow the demand.
+- [ ] **Punch through their AA: strike the air defence itself** (his 10-23: "you're trying to punch through the
+  enemy's air defense... this might mean you attack the air defenses directly"). The strike planner's targets
+  are economy only (NaSnapEnemy gNaEcoP); AA enters only as a cost, so a base ringed with AA offers nothing worth
+  a small wing (his game, Cortex seat: the cheapest paying wing was 58 Phoenixes for 106 net). As a price: an
+  AA site is a target worth its own metal plus what it stops protecting -- the next runs' losses it no longer
+  causes over the cells behind it.
+- [ ] **Gunships commit or stay home** (his 10-23 watch: a 40-gunship wing lingered over their base without
+  attacking while bombers and fighters struck; against humans it would all die to AA). NaDecide sends the wing
+  at a cell priced against their AA (`nnair-go gunships n=40 ... killF=0.24 lossN=40`); the C++ raid task then
+  commits with no target (`raid-commit ... target=- aaSet=24`) and refuses each one under AA, so it circles. One
+  judgement: the raid takes the target the decision priced; the decision counts the wing it expects to lose.
+- [ ] **Air scouts for the army** (his 10-23: no scout planes to see how strong their base is; 0 `air look`
+  flights in 37 minutes). LookGainFor prices a look only by what it adds to the first bomber's prize; add what
+  the army gains from knowing whether their base can be pushed.
 - [ ] **Ultra-late air to end the game** -- *"Eventually we just make mostly T3 and we kinda stop to make air it seems.
   Air is still a good way to end a game. We should invest more into air in ultra late game and do huge air raids,
   something to try to end the game. Instead it feels like we do less."* His 10-22 hosted game (8 seats, v0.3.5):
