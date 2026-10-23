@@ -20,12 +20,7 @@ namespace Market {
 // away that a long build's delay is felt and near enough that the ladder still
 // terminates: 4x is about one era of this game, an opening economy to a mid one.
 const float ETA_TARGET_MUL = 4.f;
-// TEST ONLY (apex_eta_target): the horizon swept against 4x, removed with the result.
-float EtaTargetMul()
-{
-	const float t = ai.GetTunable("apex_eta_target", TUNE_ETA_TARGET);
-	return (t > 1.f) ? t : ETA_TARGET_MUL;
-}
+
 const int   ETA_MAX_STEPS = 64;
 const float ETA_BIG = 1.0e9f;
 // The generator tail is inexhaustible, so it is closed in geometric chunks
@@ -502,8 +497,6 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 			fill = (target - P) / (float(k) * g);
 		t += float(k) * (stepS + rlat) * fill;
 		gLadderLatS += float(k) * rlat * fill;
-		if (gLadderTierRate > 0.f)
-			gLadderTierBP += gLadderTierRate * float(k) * (stepS + rlat) * fill;
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
@@ -528,11 +521,9 @@ float gLadderAddBP = 0.f;
 // The new tier's mobile lathe once a tech first move stands: the lab's first
 // constructor plus the ceiling hands already owned. 0 = not a tech plan.
 float gLadderTierBP = 0.f;
-// THE NEW LAB KEEPS MAKING HANDS (apex_tier_grow). The tier's rungs ran on the lab's FIRST constructor for the whole
-// plan, so the ladder priced T2 as a one-hand economy, and the longer the horizon the worse it read (seed 3600 at
-// minute 4.9: T2 4,613 s at 16x against 59,624 for the plan without it). His T2 air plant turned one out every 18 s.
-// While the ladder runs, the lab adds a constructor's build power at its own build rate (BP per second).
-float gLadderTierRate = 0.f;
+// the last plan's first move: its seconds, and the fleet lathe it ran at (eta-tech-trace)
+float gEtaHeadS = 0.f, gEtaHeadBP = 0.f;   // the last plan's first move: its seconds, and the fleet lathe it ran at
+int gEtaTechTraceAt = 0;
 bool gLadderTrace = false;
 string gLadderTraceS;
 float CeilingHandsBP()
@@ -594,7 +585,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	float P = EcoPowerM();
 	if (P < 0.5f)
 		P = 0.5f;
-	const float target = P * EtaTargetMul();
+	const float target = P * ETA_TARGET_MUL;
 	float bank = Eco::MCur();
 	float bp = EffBP(0.f);
 	if (bp < 1.f)
@@ -662,19 +653,17 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 				const float tier = Catalog::gBuildPower[conD] + CeilingHandsBP()
 						+ bpMob * ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
 				gLadderTierBP = (tier > 1.f) ? tier : 1.f;
-				gLadderTierRate = ((ai.GetTunable("apex_tier_grow", TUNE_TIER_GROW) > 0.f)
-						&& (Catalog::gBuildTime[conD] > 1.f))
-						? (labBP / Catalog::gBuildTime[conD]) * Catalog::gBuildPower[conD] : 0.f;
 			}
 		}
 	}
 	Perf::Add("et.head", _tE);
 	_tE = Perf::T0();
+	gEtaHeadS = t;
+	gEtaHeadBP = bp;
 	const float eta = t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
 	Perf::Add("et.ladder", _tE);
 	gLadderAddBP = 0.f;
 	gLadderTierBP = 0.f;
-	gLadderTierRate = 0.f;
 	return eta;
 }
 
@@ -723,7 +712,7 @@ float EtaHandsShareNow()
 	// read as hands-bound and the factories never stopped (209 air cons).
 	// Summed, the lathe time and the feed time over the same batches say
 	// which of the two the target is actually waiting on.
-	const float target = P * EtaTargetMul();
+	const float target = P * ETA_TARGET_MUL;
 	float eAvail = EtaEnergyAvail();
 	float tBuild = 0.f;
 	float tFeed = 0.f;
@@ -1031,12 +1020,31 @@ void EtaLog(array<Want@>@ ranked, CCircuitUnit@ unit)
 				+ formatFloat(e, "", 0, 0);
 		}
 	}
+	// The T2 plan against the plan without it, step by step (diagnostic switch): which steps cost the time.
+	if ((ai.GetTunable("apex_efloor_diag", TUNE_EFLOOR_DIAG) > 0.f) && (ai.frame >= gEtaTechTraceAt)) {
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if ((ranked[i].kind != WK_TECH) || (ranked[i].def is null))
+				continue;
+			gEtaTechTraceAt = ai.frame + 30 * SECOND;
+			gLadderTrace = true;
+			gLadderTraceS = "";
+			const float et = EtaOfWant(ranked[i]);
+			AiLog("apex: eta-tech-trace t=" + ai.teamId + " " + ranked[i].def.GetName() + " eta=" + int(et)
+				+ " head=" + int(gEtaHeadS) + " bp=" + int(gEtaHeadBP) + " tierBP0=" + int(gLadderTierBP) + " |" + gLadderTraceS);
+			gLadderTraceS = "";
+			const float eb = EtaWith(0, 0.f, 0.f, false);
+			AiLog("apex: eta-tech-trace t=" + ai.teamId + " base eta=" + int(eb) + " |" + gLadderTraceS);
+			gLadderTrace = false;
+			gLadderTraceS = "";
+			break;
+		}
+	}
 	// How much cheap growth the map still owes us -- the quantity that ends a
 	// regime in the plan, and the one a threshold used to stand in for.
 	const float cheap = ServableUpDemand() + OpenSpotStream();
 	AiLog(Factory::T() + "apex: eta t=" + ai.teamId
 		+ " P=" + formatFloat(P, "", 0, 1)
-		+ " tgt=" + formatFloat(P * EtaTargetMul(), "", 0, 1)
+		+ " tgt=" + formatFloat(P * ETA_TARGET_MUL, "", 0, 1)
 		+ " cheap=" + formatFloat(cheap, "", 0, 2)
 		+ " base=" + formatFloat(EtaWith(0, 0.f, 0.f, false), "", 0, 0)
 		+ " mkt=" + ((mktAt < 0) ? "-"
