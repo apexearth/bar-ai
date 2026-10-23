@@ -1782,7 +1782,6 @@ const float TUNE_LIFT_TURRETS = 1.f;   // [toggle 0/1] lift.as: with no line sho
 const float TUNE_LIFT_HANDS = 1.f;   // [toggle 0/1] lift.as: a ground builder walking to a far job is flown when the seconds saved at its own lathe beat the AA risk on the route times plane and cargo (the commander: everything we own) (his 10-20)
 const float TUNE_NANO_FLUSH = 0.f;   // [toggle 0/1] nanopack.as: a turret the packed ring cannot hold goes flush against a standing turret
 const float TUNE_BIG_NEAR = 0.f;   // [toggle 0/1] sites.as: a big generator probed half a reach into the turret block; room only for turrets short
-const float TUNE_TRAVEL_STEP = 1.f;   // TravelAction.cpp: waypoint spacing multiplier (fewer move orders when > 1)
 const float TUNE_FAC_LANES = 1.f;   // [toggle 0/1] FactoryTask.cpp: the lab site test refuses lanes and other factories' doors
 const float TUNE_LANE_RECLAIM = 1.f;   // [toggle 0/1] want_reclaim.as: an idle plant on a street or in an ally's factory door is priced for reclaim
 const float TUNE_FORECAST_LOG = 0.f;   // [toggle 0/1] forecast.as: log the 60-second forecast's error outside eco-only games too

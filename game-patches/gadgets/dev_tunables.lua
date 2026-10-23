@@ -409,7 +409,6 @@ local NAMES = {
 	"apex_air_finish", -- nnair.as: cadence launch waits for a finishing wing (1)
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
 	"apex_lane_reclaim", -- want_reclaim.as: idle plants in a lane priced for reclaim (1)
-	"apex_travel_step", -- TravelAction.cpp: waypoint spacing multiplier (1)
 	"apex_fac_lanes", -- FactoryTask.cpp: the lab site test refuses lanes and other factories' doors (1)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
