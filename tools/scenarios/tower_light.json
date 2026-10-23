@@ -1,0 +1,14 @@
+{
+  "about": "10 Centurions (2,700 m) vs 3 light towers (255 m) guarding 4 mexes, nothing else of theirs on the map",
+  "passes": "takes the ground it plainly beats: at least 2 towers and 3 mexes die, and at least 8 of 10 live",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "units": [
+    {"side": 0, "def": "armwar", "n": 10, "at": ["c", -900, 0], "order": "ai"},
+    {"side": 1, "def": "armllt", "n": 3, "at": ["c", 500, 0], "spacing": 160, "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 4, "at": ["c", 750, 0], "spacing": 160, "order": "ai"}
+  ],
+  "expect": [
+    {"killed:armllt": [">=", 2], "killed:armmex": [">=", 3], "alive_frac0": [">=", 0.8]}
+  ]
+}

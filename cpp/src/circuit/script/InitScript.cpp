@@ -1421,6 +1421,45 @@ static bool CCircuitUnit_HotRoadTo(CCircuitUnit* unit, const AIFloat3& site)
 	return false;
 }
 
+// ...and another hand's refusal there: 11 armck walked one by one into the same refused road on Isthmus (10-23).
+// It holds while the refused road's hot square is over THIS hand's bar and within 600 of its own straight road.
+static bool CCircuitUnit_HotRoadToTeam(CCircuitUnit* unit, const AIFloat3& site)
+{
+	if (CCircuitUnit_HotRoadTo(unit, site)) {
+		return true;
+	}
+	ITaskModule* mgr = (unit != nullptr) ? unit->GetManager() : nullptr;
+	if ((mgr == nullptr) || (unit->GetCircuitDef() == nullptr)) {
+		return false;
+	}
+	CCircuitAI* circuit = mgr->GetCircuit();
+	const AIFloat3 from = unit->GetPos(circuit->GetLastFrame());
+	const float bar = std::max(unit->GetCircuitDef()->GetPower(), std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(site)));
+	CThreatMap* tm = circuit->GetThreatMap();
+	bool typed = false;
+	for (const CCircuitAI::SHotRoad& h : circuit->hotRoads) {
+		if ((h.end.x < 0.f) || (h.end.SqDistance2D(site) > SQUARE(512.f))) {
+			continue;
+		}
+		const AIFloat3 d = site - from;
+		const float len2 = d.x * d.x + d.z * d.z;
+		float t = (len2 > 1.f) ? (((h.at.x - from.x) * d.x + (h.at.z - from.z) * d.z) / len2) : 0.f;
+		t = std::min(1.f, std::max(0.f, t));
+		const AIFloat3 onRoad(from.x + d.x * t, 0.f, from.z + d.z * t);
+		if (onRoad.SqDistance2D(h.at) > SQUARE(600.f)) {
+			continue;
+		}
+		if (!typed) {
+			tm->SetThreatType(unit);
+			typed = true;
+		}
+		if (tm->GetThreatAt(unit, h.at) > bar) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // Our streets or an in-process ally's (CCircuitAI::IsInBaseLane): the lanes the script cannot see.
 static bool CCircuitAI_InAnyBaseLane(CCircuitAI* circuit, const AIFloat3& pos)
 {
@@ -2763,7 +2802,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "string GetActTrace() const", asMETHOD(CCircuitUnit, GetActTrace), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedWeapon() const", asMETHOD(CCircuitUnit, GetDamagedWeapon), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedFrame() const", asMETHOD(CCircuitUnit, GetDamagedFrame), asCALL_THISCALL); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CCircuitUnit", "bool HotRoadTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_HotRoadTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "bool HotRoadTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_HotRoadToTeam), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreE() const", asMETHOD(CCircuitDef, GetStoreE), asCALL_THISCALL); ASSERT(r >= 0);

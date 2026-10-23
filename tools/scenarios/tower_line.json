@@ -1,0 +1,15 @@
+{
+  "about": "16 Centurions (4,320 m) vs a tower line -- 8 light and 2 heavy towers (1,560 m) spread over 1,400 elmos -- with 6 mexes behind it",
+  "passes": "breaks a line it outweighs ~2.8x: at least 5 towers and 3 mexes die, and at least 10 of 16 live",
+  "map": "Geyser Plains",
+  "seconds": 180,
+  "units": [
+    {"side": 0, "def": "armwar", "n": 16, "at": ["c", -1100, 0], "order": "ai"},
+    {"side": 1, "def": "armllt", "n": 8, "at": ["c", 500, 0], "spacing": 200, "order": "ai"},
+    {"side": 1, "def": "armhlt", "n": 2, "at": ["c", 600, 0], "spacing": 500, "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 6, "at": ["c", 900, 0], "spacing": 220, "order": "ai"}
+  ],
+  "expect": [
+    {"killed:armllt": [">=", 4], "killed:armmex": [">=", 3], "alive_frac0": [">=", 0.62]}
+  ]
+}

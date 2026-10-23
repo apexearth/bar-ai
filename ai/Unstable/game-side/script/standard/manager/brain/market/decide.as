@@ -1286,6 +1286,8 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 // everything we own -- and it is assigned, not accumulated, because memoed
 // wants come back as the same object.
 int gHotRoadHeld = 0;
+int gUnreachHeld = 0;
+int gUnreachLogN = 0;
 void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 {
 	if ((w is null) || (w.kind == WK_NONE) || !OnMap(w.pos) || (w.value <= 0.f))
@@ -1314,6 +1316,33 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 		w.value = 0.f;
 		++gHotRoadHeld;
 		return;
+	}
+	// ...or a site this hand cannot reach at all: two ship cons re-elected a land gun 758 elmos inland for minutes,
+	// each killed a second later as unreach-safe (Isthmus 10-23). The test C++ applies, asked first.
+	if (ai.GetTunable("apex_hot_road_memo", TUNE_HOT_ROAD_MEMO) > 0.f) {
+		const int uid = int(unit.circuitDef.id);
+		float reach = Catalog::gBuildDist[uid];
+		if (w.def !is null) {
+			const int bd = int(w.def.id);
+			reach += 8.f * float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]);
+		}
+		// A hand whose own square reads unreachable is in ground the area map does not know (52 of 84 held ship
+		// cons, Isthmus 10-23): unknown is not impossible, so it is not asked.
+		const AIFloat3 upR = unit.GetPos(ai.frame);
+		if (ai.CanDefReachAt(Catalog::Def(uid), upR, upR, reach)
+			&& !ai.CanDefReachAt(Catalog::Def(uid), upR, w.pos, reach)) {
+			w.value = 0.f;
+			++gUnreachHeld;
+			if (gUnreachLogN < 6) {
+				++gUnreachLogN;
+				const AIFloat3 up = upR;
+				AiLog(Factory::T() + "apex: unreach-held " + unit.circuitDef.GetName() + " #" + unit.id
+					+ " kind=" + w.kind + " def=" + ((w.def !is null) ? w.def.GetName() : "-")
+					+ " from=" + int(up.x) + "," + int(up.z) + " to=" + int(w.pos.x) + "," + int(w.pos.z)
+					+ " d=" + int(up.distance2D(w.pos)) + " reach=" + int(reach));
+			}
+			return;
+		}
 	}
 	if (w.tripM <= 0.f)
 		w.valueRaw = w.value;
@@ -1543,7 +1572,7 @@ void ElecLog()
 		return;
 	gNextElecLog = ai.frame + 60 * SECOND;
 	AiLog("apex: elec-slice done=" + gElecDone + " partial=" + gElecPartial
-		+ " held=" + gElecHeld + " bounce=" + gDecBounce + " hotRoad=" + gHotRoadHeld
+		+ " held=" + gElecHeld + " bounce=" + gDecBounce + " hotRoad=" + gHotRoadHeld + " unreach=" + gUnreachHeld
 		+ " dropped=" + gElecDropped + " (lapse=" + gElecDropLapse
 		+ " task=" + gElecDropTask + ") queued=" + gElecQ.length()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
@@ -1565,6 +1594,8 @@ void ElecLog()
 	gElecHeld = 0;
 	gDecBounce = 0;
 	gHotRoadHeld = 0;
+	gUnreachHeld = 0;
+	gUnreachLogN = 0;
 	gElecWorstWait = 0;
 }
 

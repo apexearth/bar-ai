@@ -83,6 +83,11 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 61 | Fewer, stronger units; reclaim idle nanos and unneeded labs (10-19) | a full bank no longer lifts the outgrown T1 tier (apex_spill_outgrown 0); an idle nano turret is a priced reclaim victim (apex_reclaim_idle_nano 1) | late army by def; nano turrets late; units at min 40; frame ms | PARTLY -- his Odderon: Parrow/Vamp top the army, nanos 817 -> 551, units -7-10%; clean A/B (matches/hispair) running |
 | 62 | A teammate with no commander, no base and no income kept getting our units (10-19) | a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap (TUNE_GIFT_STAKE, off) | `apex: gift-stake`; gift metal to a seat after its commander dies | UNTESTED -- his watch games: single gifts of 111 units / 62k m and 123 units / 91k m |
 | 63 | Not enough anti-nukes while the enemy launches a lot of nukes (10-19; "about 6 at once... ~10 nukes all on your base you WILL die") | survive their worst salvo by arithmetic: every seen silo full (its stockpilelimit), fired together, / TUNE_ANTI_AT_ONCE (6) = antis each target needs -- the core and any cluster worth more than those antis; launches seen floor the salvo for unseen silos and lift the income floor | `apex: nukemath facts` (startup: armamd=20/90s armsilo=10/120s corsilo=10/180s), `apex: nukepress`; antis over the core vs ceil(salvo/6) | BUILT -- math checked against the unit files; no game test (his 10-19: "you can get it all through math") |
+| 64 | No T1 lab in an ally's open lane (10-22) | apex_fac_lanes (lab sites refuse any base lane, ours or an ally's, and a friendly lab's door), apex_lane_reclaim (an idle plant in a lane priced for reclaim) | `fac-site-moved ... others=0`, `plant-in-lane` | FIRES -- check games 10-22: 1 site refused (Isthmus), 2 idle lane labs reclaimed |
+| 65 | Air not sent at an underwater mex (10-22) | BombTask uses IsInWater; NaSnapEnemy drops submerged eco from the prize (5a3df3a1) | `bomb ... nPower` skips; strike cells on a water map | UNTESTED -- no water map run |
+| 66 | Stop sending air into heavy AA (10-22) | apex_air_obs_evidence: a scored run weighs by bombers sent over the wing planned (5a3df3a1) | `air run scored ... plan= w=`, bombers bought after failed runs | FIRES -- 10-23 games log plan/w; no game yet with mass failed runs |
+| 67 | One con looping on a far lab, hot road (his 10-23 game, 74 orders) | apex_hot_road_memo: the refused road's hottest square read live at the next election (5a3df3a1) | `elec-slice hotRoad=`, repeats of `task-die ... why=hot-road` per unit | FIRES -- per-hand memo: 11 different cons still walked into one refused road (Isthmus 10-23), so it is shared by the team; a reach test joined it (two ship cons re-elected an inland gun, and the floor guarded land bosses 154 times in 35 s). unreach-safe aborts 107/40 per game before, 24/2 after; outcome A/B running |
+| 68 | APM under control (10-22) | apex_keep_route (649374e6) | `apex: cmds` army per unit-minute | PARTLY -- 16-20 in 3 of 4 games vs 25-33 before; outcome needs paired games |
 
 ## A T1 LAB IN AN ALLY'S OPEN LANE (2026-10-22)
 
@@ -130,12 +135,33 @@ commands 6%: the orders come from units being handed fresh paths (each new Trave
 carrot re-set every couple of seconds, not from reaching waypoints. Next: find who re-paths every ~2 s (squad
 update / AttackTask / regroup) and hold a unit's order while its goal has not moved enough to change its route.
 
+10-23: traced (apex_order_trace, 20-min 2v2): 20,125 route changes, builders 55% (115 per builder), retreats 15%,
+scouts 13%, raids 9%; 70-90% of them moved the goal under 64 elmos. apex_keep_route (on, 649374e6) keeps the
+route being walked when the new one ends within 64 of it: 15-27k routes kept a game, army commands per army unit
+per minute 16-20 in three of four games against 25-33 before (the fourth, 31, was a game lost early). What is
+left is mostly units near enemies, which the lean path deliberately re-orders every second.
+apex_travel_samestep (off) measured on four games: Comet -34%, Isthmus +20% -- noise, left off.
+OPEN: apex_keep_route is on with one outcome pair (keep0 vs keep1, 25 min, we lost more with it, 29k vs 18k);
+needs ~8 paired games for the result before it is kept.
+
+## TOO AFRAID OF STATIC DEFENCES (2026-10-23)
+
+A player's feedback via him, 10-22. Not the attack choice. Scenarios (tools/scenarios/
+tower_light, tower_heavy, tower_line) all PASS on the stock army: 10 Centurions kill 3 LLTs or 2 HLTs and
+their mexes, 16 break a line of 8 LLT + 2 HLT, 0-3 lost. His hosted v0.3.5 games keep 50-74% of the army on
+ATTACK from minute 5 to 35. Stock StockFindTarget still divides a distance by a squared distance (the fork bug
+AttackTask.cpp fixed for our path), which shrinks a group's influence toward 0 away from base -- reckless, not
+afraid. Untested: the threat-aware route walking around tower cover, and the retreat thresholds near towers.
+Needs what the player actually saw.
+
 ## AIR ATTACKS AN UNDERWATER EXTRACTOR (2026-10-22)
 
 His watch, 10-22: air units trying to attack a mex underwater. Aircraft that cannot hit a submerged target were
 sent at one, a wasted strike. Unmeasured: find the target choice (C++ attack/bomb tasks or the script's strike
 target) and whether it checks the weapon can reach a target below the water line. The fix belongs in the pricing
 of the target (a strike that cannot land is worth nothing), not a filter added on top.
+10-23: CBombTask skipped only targets below y=-40; a building on a shallow seabed passed. Now IsInWater, and the
+strike planner's prize leaves submerged economy out (validation #65).
 
 ## ECO AT HALF HIS CURVE; WHAT 10-21/10-22 MEASURED (2026-10-22)
 

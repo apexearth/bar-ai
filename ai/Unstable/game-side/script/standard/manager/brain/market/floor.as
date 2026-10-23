@@ -409,6 +409,18 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 // anywhere -- but the hand should still be standing beside the work that
 // matters most, because that is where it starts drawing the moment flow
 // frees. So this ranks with the feed test off.
+// A boss this hand cannot reach is a guard that dies as unreach a second later, every second: two ship cons
+// guarded land work 4,000 elmos inland 154 times in 35 s (Isthmus 10-23). The test C++ applies.
+bool FloorCanReach(CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	if (!OnMap(at))
+		return false;
+	const int uid = int(unit.circuitDef.id);
+	const AIFloat3 up = unit.GetPos(ai.frame);
+	const float r = Catalog::gBuildDist[uid] + 64.f;
+	return !ai.CanDefReachAt(Catalog::Def(uid), up, up, r) || ai.CanDefReachAt(Catalog::Def(uid), up, at, r);
+}
+
 CCircuitUnit@ BestJobBoss(CCircuitUnit@ unit)
 {
 	@gBossJob = null;
@@ -425,6 +437,8 @@ CCircuitUnit@ BestJobBoss(CCircuitUnit@ unit)
 	if (job is null)
 		@job = (gJobNearBest !is null) ? gJobNearBest : any;
 	if (job is null)
+		return null;
+	if (!FloorCanReach(unit, job.GetBuildPos()))
 		return null;
 	if (CrewSplitOn() && !CrewIsField(unit) && FieldSite(job.GetBuildPos())
 		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
@@ -463,6 +477,12 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 		if (isComm ? ComFar(w.GetPos(ai.frame)) : (leashed && EcoFar(w.GetPos(ai.frame))))
 			continue;
 		const int bt = int(w.task.GetBuildType());
+		{
+			const bool open = (bt == int(Task::BuildType::NANO)) ? (nano is null)
+					: ((bt == int(Task::BuildType::FACTORY)) ? (fac is null) : (any is null));
+			if (open && !FloorCanReach(unit, w.task.GetBuildPos()))
+				continue;
+		}
 		if (Requests::JoinArriveOn() && (w.task.buildDef !is null)) {
 			const bool slotTaken = (bt == int(Task::BuildType::NANO)) ? (nano !is null)
 					: ((bt == int(Task::BuildType::FACTORY)) ? (fac !is null) : (any !is null));

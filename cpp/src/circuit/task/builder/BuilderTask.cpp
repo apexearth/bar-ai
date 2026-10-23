@@ -1611,6 +1611,7 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 	unit->hotRoadEnd = endPos;
 	unit->hotRoadAt = roadHot;
 	unit->hotRoadBar = roadBarLog;
+	circuit->NoteHotRoad(endPos, roadHot);
 	SetDeathNote("hot-road");
 	manager->AbortTask(this);
 }
