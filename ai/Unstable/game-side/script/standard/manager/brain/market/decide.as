@@ -1324,7 +1324,9 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 		float reach = Catalog::gBuildDist[uid];
 		if (w.def !is null) {
 			const int bd = int(w.def.id);
-			reach += 8.f * float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]);
+			// half the footprint, and the 8 lattice rings C++ searches for a free slot before it builds (a coastal gun
+			// named in the water was built 276 elmos away on the shore, Comet 10-23)
+			reach += 136.f * float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]);
 		}
 		// A hand whose own square reads unreachable is in ground the area map does not know (52 of 84 held ship
 		// cons, Isthmus 10-23): unknown is not impossible, so it is not asked.
