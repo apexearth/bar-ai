@@ -40,6 +40,13 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
 - [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
   and do a massive air attack, things like that would be crazy and fun."* A team plan names a time and a kind
   (all air, all T3 ground); each seat's tilt leans toward it until the strike, then back to its own style.
+- [ ] **Ultra-late air to end the game** -- *"Eventually we just make mostly T3 and we kinda stop to make air it seems.
+  Air is still a good way to end a game. We should invest more into air in ultra late game and do huge air raids,
+  something to try to end the game. Instead it feels like we do less."* His 10-22 hosted game (8 seats, v0.3.5):
+  air orders per 5 min 70-80 to minute 45, then 23 and 22 while T3 took 61-70; 12 air plants ordered in minutes
+  50-55. Lag from minute 35 (sim 0.94-0.96, LAG/HOSTSHORT lines, thinner slices) -- check whether it cuts air
+  more than the rest. As a price: a mass strike that can end the game (their economy or commander) carries its
+  decisive worth, not a unit's trade value, and pairs with the team timing below.
 - [ ] **Stop re-nuking blind** -- *"we keep nuking spots we've already landed several nukes on. If we landed 2+ nukes
   there but we haven't rescouted there and don't know what's up, then we should stop nuking there."* As a price,
   not a count: each landed nuke cuts what the target is believed to still hold (by the blast against what stood
