@@ -235,9 +235,9 @@ void CCircuitUnit::ManualFire(CEnemyInfo* target, int timeout)
 	TRY_UNIT(manager->GetCircuit(), this,
 		if (circuitDef->HasDGun()) {
 			if (target->GetUnit()->IsCloaked()) {  // los-cheat related
-				unit->DGunPosition(target->GetPos(), UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_CONTROL_KEY, timeout);
+				(CountCmd(6), unit)->DGunPosition(target->GetPos(), UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_CONTROL_KEY, timeout);
 			} else {
-				unit->DGun(target->GetUnit(), UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_CONTROL_KEY, timeout);
+				(CountCmd(6), unit)->DGun(target->GetUnit(), UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_CONTROL_KEY, timeout);
 			}
 		} else {
 			if (circuitDef->IsPlane()) {
@@ -400,7 +400,7 @@ float CCircuitUnit::GetHealthPercent()
  */
 void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 {
-	unit->ExecuteCustomCommand(CMD_REMOVE, params, options);
+	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_REMOVE, params, options);
 }
 
 // Records the order, and marks it a suppression candidate when re-sending it
@@ -453,6 +453,14 @@ const char* CCircuitUnit::OrdSrcName(int src)
 			== static_cast<size_t>(CCircuitUnit::OrdSrc::_SIZE),
 			"OrdSrcName is out of step with OrdSrc");
 	return ((src >= 0) && (src < static_cast<int>(OrdSrc::_SIZE))) ? names[src] : "?";
+}
+
+// apex: every command this wrapper sends the engine, counted by unit kind and command (apex: cmds, per minute)
+void CCircuitUnit::CountCmd(int kind)
+{
+	if (manager != nullptr) {
+		manager->GetCircuit()->NoteCmd(this, kind);
+	}
 }
 
 bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout,
@@ -628,15 +636,15 @@ void CCircuitUnit::CmdMoveTo(const AIFloat3& p0, short options, int timeout, Ord
 	NoteAct("mov", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::MOVE);
-	unit->MoveTo(pos, options, timeout);
-//	unit->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
+	(CountCmd(4), unit)->MoveTo(pos, options, timeout);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
 // A factory set to repeat re-queues what it finishes, so it keeps producing
 // without waiting to be handed the next task.
 void CCircuitUnit::CmdRepeat(bool repeat, short options, int timeout)
 {
-	unit->SetRepeat(repeat, options, timeout);
+	(CountCmd(9), unit)->SetRepeat(repeat, options, timeout);
 }
 
 void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
@@ -645,7 +653,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
 		return;
 	}
 //	assert(utils::is_in_map(pos));
-//	unit->ExecuteCustomCommand(CMD_JUMP, {pos.x, pos.y, pos.z}, options, timeout);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_JUMP, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
 void CCircuitUnit::CmdFightTo(const AIFloat3& p0, short options, int timeout, OrdSrc src)
@@ -667,7 +675,7 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& p0, short options, int timeout, Or
 	if (NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout, src)) {
 		return;
 	}
-	unit->Fight(pos, options, timeout);
+	(CountCmd(5), unit)->Fight(pos, options, timeout);
 }
 
 void CCircuitUnit::CmdPatrolTo(const AIFloat3& p0, short options, int timeout)
@@ -680,7 +688,7 @@ void CCircuitUnit::CmdPatrolTo(const AIFloat3& p0, short options, int timeout)
 	if (NoteOrder(OrdKind::PATROL, options, pos, 0, timeout, OrdSrc::PATROL)) {
 		return;
 	}
-	unit->PatrolTo(pos, options, timeout);
+	(CountCmd(8), unit)->PatrolTo(pos, options, timeout);
 }
 
 void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeout)
@@ -696,7 +704,7 @@ void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeo
 	if (NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout, OrdSrc::ATTACK)) {
 		return;
 	}
-	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
+	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
 AIFloat3 CCircuitUnit::SniperHoldPos(const AIFloat3& tPos)
@@ -738,14 +746,14 @@ void CCircuitUnit::CmdAttack(CEnemyInfo* enemy, short options, int timeout)
 	if (NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout, OrdSrc::ATTACK)) {
 		return;
 	}
-	unit->Attack(enemy->GetUnit(), options, timeout);
+	(CountCmd(6), unit)->Attack(enemy->GetUnit(), options, timeout);
 }
 
 void CCircuitUnit::CmdWantedSpeed(float speed)
 {
-//	unit->SetWantedMaxSpeed(speed / FRAMES_PER_SEC, true);
-//	unit->SetWantedMaxSpeed(0.5f, true);
-//	unit->ExecuteCustomCommand(CMD_WANTED_SPEED, {speed});
+//	(CountCmd(9), unit)->SetWantedMaxSpeed(speed / FRAMES_PER_SEC, true);
+//	(CountCmd(9), unit)->SetWantedMaxSpeed(0.5f, true);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_WANTED_SPEED, {speed});
 }
 
 void CCircuitUnit::CmdStop(short options, int timeout)
@@ -753,7 +761,7 @@ void CCircuitUnit::CmdStop(short options, int timeout)
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->Stop(options, timeout);
+	(CountCmd(7), unit)->Stop(options, timeout);
 	// CMD_STOP is one of unit_target_on_the_move's own removal paths (we never
 	// pass ctrl, so ignoreStop is false and it drops the holder outright).
 	if (manager != nullptr) {
@@ -793,7 +801,7 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 	}
 	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
 	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX, OrdSrc::SETTGT);
-	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
+	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
 	// The gadget enrols only what its own validUnits table admits
 	// (canAttack and maxWeaponRange > 0); counting the rest would inflate the
 	// census with units it never sweeps.
@@ -805,45 +813,45 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 
 void CCircuitUnit::CmdCloak(bool state)
 {
-	unit->ExecuteCustomCommand(CMD_WANT_CLOAK, {state ? 1.f : 0.f});  // personal
-//	unit->ExecuteCustomCommand(CMD_CLOAK_SHIELD, {state ? 1.f : 0.f});  // area
-//	unit->Cloak(state);
+	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_WANT_CLOAK, {state ? 1.f : 0.f});  // personal
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_CLOAK_SHIELD, {state ? 1.f : 0.f});  // area
+//	(CountCmd(9), unit)->Cloak(state);
 }
 
 void CCircuitUnit::CmdFireAtRadar(bool state)
 {
-//	unit->ExecuteCustomCommand(CMD_DONT_FIRE_AT_RADAR, {state ? 0.f : 1.f});
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_DONT_FIRE_AT_RADAR, {state ? 0.f : 1.f});
 }
 
 void CCircuitUnit::CmdFindPad(int timeout)
 {
-//	unit->ExecuteCustomCommand(CMD_FIND_PAD, {}, 0, timeout);
-	unit->ExecuteCustomCommand(CMD_LAND_AT_AIRBASE, {}, 0, timeout);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_FIND_PAD, {}, 0, timeout);
+	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_LAND_AT_AIRBASE, {}, 0, timeout);
 }
 
 void CCircuitUnit::CmdManualFire(short options, int timeout)
 {
-//	unit->ExecuteCustomCommand(CMD_ONECLICK_WEAPON, {}, options, timeout);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_ONECLICK_WEAPON, {}, options, timeout);
 }
 
 void CCircuitUnit::CmdAirManualFire(const AIFloat3& pos, short options, int timeout)
 {
-//	unit->ExecuteCustomCommand(CMD_AIR_MANUALFIRE, {pos.x, pos.y, pos.z}, options, timeout);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_AIR_MANUALFIRE, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
 void CCircuitUnit::CmdPriority(float value)
 {
-//	unit->ExecuteCustomCommand(CMD_PRIORITY, {value});
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_PRIORITY, {value});
 }
 
 void CCircuitUnit::CmdMiscPriority(float value)
 {
-//	unit->ExecuteCustomCommand(CMD_MISC_PRIORITY, {value});
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_MISC_PRIORITY, {value});
 }
 
 void CCircuitUnit::CmdAirStrafe(float value)
 {
-//	unit->ExecuteCustomCommand(CMD_AIR_STRAFE, {value});
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_AIR_STRAFE, {value});
 }
 
 void CCircuitUnit::CmdBARPriority(float value)
@@ -852,18 +860,18 @@ void CCircuitUnit::CmdBARPriority(float value)
 		return;
 	}
 	priority = value;
-	unit->ExecuteCustomCommand(CMD_BAR_PRIORITY, {value});
+	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_BAR_PRIORITY, {value});
 }
 
 void CCircuitUnit::CmdTerraform(std::vector<float>&& params)
 {
-//	unit->ExecuteCustomCommand(CMD_TERRAFORM_INTERNAL, params);
+//	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_TERRAFORM_INTERNAL, params);
 }
 
 void CCircuitUnit::CmdSelfD(bool state)
 {
 	if (isSelfD != state) {
-		unit->SelfDestruct();
+		(CountCmd(9), unit)->SelfDestruct();
 		isSelfD = state;
 	}
 }
@@ -871,7 +879,7 @@ void CCircuitUnit::CmdSelfD(bool state)
 void CCircuitUnit::CmdWait(bool state)
 {
 	if (state != (command->GetId() == CMD_WAIT)) {
-		unit->Wait();
+		(CountCmd(7), unit)->Wait();
 	}
 }
 
@@ -890,7 +898,7 @@ void CCircuitUnit::CmdRepair(CAllyUnit* target, short options, int timeout)
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->Repair(target->GetUnit(), options, timeout);
+	(CountCmd(1), unit)->Repair(target->GetUnit(), options, timeout);
 	taskState = ETaskState::EXECUTE;
 }
 
@@ -899,7 +907,7 @@ void CCircuitUnit::CmdBuild(CCircuitDef* buildDef, const AIFloat3& buildPos, int
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->Build(buildDef->GetDef(), buildPos, facing, options, timeout);
+	(CountCmd(0), unit)->Build(buildDef->GetDef(), buildPos, facing, options, timeout);
 	taskState = ETaskState::EXECUTE;
 }
 
@@ -908,7 +916,7 @@ void CCircuitUnit::CmdReclaimEnemy(CEnemyInfo* enemy, short options, int timeout
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->ReclaimUnit(enemy->GetUnit(), options, timeout);
+	(CountCmd(2), unit)->ReclaimUnit(enemy->GetUnit(), options, timeout);
 }
 
 void CCircuitUnit::CmdReclaimUnit(CAllyUnit* toReclaim, short options, int timeout)
@@ -916,7 +924,7 @@ void CCircuitUnit::CmdReclaimUnit(CAllyUnit* toReclaim, short options, int timeo
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->ReclaimUnit(toReclaim->GetUnit(), options, timeout);
+	(CountCmd(2), unit)->ReclaimUnit(toReclaim->GetUnit(), options, timeout);
 	taskState = ETaskState::EXECUTE;
 }
 
@@ -925,7 +933,7 @@ void CCircuitUnit::CmdReclaimInArea(const AIFloat3& pos, float radius, short opt
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->ReclaimInArea(pos, radius, options, timeout);
+	(CountCmd(2), unit)->ReclaimInArea(pos, radius, options, timeout);
 }
 
 void CCircuitUnit::CmdResurrectInArea(const AIFloat3& pos, float radius, short options, int timeout)
@@ -933,12 +941,12 @@ void CCircuitUnit::CmdResurrectInArea(const AIFloat3& pos, float radius, short o
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	unit->ResurrectInArea(pos, radius, options, timeout);
+	(CountCmd(2), unit)->ResurrectInArea(pos, radius, options, timeout);
 }
 
 void CCircuitUnit::CmdSetFireState(CCircuitDef::FireT state)
 {
-	unit->SetFireState(state);
+	(CountCmd(9), unit)->SetFireState(state);
 }
 
 void CCircuitUnit::TrySetFireState(CCircuitDef::FireT state)
@@ -951,7 +959,7 @@ void CCircuitUnit::TrySetFireState(CCircuitDef::FireT state)
 
 void CCircuitUnit::CmdSetMoveState(CCircuitDef::MoveT state)
 {
-	unit->SetMoveState(state);
+	(CountCmd(9), unit)->SetMoveState(state);
 }
 
 void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
@@ -1026,7 +1034,7 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 			CmdWantedSpeed(NO_SPEED_LIMIT);
 			CmdSetTarget(target);
 			if (circuitDef->IsAttrOnOff()) {
-				unit->SetOn(isStatic == circuitDef->IsOnSlow());
+				(CountCmd(9), unit)->SetOn(isStatic == circuitDef->IsOnSlow());
 			}
 		)
 		return;
@@ -1095,7 +1103,7 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 		CmdWantedSpeed(NO_SPEED_LIMIT);
 		CmdSetTarget(target);
 		if (circuitDef->IsAttrOnOff()) {
-			unit->SetOn(isStatic == circuitDef->IsOnSlow());
+			(CountCmd(9), unit)->SetOn(isStatic == circuitDef->IsOnSlow());
 		}
 	)
 }
@@ -1110,8 +1118,8 @@ void CCircuitUnit::Attack(const AIFloat3& position, CEnemyInfo* enemy, int tile,
 void CCircuitUnit::Guard(CCircuitUnit* target, int timeout)
 {
 	TRY_UNIT(manager->GetCircuit(), this,
-//		unit->ExecuteCustomCommand(CMD_ORBIT, {(float)target->GetId(), 300.0f}, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
-		unit->Guard(target->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+//		(CountCmd(9), unit)->ExecuteCustomCommand(CMD_ORBIT, {(float)target->GetId(), 300.0f}, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+		(CountCmd(3), unit)->Guard(target->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 //		CmdWantedSpeed(NO_SPEED_LIMIT);
 	)
 }
@@ -1130,7 +1138,7 @@ void CCircuitUnit::Morph()
 {
 	isMorphing = true;
 	TRY_UNIT(manager->GetCircuit(), this,
-		unit->ExecuteCustomCommand(CMD_MORPH, {});
+		(CountCmd(9), unit)->ExecuteCustomCommand(CMD_MORPH, {});
 		CmdMiscPriority(1);
 	)
 }
@@ -1139,7 +1147,7 @@ void CCircuitUnit::StopMorph()
 {
 	isMorphing = false;
 	TRY_UNIT(manager->GetCircuit(), this,
-		unit->ExecuteCustomCommand(CMD_MORPH_STOP, {});
+		(CountCmd(9), unit)->ExecuteCustomCommand(CMD_MORPH_STOP, {});
 		CmdMiscPriority(1);
 	)
 }
@@ -1193,7 +1201,7 @@ void CCircuitUnit::Upgrade()
 	upgrade.insert(upgrade.end(), newModules.begin(), newModules.end());
 
 	TRY_UNIT(manager->GetCircuit(), this,
-		unit->ExecuteCustomCommand(CMD_MORPH_UPGRADE_INTERNAL, upgrade);
+		(CountCmd(9), unit)->ExecuteCustomCommand(CMD_MORPH_UPGRADE_INTERNAL, upgrade);
 		CmdMiscPriority(1);
 	)
 }
@@ -1202,7 +1210,7 @@ void CCircuitUnit::StopUpgrade()
 {
 	isMorphing = false;
 	TRY_UNIT(manager->GetCircuit(), this,
-		unit->ExecuteCustomCommand(CMD_UPGRADE_STOP, {});
+		(CountCmd(9), unit)->ExecuteCustomCommand(CMD_UPGRADE_STOP, {});
 		CmdMiscPriority(1);
 	)
 }

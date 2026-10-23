@@ -1244,6 +1244,23 @@ int CCircuitAI::Update(int frame)
 		// turning it on would buy rather than what it bought.
 		LOG("apex: orders t=%i move=%u fight=%u patrol=%u attack=%u target=%u dupable=%u",
 				teamId, ordSent[0], ordSent[1], ordSent[2], ordSent[3], ordSent[4], ordSup[0]);
+		{
+			// apex: EVERY command the wrappers sent this minute, by who got it (his 10-22: "throttle it so APM doesn't
+			// go out of control"). build/repair/reclaim/guard/move/fight/attack/stop/patrol/other.
+			static const char* who[4] = {"turret", "con", "fac", "army"};
+			for (int w = 0; w < 4; ++w) {
+				unsigned tot = 0;
+				for (int k = 0; k < 10; ++k) {
+					tot += cmdCount[w][k];
+				}
+				LOG("apex: cmds t=%i %s total=%u build=%u repair=%u reclaim=%u guard=%u move=%u fight=%u attack=%u stop=%u patrol=%u other=%u",
+						teamId, who[w], tot, cmdCount[w][0], cmdCount[w][1], cmdCount[w][2], cmdCount[w][3],
+						cmdCount[w][4], cmdCount[w][5], cmdCount[w][6], cmdCount[w][7], cmdCount[w][8], cmdCount[w][9]);
+				for (int k = 0; k < 10; ++k) {
+					cmdCount[w][k] = 0;
+				}
+			}
+		}
 		LOG("apex: order-rep t=%i move same=%u lt8=%u lt32=%u lt128=%u far=%u"
 				" | fight=%u attack=%u target=%u",
 				teamId, ordRep[0][0], ordRep[0][1], ordRep[0][2], ordRep[0][3], ordRep[0][4],
@@ -3033,6 +3050,23 @@ static bool InLaneOf(const AIFloat3& anchor, const AIFloat3& fwd, float pitch, f
 		return false;  // behind the anchor is the economy: no streets (script LanesApply)
 	}
 	return (LaneGapAt(lat, pitch) < half) || (LaneGapAt(depth, pitch) < half);
+}
+
+void CCircuitAI::NoteCmd(const CCircuitUnit* u, int kind)
+{
+	if ((u == nullptr) || (kind < 0) || (kind >= 10)) {
+		return;
+	}
+	const CCircuitDef* cd = u->GetCircuitDef();
+	int w = 3;
+	if (cd != nullptr) {
+		if (cd->IsMobile()) {
+			w = cd->IsBuilder() ? 1 : 3;
+		} else {
+			w = cd->IsBuilder() ? 2 : (cd->IsAssist() ? 0 : 3);
+		}
+	}
+	++cmdCount[w][kind];
 }
 
 bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const

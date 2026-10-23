@@ -164,7 +164,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
 				unit->CmdMoveTo(pos, options | UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::GUARD);
 				options = UNIT_COMMAND_OPTION_SHIFT_KEY;
 			}
-			unit->GetUnit()->Guard(vip->GetUnit(), options);
+			(unit->CountCmd(3), unit->GetUnit())->Guard(vip->GetUnit(), options);
 		)
 	} else {
 		manager->AbortTask(this);
@@ -179,7 +179,7 @@ void CBGuardTask::OnUnitIdle(CCircuitUnit* unit)
 	CAllyUnit* vip = Vip();
 	if (vip != nullptr) {
 		TRY_UNIT(circuit, unit,
-			unit->GetUnit()->Guard(vip->GetUnit());
+			(unit->CountCmd(3), unit->GetUnit())->Guard(vip->GetUnit());
 		)
 	} else {
 		manager->AbortTask(this);

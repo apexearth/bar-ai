@@ -165,6 +165,7 @@ public:
 	enum class OrdSrc: int { OTHER = 0, RING, TRAVEL, DODGE, STANDOFF, POST,
 		RETREAT, BUILD, SCOUT, SETTGT, ATTACK, PATROL, ENGAGE, REGROUP, ESCORT,
 		SNIPER, MANUAL, SCRIPT, FWALK, COMBAT, GUARD, RALLY, _SIZE };
+	void CountCmd(int kind);
 	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout,
 			OrdSrc src = OrdSrc::OTHER);
 	// One source of truth for the call-site names: the order census in

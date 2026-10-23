@@ -761,6 +761,7 @@ public:
 	// apex: census of every engine order this AI sends, by kind, with the ones
 	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
 	void NoteOrder(int kind, int bucket, bool suppressed, int src = 0);
+	void NoteCmd(const CCircuitUnit* u, int kind);
 	// apex: orders the arbiter refused, per call site -- what a centre TRIED to
 	// do while a higher-ranked decision was still running.
 	void NoteOrderRefused(int src, int byPrio);
@@ -865,6 +866,7 @@ private:
 	// [1] < SQUARE_SIZE (the goal radius our move orders carry), [2] < 4,
 	// [3] < 16 squares, [4] further. Everything past [0] re-paths.
 	unsigned ordSent[5] = {0, 0, 0, 0, 0};
+	unsigned cmdCount[4][10] = {};   // [turret, constructor, factory, army][build repair reclaim guard move fight attack stop patrol other]
 	unsigned ordSup[5] = {0, 0, 0, 0, 0};
 	unsigned ordRep[5][5] = {{0}};
 	// apex: the same census split by CALL SITE (CCircuitUnit::OrdSrc), because
