@@ -84,6 +84,15 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 62 | A teammate with no commander, no base and no income kept getting our units (10-19) | a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap (TUNE_GIFT_STAKE, off) | `apex: gift-stake`; gift metal to a seat after its commander dies | UNTESTED -- his watch games: single gifts of 111 units / 62k m and 123 units / 91k m |
 | 63 | Not enough anti-nukes while the enemy launches a lot of nukes (10-19; "about 6 at once... ~10 nukes all on your base you WILL die") | survive their worst salvo by arithmetic: every seen silo full (its stockpilelimit), fired together, / TUNE_ANTI_AT_ONCE (6) = antis each target needs -- the core and any cluster worth more than those antis; launches seen floor the salvo for unseen silos and lift the income floor | `apex: nukemath facts` (startup: armamd=20/90s armsilo=10/120s corsilo=10/180s), `apex: nukepress`; antis over the core vs ceil(salvo/6) | BUILT -- math checked against the unit files; no game test (his 10-19: "you can get it all through math") |
 
+## A T1 LAB IN AN ALLY'S OPEN LANE (2026-10-22)
+
+His hosted game, 10-22 (v0.3.5): our AI put an unused T1 lab right in an ally's open lane, which is not supposed to
+be blocked. Unmeasured -- pull the replay of that game. Two parts: (1) the plant site keeps off our own lanes
+(IsInBaseLane) and allies' factory doorways (OffAllyExit), but no check guards an ally's movement lanes; (2) an
+idle plant standing in a lane is not priced to move. The reclaim market already prices a plant our own turrets
+walled in (plant-walled, PlantEnclosure); a lane it blocks for an ally belongs in the same price -- the ally's
+blocked traffic against a lab producing nothing.
+
 ## TURRET APM AND BUILDER ELECTIONS LATE (2026-10-22)
 
 His 10-22: "one thing that lags me is probably all the con turrets... throttle it so APM doesn't go out of control."
