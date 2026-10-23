@@ -21,7 +21,14 @@ namespace Market {
 // terminates: 4x is about one era of this game, an opening economy to a mid one.
 const float ETA_TARGET_MUL = 4.f;
 float gEtaTraceMul = 0.f;   // > 0 only inside eta-tech-trace: the same plans read to a farther target
-float EtaMul() { return (gEtaTraceMul > 0.f) ? gEtaTraceMul : ETA_TARGET_MUL; }
+// TEST (apex_eta_target): the horizon screened again now the T2 plan's energy is fed; removed with the result.
+float EtaMul()
+{
+	if (gEtaTraceMul > 0.f)
+		return gEtaTraceMul;
+	const float t = ai.GetTunable("apex_eta_target", TUNE_ETA_TARGET);
+	return (t > 1.f) ? t : ETA_TARGET_MUL;
+}
 
 const int   ETA_MAX_STEPS = 64;
 const float ETA_BIG = 1.0e9f;
@@ -773,7 +780,7 @@ float EtaHandsShareNow()
 	// read as hands-bound and the factories never stopped (209 air cons).
 	// Summed, the lathe time and the feed time over the same batches say
 	// which of the two the target is actually waiting on.
-	const float target = P * ETA_TARGET_MUL;
+	const float target = P * EtaMul();
 	float eAvail = EtaEnergyAvail();
 	float tBuild = 0.f;
 	float tFeed = 0.f;
@@ -1115,7 +1122,7 @@ void EtaLog(array<Want@>@ ranked, CCircuitUnit@ unit)
 	const float cheap = ServableUpDemand() + OpenSpotStream();
 	AiLog(Factory::T() + "apex: eta t=" + ai.teamId
 		+ " P=" + formatFloat(P, "", 0, 1)
-		+ " tgt=" + formatFloat(P * ETA_TARGET_MUL, "", 0, 1)
+		+ " tgt=" + formatFloat(P * EtaMul(), "", 0, 1)
 		+ " cheap=" + formatFloat(cheap, "", 0, 2)
 		+ " base=" + formatFloat(EtaWith(0, 0.f, 0.f, false), "", 0, 0)
 		+ " mkt=" + ((mktAt < 0) ? "-"
