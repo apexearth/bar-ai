@@ -1,6 +1,7 @@
 #include "stamp.as"
 #include "tunables.as"       // EVERY default, in one file -- edit here
 #include "eco.as"             // every economy reading, through one seam a test can pose
+#include "manager/trial.as"   // seat-level trials: a coin per seat, its arm and footprint logged (trial_report.py)
 #include "../side.as"
 #include "../world.as"
 #include "perf.as"
@@ -151,6 +152,7 @@ bool gFrameHook = false;
 
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
+	Trial::Tick();
 	if (gFrameHook)
 		return;
 	for (int c = 0; c < UP_CHUNKS; ++c)
@@ -303,8 +305,10 @@ bool WasFinished(int id)
 void AiUnitFinished(CCircuitUnit@ unit)
 {
 	const double _t = Perf::T0();
-	if (unit !is null)
+	if (unit !is null) {
 		Requests::RingFrameGone(int(unit.id));
+		Air::TrialNoteFinished(unit);
+	}
 	UnitFinishedInner(unit);
 	Perf::Add("hk.finished", _t);
 }
@@ -370,6 +374,8 @@ void UnitFinishedInner(CCircuitUnit@ unit, bool produced = true)
 // see Builder::SampleTaskHist/TakeHistFor in manager/builder/events.as.
 void AiUnitDestroyed(CCircuitUnit@ unit)
 {
+	if ((unit !is null) && (unit.circuitDef !is null))
+		Trial::NoteLoss(unit.circuitDef.costM);
 	Market::NoteDead(unit);
 	Market::LiftNoteDead(unit);
 	if (unit is null)
@@ -570,6 +576,8 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
 	if (edef is null)
 		return;
+	if (byUs)
+		Trial::NoteKill(edef.costM);
 	Military::NoteFoeDef(edef.costM, edef);
 	Military::FoeMemNoteDeath(int(edef.id), pos);
 	double hkT = Perf::T0();

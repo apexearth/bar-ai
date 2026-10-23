@@ -572,12 +572,35 @@ float StrikeGainWing(int d, float fillSec)
 	// bomber at 0, so neither bombers nor a second advanced plant were ever worth anything. Past the count the
 	// next bomber is still bought while its measured (or modelled) gain beats its cost; the count keeps its other
 	// jobs (when a held wing is massed, the commit size).
-	if ((ScaledBombers() <= 0) || ((held >= ScaledBombers())
-		&& (ai.GetTunable("apex_air_rich", TUNE_AIR_RICH) <= 0.f)))
+	if ((ScaledBombers() <= 0) || ((held >= ScaledBombers()) && !AirRichOn()))
 		return 0.f;
 	if (!MarginalWorth(d, held))
 		return 0.f;
 	return MarginalGain(d, held) / ((fillSec > 1.f) ? fillSec : 180.f);
+}
+
+// apex_air_rich, or this seat's coin while its trial runs (manager/trial.as; v0.3.8 shipped it as a trial).
+bool AirRichOn()
+{
+	return Trial::On("air_rich", TUNE_AIR_RICH, TUNE_TRIAL_AIR_RICH);
+}
+
+// The trial's footprint, counted where planes and plants finish: every bomber, the ones that came in while the
+// held wing was already at the count (only the trial's arm buys those), and advanced air plants.
+void TrialNoteFinished(CCircuitUnit@ unit)
+{
+	if (!Trial::Running("air_rich", TUNE_TRIAL_AIR_RICH) || (unit.circuitDef is null))
+		return;
+	AirRichOn();   // registers the coin before the first minute's line
+	const int d = int(unit.circuitDef.id);
+	if (IsBomberDef(d)) {
+		Trial::Note("air_rich", "bombers", 1.f);
+		if (HeldBombers() > ScaledBombers())
+			Trial::Note("air_rich", "pastCount", 1.f);
+	} else if (Catalog::ValidId(d) && !Catalog::gMobile[d] && (Catalog::gBuildPower[d] > 0.f)
+		&& (unit.circuitDef.GetName().findFirst("aap") >= 0)) {
+		Trial::Note("air_rich", "advAirPlants", 1.f);
+	}
 }
 
 // Which of StrikeGainFor's gates zeroed it -- the prodrank line's wing0 reason.
@@ -593,7 +616,7 @@ string StrikeWhy(int d)
 		held = pool;
 	if (ScaledBombers() <= 0)
 		return "scaled0";
-	if ((held >= ScaledBombers()) && (ai.GetTunable("apex_air_rich", TUNE_AIR_RICH) <= 0.f))
+	if ((held >= ScaledBombers()) && !AirRichOn())
 		return "full " + held + "(pool" + pool + ")/" + ScaledBombers();
 	return "worth " + int(MarginalGain(d, held)) + "<" + int(Catalog::gCostM[d]
 			* ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF)) + " obs=" + int(ObsDmg(d));

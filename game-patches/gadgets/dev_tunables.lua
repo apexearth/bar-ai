@@ -409,7 +409,8 @@ local NAMES = {
 	"apex_air_finish", -- nnair.as: cadence launch waits for a finishing wing (1)
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
 	"apex_lane_reclaim", -- want_reclaim.as: idle plants in a lane priced for reclaim (1)
-	"apex_air_rich", -- air/state.as: bombers bought past the count while they pay (1)
+	"apex_air_rich",
+	"apex_trial_air_rich", -- trial.as: a coin per seat for apex_air_rich (1) -- air/state.as: bombers bought past the count while they pay (1)
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
 	"apex_army_press", -- StockFight.inl: attack squads press remembered/mirrored enemy ground (1)
 	"apex_hot_road_memo", -- decide.as ChargeTrip: a still-hot refused road zeroes that hand's want (1)

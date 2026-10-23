@@ -57,7 +57,10 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   4-11 of our mexes lost on home ground in the first 10-16 minutes. As a price, not a count: the guard's prevented
   loss is the extractor's income over the raids it stops, early raids included -- measure which term reads low
   (mex-guard wants, `defwhy`) before changing anything.
-- [ ] **Rich: more T2 air plants, more air** (his 10-23: "when you're rich, make more T2 air labs, make more air").
+- [ ] **Rich: more T2 air plants, more air** (his 10-23: "when you're rich, make more T2 air labs, make more air";
+  "i do like things priced"). Step 1 shipped as a TRIAL in v0.3.8 (apex_air_rich: bombers bought past the count while
+  they pay; 7-6 vs v0.3.7 in 16 2v2 games, +26% bombers). Still to price: the income bar AirEcoReady
+  (apex_air_eco_base, `wing0(eco)`) and an untried bomber type's prior (`worth 133<5100 obs=-1`).
   His 10-23 watch game, seat 0 at 1,238-1,310 m/s: one advanced air plant (a second at minute 35); the plant's
   line read `armblade: wing0(full 120(pool120)/59)` -- ScaledBombers (state.as) is a COUNT, AIR_BOMBERS plus one
   per AIR_SCALE_INCOME of income plus an AA soak, and past it StrikeGainWing prices the next bomber at 0, so
@@ -70,11 +73,19 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   a small wing (his game, Cortex seat: the cheapest paying wing was 58 Phoenixes for 106 net). As a price: an
   AA site is a target worth its own metal plus what it stops protecting -- the next runs' losses it no longer
   causes over the cells behind it.
-- [ ] **Gunships commit or stay home** (his 10-23 watch: a 40-gunship wing lingered over their base without
-  attacking while bombers and fighters struck; against humans it would all die to AA). NaDecide sends the wing
-  at a cell priced against their AA (`nnair-go gunships n=40 ... killF=0.24 lossN=40`); the C++ raid task then
-  commits with no target (`raid-commit ... target=- aaSet=24`) and refuses each one under AA, so it circles. One
-  judgement: the raid takes the target the decision priced; the decision counts the wing it expects to lose.
+- [ ] **Gunships: fight or don't, never hesitate** (his 10-23: "They can roam around, but don't start to go into
+  heavy AA and then move away, and then move back, and then move away... either fight or don't. hesitation
+  behavior is terrible"). Roaming is fine; the failure is the in-out cycle under AA. His watch: a 40-gunship wing
+  lingered over their base while bombers struck. NaDecide sends the wing at a cell priced against their AA
+  (`nnair-go gunships n=40 ... killF=0.24 lossN=40`); the C++ raid task commits with no target
+  (`raid-commit ... target=- aaSet=24`) and refuses each one under AA, so it circles in and out. One judgement:
+  once the decision commits into AA, the raid fights there; if it does not commit, it stays out of AA reach.
+- [ ] **Remember our pain points: clear their AA, then strike** (his 10-23: "if we are constantly failing to strike
+  enemy eco we need to switch to other targets AA can be a good target. Ideally we just remember what our 'pain
+  points' are. If enemy AA is why our air is useless, attack that AA with our ground forces, LRPC, or nukes. Once
+  the AA is out of the way, send in the air attack"). The scored runs already measure air failing (ObsSurv,
+  ObsDmg); what is missing is the cause attached to a place -- the AA that killed the wing -- priced as a target
+  for the ground army, LRPC and nukes worth the air strikes it unblocks, and the air waiting until it falls.
 - [ ] **Air scouts for the army** (his 10-23: no scout planes to see how strong their base is; 0 `air look`
   flights in 37 minutes). LookGainFor prices a look only by what it adds to the first bomber's prize; add what
   the army gains from knowing whether their base can be pushed.
