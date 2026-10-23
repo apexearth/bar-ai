@@ -502,6 +502,8 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 			fill = (target - P) / (float(k) * g);
 		t += float(k) * (stepS + rlat) * fill;
 		gLadderLatS += float(k) * rlat * fill;
+		if (gLadderTierRate > 0.f)
+			gLadderTierBP += gLadderTierRate * float(k) * (stepS + rlat) * fill;
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
@@ -526,6 +528,11 @@ float gLadderAddBP = 0.f;
 // The new tier's mobile lathe once a tech first move stands: the lab's first
 // constructor plus the ceiling hands already owned. 0 = not a tech plan.
 float gLadderTierBP = 0.f;
+// THE NEW LAB KEEPS MAKING HANDS (apex_tier_grow). The tier's rungs ran on the lab's FIRST constructor for the whole
+// plan, so the ladder priced T2 as a one-hand economy, and the longer the horizon the worse it read (seed 3600 at
+// minute 4.9: T2 4,613 s at 16x against 59,624 for the plan without it). His T2 air plant turned one out every 18 s.
+// While the ladder runs, the lab adds a constructor's build power at its own build rate (BP per second).
+float gLadderTierRate = 0.f;
 bool gLadderTrace = false;
 string gLadderTraceS;
 float CeilingHandsBP()
@@ -655,6 +662,9 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 				const float tier = Catalog::gBuildPower[conD] + CeilingHandsBP()
 						+ bpMob * ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
 				gLadderTierBP = (tier > 1.f) ? tier : 1.f;
+				gLadderTierRate = ((ai.GetTunable("apex_tier_grow", TUNE_TIER_GROW) > 0.f)
+						&& (Catalog::gBuildTime[conD] > 1.f))
+						? (labBP / Catalog::gBuildTime[conD]) * Catalog::gBuildPower[conD] : 0.f;
 			}
 		}
 	}
@@ -664,6 +674,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	Perf::Add("et.ladder", _tE);
 	gLadderAddBP = 0.f;
 	gLadderTierBP = 0.f;
+	gLadderTierRate = 0.f;
 	return eta;
 }
 
