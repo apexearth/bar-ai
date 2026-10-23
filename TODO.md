@@ -45,7 +45,8 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   something to try to end the game. Instead it feels like we do less."* His 10-22 hosted game (8 seats, v0.3.5):
   air orders per 5 min 70-80 to minute 45, then 23 and 22 while T3 took 61-70; 12 air plants ordered in minutes
   50-55. Lag from minute 35 (sim 0.94-0.96, LAG/HOSTSHORT lines, thinner slices) -- check whether it cuts air
-  more than the rest. As a price: a mass strike that can end the game (their economy or commander) carries its
+  more than the rest: the lag ladder (perf.as) deliberately stops lower-tier army lines once T3 runs when severity
+  passes 2 ("T2 army stops when T3 runs"), which would cut T2 air exactly when it went. As a price: a mass strike that can end the game (their economy or commander) carries its
   decisive worth, not a unit's trade value, and pairs with the team timing below.
 - [ ] **Stop re-nuking blind** -- *"we keep nuking spots we've already landed several nukes on. If we landed 2+ nukes
   there but we haven't rescouted there and don't know what's up, then we should stop nuking there."* As a price,
