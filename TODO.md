@@ -40,6 +40,11 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
 - [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
   and do a massive air attack, things like that would be crazy and fun."* A team plan names a time and a kind
   (all air, all T3 ground); each seat's tilt leans toward it until the strike, then back to its own style.
+- [ ] **Stop re-nuking blind** -- *"we keep nuking spots we've already landed several nukes on. If we landed 2+ nukes
+  there but we haven't rescouted there and don't know what's up, then we should stop nuking there."* As a price,
+  not a count: each landed nuke cuts what the target is believed to still hold (by the blast against what stood
+  there); nothing restores it without a fresh look, so a spot hit twice since its last scouting prices near zero
+  and a rescout of it becomes the valuable move. A look that shows it rebuilt brings the price back.
 
 # Next big job (his 10-15: "we'll do it later")
 
