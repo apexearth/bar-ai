@@ -122,14 +122,14 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 	p.hands.insertAt(at, hands);
 }
 
-// OUR TREE: everything reachable from what we own through what it builds. The T2 pool admitted any def anybody
-// builds, so our T2 plan's energy step was Cortex's advanced fusion (trace seed 3600). Rebuilt every 60 s.
+// OUR TREE: everything reachable from what we own through what it builds -- the unit defs say it all at game start
+// (his 10-22), so it is built once, from the first roots we own; asked before we own anything, it is asked again.
+// The T2 pool admitted any def anybody builds, so our T2 plan's energy step was Cortex's advanced fusion.
 array<bool> gOurTree;
-int gOurTreeAt = -999999;
+bool gOurTreeBuilt = false;
 bool InOurTree(int d)
 {
-	if ((ai.frame - gOurTreeAt >= 60 * SECOND) || (gOurTree.length() == 0)) {
-		gOurTreeAt = ai.frame;
+	if (!gOurTreeBuilt) {
 		gOurTree.resize(0);
 		gOurTree.resize(Catalog::gDefCount + 1);
 		array<int> q;
@@ -147,6 +147,7 @@ bool InOurTree(int d)
 					q.insertLast(bl[b]);
 				}
 		}
+		gOurTreeBuilt = (q.length() > 0);
 	}
 	return Catalog::ValidId(d) && (uint(d) < gOurTree.length()) && gOurTree[d];
 }
