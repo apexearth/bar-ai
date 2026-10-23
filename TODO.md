@@ -52,6 +52,11 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
 - [ ] **Allies agree a timing**: *"the AI could suggest to each other that at a certain time they'll all go air
   and do a massive air attack, things like that would be crazy and fun."* A team plan names a time and a kind
   (all air, all T3 ground); each seat's tilt leans toward it until the strike, then back to its own style.
+- [ ] **A little more willingness to guard mexes with LLTs early** (his 10-23: "we'll win more if we have just a
+  little more willingness to build LLTs around our mexes earlier in the game"). Starwatcher 1v1 games 10-23 logged
+  4-11 of our mexes lost on home ground in the first 10-16 minutes. As a price, not a count: the guard's prevented
+  loss is the extractor's income over the raids it stops, early raids included -- measure which term reads low
+  (mex-guard wants, `defwhy`) before changing anything.
 - [ ] **Rich: more T2 air plants, more air** (his 10-23: "when you're rich, make more T2 air labs, make more air").
   His 10-23 watch game, seat 0 at 1,238-1,310 m/s: one advanced air plant (a second at minute 35); the plant's
   line read `armblade: wing0(full 120(pool120)/59)` -- ScaledBombers (state.as) is a COUNT, AIR_BOMBERS plus one
