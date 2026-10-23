@@ -45,6 +45,11 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   not a count: each landed nuke cuts what the target is believed to still hold (by the blast against what stood
   there); nothing restores it without a fresh look, so a spot hit twice since its last scouting prices near zero
   and a rescout of it becomes the valuable move. A look that shows it rebuilt brings the price back.
+- [ ] **Reclaim idle turrets while the host lags** -- *"one additional thing we can do when the host is lagging, is
+  to reclaim nano turrets which are idle."* In the reclaim market: an idle turret's keep value (the chance work
+  enters its reach soon x its rebuild cost) against its running cost, which rises with the measured lag (Perf's sim
+  speed against wall time); the farthest-from-work idle turrets go first and return their metal. Our own only;
+  a turret a coming build will need keeps its value, so nothing is reclaimed and rebuilt a minute later.
 
 # Next big job (his 10-15: "we'll do it later")
 
