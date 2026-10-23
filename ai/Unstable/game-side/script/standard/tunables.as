@@ -653,6 +653,7 @@ const float TUNE_NUKE_MISSILE_COST = 1500.f;
 const float TUNE_NUKE_PAYOFF = 3.f;
 
 const float TUNE_NUKE_REPEAT_DECAY = 0.5f;
+const float TUNE_NUKE_BLIND = 1.f;   // [toggle 0/1] nukes.as: no strike on ground believed spent (cost halved per strike since the last look, under apex_nuke_min_value)
 
 const float TUNE_NUKE_RESIGHT_R = 1600.f;
 

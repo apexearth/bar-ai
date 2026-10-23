@@ -30,6 +30,33 @@ int  gNukeNextLog = 0;
 // bases can still out-bid the skepticism. Persistent for the game; bounded.
 array<AIFloat3> gHitPos;
 array<int>      gHitN;
+array<int>      gHitAt;   // the frame of the last strike on this ground
+
+// NOT AGAIN, BLIND (apex_nuke_blind; his 10-22: "If we landed 2+ nukes there but we haven't rescouted there and don't
+// know what's up, then we should stop nuking there"). A target is believed to hold its cost halved per strike since
+// the last look, and below apex_nuke_min_value (his 10k) it is not a target: the 30k mirrored base after two strikes
+// is 7.5k. A look -- the ground in our LOS a minute or more after the last strike landed -- clears the count, so a
+// rebuilt base prices whole again. Defensive strikes never count (each wave is a new army).
+bool NukeBlindOn() { return ai.GetTunable("apex_nuke_blind", TUNE_NUKE_BLIND) > 0.f; }
+void NukeLookSweep()
+{
+	if (!NukeBlindOn())
+		return;
+	for (uint i = 0; (i < gHitPos.length()) && (i < gHitAt.length()); ++i)
+		if ((gHitN[i] > 0) && (ai.frame - gHitAt[i] >= 60 * SECOND) && ai.IsPosInLos(gHitPos[i]))
+			gHitN[i] = 0;
+}
+// Still worth a strike after the ones landed blind on it?
+bool NukeStillWorth(float cost, int hits, float minValue)
+{
+	if (!NukeBlindOn())
+		return true;
+	const float decay = ai.GetTunable("apex_nuke_repeat_decay", TUNE_NUKE_REPEAT_DECAY);
+	float believed = cost;
+	for (int h = 0; h < hits; ++h)
+		believed *= decay;
+	return believed >= minValue;
+}
 
 int StrikesOn(const AIFloat3 &in p)
 {
@@ -45,14 +72,19 @@ void NoteStrikeOn(const AIFloat3 &in p)
 	for (uint i = 0; i < gHitPos.length(); ++i) {
 		if (gHitPos[i].SqDistance2D(p) < 900.f * 900.f) {
 			++gHitN[i];
+			if (i < gHitAt.length())
+				gHitAt[i] = ai.frame;
 			return;
 		}
 	}
 	gHitPos.insertLast(p);
 	gHitN.insertLast(1);
+	gHitAt.insertLast(ai.frame);
 	if (gHitPos.length() > 32) {
 		gHitPos.removeAt(0);
 		gHitN.removeAt(0);
+		if (gHitAt.length() > 0)
+			gHitAt.removeAt(0);
 	}
 }
 
@@ -370,6 +402,7 @@ float StructsKilledM(const AIFloat3 &in at)
 
 void UpdateNukes()
 {
+	NukeLookSweep();
 	if (ai.GetTunable("apex_brain_nuke", TUNE_BRAIN_NUKE) <= 0.f)
 		return;
 	ShareSilos();
@@ -601,6 +634,8 @@ void UpdateNukes()
 			// until the ground is re-sighted.
 			const float decay = ai.GetTunable("apex_nuke_repeat_decay", TUNE_NUKE_REPEAT_DECAY);
 			int hits = StrikesOn(p);
+			if (!NukeStillWorth(cost, hits, minValue))
+				continue;
 			if (hits > 6)
 				hits = 6;
 			for (int h = 0; h < hits; ++h)
@@ -641,6 +676,8 @@ void UpdateNukes()
 			}
 			float score = cost / float(1 + antis);
 			int hits = StrikesOn(p);
+			if (!NukeStillWorth(cost, hits, minValue))
+				continue;
 			if (hits > 6)
 				hits = 6;
 			for (int h = 0; h < hits; ++h)
@@ -685,6 +722,8 @@ void UpdateNukes()
 				hits = 6;
 			for (int h = 0; h < hits; ++h)
 				score *= decay;
+			if (!NukeStillWorth(cost, StrikesOn(mirror), minValue))
+				score = 0.f;   // two blind strikes on the guessed base: nothing believed left there
 			if (score > bestScore) {
 				bestScore = score;
 				bestPos = mirror;
