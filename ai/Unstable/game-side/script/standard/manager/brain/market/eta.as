@@ -122,6 +122,35 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 	p.hands.insertAt(at, hands);
 }
 
+// OUR TREE: everything reachable from what we own through what it builds. The T2 pool admitted any def anybody
+// builds, so our T2 plan's energy step was Cortex's advanced fusion (trace seed 3600). Rebuilt every 60 s.
+array<bool> gOurTree;
+int gOurTreeAt = -999999;
+bool InOurTree(int d)
+{
+	if ((ai.frame - gOurTreeAt >= 60 * SECOND) || (gOurTree.length() == 0)) {
+		gOurTreeAt = ai.frame;
+		gOurTree.resize(0);
+		gOurTree.resize(Catalog::gDefCount + 1);
+		array<int> q;
+		const array<int>@ own = OwnedDefs();
+		for (uint oi = 0; oi < own.length(); ++oi)
+			if ((gOwnCount[own[oi]] > 0) && !gOurTree[own[oi]]) {
+				gOurTree[own[oi]] = true;
+				q.insertLast(own[oi]);
+			}
+		for (uint qi = 0; qi < q.length(); ++qi) {
+			const array<int>@ bl = Catalog::gBuildsList[q[qi]];
+			for (uint b = 0; b < bl.length(); ++b)
+				if (Catalog::ValidId(bl[b]) && !gOurTree[bl[b]]) {
+					gOurTree[bl[b]] = true;
+					q.insertLast(bl[b]);
+				}
+		}
+	}
+	return Catalog::ValidId(d) && (uint(d) < gOurTree.length()) && gOurTree[d];
+}
+
 // anyTier ignores who can build it: that is the world AFTER an advanced plant,
 // and comparing the two pools is how "is T2 worth it yet" gets answered by
 // arithmetic instead of by a bar.
@@ -133,6 +162,8 @@ int BestExtractDef(bool anyTier)
 		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
 			continue;
 		if (!anyTier && !CanBuildEver(d))
+			continue;
+		if (anyTier && EtaEFeedOn() && !InOurTree(d))
 			continue;
 		if (Catalog::gExtractsM[d] > bx) {
 			bx = Catalog::gExtractsM[d];
@@ -150,6 +181,8 @@ int ClaimExtractDef(bool anyTier)
 		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
 			continue;
 		if (!anyTier && !CanBuildEver(d))
+			continue;
+		if (anyTier && EtaEFeedOn() && !InOurTree(d))
 			continue;
 		const float c = Catalog::gCostM[d];
 		if ((c > 1.f) && ((best == 0) || (c < bc))) {
@@ -279,6 +312,8 @@ void PoolFill(Pool@ p, bool anyTier)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
 			continue;
 		if (!anyTier && !CanBuildEver(d))
+			continue;
+		if (anyTier && EtaEFeedOn() && !InOurTree(d))
 			continue;
 		// ...and nothing NOBODY builds (a free reactor no unit can place
 		// read as five cheap rungs of the T2 ladder).
@@ -492,12 +527,17 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 			const float tOther = StepSecWide(p.def[i], p.cost[i], P, bank,
 					RungBP(p.def[i], rbp), 1.0e9f, k, (wide > 0) ? wide : 1);
 			if ((stepS > 1.05f * tOther) && (tOther > 0.01f)) {
+				// the generator that adds the most energy per second of building it (his affordability: advanced solars
+				// early, an advanced fusion's 2,438 s step was the energy-per-cost pick)
 				int jb = -1;
 				float jv = 0.f;
 				for (uint j = 0; j < n.length(); ++j) {
 					if ((n[j] <= 0) || (p.makeE[j] <= 0.f) || (j == i))
 						continue;
-					const float v = p.makeE[j] / PoolEq(p.cost[j], p.costE[j]);
+					const float rbpJ = p.mob[j]
+							? ((CanBuildEver(p.def[j]) || (gLadderTierBP <= 0.f)) ? bpMob : gLadderTierBP) : bp;
+					const float sJ = StepSecWide(p.def[j], p.cost[j], P, bank, RungBP(p.def[j], rbpJ), eAvail, 1, 1) + lat;
+					const float v = p.makeE[j] / ((sJ > 0.1f) ? sJ : 0.1f);
 					if (v > jv) {
 						jv = v;
 						jb = int(j);
