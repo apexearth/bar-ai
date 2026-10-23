@@ -1796,6 +1796,45 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			if ((f is null) || (f.circuitDef is null))
 				continue;
 			const int fd = int(f.circuitDef.id);
+			// A PLANT IN SOMEBODY'S WAY (his 10-22 hosted game: an unused T1 lab in an ally's open lane). An idle plant,
+			// air plants included, standing on a street -- ours or an in-process ally's (ai.InAnyBaseLane) -- or in an
+			// ally factory's door (AllyLaneHit) is worth the ground it frees, priced as a plant walled in whole, and
+			// loses nothing by going: no twin is asked for. apex_lane_reclaim 0 is the old market.
+			if ((ai.GetTunable("apex_lane_reclaim", TUNE_LANE_RECLAIM) > 0.f) && (Catalog::gBuildsList[fd].length() > 0)
+				&& !LineWorking(f) && !ReclaimClaimed(f.id, unit.id))
+			{
+				const int born0 = BuiltFrameOf(f);
+				const float win0 = ai.GetTunable("apex_replant_window_s", TUNE_REPLANT_WINDOW_S);
+				const AIFloat3 lp = f.GetPos(ai.frame);
+				const float lh = float((Catalog::gFootX[fd] > Catalog::gFootZ[fd])
+						? Catalog::gFootX[fd] : Catalog::gFootZ[fd]) * 8.f;
+				bool inWay = false;
+				if (!((born0 > 0) && (float(ai.frame - born0) < win0 * float(SECOND)))) {
+					const array<AIFloat3> pts = {lp, lp + AIFloat3(-lh, 0.f, -lh), lp + AIFloat3(lh, 0.f, -lh),
+							lp + AIFloat3(-lh, 0.f, lh), lp + AIFloat3(lh, 0.f, lh)};
+					for (uint q = 0; (q < pts.length()) && !inWay; ++q)
+						inWay = ai.InAnyBaseLane(pts[q]) || AllyLaneHit(pts[q], AIFloat3(0.f, 0.f, 0.f), true);
+				}
+				if (inWay) {
+					const float lpitch = Lattice::FootPitch(fd);
+					const float ldoor = NanoRange() * 2.f * (lh + lpitch) / 256.f;
+					const float lcells = float((Catalog::gAreaCells[fd] > 0) ? Catalog::gAreaCells[fd] : 1);
+					const float lroom = PfMetalPerCell() * (lcells + ldoor) * ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+					const float lspeed = Catalog::gSpeed[int(unit.circuitDef.id)];
+					const float lwalk = (lspeed > 1.f) ? (unit.GetPos(ai.frame).distance2D(lp) / lspeed) : 60.f;
+					const float lv = (lroom / hz) / (1.f + (lwalk + Catalog::gCostM[fd] / 90.f) * wageR);
+					AiLog("apex: plant-in-lane t=" + ai.teamId + " " + f.circuitDef.GetName()
+						+ " at=" + int(lp.x) + "," + int(lp.z) + " room=" + int(lroom)
+						+ " reclaim v=" + formatFloat(lv, "", 0, 3) + " best=" + formatFloat(bestValue, "", 0, 3));
+					if (lv > bestValue) {
+						bestValue = lv;
+						@best = f;
+						bestDef = fd;
+						moving = false;
+					}
+					continue;
+				}
+			}
 			if (AirPlant(fd) || (Catalog::gBuildsList[fd].length() == 0))
 				continue;
 			if (ReclaimClaimed(f.id, unit.id))

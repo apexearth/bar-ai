@@ -1399,6 +1399,12 @@ static void CCircuitAI_SetBaseGrid(CCircuitAI* circuit, const AIFloat3& anchor,
 	circuit->SetBaseGrid(anchor, fwd, cell, lanePitch, laneHalf, range);
 }
 
+// Our streets or an in-process ally's (CCircuitAI::IsInBaseLane): the lanes the script cannot see.
+static bool CCircuitAI_InAnyBaseLane(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	return circuit->IsInBaseLane(pos);
+}
+
 // The def's lattice cell nearest `pos`, exactly as the builder task will snap
 // it. Script walks that used their own pitch from an unsnapped origin sat
 // half a cell off the cells C++ chose.
@@ -2572,6 +2578,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetHealPos(const AIFloat3& in)", asMETHOD(CCircuitAI, SetHealPos), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetBaseGrid(const AIFloat3& in, const AIFloat3& in, float, float, float, float)", asFUNCTION(CCircuitAI_SetBaseGrid), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapToLattice(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapToLattice), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool InAnyBaseLane(const AIFloat3& in) const", asFUNCTION(CCircuitAI_InAnyBaseLane), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsPosOnMap(const AIFloat3& in) const",asMETHOD(CCircuitAI, IsPosOnMap), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyDefendInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyDefendInflAt), asCALL_THISCALL); ASSERT(r >= 0);
