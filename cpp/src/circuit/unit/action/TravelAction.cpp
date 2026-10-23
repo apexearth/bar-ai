@@ -41,7 +41,16 @@ ITravelAction::ITravelAction(CCircuitUnit* owner, Type type, int squareSize, flo
 	} else if (cdef->IsTurnLarge()) {
 		incMod *= 2;
 	}
-	increment = incMod * DEFAULT_SLACK / squareSize + 1;
+	// apex: WAYPOINTS FARTHER APART, FEWER ORDERS (apex_travel_step; his 10-22: "throttle it so APM doesn't go out
+	// of control"). A unit gets a move order each time it reaches the next waypoint, so orders scale with path
+	// length over this spacing: travel was ~2/3 of all army moves, ~1,000 a minute per AI at the peak of a 2v2.
+	// The engine's own pathfinder steers between waypoints; the multiplier trades how tightly the threat-aware
+	// path is followed for that many fewer orders.
+	float stepMul = 1.f;
+	if (unit->GetManager() != nullptr) {
+		stepMul = std::max(1.f, unit->GetManager()->GetCircuit()->GetTunable("apex_travel_step", 1.f));
+	}
+	increment = int(float(incMod * DEFAULT_SLACK / squareSize) * stepMul) + 1;
 	minSqDist = squareSize * increment;  // / 2;
 	minSqDist *= minSqDist;
 }
