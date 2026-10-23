@@ -161,11 +161,60 @@ AIFloat3 NearestMex(const AIFloat3& in pos, float r)
 	return best;
 }
 
+// BASIC MEX DEFENCE (apex_mex_basic; his 10-23: "1 llt can protect 1 or more mexes within adequate range. just
+// being on the edge of a turret range doesn't protect a mex, need buffer to account for grunt/tick range"). A
+// raider shooting the mex from its own reach must stand inside the tower's: the mex is covered only within the
+// tower's reach less the longest raider reach. The 24 release-check games of 10-23: 734 mexes killed before
+// minute 12, 709 with no tower even in plain range, 9 inside the buffered one.
+float gRaiderReach = 0.f;
+bool MexBasicOn()
+{
+	return ai.GetTunable("apex_mex_basic", TUNE_MEX_BASIC) > 0.f;
+}
+
+// The longest ground reach among the game's cheap raiders (the Grunts and Ticks that raid mexes early, which
+// the tower is meant to stop -- the ones that cost no more than it), every faction: a player knows them all. Counting
+// dearer ones took the Garpike (305) and Pincer (305) and left a 143 cover. Cached once it reads above zero.
+float RaiderReach()
+{
+	if (gRaiderReach > 0.f)
+		return gRaiderReach;
+	const float capM = LightTowerCostM();
+	float r = 0.f;
+	string who = "";
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::ValidId(i) || !Catalog::gMobile[i] || Catalog::gFlyer[i] || (Catalog::gCostM[i] > capM))
+			continue;
+		const CCircuitDef@ cd = Catalog::Def(i);
+		if ((cd is null) || !cd.IsRoleAny(Unit::Role::RAIDER.mask))
+			continue;
+		who += " " + cd.GetName() + ":" + int(Catalog::gLandRange[i]) + "/" + int(Catalog::gCostM[i]);
+		if (Catalog::gLandRange[i] > r)
+			r = Catalog::gLandRange[i];
+	}
+	if (r > 0.f) {
+		gRaiderReach = r;
+		AiLog("apex: mex-basic raiderReach=" + int(r) + " lightRange=" + int(Brain::LightTowerRange())
+			+ " cover=" + int(MexCoverR(Brain::LightTowerRange())) + " raiders" + who);
+	}
+	return r;
+}
+
+// The radius a gun of reach r covers a mex in: r less the raider's reach, never under a third of r.
+float MexCoverR(float r)
+{
+	if (!MexBasicOn())
+		return r;
+	const float c = r - RaiderReach();
+	return (c > r / 3.f) ? c : r / 3.f;
+}
+
 bool SiteIsMex(const AIFloat3& in pos)
 {
+	const float r = MexBasicOn() ? MexCoverR(Brain::LightTowerRange()) : 200.f;
 	const array<int>@ rows = MexRows();
 	for (uint q = 0; q < rows.length(); ++q) {
-		if (gLPos[uint(rows[q])].distance2D(pos) < 200.f)
+		if (gLPos[uint(rows[q])].distance2D(pos) < r)
 			return true;
 	}
 	return false;
@@ -303,8 +352,9 @@ int MexGunsWanted(const AIFloat3& in pos)
 	return 1 + int(fwd * ((far > 0.f) ? far : 0.f) * gMexgMul * gPressGunMul);
 }
 
-bool MexUnguardedInReach(const AIFloat3& in pos, float r)
+bool MexUnguardedInReach(const AIFloat3& in pos, float rIn)
 {
+	const float r = MexCoverR(rIn);
 	// THE NEAREST MEX, NOT ANY MEX. Asking "is some mex in reach unguarded"
 	// keeps the floor switched on for every site in a cluster as long as ONE
 	// extractor anywhere nearby lacks a gun -- so the subsidy lands again and
@@ -363,8 +413,9 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 
 // SOME GUN COVERS IT (apexearth 2026-10-02: "as long as there's one covering at
 // least every mex"): ours standing or ordered, or an ally's, within reach.
-bool MexHasCover(const AIFloat3& in at, float r)
+bool MexHasCover(const AIFloat3& in at, float rIn)
 {
+	const float r = MexCoverR(rIn);
 	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t)
 		if (gProtPos[PROT_DEF][t].distance2D(at) < r)
 			return true;
@@ -564,13 +615,49 @@ void MexGuardSites(array<AIFloat3>& inout sites, float reach)
 	AIFloat3 foe;
 	const bool foeOk = FoeRef(foe);
 	const array<int>@ rows = MexRows();
+	array<bool> unguarded(rows.length(), false);
+	for (uint q = 0; q < rows.length(); ++q)
+		unguarded[q] = OnMap(gLPos[uint(rows[q])]) && MexUnguardedInReach(gLPos[uint(rows[q])], reach);
 	for (uint q = 0; q < rows.length(); ++q) {
 		const uint i = uint(rows[q]);
-		if (!OnMap(gLPos[i]))
-			continue;
-		if (!MexUnguardedInReach(gLPos[i], reach))
+		if (!unguarded[q])
 			continue;
 		AIFloat3 s = gLPos[i];
+		if (MexBasicOn()) {
+			// One gun for as many unguarded mexes as fit: the centre of this mex and its unguarded neighbours
+			// whose every member stays inside the cover radius of it, grown nearest first.
+			const float cr = MexCoverR(reach) * 0.9f;
+			array<uint> members = {i};
+			AIFloat3 sum = gLPos[i];
+			for (uint q2 = 0; q2 < rows.length(); ++q2) {
+				const uint j = uint(rows[q2]);
+				if ((j == i) || !unguarded[q2] || !OnMap(gLPos[j]) || (gLPos[j].distance2D(gLPos[i]) > 2.f * cr))
+					continue;
+				const AIFloat3 c = (sum + gLPos[j]) * (1.f / float(members.length() + 1));
+				bool fits = c.distance2D(gLPos[j]) < cr;
+				for (uint k = 0; fits && (k < members.length()); ++k)
+					fits = c.distance2D(gLPos[members[k]]) < cr;
+				if (fits) {
+					sum = sum + gLPos[j];
+					members.insertLast(j);
+				}
+			}
+			const int n = int(members.length());
+			s = sum * (1.f / float(n));
+			if (foeOk && (n == 1)) {
+				AIFloat3 dir = foe - gLPos[i];
+				if (dir.SqLength2D() > 1.f) {
+					dir.SafeNormalize2D();
+					const float step = (cr * 0.5f < 150.f) ? cr * 0.5f : 150.f;
+					const AIFloat3 s2 = gLPos[i] + dir * step;
+					if (OnMap(s2))
+						s = s2;
+				}
+			}
+			s.y = ai.GetElevationAt(s);
+			sites.insertLast(s);
+			continue;
+		}
 		if (foeOk) {
 			AIFloat3 dir = foe - gLPos[i];
 			if (dir.SqLength2D() > 1.f) {

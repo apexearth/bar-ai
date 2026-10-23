@@ -2837,8 +2837,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
-	// it is asked first.
-	if (!aaPanic && !superPush && !convertPush && !coverPush && !mexOnList
+	// it is asked first. Under apex_mex_basic the mex just built is guarded before the next is claimed: with the
+	// expansion head over 1 the next mex came first every time, and raiders took the last one (10-23, Comet: 15
+	// spots raided from minute 2.7, the first tower at 4.8, none inside cover of a raided spot).
+	if (!aaPanic && !superPush && !convertPush && !coverPush && (!mexOnList || MexBasicOn())
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
 		&& PlantFramed())
 	{
@@ -2893,10 +2895,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
-			float floorHere = floorWave * MexFloorFactor(cw.pos) * gGunpMul;
+			// A mex's FIRST gun is the basic defence, not the gun-push head's to scale (apex_mex_basic): the
+			// release net read gunp 0.11-0.16, so GunpCount(1) bought it about one election in eight.
+			const bool basic = MexBasicOn();
+			float floorHere = floorWave * MexFloorFactor(cw.pos) * (basic ? 1.f : gGunpMul);
 			if (DefMeasuredOn())
 				floorHere *= DefMeasuredPressure(DefMeasuredAt(cw.pos));
-			if ((floorHere <= 1.f) || (GunpCount(1) < 1))
+			if ((floorHere <= 1.f) || (!basic && (GunpCount(1) < 1)))
 				continue;
 			const float coverHere = CoverAt(cw.pos);
 			if (coverHere >= floorHere)
