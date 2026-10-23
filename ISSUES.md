@@ -84,6 +84,13 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 62 | A teammate with no commander, no base and no income kept getting our units (10-19) | a seat asks for gifted army only while its standing economy plus a living commander outweighs the gap (TUNE_GIFT_STAKE, off) | `apex: gift-stake`; gift metal to a seat after its commander dies | UNTESTED -- his watch games: single gifts of 111 units / 62k m and 123 units / 91k m |
 | 63 | Not enough anti-nukes while the enemy launches a lot of nukes (10-19; "about 6 at once... ~10 nukes all on your base you WILL die") | survive their worst salvo by arithmetic: every seen silo full (its stockpilelimit), fired together, / TUNE_ANTI_AT_ONCE (6) = antis each target needs -- the core and any cluster worth more than those antis; launches seen floor the salvo for unseen silos and lift the income floor | `apex: nukemath facts` (startup: armamd=20/90s armsilo=10/120s corsilo=10/180s), `apex: nukepress`; antis over the core vs ceil(salvo/6) | BUILT -- math checked against the unit files; no game test (his 10-19: "you can get it all through math") |
 
+## AIR ATTACKS AN UNDERWATER EXTRACTOR (2026-10-22)
+
+His watch, 10-22: air units trying to attack a mex underwater. Aircraft that cannot hit a submerged target were
+sent at one, a wasted strike. Unmeasured: find the target choice (C++ attack/bomb tasks or the script's strike
+target) and whether it checks the weapon can reach a target below the water line. The fix belongs in the pricing
+of the target (a strike that cannot land is worth nothing), not a filter added on top.
+
 ## ECO AT HALF HIS CURVE; WHAT 10-21/10-22 MEASURED (2026-10-22)
 
 At +50 like for like (his ask: "Test at +50 to match"; 8 seeds, b50-base-s3100..3107): minute 4 we stand 11-13
@@ -108,6 +115,12 @@ His own +0 air game, replayed (matches/_replay-his0, his 10-22): 869 m/s at 20:0
 minute 10 (we waste 14-18 m/s at minutes 6-8, he none); from minute 12 he stops small eco at 53 extractors / 11
 solars / 18 advanced solars and builds only mohos, AFUS, advanced converters and turrets -- minute 20: 10 AFUS,
 2 fusions, 48 converters, 238 turrets to our 0 / 12 / 6 / 141. Target since 10-22: 750+ m/s reliably.
+
+v0.3.5 AGAINST v0.3.4 (released 10-22, his call to ship): 20 games, no crashes/errors/desyncs. 1v1 small maps 4-3
+(1 capped); 2v2 Comet Catcher 2-0 (2 capped, split), Greenest Fields 4 capped and even (no metal spots there). 4v4
+Supreme Isthmus 4 capped: v0.3.5 eco -7%, army -9%, behind on eco in 3 of 4, 50% more turrets (60 to 40 per AI),
+AI time +7% mean and +22% on worst minutes (more units: +10%), both versions well over the 0.417 ms budget there.
+The eco tuning ran with no enemy army; the 4v4 gap is the lead to follow.
 
 WHERE THE METAL GOES (his replay vs the median of 24 base games, tmp spend.py): by minute 10 both made 23.3k metal;
 he spent 20.4k and wasted 0, we spent 16.0k and wasted 3.8k (16%, the bank full from ~5.5 min). By 14: 66k spent
