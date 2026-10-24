@@ -676,8 +676,6 @@ int NaDecide(int kind, const string why)
 		} else {
 			NaEval(cs[i], pAA, fAA, n, h, dps1, cost1, spd, flyS, kind == 0, obs, p);
 		}
-		if (kind == 1)
-			p.netM += NaChainNet(cs, i, p, n, h, dps1, cost1, spd, r);
 		if (!have || (p.netM > best.netM)) {
 			@best = p;
 			have = true;
@@ -1205,46 +1203,6 @@ void GunRunSettle()
 	AiLog(Factory::T() + "apex: gun run scored sent=" + sent + " home=" + home
 		+ " at=" + int(gGunRunAt.x) + "," + int(gGunRunAt.z)
 		+ " killedM=" + int(gGunRunKilled) + " lostM=" + int(gGunRunSentM - homeM));
-}
-
-// A MASS WORKS THROUGH THEIR BASE (apex_air_chain; his 10-24: "make even bigger and bigger attacks, until we're making
-// huge massive attacks. or build up 20 dragons supported by fighters"). A gunship wing was priced on one cell, so after
-// a failed run no wing was worth the planes the run lost and the price fell to nothing. The wing that survives a cell
-// goes on: up to three more cells, each the nearest within twice the cell radius of the last, each priced for the
-// survivors with its own AA crossing; the measured run's loss floor counts once, on the first.
-float NaChainNet(const array<NaCand@>& in cs, uint first, NaPrice@ p0, int n, float h, float dps1, float cost1,
-	float spd, float r)
-{
-	if ((ai.GetTunable("apex_air_chain", TUNE_AIR_CHAIN) <= 0.f) || (p0.netM <= 0.f) || (spd <= 0.f))
-		return 0.f;
-	float alive = float(n) - p0.lossN;
-	float extra = 0.f;
-	array<uint> seen = {first};
-	AIFloat3 at = cs[first].at;
-	for (int k = 0; (k < 3) && (alive >= 1.f); ++k) {
-		int best = -1;
-		float bestD = 2.f * r;
-		for (uint j = 0; j < cs.length(); ++j) {
-			if ((seen.find(j) >= 0) || (cs[j].v <= 0.f))
-				continue;
-			const float d = at.distance2D(cs[j].at);
-			if (d < bestD) {
-				bestD = d;
-				best = int(j);
-			}
-		}
-		if (best < 0)
-			break;
-		NaPrice@ q = NaPrice();
-		NaEval(cs[uint(best)], 0.f, 0.f, int(alive), h, dps1, cost1, spd, bestD / spd, false, -1.f, q);
-		if (q.netM <= 0.f)
-			break;
-		extra += q.netM;
-		alive -= q.lossN;
-		seen.insertLast(uint(best));
-		at = cs[uint(best)].at;
-	}
-	return extra;
 }
 
 // The gunship raid is at its cell and nothing of theirs is left there.
