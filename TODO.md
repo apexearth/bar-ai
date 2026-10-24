@@ -80,6 +80,11 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   (`nnair-go gunships n=40 ... killF=0.24 lossN=40`); the C++ raid task commits with no target
   (`raid-commit ... target=- aaSet=24`) and refuses each one under AA, so it circles in and out. One judgement:
   once the decision commits into AA, the raid fights there; if it does not commit, it stays out of AA reach.
+- [ ] **Gunships answer raids** (his 10-23: "gunships can be a good answer to handling enemy raids"). Fast enough
+  to arrive while the raid is still on our mexes, and T1 raiders cannot shoot up. Today gunships fly almost only
+  NaDecide's economy strikes; the priced air bar (apex_air_eco_priced) made c9 build 6.7 gunships a seat vs 0.7,
+  and they mostly went at AA. As a price: a gunship sent at a raid is worth the mex income and buildings the raid
+  would kill before our ground or towers arrive, against what their AA there costs it.
 - [ ] **Remember our pain points: clear their AA, then strike** (his 10-23: "if we are constantly failing to strike
   enemy eco we need to switch to other targets AA can be a good target. Ideally we just remember what our 'pain
   points' are. If enemy AA is why our air is useless, attack that AA with our ground forces, LRPC, or nukes. Once
