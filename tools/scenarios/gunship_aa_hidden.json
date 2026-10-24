@@ -1,0 +1,21 @@
+{
+  "about": "12 Brawler gunships at home vs their economy (6 mexes, 4 solars) under 6 light AA towers and a flak gun, normal line of sight so the AA is found on the way in",
+  "passes": "fights or doesn't: either at least 4 of their eco buildings die with half the wing alive, or the wing stays out and loses at most 2",
+  "map": "Geyser Plains",
+  "seconds": 300,
+  "los": "normal",
+  "units": [
+    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
+    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", -200, 0], "spacing": 120, "order": "ai"},
+    {"side": 0, "def": "armbrawl", "n": 12, "at": ["s0", 150, 0], "spacing": 60, "order": "ai"},
+    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 6, "at": ["s1", 250, 0], "spacing": 150, "order": "ai"},
+    {"side": 1, "def": "armsolar", "n": 4, "at": ["s1", 100, 150], "spacing": 100, "order": "ai"},
+    {"side": 1, "def": "armrl", "n": 6, "at": ["s1", 180, 60], "spacing": 120, "order": "ai"},
+    {"side": 1, "def": "armflak", "n": 1, "at": ["s1", 150, 0], "order": "ai"}
+  ],
+  "expect": [
+    {"killed:armmex": [">=", 2], "killed:armsolar": [">=", 2], "lost:armbrawl": ["<=", 6]},
+    {"lost:armbrawl": ["<=", 2]}
+  ]
+}

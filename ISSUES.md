@@ -157,6 +157,22 @@ AttackTask.cpp fixed for our path), which shrinks a group's influence toward 0 a
 afraid. Untested: the threat-aware route walking around tower cover, and the retreat thresholds near towers.
 Needs what the player actually saw.
 
+## GUNSHIPS GO IN AND OUT (2026-10-23)
+
+His watch: a 40-gunship wing lingered over their base under AA and never committed. Two causes, measured with
+tools/scenarios/gunship_aa_hidden (12 Brawlers vs 6 light AA + a flak, normal LOS):
+- THE GUESS IS WRONG: the unseen-base cell (nnair.as, kind 1) is our start MIRRORED; on a map whose starts are not
+  point-symmetric it is empty. The wing flew GO -> arrive -> WAIT -> GO at (2629,347), worth 13-20 metal, ten
+  times in four minutes; their base was at (3708,2220). The army press had the same bug (fixed with the nearest
+  enemy start box, CSetupManager::GetNearestEnemyBox).
+- AT THE REAL BASE IT HOVERS: a committed air raid keeps the threat test (RaidTask FindTarget), refuses every
+  target under the AA and stays (`raid-commit ... target=- aaSet=24`).
+Tried: never recall a committed wing + fight inside the goal without the threat test (apex_gun_commit) -- WORSE on
+the hidden scenario, 7 Brawlers (2,170 m) lost for 440 m killed, against 0 lost off. Removed.
+Next: the unseen cell from the enemy start box; a committed wing that finds nothing it can take at its goal leaves
+at once and the cell's AA is remembered as a pain point, so it is not priced cheap again until the wing can take
+it (TODO: pain points).
+
 ## AIR ATTACKS AN UNDERWATER EXTRACTOR (2026-10-22)
 
 His watch, 10-22: air units trying to attack a mex underwater. Aircraft that cannot hit a submerged target were
