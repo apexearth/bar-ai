@@ -194,6 +194,75 @@ void SpamNoteDeath(CCircuitUnit@ unit)
 	if ((id >= 0) && (id < int(gSpamSentAt.length())))
 		gSpamSentAt[uint(id)] = 0;
 }
+// WHERE SPAM GOES: one start box holds a whole team's bases (an 8v8's eight), so the nearest box sent every unit to
+// one point. The destinations are the enemy bases seen -- their buildings in 800-elmo cells, the 12 richest --
+// else a 3x3 grid over their start box; each unit takes one by its id and a point of its own within 300 of it,
+// so they split over the bases and do not stack where they stop.
+array<AIFloat3> gSpamDest;
+int gSpamDestAt = -1;
+bool gSpamDestSeen = false;
+void SpamDestBuild(const AIFloat3& in from)
+{
+	if (ai.frame < gSpamDestAt)
+		return;
+	gSpamDestAt = ai.frame + 10 * SECOND;
+	gSpamDest.resize(0);
+	array<int> key;
+	array<float> m;
+	array<float> sx;
+	array<float> sz;
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if ((d <= 0) || (d > Catalog::gDefCount) || Catalog::gMobile[d])
+			continue;
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+			continue;
+		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+		if (!OnMap(p))
+			continue;
+		const int k = int(p.x / 800.f) * 1000 + int(p.z / 800.f);
+		int j = key.find(k);
+		if (j < 0) {
+			key.insertLast(k);
+			m.insertLast(0.f);
+			sx.insertLast(0.f);
+			sz.insertLast(0.f);
+			j = int(key.length()) - 1;
+		}
+		const float c = Catalog::gCostM[d];
+		m[uint(j)] += c;
+		sx[uint(j)] += p.x * c;
+		sz[uint(j)] += p.z * c;
+	}
+	for (uint n = 0; (n < 12) && (key.length() > 0); ++n) {
+		uint b = 0;
+		for (uint j = 1; j < key.length(); ++j) {
+			if (m[j] > m[b])
+				b = j;
+		}
+		if (m[b] <= 0.f)
+			break;
+		gSpamDest.insertLast(AIFloat3(sx[b] / m[b], 0.f, sz[b] / m[b]));
+		m[b] = 0.f;
+	}
+	gSpamDestSeen = gSpamDest.length() > 0;
+	if (gSpamDestSeen)
+		return;
+	const AIFloat3 lo = ai.GetNearestEnemyBoxMin(from);
+	const AIFloat3 hi = ai.GetNearestEnemyBoxMax(from);
+	if (OnMap(lo) && OnMap(hi)) {
+		for (int a = 1; a <= 3; ++a) {
+			for (int b = 1; b <= 3; ++b) {
+				const AIFloat3 p(lo.x + (hi.x - lo.x) * 0.25f * float(a), 0.f, lo.z + (hi.z - lo.z) * 0.25f * float(b));
+				if (OnMap(p))
+					gSpamDest.insertLast(p);
+			}
+		}
+	}
+}
+
 // 0 not spam, 1 sent now, 2 sent before (held)
 int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 {
@@ -208,13 +277,15 @@ int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 	if (gSpamSentAt[uint(id)] > 0)
 		return 2;
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	AIFloat3 to = ai.GetNearestEnemyBox(here);
+	SpamDestBuild(here);
+	AIFloat3 to = (gSpamDest.length() > 0) ? gSpamDest[uint((id * 7919) % int(gSpamDest.length()))]
+			: ai.GetNearestEnemyBox(here);
 	if (!OnMap(to))
 		to = Front::FoeAnchor();
 	if (!OnMap(to))
 		return 0;
-	const float a = float(id % 360) * 0.0174533f;
-	const float j = float((id * 37) % 400);
+	const float a = float((id * 137) % 360) * 0.0174533f;
+	const float j = 60.f + float((id * 37) % 240);
 	const AIFloat3 to2 = to + AIFloat3(cos(a) * j, 0.f, sin(a) * j);
 	if (OnMap(to2))
 		to = to2;
@@ -227,7 +298,8 @@ int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 	if (ai.frame >= gSpamLogAt) {
 		gSpamLogAt = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: spam-send t=" + ai.teamId + " " + cdef.GetName() + " #" + id
-			+ " to=" + int(to.x) + "," + int(to.z) + " sent=" + gSpamSent);
+			+ " to=" + int(to.x) + "," + int(to.z) + " sent=" + gSpamSent + " dests=" + gSpamDest.length()
+			+ (gSpamDestSeen ? " (seen bases)" : " (box grid)"));
 	}
 	return 1;
 }

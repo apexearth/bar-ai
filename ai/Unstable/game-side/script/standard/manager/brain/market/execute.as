@@ -22,14 +22,21 @@ bool InteriorGunGeom(int d, const AIFloat3& in at)
 // ...unless it is a mex's only cover (his 2026-10-05): some mex of ours in its
 // reach has no gun standing or ordered. The NEAREST mex was asked, and a gun
 // for a gunless mex was refused beside a guarded one.
+// The waiver holds only where this gun would cover the mex: a doorway slide put 15 turrets in one cell, each waived
+// for a mex 280-320 away that it never covered (his 8v8 watch game, 10-24; apex_mex_cover_site).
+bool MexCoverSiteOn()
+{
+	return ai.GetTunable("apex_mex_cover_site", TUNE_MEX_COVER_SITE) > 0.f;
+}
 bool SoleMexCover(int d, const AIFloat3& in at)
 {
 	const float r = Catalog::gMaxRange[d];
+	const float reach = MexCoverSiteOn() ? MexCoverR(r) : r;
 	const float lr = Brain::LightTowerRange();
 	const array<int>@ rows = MexRows();
 	for (uint q = 0; q < rows.length(); ++q) {
 		const AIFloat3 m = gLPos[uint(rows[q])];
-		if ((m.distance2D(at) < r) && !MexHasCover(m, lr))
+		if ((m.distance2D(at) < reach) && !MexHasCover(m, lr))
 			return true;
 	}
 	return false;
@@ -274,6 +281,7 @@ AIFloat3 OffFactoryExit(const AIFloat3& in pos)
 	AIFloat3 p = pos;
 	for (uint tries = 0; tries < 3; ++tries) {
 		bool inLane = false;
+		float laneSide = 0.f;
 		ComNear(p, 242.f);   // same 220x100 lane box as ClearExitLane
 		for (uint q = 0; q < gComGrid.hit.length(); ++q) {
 			const uint i = uint(gComGrid.hit[q]);
@@ -290,15 +298,21 @@ AIFloat3 OffFactoryExit(const AIFloat3& in pos)
 			const float side = rx * fwd.z - rz * fwd.x;
 			if ((side > -100.f) && (side < 100.f)) {
 				inLane = true;
+				laneSide = side;
 				break;
 			}
 		}
+		const bool ownLane = inLane;
 		if (!inLane)
 			inLane = AllyLaneHit(p, fwd, true);
 		if (!inLane)
 			return p;
-		p.x += fwd.z * 140.f;   // across the axis, out of the doorway
-		p.z -= fwd.x * 140.f;
+		// across the axis, out of the doorway: to the nearer edge and a margin past it, so the gun stays by what it guards
+		float step = 140.f;
+		if (MexCoverSiteOn() && ownLane)
+			step = (laneSide >= 0.f) ? (124.f - laneSide) : -(124.f + laneSide);
+		p.x += fwd.z * step;
+		p.z -= fwd.x * step;
 	}
 	return p;
 }

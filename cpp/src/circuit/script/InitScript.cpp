@@ -2180,6 +2180,25 @@ static AIFloat3 CCircuitAI_GetNearestEnemyBox(CCircuitAI* circuit, const AIFloat
 	return circuit->GetSetupManager()->GetNearestEnemyBoxCentre(pos);
 }
 
+// apex: the nearest enemy start box's corners -- (left, 0, top) and (right, 0, bottom); off-map (-1) when none.
+static AIFloat3 CCircuitAI_GetNearestEnemyBoxMin(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	float l, r, t, b;
+	if (!circuit->GetSetupManager()->GetNearestEnemyBox(pos, l, r, t, b)) {
+		return AIFloat3(-1.f, 0.f, -1.f);
+	}
+	return AIFloat3(l, 0.f, t);
+}
+
+static AIFloat3 CCircuitAI_GetNearestEnemyBoxMax(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	float l, r, t, b;
+	if (!circuit->GetSetupManager()->GetNearestEnemyBox(pos, l, r, t, b)) {
+		return AIFloat3(-1.f, 0.f, -1.f);
+	}
+	return AIFloat3(r, 0.f, b);
+}
+
 static void IUnitTask_SetRaidGoal(IUnitTask* task, const AIFloat3& pos, float r)
 {
 	if (StockDropTask(task, "raidgoal")) {
@@ -2681,6 +2700,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapToLattice(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapToLattice), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool InAnyBaseLane(const AIFloat3& in) const", asFUNCTION(CCircuitAI_InAnyBaseLane), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetNearestEnemyBox(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetNearestEnemyBox), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetNearestEnemyBoxMin(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetNearestEnemyBoxMin), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetNearestEnemyBoxMax(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetNearestEnemyBoxMax), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsPosOnMap(const AIFloat3& in) const",asMETHOD(CCircuitAI, IsPosOnMap), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyDefendInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyDefendInflAt), asCALL_THISCALL); ASSERT(r >= 0);
