@@ -136,6 +136,13 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   at the measured run's (obsLost: their AA kills so many a pass), so mass should pay -- but it values ONE cell, and a
   surviving mass works through their base cell after cell. Price a wing on the cells it survives to reach; then the
   planned wing (gNaNeedN, the finish bar) grows after a failure instead of the price falling to zero.
+- [ ] **Air arrives together** (his 10-24: "you also need to position the aircraft so they reach the target in a
+  reasonable formation and correct timing, whether its a single wing or multiple"). A mass that trickles in dies one
+  plane at a time. What exists: a gunship wing flies in a grid (AssignFlierSlots, `squad air-formation`), a bomber
+  strike takes the gunships to the same cell, the team air plan gathers seats at one rally. Unmeasured: how far apart
+  they ARRIVE. First the instrument -- per strike, first to last plane entering the target cell, within a wing and
+  across wings. Then: gather outside their AA reach, fly a wing at its slowest plane's speed, and launch each wing
+  so all reach the cell together (launch = arrival time minus that wing's flight time).
 - [ ] **Remember our pain points: clear their AA, then strike** (his 10-23: "if we are constantly failing to strike
   enemy eco we need to switch to other targets AA can be a good target. Ideally we just remember what our 'pain
   points' are. If enemy AA is why our air is useless, attack that AA with our ground forces, LRPC, or nukes. Once
