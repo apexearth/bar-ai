@@ -1423,6 +1423,16 @@ static bool CCircuitUnit_HotRoadTo(CCircuitUnit* unit, const AIFloat3& site)
 
 // ...and another hand's refusal there: 11 armck walked one by one into the same refused road on Isthmus (10-23).
 // It holds while the refused road's hot square is over THIS hand's bar and within 600 of its own straight road.
+// apex: 1 for a finished unit, else the frame's build progress (the loss field takes a killed frame at what it absorbed).
+static float CCircuitUnit_GetBuildProgress(CCircuitUnit* unit)
+{
+	if ((unit == nullptr) || (unit->GetUnit() == nullptr) || !unit->GetUnit()->IsBeingBuilt()) {
+		return 1.f;
+	}
+	const float p = unit->GetUnit()->GetBuildProgress();
+	return (p < 0.f) ? 0.f : ((p > 1.f) ? 1.f : p);
+}
+
 static bool CCircuitUnit_HotRoadToTeam(CCircuitUnit* unit, const AIFloat3& site)
 {
 	if (CCircuitUnit_HotRoadTo(unit, site)) {
@@ -2837,6 +2847,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedWeapon() const", asMETHOD(CCircuitUnit, GetDamagedWeapon), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedFrame() const", asMETHOD(CCircuitUnit, GetDamagedFrame), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool HotRoadTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_HotRoadToTeam), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetBuildProgress()", asFUNCTION(CCircuitUnit_GetBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool CmdAttackEnemy(int)", asFUNCTION(CCircuitUnit_CmdAttackEnemy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);

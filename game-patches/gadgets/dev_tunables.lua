@@ -410,6 +410,9 @@ local NAMES = {
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
 	"apex_lane_reclaim", -- want_reclaim.as: idle plants in a lane priced for reclaim (1)
 	"apex_air_rich",
+	"apex_frame_loss", -- main.as: killed frames enter the loss field (1)
+	"apex_lrpc_site_priced", -- want_super.as: gun site priced on reach x survival (1)
+	"apex_lrpc_safe_siege", -- want_super.as: no gun site C++ refuses as unsafe (1)
 	"apex_lrpc_prize", -- want_super.as: LRPC kills priced like a bomber's (1)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)

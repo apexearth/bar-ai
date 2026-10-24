@@ -559,6 +559,15 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 			Military::NoteRaidOn(at, int(attackerDef.id));
 		}
 	}
+	// A frame they kill is a loss at that place too: forward gun sites read ~0.5 survival while ~4% of the frames
+	// begun there were finished (2v2 +100 vs v0.4.0, 10-24) -- the field saw only finished buildings.
+	if (!cdef.IsMobile() && !WasFinished(int(unit.id))
+		&& (ai.GetTunable("apex_frame_loss", TUNE_FRAME_LOSS) > 0.f))
+	{
+		const float spent = cdef.costM * unit.GetBuildProgress();
+		if (spent > 0.f)
+			Market::NoteEcoLoss(unit.GetPos(ai.frame), spent);
+	}
 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
 	// BUILDINGS, and the mobile-only filter below threw away precisely its
 	// victims -- so the one signal that says "we are being shelled" was
