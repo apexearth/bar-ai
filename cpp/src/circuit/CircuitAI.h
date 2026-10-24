@@ -763,6 +763,8 @@ public:
 	void NoteOrder(int kind, int bucket, bool suppressed, int src = 0);
 	void NoteCmd(const CCircuitUnit* u, int kind);
 	void NoteRouteKept() { ++routeKept; }
+	void NoteDoorRefused() { ++doorRefused; }
+	unsigned doorRefused = 0;   // site probes refused for standing in a friendly factory's doorway (apex_door_clear)
 	// apex: the team's last refused roads (IBuilderTask::ApplyPathUnbounded), read by CCircuitUnit HotRoadTo
 	struct SHotRoad { springai::AIFloat3 end = springai::AIFloat3(-1.f, 0.f, -1.f); springai::AIFloat3 at; };
 	SHotRoad hotRoads[8];

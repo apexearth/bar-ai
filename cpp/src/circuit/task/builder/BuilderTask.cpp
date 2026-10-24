@@ -1790,16 +1790,67 @@ CTerrainManager::TerrainPredicate IBuilderTask::SitePredicate(CCircuitUnit* buil
 	const bool dryOnly = keepLanes && circuit->HasLava();
 	CCircuitDef* siteDef = buildDef;
 	const AIFloat3 builderPos = builder->GetPos(circuit->GetLastFrame());
+	// NOTHING STANDS IN A FACTORY'S DOORWAY, OURS OR AN ALLY'S (apex_door_clear; his 10-24 hosted game: "we trapped a
+	// bunch of T3 units using construction turrets... the turrets from 3 of the players are causing the trapping...
+	// multiple gantries around and the turrets are there supporting the gantries"). Three seats' gantries stood within
+	// ~900 elmos and each ringed its own; around one, 9 of the turrets within 200 were another seat's. The lanes only
+	// cover each seat's streets, and the door test lived in FactoryTask alone. Here every friendly factory near the
+	// search gives its doorway -- two of its footprints ahead at its own facing, its width -- gathered once a search.
+	struct Door { float x, z, fx, fz, uh, len; };
+	std::vector<Door> doors;
+	float siteHalf = 0.f;
+	if (keepLanes && (siteDef != nullptr) && siteDef->GetBuildOptions().empty()   // factories have their own test (FactoryTask)
+		&& (circuit->GetTunable("apex_door_clear", 1.f) > 0.f))
+	{
+		siteHalf = std::max(siteDef->GetDef()->GetXSize(), siteDef->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f;
+		circuit->UpdateFriendlyUnits();
+		auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(GetPosition(), 3200.f);
+		for (springai::Unit* u : units) {
+			auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+			if (cand == nullptr) {
+				continue;
+			}
+			CCircuitDef* cd = cand->GetCircuitDef();
+			if ((cd == nullptr) || cd->IsMobile() || !cd->IsBuilder() || !cd->GetDef()->IsBuilder()
+				|| cd->GetBuildOptions().empty())
+			{
+				continue;
+			}
+			Door dr;
+			dr.fx = 0.f; dr.fz = 0.f;
+			switch (u->GetBuildingFacing()) {
+				default:
+				case UNIT_FACING_SOUTH: dr.fz = 1.f; break;
+				case UNIT_FACING_EAST:  dr.fx = 1.f; break;
+				case UNIT_FACING_NORTH: dr.fz = -1.f; break;
+				case UNIT_FACING_WEST:  dr.fx = -1.f; break;
+			}
+			const float usz = std::max(cd->GetDef()->GetXSize(), cd->GetDef()->GetZSize()) * SQUARE_SIZE;
+			const AIFloat3& up = cand->GetPos(circuit->GetLastFrame());
+			dr.x = up.x; dr.z = up.z; dr.uh = usz * 0.5f; dr.len = 2.f * usz;
+			doors.push_back(dr);
+		}
+		utils::free(units);
+	}
 	// Everything captured BY VALUE. An earlier version flipped one
 	// captured-by-reference flag between two passes; FindBuildSite takes the
 	// predicate by non-const reference and the AI crashed with an access
 	// violation on two of twelve games. Nothing here outlives this frame.
-	return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar](const AIFloat3& p) {
+	return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar, doors, siteHalf](const AIFloat3& p) {
 		if ((selfBar > 0.f) && (p.SqDistance2D(builderPos) < SQUARE(selfBar))) {
 			return false;
 		}
 		if (keepLanes && circuit->IsInBaseLane(p)) {
 			return false;
+		}
+		for (const auto& dr : doors) {
+			const float rx = p.x - dr.x, rz = p.z - dr.z;
+			const float ahead = rx * dr.fx + rz * dr.fz;
+			const float side = std::fabs(rx * dr.fz - rz * dr.fx);
+			if ((ahead + siteHalf > dr.uh) && (ahead - siteHalf < dr.uh + dr.len) && (side - siteHalf < dr.uh)) {
+				circuit->NoteDoorRefused();
+				return false;
+			}
 		}
 		if (dryOnly && circuit->IsUnderLava(p, siteDef)) {
 			return false;
