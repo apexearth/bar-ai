@@ -419,8 +419,6 @@ AIFloat3 SuperSite(CCircuitUnit@ unit, int sc, CCircuitDef@ def = null)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if (sc == SC_LRPC) {
-		if (LrpcSitePriced() && (def !is null))
-			return LrpcSite(unit, def);
 		const AIFloat3 flat = SuperSite(unit, SC_HEAVY);
 		return HighGroundNear(def, flat, 600.f);
 	}
@@ -901,117 +899,6 @@ float JunoGain()
 // THE TARGET FIRST, THEN THE SITE (apexearth 2026-09-30): the turret group we
 // mean to hit, and the gun stands outside its reach, inside the gun's own --
 // halfway between the two. A gun that does not outrange it gets no site.
-// A siege site C++ will not let this hand build at (its road under threat past the hand's bar) is an order that
-// dies on arrival: 2v2 +100 vs v0.4.0, 84 of ~180 dead gun tasks unreach-safe at sites >3000 from base, 51 more
-// killed there as frames or with the builder hurt. The verdict is held 10 s per site and builder type.
-array<int> gLsiteKey;
-array<int> gLsiteAt;
-array<bool> gLsiteOk;
-int gLsiteHeld = 0;
-bool SiegeSiteSafe(CCircuitUnit@ unit, const AIFloat3& in at)
-{
-	if (ai.GetTunable("apex_lrpc_safe_siege", TUNE_LRPC_SAFE_SIEGE) <= 0.f)
-		return true;
-	const int key = (int(at.x / 256.f) * 100 + int(at.z / 256.f)) * 4096 + int(unit.circuitDef.id);
-	const int k = gLsiteKey.find(key);
-	if ((k >= 0) && (ai.frame < gLsiteAt[uint(k)] + 10 * SECOND))
-		return gLsiteOk[uint(k)];
-	const bool ok = ai.BuildSiteSafe(unit, at);
-	if (!ok) {
-		++gLsiteHeld;
-		if (gLsiteHeld <= 4)
-			AiLog("apex: lrpc-siege-unsafe t=" + ai.teamId + " by=" + unit.circuitDef.GetName()
-				+ " at=" + int(at.x) + "," + int(at.z) + " n=" + gLsiteHeld);
-	}
-	if (k >= 0) {
-		gLsiteAt[uint(k)] = ai.frame;
-		gLsiteOk[uint(k)] = ok;
-	} else {
-		gLsiteKey.insertLast(key);
-		gLsiteAt.insertLast(ai.frame);
-		gLsiteOk.insertLast(ok);
-		if (gLsiteKey.length() > 64) {
-			gLsiteKey.removeAt(0);
-			gLsiteAt.removeAt(0);
-			gLsiteOk.removeAt(0);
-		}
-	}
-	return ok;
-}
-
-bool LrpcSitePriced()
-{
-	return ai.GetTunable("apex_lrpc_site_priced", TUNE_LRPC_SITE_PRICED) > 0.f;
-}
-
-// WHERE THE GUN STANDS IS PRICED: what it reaches times the chance its frame lives through its own build there. It
-// took the heavy defence's gate, and a gate is the edge of the ground we hold -- in a 2v2 the edge of a hull spanning
-// both allies: 85-95% of elected gun sites stood >3000 from the seat's start and died there as unsafe roads, killed
-// frames and hurt builders, while the few built stood within 1500 (2v2 +100 vs v0.4.0, two runs).
-int gLsLogAt = -1;
-AIFloat3 LrpcSite(CCircuitUnit@ unit, CCircuitDef@ def)
-{
-	const int d = int(def.id);
-	const int uid = int(unit.circuitDef.id);
-	array<AIFloat3> cand;
-	array<string> tag;
-	const AIFloat3 home = InteriorSite(unit.GetPos(ai.frame), Catalog::Def(uid));
-	if (OnMap(home)) {
-		cand.insertLast(HighGroundNear(def, home, 600.f));
-		tag.insertLast("home");
-	}
-	if (Base::gAnchorSet) {
-		array<AIFloat3> gates;
-		Front::GateChokes(gates);
-		for (uint gi = 0; gi < gates.length(); ++gi) {
-			AIFloat3 site;
-			if (!Front::BehindChoke(gates[gi], 180.f, site))
-				site = gates[gi];
-			if (OnMap(site)) {
-				cand.insertLast(HighGroundNear(def, site, 600.f));
-				tag.insertLast("gate");
-			}
-		}
-	}
-	AIFloat3 siege;
-	if (SiegeSite(unit, d, siege)) {
-		const AIFloat3 up = HighGroundNear(def, siege, 600.f);
-		if (SiegeSiteSafe(unit, up)) {
-			cand.insertLast(up);
-			tag.insertLast("siege");
-		}
-	}
-	if (cand.length() == 0)
-		return HighGroundNear(def, SuperSite(unit, SC_HEAVY), 600.f);
-	TrackIncome();
-	const float inc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
-	float T = SuperBill(d) / ((inc > 1.f) ? inc : 1.f);
-	const float buildS = Catalog::BuildSecondsAt(d, EffBP(Catalog::gBuildPower[uid]));
-	if (buildS > T)
-		T = buildS;
-	int best = -1;
-	float bestV = -1.f;
-	string why = "";
-	for (uint i = 0; i < cand.length(); ++i) {
-		float inR = 0.f;
-		const float g = LrpcGain(d, cand[i], inR);
-		const float s = StreamSurvivalOver(cand[i], T);
-		const float v = g * s;
-		if (v > bestV) {
-			bestV = v;
-			best = int(i);
-		}
-		why += " " + tag[i] + "(" + int(cand[i].x) + "," + int(cand[i].z) + " g=" + formatFloat(g, "", 0, 1)
-			+ " s=" + formatFloat(s, "", 0, 2) + ")";
-	}
-	if (ai.frame >= gLsLogAt) {
-		gLsLogAt = ai.frame + 60 * SECOND;
-		AiLog("apex: lrpc-site t=" + ai.teamId + " " + def.GetName() + " T=" + int(T) + " pick=" + tag[uint(best)]
-			+ " at=" + int(cand[uint(best)].x) + "," + int(cand[uint(best)].z) + " |" + why);
-	}
-	return cand[uint(best)];
-}
-
 bool SiegeSite(CCircuitUnit@ unit, int d, AIFloat3 &out at)
 {
 	const AIFloat3 home = Base::gAnchorSet ? Base::gAnchor : unit.GetPos(ai.frame);
@@ -1214,14 +1101,10 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// turrets our army dies to.
 			AIFloat3 foe, siege;
 			float foeR = 0.f, foeM = 0.f;
-			if ((sc == SC_LRPC) && !LrpcSitePriced() && Military::TurretTarget(foe, foeR, foeM)
+			if ((sc == SC_LRPC) && Military::TurretTarget(foe, foeR, foeM)
 					&& (at.distance2D(foe) > Catalog::gMaxRange[d])
 					&& SiegeSite(unit, d, siege))
-			{
-				const AIFloat3 up = HighGroundNear(Catalog::Def(d), siege, 600.f);
-				if (SiegeSiteSafe(unit, up))
-					at = up;
-			}
+				at = HighGroundNear(Catalog::Def(d), siege, 600.f);
 		}
 		const double _tSp = Perf::T0();
 		at = ProbedSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), at);
