@@ -194,7 +194,7 @@ void PlanNetDecide()
 	if (why == "first")
 		NnExploreSay(NgName(gPlan), "drawn at " + int(100.f * p[gPlan] + 0.5f) + "% odds, held until our tech tier rises");
 	else
-		ai.SendChat("Team " + ai.teamId + " discovery: tier " + tier + " reached, strategy now " + NgName(gPlan));
+		AiLog("apex: plan-explorer t=" + ai.teamId + " tier " + tier + " reached, strategy now " + NgName(gPlan));
 }
 
 // HOW MANY AIR PLANTS while the plan is AIR: a continuous head, an absolute count

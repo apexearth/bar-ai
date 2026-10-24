@@ -1771,11 +1771,6 @@ bool EcoRoleActive()
 		AiLog("apex: rear-specialist " + (gEcoRole ? "ON" : "off")
 				+ " team=" + ai.teamId
 				+ " shelter=" + int(sh[seat]) + " seat=t" + ht[seat]);
-		// A chat line survives on screen; log lines scroll away (apexearth).
-		ai.SendChat(gEcoRole
-				? ("I am the eco specialist (team " + ai.teamId
-					+ ", sheltered position): scaling economy, no army until T3.")
-				: ("Eco specialist role off (team " + ai.teamId + ")."));
 	}
 	return gEcoRole;
 }

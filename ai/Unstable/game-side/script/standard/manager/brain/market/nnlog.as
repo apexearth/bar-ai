@@ -669,8 +669,7 @@ void NnExploreSay(const string& in plan, const string& in how)
 	if (gNnExploreSaid || !gNnPlanExplore)
 		return;
 	gNnExploreSaid = true;
-	ai.SendChat("Team " + ai.teamId + " is the DISCOVERY explorer this game: strategy " + plan + " (" + how + ")");
-	ai.DrawPoint(aiSetupMgr.GetBasePos(), "Discovery explorer: team " + ai.teamId + " " + plan);
+	AiLog("apex: plan-explorer t=" + ai.teamId + " strategy " + plan + " (" + how + ")");
 }
 
 void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why)

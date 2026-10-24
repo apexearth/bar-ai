@@ -7,6 +7,34 @@ phrased as a bar ("at 150 metal/s, build a gantry") it is a symptom at the incom
 not a number to code. The fight layer is stock BARb since 2026-09-07, so squad behaviour below is
 C++ work on top of stock. Older text: `git log -p TODO.md`.
 
+# Team strategies that shift, and personalities that bend (his 10-24)
+
+The whole team runs one cooperative plan and acts on it in unison, and the plan CHANGES -- *"imagine we are doing
+normal and then we suddenly switch to air"*. The plan is *"based on what they think will work"*, from what they can
+see; *"timing is so important on a lot of these and the context/ability in the game is important"*. His list:
+- Vehicle rush. Bot rush.
+- Massive air attacks: *"a build up of air and then sudden massive attack surprising and overwhelming the enemy"*;
+  *"good to follow up next with a massive bot or vehicle attack, confusing the enemy who just spent a lot of money on
+  AA"*.
+- Nuke rush. T3. Longer range T2 massing. Greed.
+- Mass stealth units if there are gaps in the enemy front.
+- NOT turtle: *"a bad strategy, boring game for humans, we should avoid"*.
+Never announced in chat (*"definitely do not announce in chat"*); the log carries the diagnostics.
+Personalities are per seat and *"can bend/change. humans will often adapt to the strategies used against them, so
+repeatedly doing the same thing can be a good way to fail. changing up behavior IS a winning strategy sometimes."*
+
+Today (10-24): one plan per team (`plannet.as`), held 8 min and re-drawn only when our tech tier rises; it scales one
+class's gains x4 -- no build-up, no common strike, no follow-up. His last four hosted games: NORMAL and ARTY once each.
+
+The shape agreed in discussion: a plan is build-up (quiet, gathered out of sight) -> strike (every seat on one
+signal, when the gathered force beats what we have seen of theirs) -> follow-up (their answer -- e.g. the AA they
+buy after an air strike -- raises the value of the counter-plan, and the team switches whole and sudden). Each
+plan priced from the seen state with its own timing window; a plan the enemy has adapted to is worth less, so
+repetition prices itself out. The fight itself stays stock. Personalities: per-seat dials (aggression, tech greed,
+preferred unit type, raid appetite) that pick each seat's part in the plan and drift as the game goes.
+Order: (1) price every plan and LOG it, acting on nothing; (2) air strike + the ground follow-up (team air exists,
+off); (3) vehicle and bot rushes; (4) nuke rush, T3, long-range T2, greed, stealth; (5) personalities.
+
 # Army control redo (his 10-16: "the bane of this AI")
 
 Too many separate systems order the same units. Replace them with one simple layer he can reason
