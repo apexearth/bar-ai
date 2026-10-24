@@ -83,6 +83,14 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
 - [ ] **Air pricing counts the enemy AA we have seen** (his 10-23: "make sure that pricing factors in enemy AA we've
   seen"). Every air decision -- strike, gunship raid, raid answer -- prices the AA seen along the route and at the
   target (remembered, not only what is in sight now).
+- [ ] **Build our own LRPC mass** (his 10-24: "also work on our own lrpc massing"; he won Canis River with ~17). Ours
+  placed 4-8 a seat there and 0-1 a seat in his 10-24 game. Two limits, measured: EARLY the SuperBudget gate --
+  income x apex_super_afford_s against the bill (`super ... lrpc:corint bill=5552 budget=2865`), so a 50-60 m/s seat
+  never starts one; LATE a COUNT -- SuperTarget, guns wanted = targets in reach + 1 (`bill=5425 budget=83844
+  have=4/5`), so a rich seat stops at 4-5 with the money there. Also 6 of seat 4's gun tasks died as frames killed
+  under construction (`target-killed`). As a price, like the bombers past their count (apex_air_rich): the next gun
+  is worth what it destroys over its life in reach (LrpcGain), bought while that beats its cost; the budget becomes
+  the affordability term inside the price, not a gate.
 - [ ] **Mass LRPC on chosen enemy areas** (his 10-23: "When we make LRPC its kinda like nukes, we should have them all
   focusing specific enemy areas which we want to defeat"). Long-range plasma cannons pick one target area together,
   like a nuke volley, instead of each gun shooting what it likes.
