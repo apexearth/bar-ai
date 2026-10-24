@@ -110,8 +110,11 @@ Starwatcher + FolsomDamR, four 8-game runs (`tournaments/20261024-0239*`, `-0330
   (26af972c / e39762ca): none moved completion.
 - In his hosted games the failure differs: no `unreach-safe`; frames killed even near base, and early the
   affordability gate (bill > a minute of income).
-- Next: a realized-completion price -- our own gun tasks finished vs died, carried into the gun's survival -- or hold
-  ground forward first (team strategy). Unstable still carries apex_lrpc_prize (1c52e5a4, on): neutral, 2-2.
+- His 10-24 answer: build there; if it fails, porc up and defend the area. Tried (b55b9eec / 9bc6be2b, reverted):
+  a failed gun site as stake (turrets near failed sites 44 vs v0.4.0's 45), then also as a defence site (16 vs 52).
+  The defence market will not buy at those sites -- its PRICE there (stake vs the forward threat, the target
+  already met) is the next thing to read, with a defprice line for those sites. Also open: a realized-completion
+  price on the gun itself. Unstable still carries apex_lrpc_prize (1c52e5a4, on): neutral, 2-2.
 
 ## A T1 LAB IN AN ALLY'S OPEN LANE (2026-10-22)
 
