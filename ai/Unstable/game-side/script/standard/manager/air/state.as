@@ -454,8 +454,13 @@ bool AirEcoReady()
 	// PRICED, NOT A BAR (apex_air_eco_priced; his 10-23: "i do like things priced"). The bar zeroed every bomber
 	// below it (`wing0(eco)`); a bomber already pays for the ground war it costs -- its gain is the strike's metal
 	// against its own cost, and the target's gain carries the army gap -- so the market decides alone.
-	if (ai.GetTunable("apex_air_eco_priced", TUNE_AIR_ECO_PRICED) > 0.f)
+	if (Trial::On("air_eco_priced", TUNE_AIR_ECO_PRICED, TUNE_TRIAL_AIR_ECO_PRICED))
 		return true;
+	return AirEcoBarMet();
+}
+
+bool AirEcoBarMet()
+{
 	const float need = ai.GetTunable("apex_air_eco_base", TUNE_AIR_ECO_BASE)
 			* Market::IncomeMult();
 	return Market::EcoPowerM() >= need;
@@ -594,7 +599,22 @@ bool AirRichOn()
 // held wing was already at the count (only the trial's arm buys those), and advanced air plants.
 void TrialNoteFinished(CCircuitUnit@ unit)
 {
-	if (!Trial::Running("air_rich", TUNE_TRIAL_AIR_RICH) || (unit.circuitDef is null))
+	if (unit.circuitDef is null)
+		return;
+	// apex_air_eco_priced's footprint: strike planes that came in while the old income bar was not met (only its
+	// arm buys those) and gunships, which the priced bar mostly bought (6.7 a seat vs 0.7, 10-23).
+	if (Trial::Running("air_eco_priced", TUNE_TRIAL_AIR_ECO_PRICED)) {
+		AirEcoReady();   // registers the coin before the first minute's line
+		const int d0 = int(unit.circuitDef.id);
+		const bool gun = unit.circuitDef.IsAbleToFly() && !IsBomberDef(d0) && (Catalog::gSurfDps[d0] > 0.f)
+				&& !unit.circuitDef.IsRoleAny(Unit::Role::AA.mask);
+		if (IsBomberDef(d0) || gun) {
+			Trial::Note("air_eco_priced", gun ? "gunships" : "bombers", 1.f);
+			if (!AirEcoBarMet())
+				Trial::Note("air_eco_priced", "belowBar", 1.f);
+		}
+	}
+	if (!Trial::Running("air_rich", TUNE_TRIAL_AIR_RICH))
 		return;
 	AirRichOn();   // registers the coin before the first minute's line
 	const int d = int(unit.circuitDef.id);
