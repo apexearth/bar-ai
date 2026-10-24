@@ -172,6 +172,10 @@ the hidden scenario, 7 Brawlers (2,170 m) lost for 440 m killed, against 0 lost 
 Next: the unseen cell from the enemy start box; a committed wing that finds nothing it can take at its goal leaves
 at once and the cell's AA is remembered as a pain point, so it is not priced cheap again until the wing can take
 it (TODO: pain points).
+10-23 later: built (74cc5616: apex_gun_refuse, apex_aa_dwell, the start-box guess; 8f907f1b: `gun run scored`,
+not yet run). 24 1v1 +50 games vs v0.3.9: 12-11 (+1 cap), CI 33-71%, 0 errors; 15 refusals recalled a wing.
+NOT RELEASED -- no measured gain. What still sends wings into AA: the release's air net picking GO over the rule's
+WAIT (GO weight 0.90-0.98). His call: the net keeps deciding; next is targeted training on scored gunship runs.
 
 ## AIR ATTACKS AN UNDERWATER EXTRACTOR (2026-10-22)
 
