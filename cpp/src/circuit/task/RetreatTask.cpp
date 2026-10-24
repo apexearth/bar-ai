@@ -177,6 +177,29 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		}
 		range = factoryMgr->GetAssistRange() * 0.6f + pathfinder->GetSquareSize();
 
+		// apex_stock_heal (his 10-24: "our units retreat too far to get back home for repairs... we can just pull back a
+		// little and be repaired by rezbots or con turrets"): a stock unit takes the script's medic station -- published
+		// only while a rez bot of ours stands at it -- when it is nearer than the haven, ours, and walkable.
+		if (stock && (circuit->GetTunable("apex_stock_heal", 1.f) > 0.f) && utils::is_valid(circuit->GetHealPos())) {
+			AIFloat3 spot = circuit->GetHealPos();
+			CTerrainManager::CorrectPosition(spot);
+			const AIFloat3& here = unit->GetPos(frame);
+			const bool use = (here.SqDistance2D(spot) < here.SqDistance2D(endPos))
+				&& (circuit->GetInflMap()->GetInfluenceAt(spot) > circuit->GetInflMap()->GetEnemyInflAt(spot))
+				&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot);
+			if (use) {
+				endPos = spot;
+			}
+			struct Tally { int heal = 0, home = 0, logAt = 0; };
+			static std::map<const CCircuitAI*, Tally> tally;
+			Tally& t = tally[circuit];
+			++(use ? t.heal : t.home);
+			if (frame >= t.logAt) {
+				t.logAt = frame + FRAMES_PER_SEC * 60;
+				circuit->LOG("apex: retreat-dest stock heal=%i home=%i", t.heal, t.home);
+			}
+		}
+
 		// apexearth: "sometimes our retreat logic takes us into new threats.
 		// Any way we can check where we're retreating to and recompute
 		// sometimes?" GetClosestHaven picks by distance only and never

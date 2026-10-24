@@ -559,6 +559,26 @@ int gNextRezLog = 0;
 int gHealAt = -999999;
 bool gHealOk = false;
 AIFloat3 gHealPos;
+// A rez bot of ours within 400 of the station: under the stock army only a manned station is published, since a
+// stock unit sent there with nobody to repair it would stand wounded (apex_stock_heal).
+array<int> gRezDefs;
+bool gRezDefsSet = false;
+bool HealManned(const AIFloat3& in at)
+{
+	if (!gRezDefsSet) {
+		gRezDefsSet = true;
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (Catalog::ValidId(d) && Catalog::gRezzer[d] && Catalog::gMobile[d])
+				gRezDefs.insertLast(d);
+		}
+	}
+	for (uint i = 0; i < gRezDefs.length(); ++i) {
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(gRezDefs[i]), at, 400.f);
+		if ((us !is null) && (us.length() > 0))
+			return true;
+	}
+	return false;
+}
 bool HealStation(AIFloat3 &out at)
 {
 	if (ai.frame - gHealAt >= 5 * SECOND) {
@@ -580,7 +600,10 @@ bool HealStation(AIFloat3 &out at)
 				}
 			}
 		}
-		ai.SetHealPos(gHealOk ? gHealPos : AIFloat3(-1.f, 0.f, -1.f));
+		bool publish = gHealOk;
+		if (publish && Military::StockArmy() && (ai.GetTunable("apex_stock_heal", TUNE_STOCK_HEAL) > 0.f))
+			publish = HealManned(gHealPos);
+		ai.SetHealPos(publish ? gHealPos : AIFloat3(-1.f, 0.f, -1.f));
 	}
 	at = gHealPos;
 	return gHealOk;

@@ -413,6 +413,7 @@ local NAMES = {
 	"apex_lrpc_prize", -- want_super.as: LRPC kills priced like a bomber's (1)
 	"apex_spam_send", -- hooks.as: late fodder sent once at their base, never re-ordered (1)
 	"apex_mex_cover_site", -- execute.as: no interior gun waived for a mex it does not cover (1)
+	"apex_stock_heal", -- RetreatTask.cpp: stock wounded to a manned medic station (1)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)
 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
