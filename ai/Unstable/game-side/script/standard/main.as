@@ -212,7 +212,7 @@ void UpdateChunk(int c)
 	} else if (c == 3) {
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscNetDecide(); Market::EcoNetDecide(); Market::ArmyNetDecide(); Perf::Add("up.escecontnets", _t); }
 	} else if (c == 4) {
-		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::PlanPriceTick(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::UpkeepTick(); Perf::Add("up.upkeep", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Market::PressUpdate(); Perf::Add("up.rush", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Market::ExpandFarUpdate(); Market::EcoReturnUpdate(); Market::LiveBanStat(); Perf::Add("up.mapshare", _t); }
