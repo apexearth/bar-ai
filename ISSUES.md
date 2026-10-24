@@ -94,6 +94,15 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 72 | T3 units not trapped by allies' turrets at clustered gantries (10-24) | apex_door_clear (ce04801c), released v0.4.0 | `doorRefused=` per minute; his hosted games with clustered gantries | FIRES -- 192/733 refusals a 2v2 game; the trap itself not reproduced in tests: watch his games |
 | 73 | Gunships don't hover in AA; remembered pain points (10-23) | apex_gun_refuse, apex_aa_dwell, start-box guess (74cc5616), released v0.4.0 | `raid-refused`, `nnair-refused`, `gun run scored` | FIRES -- scenarios: refusals recall the wing; the release air net still overrides WAIT (his call: net decides, targeted training next) |
 
+## TURRET PILES: THE KNOT RULE, LEFT FOR NOW (2026-10-24)
+
+His must-fix "large concentrations of defenses all in one tiny area" had two causes in the 8v8 Starwatcher +65 runs.
+The doorway/interior-waiver one is fixed (apex_mex_cover_site). The other is the knot rule (protect_knot.as): a gun
+beside standing guns is priced up (kappa ~2) until the knot's cover beats the wave expected there -- seat 2 put 10
+turrets (~2.6k: 3 HLT, 2 Pit Bull, 2 Beamer, 3 LLT) at a front/wall site over minutes 16-24 (matches/clust0). Working
+as designed; if the wave estimate is inflated the knot keeps growing. His 10-24: "unsure about the knot rule, leave
+for now". Watch his games for it (`apex: defplace ... knot= kappa=`, `tools` defclust on a match).
+
 ## OUR LONG-RANGE GUN ORDERS DIE: ~85-90% NEVER FINISH (2026-10-24)
 
 His ask: our own LRPC massing (he won Canis River with ~17; ours stop at 0-8 a seat). Measured, 2v2 +100 vs v0.4.0,
