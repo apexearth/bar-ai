@@ -60,7 +60,7 @@ def secb_all(secb):
         out.update(bk)
     return out
 
-def analyze(path):
+def analyze(path, ai_clock=False):
     first = {}   # bucket -> earliest (wall, frame)
     last = {}    # bucket -> latest (wall, frame)
     units = {}   # bucket -> {player -> count}
@@ -87,7 +87,7 @@ def analyze(path):
             wall = wall_seconds(m.group(1), m.group(2), m.group(3))
             b = frame // BUCKET
             # engine stamps only: the AI's merged lines carry their own clock
-            if ("Skirmish AI <" not in line) and ("[BARAI_" not in line):
+            if ai_clock or (("Skirmish AI <" not in line) and ("[BARAI_" not in line)):
                 if b not in first or frame < first[b][1]:
                     first[b] = (wall, frame)
                 if b not in last or frame > last[b][1]:
@@ -319,6 +319,23 @@ def main():
         sys.exit(1)
     for arg in sys.argv[1:]:
         p = Path(arg)
+        if p.is_dir() and not (p / "infolog.txt").exists() and list(p.glob("apex-t*.log")):
+            # his hosted game, archived by mp_archive.py: the seats' own logs, no engine lines, so the clock is the
+            # AI lines' wall stamps (his machine's, live)
+            rows = []
+            for lg in sorted(p.glob("apex-t*.log")):
+                if lg.name.endswith(".prev.log"):
+                    continue
+                for line in lg.open(encoding="utf-8", errors="replace"):
+                    m = LINE.search(line)
+                    if m:
+                        rows.append((int(m.group(4)), line))
+            rows.sort(key=lambda r: r[0])
+            merged = p / "_merged_bot_logs.txt"
+            merged.write_text("".join(r[1] for r in rows), encoding="utf-8")
+            print(f"{p}: {len(list(p.glob('apex-t*.log')))} bot logs merged (clock: AI lines)")
+            analyze(merged, ai_clock=True)
+            continue
         if p.is_dir():
             p = p / "infolog.txt"
         if not p.exists():
