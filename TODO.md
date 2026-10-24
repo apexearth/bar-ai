@@ -80,6 +80,20 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   (`nnair-go gunships n=40 ... killF=0.24 lossN=40`); the C++ raid task commits with no target
   (`raid-commit ... target=- aaSet=24`) and refuses each one under AA, so it circles in and out. One judgement:
   once the decision commits into AA, the raid fights there; if it does not commit, it stays out of AA reach.
+- [ ] **Air pricing counts the enemy AA we have seen** (his 10-23: "make sure that pricing factors in enemy AA we've
+  seen"). Every air decision -- strike, gunship raid, raid answer -- prices the AA seen along the route and at the
+  target (remembered, not only what is in sight now).
+- [ ] **Mass LRPC on chosen enemy areas** (his 10-23: "When we make LRPC its kinda like nukes, we should have them all
+  focusing specific enemy areas which we want to defeat"). Long-range plasma cannons pick one target area together,
+  like a nuke volley, instead of each gun shooting what it likes.
+- [ ] **The whole shabang on one target, late** (his 10-23: "In very late game, mass LRPC hitting a target, nukes
+  focusing there too, and AIR focusing attacking that area as well. AND T3. The whole shabang will break
+  down/capitulate that target. Though it is possible other better targets may come up. because the guy being
+  targetted will reinforce if we don't kill them fast enough. sometimes switching targets fully and suddenly will
+  catch someone else off-guard"). One focus target for LRPC, nukes, air and T3 at once, priced by what breaking it
+  is worth against how fast they reinforce it; switch when the kill rate falls behind their rebuild or a softer
+  target's price passes it -- the switch whole and sudden, not a drift. Ties to the team strategy net in
+  [[goal-decisiveness]] and the team air timing below.
 - [ ] **Gunships answer raids** (his 10-23: "gunships can be a good answer to handling enemy raids"). Fast enough
   to arrive while the raid is still on our mexes, and T1 raiders cannot shoot up. Today gunships fly almost only
   NaDecide's economy strikes; the priced air bar (apex_air_eco_priced) made c9 build 6.7 gunships a seat vs 0.7,
