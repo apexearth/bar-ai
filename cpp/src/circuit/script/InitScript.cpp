@@ -2141,6 +2141,20 @@ static int IUnitTask_GetFightType(IUnitTask* task)
 }
 
 // apex: a RAID fight task is always a CRaidTask (MilitaryManager::Enqueue).
+// apex: a committed air raid found nothing it would take at its goal (CRaidTask::IsGoalRefused)
+static bool IUnitTask_IsRaidRefused(IUnitTask* task)
+{
+	return (task != nullptr) && (task->GetType() == IUnitTask::Type::FIGHTER)
+		&& (static_cast<IFighterTask*>(task)->GetFightType() == IFighterTask::FightType::RAID)
+		&& static_cast<CRaidTask*>(task)->IsGoalRefused();
+}
+
+// apex: the centre of the enemy start box nearest pos, (-1,0,-1) with none -- every player sees the boxes
+static AIFloat3 CCircuitAI_GetNearestEnemyBox(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	return circuit->GetSetupManager()->GetNearestEnemyBoxCentre(pos);
+}
+
 static void IUnitTask_SetRaidGoal(IUnitTask* task, const AIFloat3& pos, float r)
 {
 	if (StockDropTask(task, "raidgoal")) {
@@ -2547,6 +2561,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asFUNCTION(IUnitTask_RemoveUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "int GetFightType() const", asFUNCTION(IUnitTask_GetFightType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetRaidGoal(const AIFloat3& in, float)", asFUNCTION(IUnitTask_SetRaidGoal), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "bool IsRaidRefused() const", asFUNCTION(IUnitTask_IsRaidRefused), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetScriptMove(const AIFloat3& in, int, bool)", asFUNCTION(IUnitTask_SetScriptMove), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetKeepOut(const AIFloat3& in, float, int)", asFUNCTION(IUnitTask_SetKeepOut), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "bool IsFocusFight() const", asFUNCTION(IUnitTask_IsFocusFight), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2640,6 +2655,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetBaseGrid(const AIFloat3& in, const AIFloat3& in, float, float, float, float)", asFUNCTION(CCircuitAI_SetBaseGrid), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapToLattice(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapToLattice), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool InAnyBaseLane(const AIFloat3& in) const", asFUNCTION(CCircuitAI_InAnyBaseLane), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetNearestEnemyBox(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetNearestEnemyBox), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsPosOnMap(const AIFloat3& in) const",asMETHOD(CCircuitAI, IsPosOnMap), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyInflAt), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyDefendInflAt(const AIFloat3& in) const", asMETHOD(CCircuitAI, GetAllyDefendInflAt), asCALL_THISCALL); ASSERT(r >= 0);

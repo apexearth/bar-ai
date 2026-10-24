@@ -410,6 +410,8 @@ local NAMES = {
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
 	"apex_lane_reclaim", -- want_reclaim.as: idle plants in a lane priced for reclaim (1)
 	"apex_air_rich",
+	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
+	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
 	"apex_air_eco_priced",
 	"apex_trial_air_eco_priced", -- trial.as: a coin per seat for apex_air_eco_priced (1) -- air/state.as: air bought on price, no income bar (1)
 	"apex_trial_air_rich", -- trial.as: a coin per seat for apex_air_rich (1) -- air/state.as: bombers bought past the count while they pay (1)

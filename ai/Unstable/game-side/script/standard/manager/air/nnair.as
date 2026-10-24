@@ -81,6 +81,7 @@ class NaCand {
 	float hp = 0.f;
 	int n = 0;
 	float aaT = 0.f;      // air dps over the cell
+	float aaR = 0.f;      // the longest air reach among the AA over it
 }
 
 class NaPrice {
@@ -228,6 +229,8 @@ void NaCands(float r, array<NaCand@>& out cs)
 		for (uint e = 0; e < gNaAAP.length(); ++e) {
 			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
 				c.aaT += gNaAAV[e];
+				if (gNaAAR[e] > c.aaR)
+					c.aaR = gNaAAR[e];
 		}
 		cs.insertLast(c);
 	}
@@ -260,6 +263,8 @@ void NaCands(float r, array<NaCand@>& out cs)
 		for (uint e = 0; e < gNaAAP.length(); ++e) {
 			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
 				c.aaT += gNaAAV[e];
+				if (gNaAAR[e] > c.aaR)
+					c.aaR = gNaAAR[e];
 		}
 		if (c.n > 0)
 			cs.insertLast(c);
@@ -356,6 +361,8 @@ void NaCandsWon(float r, const array<int>& in top, array<NaCand@>& cs)
 		for (uint e = 0; e < gNaAAP.length(); ++e) {
 			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
 				c.aaT += gNaAAV[e];
+				if (gNaAAR[e] > c.aaR)
+					c.aaR = gNaAAR[e];
 		}
 		cs.insertLast(c);
 	}
@@ -433,6 +440,20 @@ float NaEval(const NaCand@ c, float pathAAx, float ftrA, int n, float h, float d
 				tk = N1 * h / A;
 				lostT = N1;
 			}
+		}
+	}
+	// THE WING FLIES THROUGH THEIR AA TO REACH THE TARGET AND BACK OUT (apex_aa_dwell; his 10-23: "make sure that
+	// pricing factors in enemy AA we've seen"). The kill time alone left a 12-Brawler wing under 6 light AA and a
+	// flak priced at killF 1.00 lossN 0.1; it lost all 12. One crossing of the cell's AA reach each way, at the
+	// wing's speed, under the cell's whole AA.
+	if ((ai.GetTunable("apex_aa_dwell", TUNE_AA_DWELL) > 0.f) && (c.aaT > 0.f) && (c.aaR > 0.f) && (spd > 0.f)
+		&& (h > 0.f) && (N1 > 0.f))
+	{
+		const float dwellS = 2.f * c.aaR / spd;
+		lostT += c.aaT * dwellS / h;
+		if (lostT > N1) {
+			lostT = N1;
+			killF = 0.f;
 		}
 	}
 	float N2 = N1 - lostT;
@@ -582,7 +603,14 @@ int NaDecide(int kind, const string why)
 	// and with no air scout bought for them they hit edge mexes or flew at cells worth 0). A gunship wing
 	// prices their mirrored start as a cell holding the economy we have not found yet.
 	if ((kind == 1) && Builder::gHomeSet) {
-		const AIFloat3 deep(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
+		// the enemy start box nearest us (apex_gun_refuse): the mirror is empty on a map whose starts are not
+		// point-symmetric -- the wing flew to it ten times in four minutes on gunship_aa_hidden
+		AIFloat3 deep(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
+		if (GunRefuseOn()) {
+			const AIFloat3 box = ai.GetNearestEnemyBox(Builder::gHomePos);
+			if (box.x >= 0.f)
+				deep = box;
+		}
 		if (OnMap(deep) && (ctr.distance2D(deep) <= r))
 			gNaDeepLookAt = ai.frame;
 		const float seats = (Military::AllyCount() > 1.f) ? Military::AllyCount() : 1.f;
@@ -613,9 +641,15 @@ int NaDecide(int kind, const string why)
 			for (uint e = 0; e < gNaAAP.length(); ++e) {
 				if (gNaAAP[e].distance2D(deep) <= gNaAAR[e] + r * 0.5f)
 					c.aaT += gNaAAV[e];
+					if (gNaAAR[e] > c.aaR)
+						c.aaR = gNaAAR[e];
 			}
-			if (c.aaT < aaAll / seats)
+			if (c.aaT < aaAll / seats) {
 				c.aaT = aaAll / seats;
+				for (uint e = 0; e < gNaAAR.length(); ++e)
+					if (gNaAAR[e] > c.aaR)
+						c.aaR = gNaAAR[e];
+			}
 			cs.insertLast(c);
 			++gNaDeepN;
 		}
@@ -634,7 +668,14 @@ int NaDecide(int kind, const string why)
 		const float pAA = NaPathAA(ctr, cs[i].at);
 		const float fAA = NaFighterAA(cs[i].at, flyS);
 		NaPrice@ p = NaPrice();
-		NaEval(cs[i], pAA, fAA, n, h, dps1, cost1, spd, flyS, kind == 0, obs, p);
+		const float pain = (kind == 1) ? NaPainFade(cs[i].at, r) : 1.f;
+		if (pain < 1.f) {
+			NaCand pc = cs[i];
+			pc.v *= pain;
+			NaEval(pc, pAA, fAA, n, h, dps1, cost1, spd, flyS, kind == 0, obs, p);
+		} else {
+			NaEval(cs[i], pAA, fAA, n, h, dps1, cost1, spd, flyS, kind == 0, obs, p);
+		}
 		if (!have || (p.netM > best.netM)) {
 			@best = p;
 			have = true;
@@ -1053,6 +1094,54 @@ float NaTargetGain(int d, float fillSec, float armyGap)
 	return 0.f;
 }
 
+// PAIN POINTS (his 10-23: "Ideally we just remember what our 'pain points' are"): a cell our gunship wing reached
+// and could take nothing at. Its value fades to nothing and regrows over the ghost horizon, so the wing does not
+// go straight back -- the in-out he watched.
+array<AIFloat3> gPainP;
+array<int> gPainAt;
+int gNaRefusedN = 0;
+
+bool GunRefuseOn()
+{
+	return ai.GetTunable("apex_gun_refuse", TUNE_GUN_REFUSE) > 0.f;
+}
+
+float NaPainFade(const AIFloat3& in at, float r)
+{
+	if (!GunRefuseOn())
+		return 1.f;
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * float(MINUTE);
+	float f = 1.f;
+	for (uint i = 0; i < gPainP.length(); ++i) {
+		if (gPainP[i].distance2D(at) > r)
+			continue;
+		const float g = (horizon > 1.f) ? float(ai.frame - gPainAt[i]) / horizon : 1.f;
+		if (g < f)
+			f = (g < 0.f) ? 0.f : g;
+	}
+	return f;
+}
+
+// The wing's goal was refused (C++ CRaidTask): recall it and remember the cell.
+void NaCheckRefused()
+{
+	if (!GunRefuseOn() || (gNaGunNow != NA_GO) || (gNaTask is null) || gNaTask.IsDead() || !gNaTask.IsRaidRefused())
+		return;
+	gPainP.insertLast(gNaGunGoal);
+	gPainAt.insertLast(ai.frame);
+	if (gPainP.length() > 16) {
+		gPainP.removeAt(0);
+		gPainAt.removeAt(0);
+	}
+	++gNaRefusedN;
+	AiLog(Factory::T() + "apex: nnair-refused gunships at=" + int(gNaGunGoal.x) + "," + int(gNaGunGoal.z)
+		+ " pains=" + gPainP.length());
+	gNaGunNow = NA_WAIT;
+	gNaGunGoal = Builder::gHomePos;
+	gNaGunR = 0.f;
+	NaHoldGunships();
+}
+
 // The gunship raid is at its cell and nothing of theirs is left there.
 bool NaArrived()
 {
@@ -1072,6 +1161,7 @@ void NaUpdate()
 {
 	if (!Builder::gHomeSet || !ApexActive())
 		return;
+	NaCheckRefused();
 	if ((gNaGunNow == NA_WAIT) && !TairOn())
 		NaHoldGunships();
 	// AIR AND LAND TOGETHER (his 10-11): a team-army operation entering GO asks the
@@ -1133,7 +1223,7 @@ void NaUpdate()
 		}
 		AiLog(Factory::T() + "apex: nnair-stat t=" + ai.teamId + " dec=" + gNaDecN + " go=" + gNaGoN
 			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " late=" + gNaLateN + " deep=" + gNaDeepN + " goG=" + gNaGoG + " pulled=" + gNaPullN
-			+ " gun=" + gn + " home=" + home + " out=" + away + " gunNow=" + gNaGunNow
+			+ " gun=" + gn + " home=" + home + " out=" + away + " gunNow=" + gNaGunNow + " refused=" + gNaRefusedN
 			+ " held=" + HeldBombers() + " need" + need + " flat=" + Market::NnF(gNaFlat, 2));
 	}
 }

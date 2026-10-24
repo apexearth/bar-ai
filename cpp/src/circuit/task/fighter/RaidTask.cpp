@@ -220,6 +220,24 @@ void CRaidTask::Update()
 			}
 		}
 	}
+	// apex: DON'T HOVER UNDER THEIR AA (apex_gun_refuse; his 10-23: "either fight or don't"). A committed air wing at
+	// its goal that takes no target there for 3 s marks the goal refused; the script recalls it and remembers the
+	// cell. Fighting there anyway lost 2,170 m of Brawlers for 440 m on gunship_aa_hidden.
+	if (leader->GetCircuitDef()->IsAbleToFly() && IsCommitted() && (GetTarget() == nullptr)
+		&& (circuit->GetTunable("apex_gun_refuse", 1.f) > 0.f)
+		&& (leader->GetPos(frame).SqDistance2D(goalPos) <= SQUARE(goalR)))
+	{
+		if (refuseSince < 0) {
+			refuseSince = frame;
+		} else if (!goalRefused && (frame - refuseSince >= FRAMES_PER_SEC * 3)) {
+			goalRefused = true;
+			circuit->LOG("apex: raid-refused t=%i %s x%i goal=%.0f,%.0f r=%.0f pow=%.0f",
+					circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), static_cast<int>(units.size()),
+					goalPos.x, goalPos.z, goalR, attackPower);
+		}
+	} else {
+		refuseSince = -1;
+	}
 	if (GetTarget() != nullptr) {
 		noTargetSince = -1;
 		state = State::ENGAGE;

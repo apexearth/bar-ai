@@ -29,7 +29,8 @@ public:
 	virtual bool AllowRetreat(CCircuitUnit* unit) override;
 
 	// apex: the script's priced raid target (nnraid.as). r <= 0 clears it.
-	void SetGoal(const springai::AIFloat3& pos, float r) { goalPos = pos; goalR = r; }
+	void SetGoal(const springai::AIFloat3& pos, float r) { goalPos = pos; goalR = r; goalRefused = false; refuseSince = -1; }
+	bool IsGoalRefused() const { return goalRefused; }
 	float GetGoalR() const { return goalR; }
 
 private:
@@ -50,6 +51,8 @@ private:
 	int noTargetSince = -1;
 	springai::AIFloat3 goalPos;
 	float goalR = 0.f;
+	int refuseSince = -1;      // apex: a committed air wing at its goal with nothing it would take, since
+	bool goalRefused = false;
 	int keptN = 0;          // retreats a committed raid did not take
 	int blockedSince = -1;   // apex_gather: frame the bounded path to the goal first failed
 	int nextCommitLog = 0;
