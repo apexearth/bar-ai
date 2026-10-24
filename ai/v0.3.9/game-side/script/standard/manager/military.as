@@ -1,0 +1,41 @@
+#include "../../define.as"
+#include "../../unit.as"
+
+// namespace Military, split across military/. THE ORDER BELOW IS LOAD-BEARING
+// -- see builder.as for why.
+#include "military/state.as"        // posture flags and the constants behind them
+#include "military/stockarmy.as"    // apex_stock_army: our army layers stand down, stock BARb fights
+#include "military/roles.as"        // rush/eco roles, quotas, metal slinging
+#include "military/deathledger.as"  // where our metal dies, fed back into caution
+#include "military/massing.as"      // how much army to hold back and mass
+#include "military/basedefence.as"  // approach threat, porcupines, line jammers
+#include "military/danger.as"       // their army against how soon it reaches our base
+#include "military/foemem.as"       // their army remembered out of sight, by unit
+#include "military/stance.as"       // the enemy's stance; budget answer + scout demand
+#include "military/looks.as"        // wanted looks: what a decision would pay to see, and the scouts sent for it
+#include "military/jamsight.as"     // apex_jam_sight: the force we suspect where radar goes dark, and what seeing it is worth
+#include "military/posture.as"      // raid caution, team push, corridors
+#include "military/superguard.as"   // T3 heavies hold the defence line
+#include "military/unblock.as"      // units walled in by our own buildings
+#include "military/unstick.as"      // units with an order that do not move: nudge, pen test, priced self-d
+#include "military/joinfight.as"    // march to a fight already on only if we arrive in time
+#include "military/bombs.as"       // rolling bombs: never squadded, never massed
+#include "military/joinwin.as"     // a squad takes members while it forms, none once it launches
+#include "military/hooks.as"        // AiMakeTask, task/unit hooks, save/load
+#include "military/fightcensus.as"  // live fighter pools by fight type, once a game-minute
+#include "military/guardposts.as"   // idle home units posted where building cover is missing
+#include "military/raid.as"        // ask for a raid and pull the units to make one
+#include "military/nnraid.as"      // the raid priced and decided: GO at the best target or WAIT
+#include "military/raidanswer.as"  // a raider that kills a building of ours gets a squad its size
+#include "military/flankguard.as"  // groups stand at the economy's untowered approaches
+#include "military/withdraw.as"   // pull a losing squad back under our guns
+#include "military/comfight.as"   // one fight estimate per group: engage what it beats, else fall back and pool
+#include "military/army/assess.as"  // apex_squads: the one assessment, on comfight's calibrated paper
+#include "military/army/squad.as"   // a squad's state machine and the one order path to an owned unit
+#include "military/army/army.as"    // owns the ground army, hands squads their intent
+#include "military/gather.as"     // raid packs launch whole from the gathered raiders and keep their members
+#include "military/territory.as"    // what we hold, where the border and front are
+#include "military/defenceline.as"  // the front gun and AiMakeDefence
+#include "military/airthreat.as"    // enemy air scaling and heavy AA caps
+#include "military/intel.as"        // what we believe the enemy has, on a clock
+#include "military/gift.as"          // back players ship ground army to the front

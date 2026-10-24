@@ -90,6 +90,7 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 68 | APM under control (10-22) | apex_keep_route (649374e6) | `apex: cmds` army per unit-minute | OFF -- vs BARb hard (3 pairs) travel orders per army unit fell (31->27, 47->24) with no harm seen, but on Starwatcher vs v0.3.5 (1v1 +50) c9 went 6-13 with it on and 5-3 with it off (10-23): off until a larger big-map run says otherwise |
 | 69 | Basic mex defence: one LLT covers one or more mexes, with a raider-range buffer (10-23) | apex_mex_basic (8db03f05), released v0.3.7 | mexes lost before minute 12 (mexdef/mexcover scripts), `cover-push` | VERIFIED -- 24 games vs v0.3.6: 18-6 (CI 55-88%); mexes lost before 12 min 9.1 vs 18.0, light towers 16.3 vs 7.8 |
 | 70 | Rich seats make more air (10-23) | apex_air_rich, shipped in v0.3.8 as a TRIAL (TUNE_TRIAL_AIR_RICH: a coin per seat) | `python tools/trial_report.py` after his multiplayer games | TRIAL RUNNING -- 16 2v2 games vs v0.3.7: 7-6, +26% bombers. Decide at 8+ paired games (sign test), then set the switch, end the trial, delete the coin |
+| 71 | Air bought on price, no income bar (10-23, "i do like things priced") | apex_air_eco_priced, shipped in v0.3.9 as a TRIAL (TUNE_TRIAL_AIR_ECO_PRICED, its own coin) | `python tools/trial_report.py` after his multiplayer games | TRIAL RUNNING -- 24 1v1 games vs v0.3.8: 12-10 (+2 cap); gunships 6.7 a seat vs 0.7, peak income 589 vs 520. Decide at 8+ paired games |
 
 ## A T1 LAB IN AN ALLY'S OPEN LANE (2026-10-22)
 
