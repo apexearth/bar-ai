@@ -141,6 +141,18 @@ float NaPrizeOf(int d, const AIFloat3& in at, const AIFloat3& in foe, float spot
 }
 
 float gNaSpotInc = -1.f;
+
+// The average metal spot's income, for NaPrizeOf outside the strike snapshot.
+float NaSpotInc()
+{
+	if (gNaSpotInc < 0.f) {
+		float s = 0.f;
+		for (uint i = 0; i < Market::gAllSpotInc.length(); ++i)
+			s += Market::gAllSpotInc[i];
+		gNaSpotInc = (Market::gAllSpotInc.length() > 0) ? s / float(Market::gAllSpotInc.length()) : 0.f;
+	}
+	return gNaSpotInc;
+}
 array<NaCand@> gNaCs;
 
 void NaSnapEnemy(const AIFloat3& in foe)

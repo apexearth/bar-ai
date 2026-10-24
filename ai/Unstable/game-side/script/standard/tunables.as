@@ -1783,6 +1783,7 @@ const float TUNE_LIFT_HANDS = 0.f;   // [toggle 0/1] lift.as: a ground builder w
 const float TUNE_NANO_FLUSH = 0.f;   // [toggle 0/1] nanopack.as: a turret the packed ring cannot hold goes flush against a standing turret
 const float TUNE_BIG_NEAR = 0.f;   // [toggle 0/1] sites.as: a big generator probed half a reach into the turret block; room only for turrets short
 const float TUNE_AIR_RICH = 1.f;
+const float TUNE_LRPC_PRIZE = 1.f;   // [toggle 0/1] want_super.as LrpcGain: a gun's kills priced like a bomber's (metal + output until rebuilt, NaPrizeOf)
 const float TUNE_DOOR_CLEAR = 1.f;   // [toggle 0/1] BuilderTask.cpp SitePredicate: no building in any friendly factory's doorway (ours or an ally's)
 const float TUNE_LRPC_FOCUS = 0.f;   // [toggle 0/1] brain/lrpc.as: every long-range gun in reach fires at one focus cell, switched whole
 const float TUNE_AA_DWELL = 1.f;   // [toggle 0/1] nnair.as NaEval: a strike pays the AA it crosses inside the cell (2 x its air reach at the wing's speed)

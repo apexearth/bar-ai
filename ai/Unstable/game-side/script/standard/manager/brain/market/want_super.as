@@ -724,6 +724,56 @@ float StructMetalPerHp()
 // rapid-fire cannon was built in ~60 games. Blind, the start box in reach
 // stands for their base at the nuke's prior (docs/doctrine.md: they jam; the base is in
 // the box). Returns the in-reach metal through inReachM for the log.
+// ONE PRICE FOR A DEAD BUILDING, WHOEVER KILLS IT (apex_lrpc_prize; his 10-24: our own LRPC massing -- he won Canis
+// River with ~17, ours stopped at 4-8). A gun's kills were credited as the buildings' metal alone, ~32 m/s whatever
+// stood in reach, while a bomber's prize (NaPrizeOf) is the metal and the output lost until they rebuild. The ratio
+// of the two over what stands in this gun's reach; held 30 s per 512-elmo area.
+array<int> gLpKey;
+array<int> gLpAt;
+array<float> gLpRatio;
+float LrpcPrizeRatio(const AIFloat3& in at, float reach)
+{
+	if (ai.GetTunable("apex_lrpc_prize", TUNE_LRPC_PRIZE) <= 0.f)
+		return 1.f;
+	const int key = int(at.x / 512.f) * 1000 + int(at.z / 512.f);
+	const int k = gLpKey.find(key);
+	if ((k >= 0) && (ai.frame < gLpAt[uint(k)] + 30 * SECOND))
+		return gLpRatio[uint(k)];
+	AIFloat3 foe = aiSetupMgr.GetEnemyBoxCentre();
+	const bool foeOk = OnMap(foe);
+	float metal = 0.f, prize = 0.f;
+	const float spotInc = Air::NaSpotInc();
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if ((d <= 0) || (d > Catalog::gDefCount) || Catalog::gMobile[d])
+			continue;
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+			continue;
+		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+		if (p.distance2D(at) > reach)
+			continue;
+		metal += Catalog::gCostM[d];
+		prize += Air::NaPrizeOf(d, p, foeOk ? foe : p, spotInc);
+	}
+	const float ratio = (metal > 1.f) ? ((prize > metal) ? prize / metal : 1.f) : 1.f;
+	if (k >= 0) {
+		gLpAt[uint(k)] = ai.frame;
+		gLpRatio[uint(k)] = ratio;
+	} else {
+		gLpKey.insertLast(key);
+		gLpAt.insertLast(ai.frame);
+		gLpRatio.insertLast(ratio);
+		if (gLpKey.length() > 64) {
+			gLpKey.removeAt(0);
+			gLpAt.removeAt(0);
+			gLpRatio.removeAt(0);
+		}
+	}
+	return ratio;
+}
+
 float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 {
 	const float reach = Catalog::gMaxRange[d];
@@ -758,7 +808,7 @@ float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 		f1 = (f1 < 1.f) ? f1 : 1.f;
 		counter = plasma * (f1 - f0) * 0.5f;
 	}
-	return killM / horizon + counter;
+	return killM * LrpcPrizeRatio(at, reach) / horizon + counter;
 }
 
 // A LAUNCHER ANSWERS THE TURRETS OUR ARMY DIES TO (apexearth 2026-09-30):
