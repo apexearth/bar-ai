@@ -2141,6 +2141,24 @@ static int IUnitTask_GetFightType(IUnitTask* task)
 }
 
 // apex: a RAID fight task is always a CRaidTask (MilitaryManager::Enqueue).
+// apex: attack one enemy by id (the LRPC battery, brain/lrpc.as); out of sight, the ground where it was last known
+static bool CCircuitUnit_CmdAttackEnemy(CCircuitUnit* unit, int id)
+{
+	if ((unit == nullptr) || (unit->GetManager() == nullptr)) {
+		return false;
+	}
+	CEnemyInfo* e = unit->GetManager()->GetCircuit()->GetEnemyInfo(id);
+	if (e == nullptr) {
+		return false;
+	}
+	if (e->IsInRadarOrLOS()) {
+		unit->CmdAttack(e);
+	} else {
+		unit->CmdAttackGround(e->GetPos());
+	}
+	return true;
+}
+
 // apex: a committed air raid found nothing it would take at its goal (CRaidTask::IsGoalRefused)
 static bool IUnitTask_IsRaidRefused(IUnitTask* task)
 {
@@ -2819,6 +2837,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedWeapon() const", asMETHOD(CCircuitUnit, GetDamagedWeapon), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedFrame() const", asMETHOD(CCircuitUnit, GetDamagedFrame), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool HotRoadTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_HotRoadToTeam), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "bool CmdAttackEnemy(int)", asFUNCTION(CCircuitUnit_CmdAttackEnemy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreE() const", asMETHOD(CCircuitDef, GetStoreE), asCALL_THISCALL); ASSERT(r >= 0);

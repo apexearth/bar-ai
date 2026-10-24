@@ -12,6 +12,7 @@
 #include "policy.as"           // ...and every eco THRESHOLD, in this one
 #include "manager/brain/budget.as"  // the spend ledger and target split (a sense)
 #include "manager/brain/nukes.as"   // the nuke director: volleys, targets, antinuke accounting
+#include "manager/brain/lrpc.as"    // the long-range gun battery: one focus cell, switched whole
 #include "manager/brain.as"       // the arbiter: Decide is the only spender (empty market)
 #include "manager/military.as"
 #include "manager/builder.as"
@@ -226,6 +227,7 @@ void UpdateChunk(int c)
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Air::UpdateFighterStations(); Perf::Add("up.airstations", _t); }
 		if (UpEvery(4, 3)) { double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
+		{ double _t = Perf::T0(); Brain::UpdateLrpc(); Perf::Add("up.lrpc", _t); }
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Brain::NukePressureTick(); Perf::Add("up.nukepress", _t); }
 		{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
 		{ double _t = Perf::T0(); Market::NanoUpgradeAssist(); Perf::Add("up.nanoup", _t); }

@@ -1,0 +1,14 @@
+{
+  "about": "4 Big Berthas at our start vs two clusters of theirs in reach: 3 fusions (10,050 m) at their start and 8 mexes spread near the centre",
+  "passes": "the battery breaks the rich cluster: at least 2 of the 3 fusions die",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "units": [
+    {"side": 0, "def": "armbrtha", "n": 4, "at": ["s0", 0, 0], "spacing": 120, "order": "ai"},
+    {"side": 1, "def": "armfus", "n": 3, "at": ["s1", 0, 0], "spacing": 110, "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 8, "at": ["c", -300, 0], "spacing": 260, "order": "ai"}
+  ],
+  "expect": [
+    {"killed:armfus": [">=", 2]}
+  ]
+}
