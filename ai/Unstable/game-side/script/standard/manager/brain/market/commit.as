@@ -257,10 +257,8 @@ void ComTaskRemoved(IUnitTask@ task, bool done)
 	++gComStamp;
 	// done: the finish event sets/has set FINISHED by id. !done with no frame:
 	// nothing stands, the commitment is gone.
-	if (!done && (gComState[i] != CS_FINISHED) && (int(gComId[i]) < 0)) {
-		GunPainNote(gComDef[i], gComPos[i]);
+	if (!done && (gComState[i] != CS_FINISHED) && (int(gComId[i]) < 0))
 		ComDrop(uint(i));
-	}
 }
 
 void ComUnitFinished(CCircuitUnit@ unit)
@@ -310,11 +308,8 @@ void ComUnitDead(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	const int i = ComFindId(unit.id);
-	if (i >= 0) {
-		if (gComState[uint(i)] != CS_FINISHED)
-			GunPainNote(gComDef[uint(i)], gComPos[uint(i)]);
+	if (i >= 0)
 		ComDrop(uint(i));
-	}
 }
 
 int ComCountOf(int defId, int mask)

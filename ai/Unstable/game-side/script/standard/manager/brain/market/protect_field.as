@@ -252,113 +252,6 @@ float PfMetalPerCell()
 	return (gPfCells > 1.f) ? (gPfBill / gPfCells) : 0.f;
 }
 
-// PORC UP WHERE THE GUN FAILED (apex_gun_porc; his 10-24: "try to just build there but if it fails then you'll have to
-// porc up and defend the area better"). ~85-90% of our gun tasks died at forward sites the risk model read as half
-// safe (ISSUES.md). A failed gun build -- the task gone with nothing standing, or the frame killed -- leaves its site
-// standing in the stake field at the gun's metal: the guns priced over stake are bought there, and turret hands walk
-// into threat where a gun's road is refused. Merged within 512, eight sites at most; held while failures repeat, faded
-// over the stake horizon after the last, cleared by a finished gun of ours within 600 (it is its own stake then).
-array<AIFloat3> gGunPainPos;
-array<float> gGunPainM;
-array<int> gGunPainAt;
-array<int> gGunPainN;
-bool GunPorcOn()
-{
-	return ai.GetTunable("apex_gun_porc", TUNE_GUN_PORC) > 0.f;
-}
-void GunPainNote(int d, const AIFloat3& in at)
-{
-	if (!GunPorcOn() || !Catalog::ValidId(d) || !OnMap(at) || (SuperClassOf(d) != SC_LRPC))
-		return;
-	int k = -1;
-	for (uint i = 0; i < gGunPainPos.length(); ++i) {
-		if (gGunPainPos[i].distance2D(at) < 512.f) {
-			k = int(i);
-			break;
-		}
-	}
-	if (k < 0) {
-		if (gGunPainPos.length() >= 8) {
-			uint old = 0;
-			for (uint i = 1; i < gGunPainAt.length(); ++i) {
-				if (gGunPainAt[i] < gGunPainAt[old])
-					old = i;
-			}
-			gGunPainPos.removeAt(old);
-			gGunPainM.removeAt(old);
-			gGunPainAt.removeAt(old);
-			gGunPainN.removeAt(old);
-		}
-		gGunPainPos.insertLast(at);
-		gGunPainM.insertLast(0.f);
-		gGunPainAt.insertLast(ai.frame);
-		gGunPainN.insertLast(0);
-		k = int(gGunPainPos.length()) - 1;
-	}
-	const uint u = uint(k);
-	if (Catalog::gCostM[d] > gGunPainM[u])
-		gGunPainM[u] = Catalog::gCostM[d];
-	gGunPainAt[u] = ai.frame;
-	++gGunPainN[u];
-	AiLog("apex: gun-porc t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(at.x) + "," + int(at.z)
-		+ " fails=" + gGunPainN[u] + " sites=" + gGunPainPos.length());
-}
-// ...and each is offered to the defence fill as a site, a step toward them like a lone mex's guard: the gates the
-// fill already offers sit off the gun's shifted site, and the stake alone bought nothing there (44 turrets near
-// failed sites vs v0.4.0's 45, completion 15% vs 15%).
-void GunPainSites(array<AIFloat3>& inout sites, float reach)
-{
-	if (!GunPorcOn() || (gGunPainPos.length() == 0))
-		return;
-	AIFloat3 foe;
-	const bool foeOk = FoeRef(foe);
-	for (uint i = 0; i < gGunPainPos.length(); ++i) {
-		AIFloat3 s = gGunPainPos[i];
-		if (foeOk) {
-			AIFloat3 dir = foe - s;
-			if (dir.SqLength2D() > 1.f) {
-				dir.SafeNormalize2D();
-				const float step = (reach * 0.5f < 150.f) ? reach * 0.5f : 150.f;
-				const AIFloat3 s2 = s + dir * step;
-				if (OnMap(s2))
-					s = s2;
-			}
-		}
-		s.y = ai.GetElevationAt(s);
-		sites.insertLast(s);
-	}
-}
-
-// The stake each failed site still carries, appended to the field like an extractor's stream.
-void GunPainStake(float h)
-{
-	if (!GunPorcOn())
-		return;
-	for (int i = int(gGunPainPos.length()) - 1; i >= 0; --i) {
-		const uint u = uint(i);
-		const float ageS = float(ai.frame - gGunPainAt[u]) / 30.f;
-		const float fade = 1.f - ageS / ((h > 1.f) ? h : 300.f);
-		bool built = false;
-		for (uint j = 0; (j < ComLen()) && !built; ++j) {
-			built = (gComState[j] == CS_FINISHED) && (SuperClassOf(gComDef[j]) == SC_LRPC)
-				&& (gComPos[j].distance2D(gGunPainPos[u]) < 600.f);
-		}
-		if (built || (fade <= 0.f)) {
-			gGunPainPos.removeAt(u);
-			gGunPainM.removeAt(u);
-			gGunPainAt.removeAt(u);
-			gGunPainN.removeAt(u);
-			continue;
-		}
-		const float w = gGunPainM[u] * fade;
-		gPfNPos.insertLast(gGunPainPos[u]);
-		gPfNWorth.insertLast(w);
-		gPfNIsMex.insertLast(false);
-		gPfNKey.insertLast(-1000000 - i);
-		gPfTotal += w;
-	}
-}
-
 float PfHorizon()
 {
 	const float h = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
@@ -1103,7 +996,6 @@ void PfRebuild()
 		gPfNKey.insertLast(-int(i) - 1);
 		gPfTotal += w;
 	}
-	GunPainStake(h);
 	PfCommit();
 
 	// The rim, over the assets just gathered. One extra O(n) pass.

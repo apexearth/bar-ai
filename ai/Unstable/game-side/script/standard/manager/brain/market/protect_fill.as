@@ -201,7 +201,6 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// see MexGuardSites.
 	const uint mexG0 = sites.length();
 	MexGuardSites(sites, reach);
-	GunPainSites(sites, reach);
 	const uint nAsset = sites.length();
 	// THE DOORWAYS FIRST. apexearth 2026-08-29: "defend chokepoints ahead of
 	// where the mexes are... prevent the enemy from getting in there." Every
