@@ -94,6 +94,25 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 72 | T3 units not trapped by allies' turrets at clustered gantries (10-24) | apex_door_clear (ce04801c), released v0.4.0 | `doorRefused=` per minute; his hosted games with clustered gantries | FIRES -- 192/733 refusals a 2v2 game; the trap itself not reproduced in tests: watch his games |
 | 73 | Gunships don't hover in AA; remembered pain points (10-23) | apex_gun_refuse, apex_aa_dwell, start-box guess (74cc5616), released v0.4.0 | `raid-refused`, `nnair-refused`, `gun run scored` | FIRES -- scenarios: refusals recall the wing; the release air net still overrides WAIT (his call: net decides, targeted training next) |
 
+## OUR LONG-RANGE GUN ORDERS DIE: ~85-90% NEVER FINISH (2026-10-24)
+
+His ask: our own LRPC massing (he won Canis River with ~17; ours stop at 0-8 a seat). Measured, 2v2 +100 vs v0.4.0,
+Starwatcher + FolsomDamR, four 8-game runs (`tournaments/20261024-0239*`, `-0330*`, `-0411*`, `-0450*`):
+- Orders are not the limit: 613 gun orders in one run. Tasks are: 2-25% of gun tasks end in a finished gun per run,
+  in BOTH versions (pooled ~11%). Deaths: frames killed (`target-killed`), `unreach-safe` (C++ refuses the road for
+  threat), `hurt-retreat`. 85-95% of elected sites stood >3000 from the seat's start; the guns built stood at 150-2300.
+- The site is the heavy defence's (`SuperSite(SC_HEAVY)`): a gate, the edge of the ground the team holds -- in a 2v2
+  the hull of both allies (Starwatcher allies start ~6,000 apart). From home the gun reaches nothing on these maps
+  (reach gain 11-17 vs 127-252 at gates): standing forward is right; surviving there is the problem.
+- THE DEFECT: the risk model reads those gate sites at survival 0.44-0.50 over the build (`StreamSurvivalOver`) while
+  ~4% of tasks begun there finish. Killed frames never entered the loss field (only `WasFinished` deaths do); adding
+  them (cost x progress) moved gate survival 0.50 -> 0.44 only. Three site changes were measured and reverted
+  (26af972c / e39762ca): none moved completion.
+- In his hosted games the failure differs: no `unreach-safe`; frames killed even near base, and early the
+  affordability gate (bill > a minute of income).
+- Next: a realized-completion price -- our own gun tasks finished vs died, carried into the gun's survival -- or hold
+  ground forward first (team strategy). Unstable still carries apex_lrpc_prize (1c52e5a4, on): neutral, 2-2.
+
 ## A T1 LAB IN AN ALLY'S OPEN LANE (2026-10-22)
 
 His hosted game, 10-22 (v0.3.5): our AI put an unused T1 lab right in an ally's open lane, which is not supposed to
