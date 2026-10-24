@@ -611,7 +611,7 @@ void TrialNoteFinished(CCircuitUnit@ unit)
 				&& !unit.circuitDef.IsRoleAny(Unit::Role::AA.mask);
 		if (IsBomberDef(d0) || gun) {
 			Trial::Note("air_eco_priced", gun ? "gunships" : "bombers", 1.f);
-			if (!AirEcoBarMet())
+			if (!gun && !AirEcoBarMet())   // the bar gates strike planes only; gunships come through the army market
 				Trial::Note("air_eco_priced", "belowBar", 1.f);
 		}
 	}
