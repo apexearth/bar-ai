@@ -559,8 +559,9 @@ int gNextRezLog = 0;
 int gHealAt = -999999;
 bool gHealOk = false;
 AIFloat3 gHealPos;
-// A rez bot of ours within 400 of the station: under the stock army only a manned station is published, since a
-// stock unit sent there with nobody to repair it would stand wounded (apex_stock_heal).
+// Any rez bot of ours, anywhere: the medics walk to this station and outrun most of the wounded (his 10-24: "it should
+// just go to the closer location and let the Resbots go to it"). With none, nobody comes, so the haven stays the
+// answer under the stock army (apex_stock_heal).
 array<int> gRezDefs;
 bool gRezDefsSet = false;
 bool HealManned(const AIFloat3& in at)
@@ -573,7 +574,7 @@ bool HealManned(const AIFloat3& in at)
 		}
 	}
 	for (uint i = 0; i < gRezDefs.length(); ++i) {
-		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(gRezDefs[i]), at, 400.f);
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(gRezDefs[i]), at, 0.f);
 		if ((us !is null) && (us.length() > 0))
 			return true;
 	}
