@@ -94,6 +94,13 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   is worth against how fast they reinforce it; switch when the kill rate falls behind their rebuild or a softer
   target's price passes it -- the switch whole and sudden, not a drift. Ties to the team strategy net in
   [[goal-decisiveness]] and the team air timing below.
+- [ ] **Targeted training for the air net** (his 10-23: keep the net deciding; "We can always manually tune the net
+  back a little, or some targetted training. We probably have some reasonable data showing that throwing ourselves
+  against the wall stopped working at one point"). On gunship_aa_hidden the release's air net chose GO over the
+  rule's WAIT twice (GO weight 0.98 at a positive price, 0.90 at -1,550): it sees the price but barely moves. Gunship
+  runs have no outcome label -- only bomber runs are scored (`air run scored`) -- so the net never saw a wing die
+  in AA. First: score gunship runs the same way (sent, home, metal killed, metal lost), then train the air head on
+  those labels.
 - [ ] **Gunships answer raids** (his 10-23: "gunships can be a good answer to handling enemy raids"). Fast enough
   to arrive while the raid is still on our mexes, and T1 raiders cannot shoot up. Today gunships fly almost only
   NaDecide's economy strikes; the priced air bar (apex_air_eco_priced) made c9 build 6.7 gunships a seat vs 0.7,
