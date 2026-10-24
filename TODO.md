@@ -101,6 +101,16 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   runs have no outcome label -- only bomber runs are scored (`air run scored`) -- so the net never saw a wing die
   in AA. First: score gunship runs the same way (sent, home, metal killed, metal lost), then train the air head on
   those labels.
+- [ ] **Air swarms a slow push** (his 10-23, of his Canis River win -- one ally slow-pushing under 17 LRPCs: "the
+  thing for your air to do in that case would be to swarm his slow push, he would have been killed, but he was under
+  jammer and did have AA units, still... all tightly packed, could kill it"). The strike planner's targets are
+  economy only (NaSnapEnemy gNaEcoP), so an army is never a candidate. As a price: an enemy army blob is a strike
+  cell worth its metal, raised by how tightly it packs (a bomber's splash and a swarm's focus land on many units),
+  against the AA inside it -- the same NaEval, the AA crossed included (apex_aa_dwell).
+- [ ] **AA that answers a big air attack** (his 10-23 game: their fresh air 3.4k at minutes 40-50, 51.6k at 50-60,
+  68.4k at 60-70; our four seats took 7-29 airdef decisions a 10 minutes and 0 after minute 60 -- "a huge air
+  attack did almost take us out"). Trace why the AA want stayed small (aathreat.as); the ground-AA cap there is
+  per seat's share of their remembered air, by design (his 10-17 overbuild), so look past it.
 - [ ] **Gunships answer raids** (his 10-23: "gunships can be a good answer to handling enemy raids"). Fast enough
   to arrive while the raid is still on our mexes, and T1 raiders cannot shoot up. Today gunships fly almost only
   NaDecide's economy strikes; the priced air bar (apex_air_eco_priced) made c9 build 6.7 gunships a seat vs 0.7,
