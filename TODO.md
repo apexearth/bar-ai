@@ -131,6 +131,11 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   The answer to "their AA beats our air" is a different move, priced: strike the AA itself first (pain points
   below), mass past it (the air_rich trial), escort with fighters against their fighters -- and let a failed run's
   lesson fade, since their AA dies and moves.
+  ESCALATE (his 10-24: "make even bigger and bigger attacks, until we're making huge massive attacks. or build up 20
+  dragons supported by fighters... that genuinely would work a lot of the time"). NaEval already caps a wing's losses
+  at the measured run's (obsLost: their AA kills so many a pass), so mass should pay -- but it values ONE cell, and a
+  surviving mass works through their base cell after cell. Price a wing on the cells it survives to reach; then the
+  planned wing (gNaNeedN, the finish bar) grows after a failure instead of the price falling to zero.
 - [ ] **Remember our pain points: clear their AA, then strike** (his 10-23: "if we are constantly failing to strike
   enemy eco we need to switch to other targets AA can be a good target. Ideally we just remember what our 'pain
   points' are. If enemy AA is why our air is useless, attack that AA with our ground forces, LRPC, or nukes. Once
