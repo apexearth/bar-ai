@@ -10,6 +10,8 @@ parser, aimed at the three errors that have actually shipped:
           symbol`, and the whole variant is disabled.
   scope   a local read outside the block it was declared in. `bestIsWall` was
           referenced ~90 lines below its enclosing `if`, in a 2,122-line file.
+  dup     one global declared twice in a namespace, across files. `Name
+          conflict` -- a cache in want_super.as reused coverage.as's `gSsAt`.
 
 The include order is taken from the shims: CScriptBuilder adds a section, THEN
 walks that section's own includes depth-first in listed order, skipping any file
@@ -186,6 +188,7 @@ class FileScan:
         self.text = strip_code(path.read_text(encoding="utf-8", errors="replace"))
         # (namespace, name) -> offset, for globals / consts / types / enums.
         self.globals: dict[tuple[str, str], int] = {}
+        self.decls: list[tuple[tuple[str, str], int]] = []
         self.funcs: set[str] = set()
         self.namespaces: set[str] = set()
         # [(func-name, func-start, func-end, {name: [(from, to), ...]})]
@@ -239,6 +242,8 @@ class FileScan:
                     at = seg0.find(nm)
                     self.globals.setdefault((ns_path(), nm),
                                             off + (at if at >= 0 else 0))
+                    if nm == names[0]:   # the tail's extra names include initializer reads
+                        self.decls.append(((ns_path(), nm), off + (at if at >= 0 else 0)))
                 seg = self.text[off:end]
                 k = _init_at(seg)
                 if k >= 0:
@@ -538,6 +543,21 @@ def analyse(root: Path):
                     f"declares it (line "
                     f"{s.line(min(a for a, _ in spans))}) -- "
                     f"`No matching symbol '{name}'`"))
+
+    # -- 3: one global declared twice in one namespace ------------------------
+    # `Name conflict. 'Market::gSsAt' is a global property` (10-24: a new cache in want_super.as reused a name
+    # coverage.as declares) -- the whole variant is disabled.
+    first: dict[tuple[str, str], tuple[FileScan, int]] = {}
+    for s in scans:
+        for key, off in s.decls:
+            if key in first:
+                fs, foff = first[key]
+                findings.append((
+                    "dup", s.path, s.line(off),
+                    f"{'::'.join(x for x in key if x)} is already declared at "
+                    f"{fs.path.name}:{fs.line(foff)} -- `Name conflict`, the whole variant is disabled"))
+            else:
+                first[key] = (s, off)
 
     dedup, out = set(), []
     for f in findings:
