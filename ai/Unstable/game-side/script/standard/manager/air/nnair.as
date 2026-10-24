@@ -820,6 +820,7 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 		gNaGunR = r;
 		if (moved) {
 			++gNaGoG;
+			GunRunStart(best.at);
 			AiLog(Factory::T() + "apex: nnair-go gunships n=" + gNaU.length() + " at="
 				+ int(best.at.x) + "," + int(best.at.z) + " v=" + int(best.v)
 				+ " killF=" + Market::NnF(best.killF, 2) + " lossN=" + Market::NnF(best.lossN, 1)
@@ -1142,6 +1143,68 @@ void NaCheckRefused()
 	NaHoldGunships();
 }
 
+// A GUNSHIP RUN, SCORED (his 10-23: targeted training for the air net -- "throwing ourselves against the wall stopped
+// working at one point"). Bomber runs carry `air run scored`; a gunship GO had no outcome at all, so the net never saw
+// a wing die in AA. From the GO that moves the wing: its planes, the metal of theirs that dies in the cell, and the
+// planes still with us after apex_air_settle_s.
+array<int> gGunRunIds;
+AIFloat3 gGunRunAt;
+float gGunRunKilled = 0.f;
+float gGunRunSentM = 0.f;
+int gGunRunSettleAt = -1;
+
+void GunRunStart(const AIFloat3& in at)
+{
+	if (gGunRunSettleAt >= 0)
+		GunRunSettle();
+	gGunRunIds.resize(0);
+	gGunRunSentM = 0.f;
+	for (uint i = 0; i < gNaU.length(); ++i) {
+		if ((gNaU[i] is null) || (gNaU[i].circuitDef is null))
+			continue;
+		gGunRunIds.insertLast(int(gNaU[i].id));
+		gGunRunSentM += gNaU[i].circuitDef.costM;
+	}
+	gGunRunAt = at;
+	gGunRunKilled = 0.f;
+	gGunRunSettleAt = ai.frame + int(ai.GetTunable("apex_air_settle_s", TUNE_AIR_SETTLE_S)) * SECOND;
+}
+
+void GunRunNoteDeath(CCircuitDef@ edef, const AIFloat3& in pos)
+{
+	if ((gGunRunSettleAt < 0) || (edef is null) || edef.IsMobile() || !OnMap(pos))
+		return;
+	if (pos.distance2D(gGunRunAt) <= ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R))
+		gGunRunKilled += edef.costM;
+}
+
+void GunRunSettle()
+{
+	const int sent = int(gGunRunIds.length());
+	gGunRunSettleAt = -1;
+	if (sent <= 0)
+		return;
+	int home = 0;
+	float homeM = 0.f;
+	for (uint i = 0; i < Military::gSquads.length(); ++i) {
+		IUnitTask@ t = Military::gSquads[i];
+		if ((t is null) || t.IsDead())
+			continue;
+		array<CCircuitUnit@>@ on = t.GetUnits();
+		if (on is null)
+			continue;
+		for (uint j = 0; j < on.length(); ++j) {
+			if ((on[j] !is null) && (on[j].circuitDef !is null) && (gGunRunIds.find(int(on[j].id)) >= 0)) {
+				++home;
+				homeM += on[j].circuitDef.costM;
+			}
+		}
+	}
+	AiLog(Factory::T() + "apex: gun run scored sent=" + sent + " home=" + home
+		+ " at=" + int(gGunRunAt.x) + "," + int(gGunRunAt.z)
+		+ " killedM=" + int(gGunRunKilled) + " lostM=" + int(gGunRunSentM - homeM));
+}
+
 // The gunship raid is at its cell and nothing of theirs is left there.
 bool NaArrived()
 {
@@ -1162,6 +1225,8 @@ void NaUpdate()
 	if (!Builder::gHomeSet || !ApexActive())
 		return;
 	NaCheckRefused();
+	if ((gGunRunSettleAt >= 0) && (ai.frame >= gGunRunSettleAt))
+		GunRunSettle();
 	if ((gNaGunNow == NA_WAIT) && !TairOn())
 		NaHoldGunships();
 	// AIR AND LAND TOGETHER (his 10-11): a team-army operation entering GO asks the

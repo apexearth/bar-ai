@@ -420,6 +420,7 @@ int   gWaveLaunched = 0; // bombers the current wave left with
 // (docs/traps.md S30); the cell and the run's window are the attribution.
 void NoteEnemyDeath(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
+	GunRunNoteDeath(edef, pos);
 	if ((gRunDef < 0) || (edef is null) || edef.IsMobile())
 		return;
 	if (!OnMap(pos) || !OnMap(gRunAt))
