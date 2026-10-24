@@ -123,6 +123,14 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   NaDecide's economy strikes; the priced air bar (apex_air_eco_priced) made c9 build 6.7 gunships a seat vs 0.7,
   and they mostly went at AA. As a price: a gunship sent at a raid is worth the mex income and buildings the raid
   would kill before our ground or towers arrive, against what their AA there costs it.
+- [ ] **Don't give up on offensive air** (his 10-24: "I think the AI fairly quickly thinks that making air is not
+  worth it. We just have a small/medium amount of fighters and don't really put much effort into bombers"; "if the
+  humans make fighters or AA we seem to kinda give up... on the idea of offensive air"). His 10-24 hosted game: runs
+  of 14/0, 6/0, 5/0 home, 26->2, 41->7; after them NaEval floors every wing's losses at the last run's (obsSurv/
+  obsLost), the held wing sits at the count (`wing0(full)` on the rich-air-off seats) and nothing else is tried.
+  The answer to "their AA beats our air" is a different move, priced: strike the AA itself first (pain points
+  below), mass past it (the air_rich trial), escort with fighters against their fighters -- and let a failed run's
+  lesson fade, since their AA dies and moves.
 - [ ] **Remember our pain points: clear their AA, then strike** (his 10-23: "if we are constantly failing to strike
   enemy eco we need to switch to other targets AA can be a good target. Ideally we just remember what our 'pain
   points' are. If enemy AA is why our air is useless, attack that AA with our ground forces, LRPC, or nukes. Once
