@@ -284,6 +284,9 @@ public:
 	float GetSquadPowerNear(const springai::AIFloat3& pos, float radius) const;  // attack + defend squads
 	float GetSidePowerAt(const springai::AIFloat3& pos, float radius);  // ours + allies', memoised a second
 	float GetGatheredPower() const;
+	// apex: the attack threat modifier at runtime (quota.thr_mod.attack), so a plan can raise aggression for a strike
+	void SetAttackMod(float lo, float hi) { attackMod.min = lo; attackMod.len = (hi > lo) ? (hi - lo) : 0.f; }
+	float GetAttackModMin() const { return attackMod.min; }
 	float GetEnemyInflNear(const springai::AIFloat3& pos, float radius) const;
 	// apex: where a long gun holds its ring waiting for someone to see its target
 	void NoteSpotWanted(const springai::AIFloat3& pos, int frame);

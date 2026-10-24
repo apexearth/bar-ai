@@ -16,6 +16,23 @@ bool StockArmy()
 	return gSaOn > 0;
 }
 
+// HOW HARD THE ARMY PICKS ITS FIGHTS (apex_attack_mod; his 10-24: "high aggression values on army"): the threat
+// multiplier an attack task counts the enemy at when it chooses a target. behaviour.json counts them at face value
+// (1.0); stock BARb ships 0.25-0.3. 0 leaves the config's; a plan may set its own for a strike (AttackModSet).
+float gAttackModNow = -1.f;
+void AttackModSet(float m)
+{
+	if ((m <= 0.f) || (m == gAttackModNow))
+		return;
+	gAttackModNow = m;
+	aiMilitaryMgr.SetAttackMod(m, m);
+	AiLog(Factory::T() + "apex: attack-mod t=" + ai.teamId + " " + Market::NnF(m, 2));
+}
+void AttackModTick()
+{
+	AttackModSet(ai.GetTunable("apex_attack_mod", TUNE_ATTACK_MOD));
+}
+
 // apex_our_air: under the stock army, aircraft stay ours (C++ CCircuitAI::IsOurAir)
 int gSaAir = -1;
 bool OurAir()

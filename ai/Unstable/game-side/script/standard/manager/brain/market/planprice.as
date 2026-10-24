@@ -4,16 +4,21 @@ namespace Market {
 // based on what they think will work"; "timing is so important on a lot of these and the context/ability in the game
 // is important"; TODO.md "Team strategies that shift"). Every 30 s each seat publishes what it holds; the lowest
 // seat that has published prices, from what the team has SEEN, what each plan nets over the plan window
-// (NG_HOLD_S): the square-law ground fight and the air sortie through their AA of Air::TairPlanEval, with their
-// spending split into AA, fighters, turrets, army and economy (Air::TairFoeSplit) -- so their AA buys a ground plan
-// its value. A rush is priced per land plant we can build, on its best fighter's power per metal and its walk to
-// them, at the strike time that pays best. Logged as `apex: plan-price`; nothing reads it yet.
+// (NG_HOLD_S). A ground strike fights their army square-law, then takes the economy no turret covers, then fights
+// the turrets for what they cover (his 10-24: turrets count only where they stand); the air sortie flies through
+// their seen AA (Air::TairAirNet). A rush is priced per land plant on its best fighter's power per metal and its walk
+// to them, at the strike time that pays best. Logged as `apex: plan-price`; nothing reads it yet.
 
 const int PP_AT = 8000, PP_INC = 8100, PP_ARMY = 8200, PP_AIR = 8300, PP_ECO = 8400;
 int gPpNextAt = 0;
 float gPpAA0 = -1.f;
 int gPpAA0At = -1;
 float gPpAAPrev = -1.f;
+
+// What we have seen of theirs, by place: turrets and the economy they cover.
+float gPpArmy = 0.f, gPpDef = 0.f, gPpEcoFree = 0.f, gPpEcoCov = 0.f, gPpTurretR = 0.f;
+array<float> gPpClusterM;   // their economy per 800-elmo cell, richest first
+array<AIFloat3> gPpClusterP;
 
 float PpOwnAirM()
 {
@@ -41,6 +46,130 @@ float PpPower(int d)
 	const float dps = Catalog::gSurfDps[d];
 	const float hp = Catalog::gHealth[d];
 	return (dps > 0.f) && (hp > 0.f) ? sqrt(dps * hp) / Catalog::gCostM[d] : 0.f;
+}
+
+void PpFoeScan()
+{
+	gPpArmy = 0.f; gPpDef = 0.f; gPpEcoFree = 0.f; gPpEcoCov = 0.f; gPpTurretR = 0.f;
+	gPpClusterM.resize(0);
+	gPpClusterP.resize(0);
+	array<AIFloat3> tp;
+	array<float> tr;
+	array<AIFloat3> ep;
+	array<float> em;
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if ((d <= 0) || (d > Catalog::gDefCount))
+			continue;
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+			continue;
+		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+		const float m = Catalog::gCostM[d];
+		const bool armed = (Catalog::gSurfDps[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f);
+		if (Catalog::gMobile[d]) {
+			if (armed && !Catalog::gFlyer[d] && !Catalog::gBuilder[d])
+				gPpArmy += m;
+			continue;
+		}
+		if (armed && (Catalog::gSurfT[d] > 0.f)) {
+			gPpDef += m;
+			const float r = (Catalog::gLandRange[d] > 0.f) ? Catalog::gLandRange[d] : Catalog::gMaxRange[d];
+			tp.insertLast(p);
+			tr.insertLast(r);
+			if (r > gPpTurretR)
+				gPpTurretR = r;
+		} else if (!armed && OnMap(p)) {
+			ep.insertLast(p);
+			em.insertLast(m);
+		}
+	}
+	array<int> key;
+	for (uint e = 0; e < ep.length(); ++e) {
+		bool cov = false;
+		for (uint t = 0; (t < tp.length()) && !cov; ++t)
+			cov = ep[e].distance2D(tp[t]) < tr[t];
+		if (cov)
+			gPpEcoCov += em[e];
+		else
+			gPpEcoFree += em[e];
+		const int k = int(ep[e].x / 800.f) * 1000 + int(ep[e].z / 800.f);
+		int j = key.find(k);
+		if (j < 0) {
+			key.insertLast(k);
+			gPpClusterM.insertLast(0.f);
+			gPpClusterP.insertLast(ep[e]);
+			j = int(key.length()) - 1;
+		}
+		gPpClusterM[uint(j)] += em[e];
+	}
+	// richest first (a handful of cells: selection order is fine)
+	for (uint i = 0; i < gPpClusterM.length(); ++i) {
+		uint b = i;
+		for (uint j = i + 1; j < gPpClusterM.length(); ++j) {
+			if (gPpClusterM[j] > gPpClusterM[b])
+				b = j;
+		}
+		if (b != i) {
+			const float tm = gPpClusterM[i]; gPpClusterM[i] = gPpClusterM[b]; gPpClusterM[b] = tm;
+			const AIFloat3 tq = gPpClusterP[i]; gPpClusterP[i] = gPpClusterP[b]; gPpClusterP[b] = tq;
+		}
+	}
+}
+
+// A strike of G (metal, already scaled by its power) against their army, then the economy no turret covers, then
+// their turrets for what they cover; lr: our strike outranges their turrets and kills them without loss. Net metal:
+// what we destroy less what we lose; a lost fight lets their survivors into our economy.
+float PpStrike(float G, float A, float D, float free, float cov, float q, float ourEco, bool lr)
+{
+	if (G <= 0.f)
+		return 0.f;
+	if (q <= 0.f)
+		q = 1.f;
+	float lost = 0.f, killed = 0.f, gs = G;
+	if (A > 0.f) {
+		if (q * G * G < A * A) {
+			const float es = sqrt(A * A - q * G * G);
+			return (A - es) - (G + ((es < ourEco) ? es : ourEco));
+		}
+		gs = sqrt(G * G - A * A / q);
+		lost += G - gs;
+		killed += A;
+	}
+	killed += (gs < free) ? gs : free;
+	if ((cov <= 0.f) && (D <= 0.f))
+		return killed - lost;
+	if (lr) {
+		killed += D + ((gs < cov) ? gs : cov);
+		return killed - lost;
+	}
+	if (q * gs * gs >= D * D) {
+		const float g3 = sqrt(gs * gs - D * D / q);
+		lost += gs - g3;
+		killed += D + ((g3 < cov) ? g3 : cov);
+	} else {
+		killed += D - sqrt(D * D - q * gs * gs);
+		lost += gs;
+	}
+	return killed - lost;
+}
+
+// The cheapest available plant of a super class (gantry, silo): its bill, -1 if none.
+float PpSuperBill(int sc, int &out def)
+{
+	def = -1;
+	float best = -1.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::ValidId(d) || !Catalog::gAvailable[d] || Catalog::gMobile[d] || (SuperClassOf(d) != sc))
+			continue;
+		const float b = SuperBill(d);
+		if ((best < 0.f) || (b < best)) {
+			best = b;
+			def = d;
+		}
+	}
+	return best;
 }
 
 void PlanPriceTick()
@@ -78,9 +207,10 @@ void PlanPriceTick()
 	const AIFloat3 foe = Air::NaFoe();
 	Air::NaSnapEnemy(OnMap(foe) ? foe : Builder::gHomePos);
 	Air::TairFoeSplit();
-	const float fAA = Air::gTairFoeAAM, fFtr = Air::gTairFoeFtrM, fDef = Air::gTairFoeDefM;
-	const float fArmy = Air::gTairFoeArmyM, fEco = Air::gTairFoeEcoM;
-	// their income, unseen: ours, scaled by the economy we have seen of theirs once there is some to see
+	PpFoeScan();
+	const float fAA = Air::gTairFoeAAM, fFtr = Air::gTairFoeFtrM;
+	const float A0 = gPpArmy, D = gPpDef, free = gPpEcoFree, cov = gPpEcoCov;
+	const float fEco = free + cov;
 	float If = I;
 	if ((fEco > 0.2f * ourEco) && (ourEco > 1.f)) {
 		float k = fEco / ourEco;
@@ -95,32 +225,30 @@ void PlanPriceTick()
 	float G0 = Military::TeamArmyCost() - airM;
 	if (G0 < 0.f)
 		G0 = 0.f;
-	const float E0 = fArmy + fDef;
-	const float Eh = E0 + If * a * H;
+	const float Ah = A0 + If * a * H;
 	const AIFloat3 from = Builder::gHomePos;
-	// NORMAL: the army share into the usual mix, the air we have on one sortie
 	const float air0 = Air::TairAirNet(airM, from);
-	const float vNorm = Air::TairGround(G0 + I * a * H, Eh, q, fEco, ourEco) + air0;
-	// AIR: the army share into air, one massed sortie through their AA; the ground army stands as it is
+	const float vNorm = PpStrike(G0 + I * a * H, Ah, D, free, cov, q, ourEco, false) + air0;
 	const float airS = I * a * H;
-	const float vAir = Air::TairGround(G0, Eh, q, fEco, ourEco) + Air::TairAirNet(airM + airS, from);
-	// GREED: half the army share into economy; what their army takes if it comes is the price
-	const float gExtra = I * 0.5f * a * H;
-	float gFight = Air::TairGround(G0 + I * 0.5f * a * H, Eh, q, fEco, ourEco);
-	const float vGreed = gExtra * gamma + ((gFight < 0.f) ? gFight : 0.f) + air0;
+	const float vAir = PpStrike(G0, Ah, D, free, cov, q, ourEco, false) + Air::TairAirNet(airM + airS, from);
+	const float gFight = PpStrike(G0 + I * 0.5f * a * H, Ah, D, free, cov, q, ourEco, false);
+	const float vGreed = I * 0.5f * a * H * gamma + ((gFight < 0.f) ? gFight : 0.f) + air0;
 	string line = "NORMAL=" + int(vNorm) + " AIR=" + int(vAir) + "(airS=" + int(airS) + ") GREED=" + int(vGreed);
 	string best = "NORMAL";
 	float bestV = vNorm;
 	if (vAir > bestV) { bestV = vAir; best = "AIR"; }
 	if (vGreed > bestV) { bestV = vGreed; best = "GREED"; }
-	// RUSH per land plant: all income into its best fighter for T seconds, priced per second over the window
+	// land plants: each one's best fighter, and the best that outranges every turret we have seen
 	array<int> plants;
 	array<int> fighters;
 	float powSum = 0.f;
+	int lrDef = -1, t3Def = -1;
+	float lrPow = 0.f, t3Pow = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::ValidId(d) || !Catalog::gAvailable[d] || Catalog::gMobile[d]
-			|| (Catalog::gBuildsList[d].length() == 0) || (PlantClass(d) != PC_LAND) || (TreeTier(d) > 2))
+			|| (Catalog::gBuildsList[d].length() == 0) || (PlantClass(d) != PC_LAND))
 			continue;
+		const int tier = TreeTier(d);
 		int bf = -1;
 		float bp = 0.f;
 		const array<int>@ bo = Catalog::gBuildsList[d];
@@ -130,12 +258,20 @@ void PlanPriceTick()
 				|| Catalog::gKamikaze[u])   // a crawling bomb's blast read as dps: the Tumbleweed scored 9.5x
 				continue;
 			const float p = PpPower(u);
+			if (tier >= 3) {
+				if (p > t3Pow) { t3Pow = p; t3Def = u; }
+				continue;
+			}
+			if ((tier == 2) && (Catalog::gLandRange[u] > gPpTurretR) && (gPpTurretR > 0.f) && (p > lrPow)) {
+				lrPow = p;
+				lrDef = u;
+			}
 			if (p > bp) {
 				bp = p;
 				bf = u;
 			}
 		}
-		if (bf < 0)
+		if ((tier >= 3) || (bf < 0))
 			continue;
 		bool dup = false;
 		for (uint i = 0; i < fighters.length() && !dup; ++i)
@@ -159,8 +295,8 @@ void PlanPriceTick()
 		if (reach) {
 			for (int T = 60; T <= int(H); T += 60) {
 				const float G = (G0 + I * float(T)) * k;
-				const float E = E0 + If * a * (float(T) + arr);
-				const float net = Air::TairGround(G, E, q, fEco, ourEco) - (1.f - a) * I * float(T) * gamma;
+				const float Ar = A0 + If * a * (float(T) + arr);
+				const float net = PpStrike(G, Ar, D, free, cov, q, ourEco, false) - (1.f - a) * I * float(T) * gamma;
 				const float rate = net / (float(T) + arr);
 				if (rate > bestRate) {
 					bestRate = rate;
@@ -176,7 +312,65 @@ void PlanPriceTick()
 			best = "RUSH:" + Catalog::Def(plants[i]).GetName();
 		}
 	}
-	// their answer: the AA they have added over the last two minutes (the follow-up a ground plan reads)
+	// LONG-RANGE T2: the army share into the best T2 fighter that outranges every turret seen; it shells the turrets
+	// without loss once their army is beaten
+	if (lrDef > 0) {
+		const float k = (powRef > 0.f) ? lrPow / powRef : 1.f;
+		const float v = PpStrike((G0 + I * a * H) * k, Ah, D, free, cov, q, ourEco, true) + air0;
+		line += " LRT2/" + Catalog::Def(lrDef).GetName() + "=" + int(v) + "(range " + int(Catalog::gLandRange[lrDef])
+			+ ">" + int(gPpTurretR) + " k=" + NnF(k, 2) + ")";
+		if (v > bestV) { bestV = v; best = "LRT2"; }
+	} else {
+		line += " LRT2=none";
+	}
+	// T3: a gantry first, then the rest of the army share into its best unit
+	{
+		int gd = -1;
+		const float gBill = PpSuperBill(SC_GANTRY, gd);
+		const bool have = SuperHave(SC_GANTRY) > 0;
+		if ((t3Def > 0) && ((gBill > 0.f) || have)) {
+			const float k = (powRef > 0.f) ? t3Pow / powRef : 1.f;
+			float spend = I * a * H - (have ? 0.f : gBill);
+			if (spend < 0.f)
+				spend = 0.f;
+			const float v = PpStrike(G0 + spend * k, Ah, D, free, cov, q, ourEco, false) + air0;
+			line += " T3/" + Catalog::Def(t3Def).GetName() + "=" + int(v) + "(gantry " + (have ? "stands" : ("" + int(gBill)))
+				+ " k=" + NnF(k, 2) + ")";
+			if (v > bestV) { bestV = v; best = "T3"; }
+		} else {
+			line += " T3=none";
+		}
+	}
+	// NUKE: a silo, then missiles from the army share; each lands on their richest economy cells, the antis covering
+	// a cell stopping apex_nuke_per_anti each (Brain::AntisCovering)
+	{
+		int sd = -1;
+		const float sBill = PpSuperBill(SC_SILO, sd);
+		const float mBill = NUKE_MISSILE_M + NUKE_MISSILE_E * EPriceFloor();
+		const bool have = SuperHave(SC_SILO) > 0;
+		if (((sBill > 0.f) || have) && (mBill > 0.f)) {
+			float budget = I * a * H - (have ? 0.f : sBill);
+			int n = (budget > 0.f) ? int(budget / mBill) : 0;
+			const int byClock = int(H / NUKE_STOCK_S) + 1;
+			if (n > byClock)
+				n = byClock;
+			const float perAnti = ai.GetTunable("apex_nuke_per_anti", TUNE_NUKE_PER_ANTI);
+			float prize = 0.f;
+			int left = n;
+			for (uint c = 0; (c < gPpClusterM.length()) && (left > 0); ++c) {
+				const int need = 1 + int(float(Brain::AntisCovering(gPpClusterP[c])) * perAnti);
+				if (need > left)
+					continue;
+				left -= need;
+				prize += gPpClusterM[c];
+			}
+			const float v = prize - float(n) * mBill - (have ? 0.f : sBill) + PpStrike(G0, Ah, D, free, cov, q, ourEco, false);
+			line += " NUKE=" + int(v) + "(missiles " + n + " prize " + int(prize) + ")";
+			if (v > bestV) { bestV = v; best = "NUKE"; }
+		} else {
+			line += " NUKE=none";
+		}
+	}
 	if ((gPpAA0At < 0) || (ai.frame - gPpAA0At >= 120 * SECOND)) {
 		gPpAAPrev = gPpAA0;
 		gPpAA0 = fAA;
@@ -185,8 +379,8 @@ void PlanPriceTick()
 	const float dAA = (gPpAAPrev >= 0.f) ? (fAA - gPpAAPrev) : 0.f;
 	AiLog(Factory::T() + "apex: plan-price t=" + me + " seats=" + seats + " best=" + best + " cur=" + NgName(gPlan)
 		+ " | " + line
-		+ " | foe army=" + int(fArmy) + " def=" + int(fDef) + " aa=" + int(fAA) + " ftr=" + int(fFtr)
-		+ " eco=" + int(fEco) + " inc~" + int(If) + " dAA2m=" + int(dAA)
+		+ " | foe army=" + int(A0) + " def=" + int(D) + " turretR=" + int(gPpTurretR) + " aa=" + int(fAA)
+		+ " ftr=" + int(fFtr) + " eco=" + int(fEco) + "(free " + int(free) + ") inc~" + int(If) + " dAA2m=" + int(dAA)
 		+ " | ours inc=" + int(I) + " gnd=" + int(G0) + " air=" + int(airM) + " eco=" + int(ourEco)
 		+ " q=" + NnF(q, 2) + " share=" + NnF(a, 2));
 	Perf::Add("plan.price", _t);
