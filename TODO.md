@@ -101,6 +101,13 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   runs have no outcome label -- only bomber runs are scored (`air run scored`) -- so the net never saw a wing die
   in AA. First: score gunship runs the same way (sent, home, metal killed, metal lost), then train the air head on
   those labels.
+- [ ] **Don't let them mass LRPCs** (his 10-23, of his Canis River win: "to defend against my LRPC count of like 17
+  you'd have needed a ton of shields... best to just not let me build so many of those"). Our four seats lost 3.86M
+  metal there, 2.19M to attackers they never saw (shells from out of sight) and 171k+62k to Berthas and Legion LRPCs
+  by name. As a price: an enemy LRPC is worth what it will destroy over its life, and one still being built costs
+  little to kill -- their LRPC frames and the first guns are among the best targets for bombers, nukes and raids.
+  Needs the look: losses from shells we cannot see point at where to scout (pain points), and a seen gun stays
+  remembered until seen dead.
 - [ ] **Air swarms a slow push** (his 10-23, of his Canis River win -- one ally slow-pushing under 17 LRPCs: "the
   thing for your air to do in that case would be to swarm his slow push, he would have been killed, but he was under
   jammer and did have AA units, still... all tightly packed, could kill it"). The strike planner's targets are
