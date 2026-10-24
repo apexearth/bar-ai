@@ -84,13 +84,12 @@ hesitation will be the downfall."* *"To fight against enemy AA we can throw chea
   seen"). Every air decision -- strike, gunship raid, raid answer -- prices the AA seen along the route and at the
   target (remembered, not only what is in sight now).
 - [ ] **Build our own LRPC mass** (his 10-24: "also work on our own lrpc massing"; he won Canis River with ~17). Ours
-  placed 4-8 a seat there and 0-1 a seat in his 10-24 game. Two limits, measured: EARLY the SuperBudget gate --
-  income x apex_super_afford_s against the bill (`super ... lrpc:corint bill=5552 budget=2865`), so a 50-60 m/s seat
-  never starts one; LATE a COUNT -- SuperTarget, guns wanted = targets in reach + 1 (`bill=5425 budget=83844
-  have=4/5`), so a rich seat stops at 4-5 with the money there. Also 6 of seat 4's gun tasks died as frames killed
-  under construction (`target-killed`). As a price, like the bombers past their count (apex_air_rich): the next gun
-  is worth what it destroys over its life in reach (LrpcGain), bought while that beats its cost; the budget becomes
-  the affordability term inside the price, not a gate.
+  placed 4-8 a seat there and 0-1 a seat in his 10-24 game. Measured (`apex: lrpc` lines): early the gun cannot pay
+  out of a 50-60 m/s income (bill 5,418 against a 2,800-4,382 budget) -- right. Rich, the count is NOT the limit
+  (SuperTarget skips SC_LRPC; `have=4/5` is display only): LrpcGain credits a gun ~32 m/s of their metal destroyed
+  whatever stands in reach (inReachM 8k -> 101k), so its value stays ~3.4 and loses the draw to economy (v up to
+  13). A kill is priced as the building's metal alone; the air prize (NaPrizeOf) also counts the output lost until
+  they rebuild. Price LRPC kills the same way -- one prize for a dead building, whoever kills it.
 - [ ] **Mass LRPC on chosen enemy areas** (his 10-23: "When we make LRPC its kinda like nukes, we should have them all
   focusing specific enemy areas which we want to defeat"). Long-range plasma cannons pick one target area together,
   like a nuke volley, instead of each gun shooting what it likes.
