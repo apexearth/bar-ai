@@ -1423,6 +1423,13 @@ static bool CCircuitUnit_HotRoadTo(CCircuitUnit* unit, const AIFloat3& site)
 
 // ...and another hand's refusal there: 11 armck walked one by one into the same refused road on Isthmus (10-23).
 // It holds while the refused road's hot square is over THIS hand's bar and within 600 of its own straight road.
+static void CCircuitUnit_SetScriptFree(CCircuitUnit* unit, bool free)
+{
+	if (unit != nullptr) {
+		unit->scriptFree = free;
+	}
+}
+
 static bool CCircuitUnit_HotRoadToTeam(CCircuitUnit* unit, const AIFloat3& site)
 {
 	if (CCircuitUnit_HotRoadTo(unit, site)) {
@@ -2837,6 +2844,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedWeapon() const", asMETHOD(CCircuitUnit, GetDamagedWeapon), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetDamagedFrame() const", asMETHOD(CCircuitUnit, GetDamagedFrame), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool HotRoadTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_HotRoadToTeam), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetScriptFree(bool)", asFUNCTION(CCircuitUnit_SetScriptFree), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool CmdAttackEnemy(int)", asFUNCTION(CCircuitUnit_CmdAttackEnemy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);

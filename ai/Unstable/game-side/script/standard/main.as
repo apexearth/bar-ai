@@ -382,6 +382,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	Market::LiftNoteDead(unit);
 	if (unit is null)
 		return;
+	Military::SpamNoteDeath(unit);
 	Market::ComUnitDead(unit);
 	Builder::ConSlotRelease(int(unit.id));
 	Requests::RingFrameGone(int(unit.id));

@@ -1581,10 +1581,70 @@ bool EcoBehind()
 	return gEcoBehind;
 }
 
+// THE SPAM LINE (his 10-24, the smart BARb he watched: "a factory set up to send units to the enemy base, and then
+// they just make the spam units out of that factory"). In the spam phase the seat's first T1 land plant makes only
+// its fastest fodder per metal; Military::SpamSend sends each one off. Past our T2 that plant is otherwise outgrown,
+// so this is its idle capacity; the scout cap does not bind it.
+int gSpamFacId = -1;
+int gSpamFacAt = -1;
+int gSpamDefLog = -1;
+CCircuitDef@ SpamLineDef(CCircuitUnit@ fac)
+{
+	// only once a T2 LAND plant makes the ground army: a seat whose T2 was an air plant gave its one land lab to spam
+	// and built no ground army from minute 15 to 45 (his watch game, 10-24)
+	if (!Military::SpamSendOn() || !Military::SpamPhase() || (TopOwnLandPlantTier() < 2)
+		|| (fac is null) || (fac.circuitDef is null))
+		return null;
+	if (ai.frame >= gSpamFacAt) {
+		gSpamFacAt = ai.frame + 10 * SECOND;
+		gSpamFacId = -1;
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f = Factory::gFacUnits[fi];
+			if ((f is null) || (f.circuitDef is null))
+				continue;
+			const int fd = int(f.circuitDef.id);
+			if ((PlantClass(fd) != PC_LAND)
+				|| ((Factory::userData[fd].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
+				continue;
+			if ((gSpamFacId < 0) || (int(f.id) < gSpamFacId))
+				gSpamFacId = int(f.id);
+		}
+	}
+	if (int(fac.id) != gSpamFacId)
+		return null;
+	const array<int>@ bo = Catalog::gBuildsList[int(fac.circuitDef.id)];
+	int best = -1;
+	float bestV = 0.f;
+	for (uint i = 0; i < bo.length(); ++i) {
+		const int d = bo[i];
+		if (!Catalog::ValidId(d) || !Catalog::gAvailable[d] || (Catalog::gDps[d] <= 0.f)
+			|| (Catalog::gCostM[d] <= 0.f) || !Military::IsFodder(Catalog::Def(d)))
+			continue;
+		const float v = Catalog::gSpeed[d] / Catalog::gCostM[d];
+		if (v > bestV) {
+			bestV = v;
+			best = d;
+		}
+	}
+	if (best < 0)
+		return null;
+	if (best != gSpamDefLog) {
+		gSpamDefLog = best;
+		AiLog(Factory::T() + "apex: spam-line t=" + ai.teamId + " " + fac.circuitDef.GetName() + " #" + int(fac.id)
+			+ " makes " + Catalog::Def(best).GetName());
+	}
+	return Catalog::Def(best);
+}
+
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
 		return null;
+	{
+		CCircuitDef@ sp = SpamLineDef(fac);
+		if (sp !is null)
+			return sp;
+	}
 	const double _tPre = Perf::T0();
 	WorthDiag();      // self-gated, once, and only when asked for
 	LineClassDiag();  // likewise: the class split, once the field is known

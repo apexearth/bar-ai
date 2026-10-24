@@ -375,6 +375,8 @@ public:
 	springai::AIFloat3 hotRoadEnd = springai::AIFloat3(-1.f, 0.f, -1.f);
 	springai::AIFloat3 hotRoadAt = springai::AIFloat3(-1.f, 0.f, -1.f);
 	float hotRoadBar = 0.f;
+	// apex: a unit the script commands itself under the stock army (spam sent at their base, SpamSend).
+	bool scriptFree = false;
 private:
 	float goalDistStart = -1.f;
 	float goalDistMin = -1.f;

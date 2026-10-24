@@ -2247,7 +2247,7 @@ bool CCircuitAI::IsStockCtlDef(const CCircuitDef* cdef) const
 
 bool CCircuitAI::IsStockCtl(const CCircuitUnit* unit) const
 {
-	return IsStockArmy() && (unit != nullptr) && IsStockCtlDef(unit->GetCircuitDef());
+	return IsStockArmy() && (unit != nullptr) && !unit->scriptFree && IsStockCtlDef(unit->GetCircuitDef());
 }
 
 void CCircuitAI::NoteStockLeak(const char* kind)

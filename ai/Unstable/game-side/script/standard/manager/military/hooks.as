@@ -175,6 +175,63 @@ void MarkSpearhead(const CCircuitDef@ cdef)
 	AiLog(Factory::T() + "apex: spearhead " + cdef.GetName());
 }
 
+// SPAM IS SENT, NOT COMMANDED (apex_spam_send; his 10-24, watching a smart BARb: "a factory set up to send units to
+// the enemy base... The units never ever get a new move order. Just sent off to be fodder"). Canis River 10-23: the
+// other side made 435 Fleas, 880 Goblins and 768 Grunts after minute 20; ours made ~290 Rovers, and every one joined
+// the stock army. In the spam phase a fodder unit gets one MOVE order at their nearest start area and is held in the
+// idle task after it -- which gives no orders -- so nothing re-tasks it. Its retreat is zeroed with the other fodder.
+// A fight order stopped at first contact: half died nearer our own start (4 games, 10-24); a move runs on and shoots.
+array<int> gSpamSentAt;
+int gSpamSent = 0;
+int gSpamLogAt = 0;
+bool SpamSendOn()
+{
+	return ai.GetTunable("apex_spam_send", TUNE_SPAM_SEND) > 0.f;
+}
+void SpamNoteDeath(CCircuitUnit@ unit)
+{
+	const int id = int(unit.id);
+	if ((id >= 0) && (id < int(gSpamSentAt.length())))
+		gSpamSentAt[uint(id)] = 0;
+}
+// 0 not spam, 1 sent now, 2 sent before (held)
+int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
+{
+	// while the T1 lab is still the ground army (no T2 land plant), its Pawns and Grunts are the army, not spam
+	if (!SpamSendOn() || !SpamPhase() || (Market::TopOwnLandPlantTier() < 2) || !IsFodder(cdef))
+		return 0;
+	const int id = int(unit.id);
+	if (id < 0)
+		return 0;
+	if (id >= int(gSpamSentAt.length()))
+		gSpamSentAt.resize(uint(id + 1024));
+	if (gSpamSentAt[uint(id)] > 0)
+		return 2;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	AIFloat3 to = ai.GetNearestEnemyBox(here);
+	if (!OnMap(to))
+		to = Front::FoeAnchor();
+	if (!OnMap(to))
+		return 0;
+	const float a = float(id % 360) * 0.0174533f;
+	const float j = float((id * 37) % 400);
+	const AIFloat3 to2 = to + AIFloat3(cos(a) * j, 0.f, sin(a) * j);
+	if (OnMap(to2))
+		to = to2;
+	NotePostureDef(cdef, true);
+	// Under the stock army a combat def's script orders are dropped (StockDropUnit): both first tests sent nothing.
+	unit.SetScriptFree(true);
+	unit.CmdMoveTo(to);
+	gSpamSentAt[uint(id)] = ai.frame + 1;
+	++gSpamSent;
+	if (ai.frame >= gSpamLogAt) {
+		gSpamLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: spam-send t=" + ai.teamId + " " + cdef.GetName() + " #" + id
+			+ " to=" + int(to.x) + "," + int(to.z) + " sent=" + gSpamSent);
+	}
+	return 1;
+}
+
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 {
 
@@ -186,6 +243,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 
 	if (SqClaim(unit))
 		return NoteElect("squad", null);
+	{
+		const int sp = (unit.circuitDef !is null) ? SpamSend(unit, unit.circuitDef) : 0;
+		if (sp > 0)
+			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
+	}
 	if (StockCtl(unit))
 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
 	const CCircuitDef@ cdef = unit.circuitDef;
