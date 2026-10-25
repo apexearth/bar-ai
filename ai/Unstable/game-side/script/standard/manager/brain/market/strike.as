@@ -129,6 +129,33 @@ bool StrikeHoldsDefence()
 	return true;
 }
 
+// FOCUSED PRODUCTION (his 10-24: "threat mods and focused productions are our big issues, being a jack of all trades
+// makes you an ace of none"). In PRODUCE: each lab its best-priced unit, not a value-weighted mix (apex_produce_focus);
+// no new constructor while three stand -- the ones we have keep building the economy (apex_produce_nocons).
+bool ProduceFocus()
+{
+	return (StrikePhase() == SK_BUILD) && (ai.GetTunable("apex_produce_focus", TUNE_PRODUCE_FOCUS) > 0.f);
+}
+int gSkConsAt = -1;
+int gSkCons = 0;
+bool ProduceHoldsCons()
+{
+	if ((StrikePhase() != SK_BUILD) || (ai.GetTunable("apex_produce_nocons", TUNE_PRODUCE_NOCONS) <= 0.f))
+		return false;
+	if (ai.frame - gSkConsAt >= 5 * SECOND) {
+		gSkConsAt = ai.frame;
+		gSkCons = 0;
+		const array<int>@ own = OwnedDefs();
+		for (uint i = 0; i < own.length(); ++i) {
+			const int d = own[i];
+			if (Catalog::ValidId(d) && Catalog::gMobile[d] && Catalog::gBuilder[d] && (uint(d) < gOwnCount.length())
+				&& !Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
+				gSkCons += gOwnCount[d];
+		}
+	}
+	return gSkCons >= 3;
+}
+
 // whether RUSH still raises the army share (PlanShareMult): not once the strike is out
 bool StrikeArmyRaise()
 {

@@ -422,6 +422,8 @@ local NAMES = {
 	"apex_strike_phases", -- strike.as: RUSH as build-up, strike, tech (0)
 	"apex_strike_mod", -- strike.as: attack threat modifier during the strike (0.3)
 	"apex_verbose", -- plannet.as: thinking in chat, local watch games only (0)
+	"apex_produce_focus", -- strike.as: one best unit per lab in PRODUCE (0)
+	"apex_produce_nocons", -- strike.as: no new constructors in PRODUCE (0)
 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
 	"apex_attack_mod", -- stockarmy.as: attack threat modifier at runtime (0 = config)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)

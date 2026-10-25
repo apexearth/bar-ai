@@ -1129,7 +1129,7 @@ bool LabBestOn()
 {
 	if (gLabBest < 0)
 		gLabBest = (ai.GetTunable("apex_lab_best", TUNE_LAB_BEST) > 0.f) ? 1 : 0;
-	return gLabBest > 0;
+	return (gLabBest > 0) || ProduceFocus();
 }
 
 CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
@@ -2186,6 +2186,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":conidle";
 				continue;
 			}
+		}
+		if (Catalog::gBuilder[d] && ProduceHoldsCons()) {
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName() + ":produce";
+			continue;
 		}
 		if (EcoOnly() && !Catalog::gBuilder[d] && !(LiftTurretsOn() && IsLiftDef(d)))
 			continue;   // the economy-only benchmark: hands only

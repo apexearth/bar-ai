@@ -1794,6 +1794,8 @@ const float TUNE_SCHED_ALL = 0.05f;   // [mod] strike.as schedule: attack threat
 const float TUNE_STRIKE_PHASES = 0.f;   // [toggle 0/1] strike.as: the RUSH plan as build-up (T2 held) -> strike together (aggression) -> T2 during it
 const float TUNE_STRIKE_MOD = 0.05f;   // [0.1-1] strike.as: the attack threat modifier while the strike is out (stock BARb 0.25-0.3)
 const float TUNE_VERBOSE = 0.f;   // [toggle 0/1] plannet.as Say: the team's thinking in chat -- HIS LOCAL WATCH GAMES ONLY (never on in a hosted game)
+const float TUNE_PRODUCE_FOCUS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE each lab builds its best-priced unit, not a mix
+const float TUNE_PRODUCE_NOCONS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE no new constructor while 3 stand
 const float TUNE_DYN_MOD = 0.f;   // [toggle 0/1] strike.as DynMod: the attack threat modifier follows the balance -- (theirs/ours)^2 when we outweigh them
 const float TUNE_ATTACK_MOD = 0.f;   // [0-2] stockarmy.as AttackModTick: BARb's attack threat modifier (0 = behaviour.json's 1.0; stock BARb 0.25-0.3)
 const float TUNE_DOOR_CLEAR = 1.f;   // [toggle 0/1] BuilderTask.cpp SitePredicate: no building in any friendly factory's doorway (ours or an ally's)
