@@ -203,7 +203,7 @@ void UpdateChunk(int c)
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::AatUpdate(); Perf::Add("up.aathreat", _t); }
 	} else if (c == 2) {
-		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Military::AttackModTick(); Perf::Add("up.withdraw", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Military::AttackModTick(); Military::SpamWatch(); Perf::Add("up.withdraw", _t); }
 		{ double _t = Perf::T0(); Military::UpdateComFight(); Perf::Add("up.comfight", _t); }
 		{ double _t = Perf::T0(); Military::UpdateSquads(); Perf::Add("up.squads", _t); }
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }

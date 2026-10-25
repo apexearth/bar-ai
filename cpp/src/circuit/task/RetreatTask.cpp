@@ -116,6 +116,7 @@ void CRetreatTask::AssignTo(CCircuitUnit* unit)
 void CRetreatTask::RemoveAssignee(CCircuitUnit* unit)
 {
 	healSpot.erase(unit);
+	retreatDest.erase(unit);
 	IUnitTask::RemoveAssignee(unit);
 	if (units.empty()) {
 		manager->DoneTask(this);
@@ -362,6 +363,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 	// combat death bucket, 39.4k metal / 371 units in one 20m game ("solo
 	// dudes walking into enemy groups"). High mod, no ceiling: the path bends
 	// hard around danger but can never fail to exist.
+	retreatDest[unit] = std::make_pair(endPos, range);
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			unit, circuit->GetThreatMap(),
 			startPos, endPos, range, nullptr,
@@ -628,8 +630,13 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 		haven = utils::is_valid(rally) ? rally : GetRearHaven(unit, haven);
 	}
 
-	const float maxDist = factoryMgr->GetAssistRange();
+	float maxDist = factoryMgr->GetAssistRange();
 	const AIFloat3& unitPos = unit->GetPos(frame);
+	auto dest = retreatDest.find(unit);
+	if ((repairer == nullptr) && (dest != retreatDest.end()) && utils::is_valid(dest->second.first)) {
+		haven = dest->second.first;
+		maxDist = std::max(dest->second.second, float(circuit->GetPathfinder()->GetSquareSize()));
+	}
 
 	// Cloak is switched on once, when the unit finishes (CircuitAI.cpp), and
 	// nothing there ever switches it off -- so re-decide it here too rather than
@@ -659,8 +666,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 
 	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
 		// TODO: push MoveAction into unit? to avoid enemy fire
+		// the whole walk, not one second: a 1 s order expired mid-walk, the unit idled and stopped, and came back here
+		const float walkS = unitPos.distance2D(haven) / std::max(cdef->GetSpeed(), 1.f);
+		const int timeout = frame + FRAMES_PER_SEC * std::max(1, int(walkS * 1.5f) + 1);
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(haven, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 1, CCircuitUnit::OrdSrc::RETREAT);
+			unit->CmdMoveTo(haven, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout, CCircuitUnit::OrdSrc::RETREAT);
 		)
 		// TODO: Add fail counter?
 	} else {

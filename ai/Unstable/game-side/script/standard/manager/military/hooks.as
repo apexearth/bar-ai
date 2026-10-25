@@ -194,6 +194,83 @@ void SpamNoteDeath(CCircuitUnit@ unit)
 	if ((id >= 0) && (id < int(gSpamSentAt.length())))
 		gSpamSentAt[uint(id)] = 0;
 }
+// THE SENT, WATCHED: a unit that covers under a quarter of its own speed over a third of apex_stuck_secs (the stuck
+// rule's own test) is stuck on a shore or done at a base with nothing left; it takes the next reachable base.
+array<int> gSpamWId;
+array<AIFloat3> gSpamWAt;
+array<int> gSpamWSince;
+array<int> gSpamWTry;
+uint gSpamWNext = 0;
+int gSpamResent = 0;
+void SpamWatchAdd(int id, const AIFloat3& in at)
+{
+	gSpamWId.insertLast(id);
+	gSpamWAt.insertLast(at);
+	gSpamWSince.insertLast(ai.frame);
+	gSpamWTry.insertLast(0);
+}
+// the destination for this unit, the k-th try: the first base it can reach within its own weapon's range
+bool SpamPick(CCircuitUnit@ unit, const AIFloat3& in here, int k, AIFloat3& out to)
+{
+	const int id = int(unit.id);
+	CCircuitDef@ d = (unit.circuitDef !is null) ? Catalog::Def(int(unit.circuitDef.id)) : null;
+	const float rng = (d !is null) && (Catalog::gLandRange[int(d.id)] > 0.f) ? Catalog::gLandRange[int(d.id)] : 100.f;
+	const int n = int(gSpamDest.length());
+	for (int t = 0; t < n; ++t) {
+		const AIFloat3 c = gSpamDest[uint((id * 7919 + k + t) % n)];
+		if (OnMap(c) && ai.CanDefReachAt(d, here, c, rng)) {
+			to = c;
+			const float a = float((id * 137 + k * 53) % 360) * 0.0174533f;
+			const float j = 60.f + float((id * 37 + k * 71) % 240);
+			const AIFloat3 c2 = c + AIFloat3(cos(a) * j, 0.f, sin(a) * j);
+			if (OnMap(c2) && ai.CanDefReachAt(d, here, c2, rng))
+				to = c2;
+			return true;
+		}
+	}
+	to = ai.GetNearestEnemyBox(here);
+	if (!OnMap(to))
+		to = Front::FoeAnchor();
+	return OnMap(to);
+}
+void SpamWatch()
+{
+	const uint n = gSpamWId.length();
+	if (n == 0)
+		return;
+	const int win = int(ai.GetTunable("apex_stuck_secs", TUNE_STUCK_SECS) / 3.f * float(SECOND));
+	// a tenth of the watched per call, one pass in ten calls
+	uint steps = n / 10 + 1;
+	while ((steps-- > 0) && (gSpamWId.length() > 0)) {
+		if (gSpamWNext >= gSpamWId.length())
+			gSpamWNext = 0;
+		const uint i = gSpamWNext;
+		CCircuitUnit@ u = ai.GetTeamUnit(gSpamWId[i]);
+		if ((u is null) || (u.circuitDef is null)) {
+			gSpamWId.removeAt(i);
+			gSpamWAt.removeAt(i);
+			gSpamWSince.removeAt(i);
+			gSpamWTry.removeAt(i);
+			continue;
+		}
+		++gSpamWNext;
+		if (ai.frame - gSpamWSince[i] < win)
+			continue;
+		const AIFloat3 p = u.GetPos(ai.frame);
+		const float need = 0.25f * Catalog::gSpeed[int(u.circuitDef.id)] * float(ai.frame - gSpamWSince[i]) / float(SECOND);
+		const bool moved = p.distance2D(gSpamWAt[i]) >= need;
+		gSpamWAt[i] = p;
+		gSpamWSince[i] = ai.frame;
+		if (moved)
+			continue;
+		SpamDestBuild(p);
+		AIFloat3 to;
+		if (!SpamPick(u, p, ++gSpamWTry[i], to))
+			continue;
+		u.CmdMoveTo(to);
+		++gSpamResent;
+	}
+}
 // WHERE SPAM GOES: one start box holds a whole team's bases (an 8v8's eight), so the nearest box sent every unit to
 // one point. The destinations are the enemy bases seen -- their buildings in 800-elmo cells, the 12 richest --
 // else a 3x3 grid over their start box; each unit takes one by its id and a point of its own within 300 of it,
@@ -278,27 +355,21 @@ int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 		return 2;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	SpamDestBuild(here);
-	AIFloat3 to = (gSpamDest.length() > 0) ? gSpamDest[uint((id * 7919) % int(gSpamDest.length()))]
-			: ai.GetNearestEnemyBox(here);
-	if (!OnMap(to))
-		to = Front::FoeAnchor();
-	if (!OnMap(to))
+	AIFloat3 to;
+	if (!SpamPick(unit, here, 0, to))
 		return 0;
-	const float a = float((id * 137) % 360) * 0.0174533f;
-	const float j = 60.f + float((id * 37) % 240);
-	const AIFloat3 to2 = to + AIFloat3(cos(a) * j, 0.f, sin(a) * j);
-	if (OnMap(to2))
-		to = to2;
 	NotePostureDef(cdef, true);
 	// Under the stock army a combat def's script orders are dropped (StockDropUnit): both first tests sent nothing.
 	unit.SetScriptFree(true);
 	unit.CmdMoveTo(to);
 	gSpamSentAt[uint(id)] = ai.frame + 1;
+	SpamWatchAdd(id, here);
 	++gSpamSent;
 	if (ai.frame >= gSpamLogAt) {
 		gSpamLogAt = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: spam-send t=" + ai.teamId + " " + cdef.GetName() + " #" + id
-			+ " to=" + int(to.x) + "," + int(to.z) + " sent=" + gSpamSent + " dests=" + gSpamDest.length()
+			+ " to=" + int(to.x) + "," + int(to.z) + " sent=" + gSpamSent + " resent=" + gSpamResent
+			+ " watched=" + gSpamWId.length() + " dests=" + gSpamDest.length()
 			+ (gSpamDestSeen ? " (seen bases)" : " (box grid)"));
 	}
 	return 1;
