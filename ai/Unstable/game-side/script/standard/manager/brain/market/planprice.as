@@ -11,8 +11,69 @@ namespace Market {
 
 const int PP_AT = 8000, PP_INC = 8100, PP_ARMY = 8200, PP_AIR = 8300, PP_ECO = 8400;
 const int PP_THEIRS = 8520, PP_THEIRS_AT = 8521, PP_IRATIO = 8522;   // the leader's sighting, for every seat
+const int PP_CHOICE = 8523;
+const int PP_FOEARMY = 8524, PP_FOEDEF = 8525;   // their mobile army as the threat mod reads it; their turrets   // the plan the pricer chose (apex_plan_from_price)
 int gPpNextAt = 0;
 int gPpSayAt = 0;
+// STEP 2: THE TEAM PLAYS WHAT IT PRICES BEST (apex_plan_from_price; his 10-24: "do our plans ever change? I'm only
+// ever seeing rush"). The leader adopts the best-priced plan once it beats the one played by a fifth of its size
+// (at least 1,000) on two readings running, a minute; every seat reads the choice from the board, so the switch is
+// whole and at once. The pricer's names onto the team plans: RUSH:<lab> -> RUSH, LRT2 -> ARTY, NUKE -> MISSILE.
+int gPpChoice = -1;
+int gPpPending = -1;
+int gPpPendN = 0;
+bool PlanFromPriceOn()
+{
+	return ai.GetTunable("apex_plan_from_price", TUNE_PLAN_FROM_PRICE) > 0.f;
+}
+int PpNgOf(const string &in n)
+{
+	if (n.findFirst("RUSH") == 0) return NG_RUSH;
+	if (n == "AIR") return NG_AIR;
+	if (n == "GREED") return NG_GREED;
+	if (n == "LRT2") return NG_ARTY;
+	if (n == "T3") return NG_T3;
+	if (n == "NUKE") return NG_MISSILE;
+	return NG_NORMAL;
+}
+float PpValueOfNg(int ng)
+{
+	float v = -1e12f;
+	for (uint i = 0; i < gPpSayN.length(); ++i) {
+		if ((PpNgOf(gPpSayN[i]) == ng) && (gPpSayV[i] > v))
+			v = gPpSayV[i];
+	}
+	return v;
+}
+void PpChoose(const string &in best, float bestV)
+{
+	if (!PlanFromPriceOn())
+		return;
+	const int ng = PpNgOf(best);
+	if (gPpChoice < 0) {
+		gPpChoice = ng;
+		Say("plan -> " + NgName(ng) + " (priced best, " + int(bestV) + ")");
+	} else if (ng != gPpChoice) {
+		const float cur = PpValueOfNg(gPpChoice);
+		const float margin = 0.2f * ((abs(cur) > 1000.f) ? abs(cur) : 1000.f);
+		if (bestV > cur + margin) {
+			gPpPendN = (gPpPending == ng) ? gPpPendN + 1 : 1;
+			gPpPending = ng;
+			if (gPpPendN >= 2) {
+				Say("plan " + NgName(gPpChoice) + " -> " + NgName(ng) + " (" + best + " " + int(bestV) + " vs " + int(cur) + ")");
+				AiLog(Factory::T() + "apex: plan-choice t=" + ai.teamId + " " + NgName(gPpChoice) + " -> " + NgName(ng)
+					+ " best=" + best + " v=" + int(bestV) + " cur=" + int(cur));
+				gPpChoice = ng;
+				gPpPendN = 0;
+			}
+		} else {
+			gPpPendN = 0;
+		}
+	} else {
+		gPpPendN = 0;
+	}
+	ai.SetTeamBoard(PP_CHOICE, float(gPpChoice));
+}
 array<string> gPpSayN;
 array<float> gPpSayV;
 void PpSayAdd(const string &in n, float v)
@@ -26,6 +87,7 @@ float gPpAAPrev = -1.f;
 
 // What we have seen of theirs, by place: turrets and the economy they cover.
 float gPpIf = 0.f;   // their income as last estimated
+float gPpArmyNow = 0.f;
 float gPpArmy = 0.f, gPpDef = 0.f, gPpEcoFree = 0.f, gPpEcoCov = 0.f, gPpTurretR = 0.f;
 array<float> gPpClusterM;   // their economy per 800-elmo cell, richest first
 array<AIFloat3> gPpClusterP;
@@ -58,9 +120,46 @@ float PpPower(int d)
 	return (dps > 0.f) && (hp > 0.f) ? sqrt(dps * hp) / Catalog::gCostM[d] : 0.f;
 }
 
+// what our tree reaches from what we own, walked through every builder and plant on the way
+array<bool> gPpTree;
+void PpTreeRefresh()
+{
+	gPpTree.resize(Catalog::gDefCount + 1);
+	for (uint k = 0; k < gPpTree.length(); ++k)
+		gPpTree[k] = false;
+	array<int> open;
+	const array<int>@ own = OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		const int d = own[i];
+		if (Catalog::ValidId(d) && !gPpTree[d]) {
+			gPpTree[d] = true;
+			open.insertLast(d);
+		}
+	}
+	while (open.length() > 0) {
+		const int d = open[open.length() - 1];
+		open.removeLast();
+		const array<int>@ bo = Catalog::gBuildsList[d];
+		for (uint i = 0; i < bo.length(); ++i) {
+			const int b = bo[i];
+			if (Catalog::ValidId(b) && Catalog::gAvailable[b] && !gPpTree[b]) {
+				gPpTree[b] = true;
+				open.insertLast(b);
+			}
+		}
+	}
+}
+bool PpInTree(int d)
+{
+	return (d > 0) && (d < int(gPpTree.length())) && gPpTree[d];
+}
+
 void PpFoeScan()
 {
 	gPpArmy = 0.f; gPpDef = 0.f; gPpEcoFree = 0.f; gPpEcoCov = 0.f; gPpTurretR = 0.f;
+	gPpArmyNow = 0.f;
+	// a unit last seen longer ago than one walk to them counts at walk/age: it has fought, died or moved since
+	const float fresh = StrikeEta() * SECOND;
 	gPpClusterM.resize(0);
 	gPpClusterP.resize(0);
 	array<AIFloat3> tp;
@@ -79,8 +178,11 @@ void PpFoeScan()
 		const float m = Catalog::gCostM[d];
 		const bool armed = (Catalog::gSurfDps[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f);
 		if (Catalog::gMobile[d]) {
-			if (armed && !Catalog::gFlyer[d] && !Catalog::gBuilder[d])
+			if (armed && !Catalog::gFlyer[d] && !Catalog::gBuilder[d]) {
 				gPpArmy += m;
+				const float age = float(ai.frame - aiEnemyMgr.GetEnemyUnitSeenAt(i));
+				gPpArmyNow += (age <= fresh) ? m : m * fresh / age;
+			}
 			continue;
 		}
 		if (armed && (Catalog::gSurfT[d] > 0.f)) {
@@ -171,7 +273,7 @@ float PpSuperBill(int sc, int &out def)
 	def = -1;
 	float best = -1.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::ValidId(d) || !Catalog::gAvailable[d] || Catalog::gMobile[d] || (SuperClassOf(d) != sc))
+		if (!Catalog::ValidId(d) || !PpInTree(d) || Catalog::gMobile[d] || (SuperClassOf(d) != sc))
 			continue;
 		const float b = SuperBill(d);
 		if ((best < 0.f) || (b < best)) {
@@ -225,6 +327,7 @@ void PlanPriceTick()
 	const AIFloat3 foe = Air::NaFoe();
 	Air::NaSnapEnemy(OnMap(foe) ? foe : Builder::gHomePos);
 	Air::TairFoeSplit();
+	PpTreeRefresh();
 	PpFoeScan();
 	const float fAA = Air::gTairFoeAAM, fFtr = Air::gTairFoeFtrM;
 	const float A0 = gPpArmy, D = gPpDef, free = gPpEcoFree, cov = gPpEcoCov;
@@ -240,6 +343,8 @@ void PlanPriceTick()
 		const float covShare = (fEco > 1.f) ? cov / fEco : 1.f;
 		ai.SetTeamBoard(PP_THEIRS, A0 + D * covShare);
 		ai.SetTeamBoard(PP_THEIRS_AT, float(ai.frame));
+		ai.SetTeamBoard(PP_FOEARMY, gPpArmyNow);
+		ai.SetTeamBoard(PP_FOEDEF, D);
 		ai.SetTeamBoard(PP_IRATIO, (I > 1.f) ? If / I : 1.f);
 	}
 	const float a = Brain::TargetShare(Brain::ARMY);
@@ -275,7 +380,7 @@ void PlanPriceTick()
 	int lrDef = -1, t3Def = -1;
 	float lrPow = 0.f, t3Pow = 0.f;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::ValidId(d) || !Catalog::gAvailable[d] || Catalog::gMobile[d]
+		if (!Catalog::ValidId(d) || !PpInTree(d) || Catalog::gMobile[d]
 			|| (Catalog::gBuildsList[d].length() == 0) || (PlantClass(d) != PC_LAND))
 			continue;
 		const int tier = TreeTier(d);
@@ -406,6 +511,7 @@ void PlanPriceTick()
 			line += " NUKE=none";
 		}
 	}
+	PpChoose(best, bestV);
 	if ((gPpAA0At < 0) || (ai.frame - gPpAA0At >= 120 * SECOND)) {
 		gPpAAPrev = gPpAA0;
 		gPpAA0 = fAA;

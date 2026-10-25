@@ -192,7 +192,7 @@ float DynMod(int ph, float ours)
 	// ours at their estimated income
 	if ((ours <= 1.f) || (float(ai.frame) - ai.GetTeamBoard(PP_THEIRS_AT, -1e9f) > float(60 * SECOND)))
 		return 1.f;
-	float theirs = ai.GetTeamBoard(PP_THEIRS, 0.f);
+	float theirs = ai.GetTeamBoard(PP_FOEARMY, 0.f);
 	const float mirror = 0.3f * ours * ai.GetTeamBoard(PP_IRATIO, 1.f);
 	if (theirs < mirror)
 		theirs = mirror;
@@ -365,7 +365,7 @@ void StrikeTick()
 			}
 			// the balance turned (his 10-24: "We stay at plan RUSH and phase STRIKE even while threat mod is 2 because we
 			// have almost 1/10th our enemy's army"): their army as seen, never under the mirror, over 1.5x ours
-			float theirsNow = ai.GetTeamBoard(PP_THEIRS, 0.f);
+			float theirsNow = ai.GetTeamBoard(PP_FOEARMY, 0.f);
 			const float mirrorNow = 0.3f * army * ai.GetTeamBoard(PP_IRATIO, 1.f);
 			if (theirsNow < mirrorNow)
 				theirsNow = mirrorNow;

@@ -71,7 +71,8 @@ void ThinkTick()
 	string s = "ai_think:" + ai.teamId + "\n";
 	s += "plan " + NgName(gPlan) + " | phase " + SK_NAMES[uint(ph)] + " | threat mod "
 		+ Market::NnF(aiMilitaryMgr.GetAttackModMin(), 2) + "\n";
-	s += "team army " + int(army) + " | theirs seen " + int(ai.GetTeamBoard(PP_THEIRS, 0.f)) + " | eta "
+	s += "team army " + int(army) + " | their army " + int(ai.GetTeamBoard(PP_FOEARMY, 0.f)) + " (turrets "
+		+ int(ai.GetTeamBoard(PP_FOEDEF, 0.f)) + ") | eta "
 		+ int(StrikeEta()) + "s | income " + int(Eco::MInc()) + " m/s | army share "
 		+ Market::NnF(Brain::TargetShare(Brain::ARMY), 2) + "\n";
 	if (gThinkPlans != "")
@@ -156,6 +157,16 @@ void PlanNetDecide()
 		return;
 	gPlanNextAt = ai.frame + 30 * SECOND;
 	NnExploreRoll();
+	// step 2: every seat plays the pricer leader's choice (planprice.as PpChoose), no lease
+	if (PlanFromPriceOn() && (ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE) < 0.f)) {
+		const int c = int(ai.GetTeamBoard(PP_CHOICE, -1.f));
+		if (c >= 0) {
+			if (c != gPlan)
+				AiLog("apex: plan t=" + ai.teamId + " priced " + NgName(c));
+			gPlan = c;
+			return;
+		}
+	}
 	// A strategy explorer, or a bot set to try strategies (a lobby option for
 	// his multiplayer games), draws ONE strategy and leads its team with it;
 	// a second explorer on the team follows the first.

@@ -20,8 +20,11 @@ bool StockArmy()
 // multiplier an attack task counts the enemy at when it chooses a target. behaviour.json counts them at face value
 // (1.0); stock BARb ships 0.25-0.3. 0 leaves the config's; a plan may set its own for a strike (AttackModSet).
 float gAttackModNow = -1.f;
+float gAttackModCfg = -1.f;   // behaviour.json's, read before anything set it
 void AttackModSet(float m)
 {
+	if (gAttackModCfg < 0.f)
+		gAttackModCfg = aiMilitaryMgr.GetAttackModMin();
 	// a change under 5% is not worth re-tuning every running task (DynMod moves every 5 s)
 	if ((m <= 0.f) || ((gAttackModNow > 0.f) && (abs(m - gAttackModNow) < 0.05f * gAttackModNow)))
 		return;
@@ -35,7 +38,9 @@ void AttackModTick()
 {
 	if ((Market::StrikePhase() != Market::SK_NONE) || (Market::DynModOn() > 0.f))
 		return;   // the strike phases or the balance set it (strike.as)
-	AttackModSet(ai.GetTunable("apex_attack_mod", TUNE_ATTACK_MOD));
+	// 0 means the config's -- restored, not ignored: a strike's mod otherwise stood for the rest of the game
+	const float m = ai.GetTunable("apex_attack_mod", TUNE_ATTACK_MOD);
+	AttackModSet((m > 0.f) ? m : gAttackModCfg);
 }
 
 // apex_our_air: under the stock army, aircraft stay ours (C++ CCircuitAI::IsOurAir)
