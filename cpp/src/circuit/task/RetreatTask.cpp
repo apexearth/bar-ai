@@ -115,6 +115,7 @@ void CRetreatTask::AssignTo(CCircuitUnit* unit)
 
 void CRetreatTask::RemoveAssignee(CCircuitUnit* unit)
 {
+	healSpot.erase(unit);
 	IUnitTask::RemoveAssignee(unit);
 	if (units.empty()) {
 		manager->DoneTask(this);
@@ -180,15 +181,33 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		// apex_stock_heal (his 10-24: "our units retreat too far to get back home for repairs... we can just pull back a
 		// little and be repaired by rezbots or con turrets"): a stock unit takes the script's medic station -- published
 		// only while a rez bot of ours stands at it -- when it is nearer than the haven, ours, and walkable.
-		if (stock && (circuit->GetTunable("apex_stock_heal", 1.f) > 0.f) && utils::is_valid(circuit->GetHealPos())) {
-			AIFloat3 spot = circuit->GetHealPos();
-			CTerrainManager::CorrectPosition(spot);
+		// The spot a unit chose is KEPT: the station moves with the front every 5 s, and re-aimed every other update a
+		// wounded unit walked a step, stopped, walked a step (his 10-24 watch). Re-chosen only when the kept spot stops
+		// being ours or nearer than the haven.
+		if (stock && (circuit->GetTunable("apex_stock_heal", 1.f) > 0.f)
+			&& (utils::is_valid(circuit->GetHealPos()) || (healSpot.find(unit) != healSpot.end())))
+		{
 			const AIFloat3& here = unit->GetPos(frame);
-			const bool use = (here.SqDistance2D(spot) < here.SqDistance2D(endPos))
-				&& (circuit->GetInflMap()->GetInfluenceAt(spot) > circuit->GetInflMap()->GetEnemyInflAt(spot))
-				&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot);
-			if (use) {
-				endPos = spot;
+			auto ok = [&](const AIFloat3& s) {
+				return (here.SqDistance2D(s) < here.SqDistance2D(endPos))
+					&& (circuit->GetInflMap()->GetInfluenceAt(s) > circuit->GetInflMap()->GetEnemyInflAt(s))
+					&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), s);
+			};
+			bool use = false;
+			auto kept = healSpot.find(unit);
+			if ((kept != healSpot.end()) && ok(kept->second)) {
+				endPos = kept->second;
+				use = true;
+			} else if (utils::is_valid(circuit->GetHealPos())) {
+				AIFloat3 spot = circuit->GetHealPos();
+				CTerrainManager::CorrectPosition(spot);
+				use = ok(spot);
+				if (use) {
+					endPos = spot;
+					healSpot[unit] = spot;
+				} else {
+					healSpot.erase(unit);
+				}
 			}
 			struct Tally { int heal = 0, home = 0, logAt = 0; };
 			static std::map<const CCircuitAI*, Tally> tally;

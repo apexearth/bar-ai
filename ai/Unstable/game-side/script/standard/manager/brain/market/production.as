@@ -2199,8 +2199,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// ...except the fleet where our land is cut off: every yard builds
 		// fighting ships from the start (his ruling 2026-09-28). A recon scout is
 		// eyes, not army: without it the behind-test reads a jammed base as small.
+		// ...and a fighter their seen air is beating us for is the answer to it, not army above its share (his 10-24:
+		// "we don't seem to react to enemy air with enough fighters"; his v0.4.0 game, minute 12: want 1,324 of fighters
+		// against their raid, 0 owned, armfig refused "metalpath" while the T2 lab went up).
 		if (metalPath && !Catalog::gBuilder[d] && !Air::IsLookDef(d)
-			&& !((Catalog::gFloater[d] || Catalog::gSub[d]) && LandLocked())) {
+			&& !((Catalog::gFloater[d] || Catalog::gSub[d]) && LandLocked())
+			&& !(Air::IsFighterDef(d) && (Air::EveryFighterGainFor(d, 180.f) > 0.f))) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
 			continue;

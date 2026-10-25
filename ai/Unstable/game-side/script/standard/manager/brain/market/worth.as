@@ -292,7 +292,12 @@ float OwnTierMul(int d)
 	// unifying the bars is what puts it there.
 	if (Catalog::gCostM[d] < Military::FODDER_COST())
 		return 1.f;
-	const int above = TopOwnPlantTier() - DefTier(d);
+	// Against the top plant of the unit's own kind: an advanced AIR plant replaces no ground unit, and faded by it the
+	// T1 ground line starved while it was still the only ground army (his 10-24: "If our T2 choice is an air lab, we
+	// end up having no ground army because we stop making T1 units").
+	const int top = Catalog::gFlyer[d] ? TopOwnPlantTier()
+			: ((Catalog::gFloater[d] || Catalog::gSub[d]) ? TopOwnWaterPlantTier() : TopOwnLandPlantTier());
+	const int above = top - DefTier(d);
 	if (above <= 0)
 		return 1.f;
 	return 1.f / (1.f + k * float(above));
