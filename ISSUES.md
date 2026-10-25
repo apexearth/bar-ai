@@ -96,6 +96,8 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 74 | Spam sent at their bases, never re-ordered, spread over the bases (10-24) | apex_spam_send (eee008b5, 7f1e3082), released v0.4.01 | `spam-send`, `spam-line`, elect `spam.sent`/`spam.held`; his hosted games: fodder made late and where it dies | FIRES -- he watched: "the spam works though"; 2v2: 82% of late fodder died nearer their start |
 | 75 | No turret piles at the base core (10-24 must-fix) | apex_mex_cover_site (7f1e3082), released v0.4.01 | `interior-gun exempt`; densest 300-elmo cell per seat in his games | FIRES -- same-seed 8v8: densest cell 10 -> 4; the knot rule's piles are left (ISSUES) |
 | 76 | Wounded pull back to the medic station, not home (10-24) | apex_stock_heal (f131f483, b3acea17), released v0.4.02 | `apex: retreat-dest stock heal= home=` | FIRES -- his watch game: 35-46% of retreat decisions took the station; deaths in retreat not yet measured |
+| 77 | Retreats walk the whole way, no one-second stop-start (10-24, "it retreats but keeps stopping itself... like a cancel of the action") | RetreatTask OnUnitIdle: the destination Start() chose, whole-walk timeout (df48fd80), released v0.4.03 | `apex: order-src ... retreat=sent/rep` (was 263/259 in his game) | WORKS (his eye) -- his 10-24 watch game: "i didn't see any retreat issues"; the repeat count not yet re-measured |
+| 78 | Spam does not stall on shores; a stalled unit gets a fresh move (10-24, FolsomDamR) | SpamPick (reachable within weapon range), SpamWatch (df48fd80), released v0.4.03 | `apex: spam-send ... resent= watched=` | UNTESTED -- no FolsomDamR game since |
 
 ## TURRET PILES: THE KNOT RULE, LEFT FOR NOW (2026-10-24)
 
