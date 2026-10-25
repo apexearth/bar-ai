@@ -274,6 +274,7 @@ public:
 	float RecordRatioMix(CCircuitDef* cdef);
 	float GetAllyPowerAt(const springai::AIFloat3& pos, float radius);
 	float GetAllyArmyMAt(const springai::AIFloat3& pos, float radius);  // allied armed ground metal
+	float GetAllyArmyM(bool air) const;  // every ally's mobile armed non-builder metal (not ours), ground or air
 	float GetAllySquadPowerAt(const springai::AIFloat3& pos, float radius);  // same, in squad power
 	// The same matrix read from their side: their B against our A.
 	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;

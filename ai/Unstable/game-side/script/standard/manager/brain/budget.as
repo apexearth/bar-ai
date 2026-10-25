@@ -75,11 +75,8 @@ float RawTarget(Cat c)
 	// Losing the army faster than it kills raises the ARMY row itself; the
 	// normalisation below then pays for it out of every other category. See
 	// Military::LossArmyMult -- pressure-scaled and bounded, never a switch.
-	if (c == ARMY) {
-		w *= Military::LossArmyMult();
-		if (ai.GetTunable("apex_er_army_row", TUNE_ER_ARMY_ROW) > 0.f)
-			w *= Market::EcoReturnArmyMul();
-	}
+	if (c == ARMY)
+		w *= Military::LossArmyMult() * Market::EcoReturnArmyMul();
 	return w;
 }
 

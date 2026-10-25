@@ -202,7 +202,8 @@ end
 -- A replay that stops without a game-over (the recorder left) still has a
 -- winner by BAR's rule: the one ally team with a commander standing.
 function widget:Shutdown()
-	if resultSeen then
+	-- outside a replay Initialize removed us at load: no replay ended, and the line read as every match's result
+	if resultSeen or not Spring.IsReplay() then
 		return
 	end
 	local alive = {}

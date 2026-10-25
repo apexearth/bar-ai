@@ -188,14 +188,10 @@ float DynModOn()
 }
 float DynMod(int ph, float ours)
 {
-	// the leader's sighting (PlanPriceTick), stale after a minute; unseen is not none: never under 30% of a mirror of
-	// ours at their estimated income
-	if ((ours <= 1.f) || (float(ai.frame) - ai.GetTeamBoard(PP_THEIRS_AT, -1e9f) > float(60 * SECOND)))
+	// both sides from the one estimator (armyest.as); before anything of theirs is known, no reading
+	const float theirs = Military::FoeArmyM();
+	if ((ours <= 1.f) || (theirs <= 1.f))
 		return 1.f;
-	float theirs = ai.GetTeamBoard(PP_FOEARMY, 0.f);
-	const float mirror = 0.3f * ours * ai.GetTeamBoard(PP_IRATIO, 1.f);
-	if (theirs < mirror)
-		theirs = mirror;
 	const float lo = ai.GetTunable("apex_strike_mod", TUNE_STRIKE_MOD);
 	// his 10-24: "unless we feel inferior, we probably shouldn't have a threat mod above half"
 	const float r = theirs / ours;
@@ -218,7 +214,7 @@ void StrikeTick()
 	if (ai.frame < gSkNextAt)
 		return;
 	gSkNextAt = ai.frame + 5 * SECOND;
-	const float army = Military::TeamArmyCost();
+	const float army = Military::OurArmyM();
 	if (!StrikeOn() || (gPlan != NG_RUSH)) {
 		if (StrikeOn() && (int(ai.GetTeamBoard(BOARD_SK_PHASE, float(SK_NONE))) != SK_NONE))
 			ai.SetTeamBoard(BOARD_SK_PHASE, float(SK_NONE));
@@ -365,11 +361,7 @@ void StrikeTick()
 			}
 			// the balance turned (his 10-24: "We stay at plan RUSH and phase STRIKE even while threat mod is 2 because we
 			// have almost 1/10th our enemy's army"): their army as seen, never under the mirror, over 1.5x ours
-			float theirsNow = ai.GetTeamBoard(PP_FOEARMY, 0.f);
-			const float mirrorNow = 0.3f * army * ai.GetTeamBoard(PP_IRATIO, 1.f);
-			if (theirsNow < mirrorNow)
-				theirsNow = mirrorNow;
-			const bool outweighed = theirsNow > 1.5f * army;
+			const bool outweighed = Military::FoeArmyM() > 1.5f * army;
 			if (outweighed)
 				stalled = false;
 			if (stalled || outweighed || (army < 0.4f * launch)) {

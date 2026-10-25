@@ -10,9 +10,8 @@ namespace Market {
 // to them, at the strike time that pays best. Logged as `apex: plan-price`; nothing reads it yet.
 
 const int PP_AT = 8000, PP_INC = 8100, PP_ARMY = 8200, PP_AIR = 8300, PP_ECO = 8400;
-const int PP_THEIRS = 8520, PP_THEIRS_AT = 8521, PP_IRATIO = 8522;   // the leader's sighting, for every seat
+const int PP_IRATIO = 8522;   // their income over ours as the leader read it
 const int PP_CHOICE = 8523;
-const int PP_FOEARMY = 8524, PP_FOEDEF = 8525;   // their mobile army as the threat mod reads it; their turrets   // the plan the pricer chose (apex_plan_from_price)
 int gPpNextAt = 0;
 int gPpSayAt = 0;
 // STEP 2: THE TEAM PLAYS WHAT IT PRICES BEST (apex_plan_from_price; his 10-24: "do our plans ever change? I'm only
@@ -87,7 +86,6 @@ float gPpAAPrev = -1.f;
 
 // What we have seen of theirs, by place: turrets and the economy they cover.
 float gPpIf = 0.f;   // their income as last estimated
-float gPpArmyNow = 0.f;
 float gPpArmy = 0.f, gPpDef = 0.f, gPpEcoFree = 0.f, gPpEcoCov = 0.f, gPpTurretR = 0.f;
 array<float> gPpClusterM;   // their economy per 800-elmo cell, richest first
 array<AIFloat3> gPpClusterP;
@@ -157,9 +155,6 @@ bool PpInTree(int d)
 void PpFoeScan()
 {
 	gPpArmy = 0.f; gPpDef = 0.f; gPpEcoFree = 0.f; gPpEcoCov = 0.f; gPpTurretR = 0.f;
-	gPpArmyNow = 0.f;
-	// a unit last seen longer ago than one walk to them counts at walk/age: it has fought, died or moved since
-	const float fresh = StrikeEta() * SECOND;
 	gPpClusterM.resize(0);
 	gPpClusterP.resize(0);
 	array<AIFloat3> tp;
@@ -178,11 +173,8 @@ void PpFoeScan()
 		const float m = Catalog::gCostM[d];
 		const bool armed = (Catalog::gSurfDps[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f);
 		if (Catalog::gMobile[d]) {
-			if (armed && !Catalog::gFlyer[d] && !Catalog::gBuilder[d]) {
+			if (armed && !Catalog::gFlyer[d] && !Catalog::gBuilder[d])
 				gPpArmy += m;
-				const float age = float(ai.frame - aiEnemyMgr.GetEnemyUnitSeenAt(i));
-				gPpArmyNow += (age <= fresh) ? m : m * fresh / age;
-			}
 			continue;
 		}
 		if (armed && (Catalog::gSurfT[d] > 0.f)) {
@@ -339,14 +331,7 @@ void PlanPriceTick()
 		If = I * k;
 	}
 	gPpIf = If;
-	{
-		const float covShare = (fEco > 1.f) ? cov / fEco : 1.f;
-		ai.SetTeamBoard(PP_THEIRS, A0 + D * covShare);
-		ai.SetTeamBoard(PP_THEIRS_AT, float(ai.frame));
-		ai.SetTeamBoard(PP_FOEARMY, gPpArmyNow);
-		ai.SetTeamBoard(PP_FOEDEF, D);
-		ai.SetTeamBoard(PP_IRATIO, (I > 1.f) ? If / I : 1.f);
-	}
+	ai.SetTeamBoard(PP_IRATIO, (I > 1.f) ? If / I : 1.f);
 	const float a = Brain::TargetShare(Brain::ARMY);
 	const float H = float(NG_HOLD_S);
 	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);

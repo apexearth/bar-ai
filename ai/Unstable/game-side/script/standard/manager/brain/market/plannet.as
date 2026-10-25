@@ -67,12 +67,11 @@ void ThinkTick()
 		return;
 	gThinkAt = ai.frame + 3 * SECOND;
 	const int ph = StrikePhase();
-	const float army = Military::TeamArmyCost();
+	const float army = Military::OurArmyM();
 	string s = "ai_think:" + ai.teamId + "\n";
 	s += "plan " + NgName(gPlan) + " | phase " + SK_NAMES[uint(ph)] + " | threat mod "
 		+ Market::NnF(aiMilitaryMgr.GetAttackModMin(), 2) + "\n";
-	s += "team army " + int(army) + " | their army " + int(ai.GetTeamBoard(PP_FOEARMY, 0.f)) + " (turrets "
-		+ int(ai.GetTeamBoard(PP_FOEDEF, 0.f)) + ") | eta "
+	s += "our ground army " + int(army) + " | theirs believed " + int(Military::FoeArmyM()) + " | eta "
 		+ int(StrikeEta()) + "s | income " + int(Eco::MInc()) + " m/s | army share "
 		+ Market::NnF(Brain::TargetShare(Brain::ARMY), 2) + "\n";
 	if (gThinkPlans != "")

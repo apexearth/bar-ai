@@ -11,6 +11,7 @@
 #include "military/basedefence.as"  // approach threat, porcupines, line jammers
 #include "military/danger.as"       // their army against how soon it reaches our base
 #include "military/foemem.as"       // their army remembered out of sight, by unit
+#include "military/armyest.as"      // one army count for both sides (ours + allies, their believed)
 #include "military/stance.as"       // the enemy's stance; budget answer + scout demand
 #include "military/looks.as"        // wanted looks: what a decision would pay to see, and the scouts sent for it
 #include "military/jamsight.as"     // apex_jam_sight: the force we suspect where radar goes dark, and what seeing it is worth

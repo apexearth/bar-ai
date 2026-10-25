@@ -35,6 +35,7 @@ float gFmMemS = 0.f, gFmMemM = 0.f;            // out of sight, certainty-weight
 float gFmLostS = 0.f, gFmLostM = 0.f;          // out of sight, the uncertain rest
 float gFmMemEtaS = -1.f;                       // strength-weighted, out of sight
 float gFmBlipM = 0.f;                          // a blip's metal: the mean known armed unit
+float gFmBuilderM = 0.f;                       // the builders' share of live + mem + lost (commanders)
 float gFmMemCert = 0.f;
 float gFmNearLive = -1.f;
 int gFmNLos = 0, gFmNRadar = 0, gFmNGhost = 0, gFmNGone = 0, gFmNBlip = 0;
@@ -212,7 +213,7 @@ void FmPublish()
 	array<float> mem(DG_BINS + 1, 0.f);
 	array<float> hpW(FM_HP_N, 0.f);
 	for (uint q = 0; q < 4; ++q) { gFmLiveD[q] = 0.f; gFmMemD[q] = 0.f; }
-	float liveS = 0.f, liveM = 0.f, memS = 0.f, memM = 0.f, lostS = 0.f, lostM = 0.f;
+	float liveS = 0.f, liveM = 0.f, memS = 0.f, memM = 0.f, lostS = 0.f, lostM = 0.f, bldM = 0.f;
 	float etaW = 0.f, certW = 0.f, knS = 0.f, knM = 0.f;
 	int knN = 0, nLos = 0, nRad = 0, nGh = 0, nGone = 0, nBlip = 0;
 	float near = -1.f;
@@ -315,7 +316,10 @@ void FmPublish()
 		}
 		if ((spd <= 1.f) || (str <= 0.f))
 			continue;
+		const bool bld = (d > 0) && Catalog::gBuilder[d];
 		if (gFmLive[s]) {
+			if (bld)
+				bldM += m;
 			float gap = DgRim(gFmPos[s]) - rng;
 			if (gap < 0.f)
 				gap = 0.f;
@@ -351,6 +355,8 @@ void FmPublish()
 		mem[DgBin(eta)] += str * cert;
 		memS += str * cert;
 		memM += m * cert;
+		if (bld)
+			bldM += m * cert;
 		etaW += eta * str * cert;
 		certW += cert * str;
 		if (baseD > 0.f) {
@@ -365,6 +371,8 @@ void FmPublish()
 			mem[DgBin(bg / spd)] += lost;
 			lostS += lost;
 			lostM += m * (1.f - cert);
+			if (bld)
+				bldM += m * (1.f - cert);
 		}
 	}
 	for (int b = 1; b <= DG_BINS; ++b) {
@@ -373,6 +381,7 @@ void FmPublish()
 	}
 	gFmLiveBins = live;
 	gFmMemBins = mem;
+	gFmBuilderM = bldM;
 	gFmHpW = hpW;
 	gFmLiveS = liveS; gFmLiveM = liveM;
 	gFmMemS = memS; gFmMemM = memM;

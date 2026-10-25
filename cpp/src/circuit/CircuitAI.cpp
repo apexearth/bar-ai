@@ -2747,6 +2747,25 @@ float CCircuitAI::GetAllyArmyMAt(const AIFloat3& pos, float radius)
 	return sum;
 }
 
+float CCircuitAI::GetAllyArmyM(bool air) const
+{
+	float sum = 0.f;
+	for (auto& kv : GetFriendlyUnits()) {
+		CAllyUnit* u = kv.second;
+		if ((u == nullptr) || (teamUnits.find(kv.first) != teamUnits.end())) {
+			continue;
+		}
+		CCircuitDef* cdef = u->GetCircuitDef();
+		if ((cdef == nullptr) || !cdef->IsMobile() || !cdef->IsAttacker() || cdef->IsBuilder()
+			|| (cdef->IsAbleToFly() != air))
+		{
+			continue;
+		}
+		sum += cdef->GetCostM();
+	}
+	return sum;
+}
+
 float CCircuitAI::GetAllySquadPowerAt(const AIFloat3& pos, float radius)
 {
 	GetAllyPowerAt(pos, 0.f);   // refreshes the per-frame list

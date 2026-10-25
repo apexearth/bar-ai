@@ -529,7 +529,12 @@ def parse_stats(text: str) -> list[dict] | None:
 
 
 def parse_infolog(text: str, result: MatchResult) -> MatchResult:
-    m = RESULT_RE.search(text)
+    # The LAST real result, not the first line: a widget that removes itself at load (barai_replay_export outside a
+    # replay, 10-24) printed "reason=replayend frame=0" before the game began, and every match since read as no
+    # winner at frame 0 while the gameover line came later.
+    found = list(RESULT_RE.finditer(text))
+    real = [x for x in found if not (x.group(1) == "replayend" and int(x.group(2)) == 0)]
+    m = (real or found or [None])[-1]
     if m:
         result.reason = m.group(1)
         result.game_frames = int(m.group(2))

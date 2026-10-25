@@ -464,7 +464,7 @@ local function teamSnapshot(teamID)
 	local r = {
 		units = 0, builders = 0, passive = 0, passiveBusy = 0, -- ownUnitCounts; passive = BAR low build priority
 		conT1 = 0, conT2 = 0, conMetal = 0, -- builderCounts (commanders excluded)
-		army = 0, armyCheap = 0,            -- armyValue (mobile, armed, non-builder)
+		army = 0, armyCheap = 0, armyAir = 0, -- armyValue (mobile, armed, non-builder); armyAir = the flying share of both
 		facs = 0, facOrders = 0,            -- factoryQueueDepth
 		armed = 0, targeted = 0,            -- CmdSetTarget landing rate
 	}
@@ -492,6 +492,7 @@ local function teamSnapshot(teamID)
 				end
 			elseif mobile and #ud.weapons > 0 then
 				local c = ud.metalCost or 0
+				if ud.canFly then r.armyAir = r.armyAir + c end
 				if c >= SPAM_COST then r.army = r.army + c
 				else r.armyCheap = r.armyCheap + c end
 			end
@@ -754,6 +755,7 @@ local function dump(reason, onlyTeam, atFrame)
 			local snap = teamSnapshot(teamID)
 			parts[#parts + 1] = string.format("armyReal=%.0f", snap.army)
 			parts[#parts + 1] = string.format("armyCheap=%.0f", snap.armyCheap)
+			parts[#parts + 1] = string.format("armyAir=%.0f", snap.armyAir)
 
 			parts[#parts + 1] = string.format("conT1=%d", snap.conT1)
 			parts[#parts + 1] = string.format("conT2=%d", snap.conT2)
