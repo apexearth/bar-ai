@@ -98,6 +98,7 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 76 | Wounded pull back to the medic station, not home (10-24) | apex_stock_heal (f131f483, b3acea17), released v0.4.02 | `apex: retreat-dest stock heal= home=` | FIRES -- his watch game: 35-46% of retreat decisions took the station; deaths in retreat not yet measured |
 | 77 | Retreats walk the whole way, no one-second stop-start (10-24, "it retreats but keeps stopping itself... like a cancel of the action") | RetreatTask OnUnitIdle: the destination Start() chose, whole-walk timeout (df48fd80), released v0.4.03 | `apex: order-src ... retreat=sent/rep` (was 263/259 in his game) | WORKS (his eye) -- his 10-24 watch game: "i didn't see any retreat issues"; the repeat count not yet re-measured |
 | 78 | Spam does not stall on shores; a stalled unit gets a fresh move (10-24, FolsomDamR) | SpamPick (reachable within weapon range), SpamWatch (df48fd80), released v0.4.03 | `apex: spam-send ... resent= watched=` | UNTESTED -- no FolsomDamR game since |
+| 79 | Army spending not cut when we are behind (10-24 his watch game: army share 0.06 at 0.77 of their army; the review) | eco return's q off, TRIAL er_q from v0.4.04 (7409b65d) | `apex: trial name=er_q arm=`; trial_report.py | TRIAL RUNNING -- overnight 10-25 q off 27-15 vs on 22-19 (48 games each vs v0.4.02); second round n4c/n4q running |
 
 ## TURRET PILES: THE KNOT RULE, LEFT FOR NOW (2026-10-24)
 
