@@ -421,6 +421,7 @@ local NAMES = {
 	"apex_sched_all",
 	"apex_strike_phases", -- strike.as: RUSH as build-up, strike, tech (0)
 	"apex_strike_mod", -- strike.as: attack threat modifier during the strike (0.3)
+	"apex_plan_price", -- planprice.as: the plan pricer runs (1)
 	"apex_verbose", -- plannet.as: thinking in chat, local watch games only (0)
 	"apex_produce_focus", -- strike.as: one best unit per lab in PRODUCE (0)
 	"apex_produce_nocons", -- strike.as: no new constructors in PRODUCE (0)

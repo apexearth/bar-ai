@@ -1793,6 +1793,7 @@ const float TUNE_SCHED_HOLD_MOD = 2.f;   // [mod] strike.as schedule: attack thr
 const float TUNE_SCHED_ALL = 0.05f;   // [mod] strike.as schedule: attack threat modifier all-in (the engine divides by it)
 const float TUNE_STRIKE_PHASES = 0.f;   // [toggle 0/1] strike.as: the RUSH plan as build-up (T2 held) -> strike together (aggression) -> T2 during it
 const float TUNE_STRIKE_MOD = 0.05f;   // [0.1-1] strike.as: the attack threat modifier while the strike is out (stock BARb 0.25-0.3)
+const float TUNE_PLAN_PRICE = 1.f;   // [toggle 0/1] planprice.as: the plan pricer runs (a bisect switch: it calls into the air model)
 const float TUNE_VERBOSE = 0.f;   // [toggle 0/1] plannet.as Say: the team's thinking in chat -- HIS LOCAL WATCH GAMES ONLY (never on in a hosted game)
 const float TUNE_PRODUCE_FOCUS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE each lab builds its best-priced unit, not a mix
 const float TUNE_PRODUCE_NOCONS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE no new constructor while 3 stand

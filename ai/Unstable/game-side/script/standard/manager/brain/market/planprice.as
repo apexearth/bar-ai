@@ -184,7 +184,9 @@ float PpSuperBill(int sc, int &out def)
 
 void PlanPriceTick()
 {
-	if (ai.frame < gPpNextAt)
+	// the bisect switch: is the log-only pricer moving the live air state? (his 10-24: "we seem to do worse *every
+	// game*" -- the control without the play lost to v0.4.02 too)
+	if ((ai.frame < gPpNextAt) || (ai.GetTunable("apex_plan_price", TUNE_PLAN_PRICE) <= 0.f))
 		return;
 	gPpNextAt = ai.frame + 30 * SECOND;
 	const int me = ai.teamId;
@@ -214,6 +216,12 @@ void PlanPriceTick()
 		airM += ai.GetTeamBoard(PP_AIR + t, 0.f);
 		ourEco += ai.GetTeamBoard(PP_ECO + t, 0.f);
 	}
+	// THE PRICER MUST NOT TOUCH THE LIVE AIR STATE: its sortie resets the run floors (gNaObsDmg/gNaObsLost) and its
+	// snapshot and candidate list are the per-frame caches the real air decision reads. Measured: pricer off vs on,
+	// same 8 seeds vs v0.4.02 at +50 -- trade 1.13 vs 0.76, better in 6 of 8. Saved here, restored and invalidated
+	// below.
+	const float savedObsDmg = Air::gNaObsDmg;
+	const float savedObsLost = Air::gNaObsLost;
 	const AIFloat3 foe = Air::NaFoe();
 	Air::NaSnapEnemy(OnMap(foe) ? foe : Builder::gHomePos);
 	Air::TairFoeSplit();
@@ -426,6 +434,10 @@ void PlanPriceTick()
 		}
 		gThinkPlans = s + " | theirs army " + int(A0) + " turrets " + int(D) + " AA " + int(fAA) + " | ours " + int(G0);
 	}
+	Air::gNaObsDmg = savedObsDmg;
+	Air::gNaObsLost = savedObsLost;
+	Air::gNaSnapAt = -1;
+	Air::gNaCsAt = -1;
 	Perf::Add("plan.price", _t);
 }
 
