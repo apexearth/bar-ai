@@ -681,6 +681,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	}
 	if (etaSave > demand)
 		demand = etaSave;
+	demand *= StrikeTechMul();   // the RUSH build-up waits on T2 until the strike is out (strike.as)
 	if (ai.frame >= gTechDiagAt) {
 		gTechDiagAt = ai.frame + 120 * SECOND;
 		AiLog("apex: tech-diag team=" + ai.teamId + " upD=" + demand

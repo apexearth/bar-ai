@@ -10,12 +10,22 @@ namespace Market {
 // to them, at the strike time that pays best. Logged as `apex: plan-price`; nothing reads it yet.
 
 const int PP_AT = 8000, PP_INC = 8100, PP_ARMY = 8200, PP_AIR = 8300, PP_ECO = 8400;
+const int PP_THEIRS = 8520, PP_THEIRS_AT = 8521, PP_IRATIO = 8522;   // the leader's sighting, for every seat
 int gPpNextAt = 0;
+int gPpSayAt = 0;
+array<string> gPpSayN;
+array<float> gPpSayV;
+void PpSayAdd(const string &in n, float v)
+{
+	gPpSayN.insertLast(n);
+	gPpSayV.insertLast(v);
+}
 float gPpAA0 = -1.f;
 int gPpAA0At = -1;
 float gPpAAPrev = -1.f;
 
 // What we have seen of theirs, by place: turrets and the economy they cover.
+float gPpIf = 0.f;   // their income as last estimated
 float gPpArmy = 0.f, gPpDef = 0.f, gPpEcoFree = 0.f, gPpEcoCov = 0.f, gPpTurretR = 0.f;
 array<float> gPpClusterM;   // their economy per 800-elmo cell, richest first
 array<AIFloat3> gPpClusterP;
@@ -217,6 +227,13 @@ void PlanPriceTick()
 		k = (k < 0.5f) ? 0.5f : ((k > 2.f) ? 2.f : k);
 		If = I * k;
 	}
+	gPpIf = If;
+	{
+		const float covShare = (fEco > 1.f) ? cov / fEco : 1.f;
+		ai.SetTeamBoard(PP_THEIRS, A0 + D * covShare);
+		ai.SetTeamBoard(PP_THEIRS_AT, float(ai.frame));
+		ai.SetTeamBoard(PP_IRATIO, (I > 1.f) ? If / I : 1.f);
+	}
 	const float a = Brain::TargetShare(Brain::ARMY);
 	const float H = float(NG_HOLD_S);
 	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
@@ -234,6 +251,11 @@ void PlanPriceTick()
 	const float gFight = PpStrike(G0 + I * 0.5f * a * H, Ah, D, free, cov, q, ourEco, false);
 	const float vGreed = I * 0.5f * a * H * gamma + ((gFight < 0.f) ? gFight : 0.f) + air0;
 	string line = "NORMAL=" + int(vNorm) + " AIR=" + int(vAir) + "(airS=" + int(airS) + ") GREED=" + int(vGreed);
+	gPpSayN.resize(0);
+	gPpSayV.resize(0);
+	PpSayAdd("NORMAL", vNorm);
+	PpSayAdd("AIR", vAir);
+	PpSayAdd("GREED", vGreed);
 	string best = "NORMAL";
 	float bestV = vNorm;
 	if (vAir > bestV) { bestV = vAir; best = "AIR"; }
@@ -307,6 +329,8 @@ void PlanPriceTick()
 		const float v = reach ? bestRate * H : 0.f;
 		line += " RUSH:" + Catalog::Def(plants[i]).GetName() + "/" + Catalog::Def(u).GetName() + "="
 			+ (reach ? ("" + int(v) + "(T=" + bestT + " k=" + NnF(k, 2) + " walk=" + int(arr) + ")") : "unreachable");
+		if (reach)
+			PpSayAdd("RUSH:" + Catalog::Def(plants[i]).GetName(), v);
 		if (reach && (v > bestV)) {
 			bestV = v;
 			best = "RUSH:" + Catalog::Def(plants[i]).GetName();
@@ -319,6 +343,7 @@ void PlanPriceTick()
 		const float v = PpStrike((G0 + I * a * H) * k, Ah, D, free, cov, q, ourEco, true) + air0;
 		line += " LRT2/" + Catalog::Def(lrDef).GetName() + "=" + int(v) + "(range " + int(Catalog::gLandRange[lrDef])
 			+ ">" + int(gPpTurretR) + " k=" + NnF(k, 2) + ")";
+		PpSayAdd("LRT2", v);
 		if (v > bestV) { bestV = v; best = "LRT2"; }
 	} else {
 		line += " LRT2=none";
@@ -336,6 +361,7 @@ void PlanPriceTick()
 			const float v = PpStrike(G0 + spend * k, Ah, D, free, cov, q, ourEco, false) + air0;
 			line += " T3/" + Catalog::Def(t3Def).GetName() + "=" + int(v) + "(gantry " + (have ? "stands" : ("" + int(gBill)))
 				+ " k=" + NnF(k, 2) + ")";
+			PpSayAdd("T3", v);
 			if (v > bestV) { bestV = v; best = "T3"; }
 		} else {
 			line += " T3=none";
@@ -366,6 +392,7 @@ void PlanPriceTick()
 			}
 			const float v = prize - float(n) * mBill - (have ? 0.f : sBill) + PpStrike(G0, Ah, D, free, cov, q, ourEco, false);
 			line += " NUKE=" + int(v) + "(missiles " + n + " prize " + int(prize) + ")";
+			PpSayAdd("NUKE", v);
 			if (v > bestV) { bestV = v; best = "NUKE"; }
 		} else {
 			line += " NUKE=none";
@@ -383,6 +410,23 @@ void PlanPriceTick()
 		+ " ftr=" + int(fFtr) + " eco=" + int(fEco) + "(free " + int(free) + ") inc~" + int(If) + " dAA2m=" + int(dAA)
 		+ " | ours inc=" + int(I) + " gnd=" + int(G0) + " air=" + int(airM) + " eco=" + int(ourEco)
 		+ " q=" + NnF(q, 2) + " share=" + NnF(a, 2));
+	if (SayOn() && (ai.frame >= gPpSayAt)) {
+		gPpSayAt = ai.frame + 60 * SECOND;
+		string s = "plans (playing " + NgName(gPlan) + "):";
+		array<bool> used(gPpSayN.length(), false);
+		for (int k = 0; k < 4; ++k) {
+			int b = -1;
+			for (uint i = 0; i < gPpSayN.length(); ++i) {
+				if (!used[i] && ((b < 0) || (gPpSayV[i] > gPpSayV[uint(b)])))
+					b = int(i);
+			}
+			if (b < 0)
+				break;
+			used[uint(b)] = true;
+			s += " " + gPpSayN[uint(b)] + " " + int(gPpSayV[uint(b)]);
+		}
+		Say(s + " | theirs army " + int(A0) + " turrets " + int(D) + " AA " + int(fAA) + " | ours " + int(G0));
+	}
 	Perf::Add("plan.price", _t);
 }
 

@@ -38,6 +38,20 @@ bool PlanPushes()
 	return (gPlan != NG_NORMAL) && !PlanGreedy() && (gPlan != NG_TURTLE);
 }
 
+// SAY: the team's thinking in chat, only with apex_verbose (his local watch games; never in a hosted game).
+int gSayOn = -1;
+bool SayOn()
+{
+	if (gSayOn < 0)
+		gSayOn = (ai.GetTunable("apex_verbose", TUNE_VERBOSE) > 0.f) ? 1 : 0;
+	return gSayOn > 0;
+}
+void Say(const string &in msg)
+{
+	if (SayOn())
+		ai.SendChat("[t" + ai.teamId + "] " + msg);
+}
+
 bool PlanGreedy()
 {
 	return (gPlan == NG_GREED) || (gPlan == NG_GREED_DEEP);
@@ -59,7 +73,7 @@ float PlanArmyMult()
 float PlanShareMult(int c)
 {
 	if ((gPlan == NG_RUSH) && (c == 0))
-		return NG_MUL;
+		return StrikeArmyRaise() ? NG_MUL : 1.f;
 	if ((gPlan == NG_TURTLE) && ((c == 1) || (c == 2)))
 		return NG_MUL;
 	if (PlanGreedy() && (c == 3))
@@ -101,6 +115,8 @@ void PlanSet(int plan, const string why)
 	PlanBoardWrite(false);
 	if (was != plan)
 		AiLog("apex: plan t=" + ai.teamId + " sets " + NgName(plan) + " (" + why + ")");
+	if (was != plan)
+		Say("plan -> " + NgName(plan) + " (" + why + ")");
 }
 
 void PlanNetDecide()

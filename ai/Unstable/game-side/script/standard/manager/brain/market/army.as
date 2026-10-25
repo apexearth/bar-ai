@@ -2249,7 +2249,16 @@ float ArmyTarget()
 	// 2026-10-05, replacing 09-21) -- halved, the lab stood idle and we lost ground.
 	const float fullD = ArmyTargetFull();
 	const float floorD = ArmyFloor(fullD);
-	return ((floorD > fullD) ? floorD : fullD) * PlanArmyMult();
+	float t = ((floorD > fullD) ? floorD : fullD) * PlanArmyMult();
+	// THE RUSH BUILD-UP NEVER REACHES ITS ARMY (his 10-24 watch: "we don't truly go big on making army"): the gap stays a
+	// full fill of the army's share of income, so the labs keep producing until the strike (strike.as ends the phase).
+	if (StrikeBuilding()) {
+		const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+		const float open = ArmyValue() + Brain::TargetShare(Brain::ARMY) * Eco::MInc() * ((fillS > 1.f) ? fillS : 180.f);
+		if (open > t)
+			t = open;
+	}
+	return t;
 }
 
 // The defensive army a sheltered seat holds before it jumps to the T2 lab

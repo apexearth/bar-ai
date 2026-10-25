@@ -2841,7 +2841,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// expansion head over 1 the next mex came first every time, and raiders took the last one (10-23, Comet: 15
 	// spots raided from minute 2.7, the first tower at 4.8, none inside cover of a raided spot).
 	if (!aaPanic && !superPush && !convertPush && !coverPush && (!mexOnList || MexBasicOn())
-		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
+		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f) && !StrikeHoldsDefence()
 		&& PlantFramed())
 	{
 		const float floorWave = MexCoverFloorM()

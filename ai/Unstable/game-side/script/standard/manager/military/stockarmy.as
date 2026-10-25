@@ -22,14 +22,19 @@ bool StockArmy()
 float gAttackModNow = -1.f;
 void AttackModSet(float m)
 {
-	if ((m <= 0.f) || (m == gAttackModNow))
+	// a change under 5% is not worth re-tuning every running task (DynMod moves every 5 s)
+	if ((m <= 0.f) || ((gAttackModNow > 0.f) && (abs(m - gAttackModNow) < 0.05f * gAttackModNow)))
 		return;
+	if ((gAttackModNow <= 0.f) || (abs(m - gAttackModNow) > 0.25f * gAttackModNow))
+		Market::Say("threat mod " + Market::NnF(m, 2) + ((m < 1.f) ? " (pressing)" : ((m > 1.f) ? " (holding)" : "")));
 	gAttackModNow = m;
 	aiMilitaryMgr.SetAttackMod(m, m);
 	AiLog(Factory::T() + "apex: attack-mod t=" + ai.teamId + " " + Market::NnF(m, 2));
 }
 void AttackModTick()
 {
+	if ((Market::StrikePhase() != Market::SK_NONE) || (Market::DynModOn() > 0.f))
+		return;   // the strike phases or the balance set it (strike.as)
 	AttackModSet(ai.GetTunable("apex_attack_mod", TUNE_ATTACK_MOD));
 }
 

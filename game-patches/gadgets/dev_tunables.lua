@@ -414,6 +414,15 @@ local NAMES = {
 	"apex_spam_send", -- hooks.as: late fodder sent once at their base, never re-ordered (1)
 	"apex_mex_cover_site", -- execute.as: no interior gun waived for a mex it does not cover (1)
 	"apex_stock_heal", -- RetreatTask.cpp: stock wounded to a manned medic station (1)
+	"apex_strike_schedule", -- strike.as: his timed play (0)
+	"apex_sched_hold_min",
+	"apex_sched_go_min",
+	"apex_sched_hold_mod",
+	"apex_sched_all",
+	"apex_strike_phases", -- strike.as: RUSH as build-up, strike, tech (0)
+	"apex_strike_mod", -- strike.as: attack threat modifier during the strike (0.3)
+	"apex_verbose", -- plannet.as: thinking in chat, local watch games only (0)
+	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
 	"apex_attack_mod", -- stockarmy.as: attack threat modifier at runtime (0 = config)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)

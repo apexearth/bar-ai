@@ -2959,4 +2959,20 @@ CDefenceData::SDefPoint* CMilitaryManager::FindClosestDefPoint(int cluster, cons
 	return closestPoint;
 }
 
+
+// apex: the attack threat modifier at runtime, applied to the attack and raid tasks already running too (their margin
+// was fixed at creation: an attack task's is 0.8 / mod, a raid's 0.75 / mod), so a plan's switch takes effect at once.
+void CMilitaryManager::SetAttackMod(float lo, float hi)
+{
+	attackMod.min = lo;
+	attackMod.len = (hi > lo) ? (hi - lo) : 0.f;
+	const float m = (lo > 0.01f) ? lo : 0.01f;
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
+		t->SetPowerMod(0.8f / m);
+	}
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::RAID)) {
+		t->SetPowerMod(0.75f / m);
+	}
+}
+
 } // namespace circuit

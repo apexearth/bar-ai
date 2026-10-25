@@ -984,6 +984,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			continue;
 		if (slotFull && (sc != SC_GANTRY))
 			continue;
+		if ((sc == SC_GANTRY) && StrikeBuilding())
+			continue;   // a tier-up waits for the strike (strike.as)
 		// ...and no big gun or heavy turret either: they are the military
 		// ("makes no military, focusing on economy"). The anti-nuke stays,
 		// priced on the enemy's silos as before -- and the SILO comes in with
@@ -1261,7 +1263,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	// Priced here as what it is, a strategic line the economy can carry, on
 	// the same affordability shape as the rest of this market.
 	{
-		CCircuitDef@ ap = slotFull ? null : Air::IntelPlantToBuild();
+		CCircuitDef@ ap = (slotFull || StrikeBuilding()) ? null : Air::IntelPlantToBuild();
 		// An ADVANCED air plant waits its turn behind any advanced plant
 		// already in flight -- see AdvPlantInFlight above (Purple's
 		// simultaneous T2 vehicle + T2 air, "a huge 'no no'").

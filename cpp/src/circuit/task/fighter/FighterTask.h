@@ -50,6 +50,7 @@ public:
 	const springai::AIFloat3& GetPosition() const { return position; }
 
 	float GetAttackPower() const { return attackPower; }
+	void SetPowerMod(float m) { powerMod = m; }  // apex: SetAttackMod retunes running tasks
 	CEnemyInfo* GetTarget() const { return target; }
 	void ClearTarget() { target = nullptr; }  // Only for ~CEnemyUnit
 

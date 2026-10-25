@@ -1711,6 +1711,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				continue;
 		}
 		const int dClass = PlantClass(d);
+		if (StrikeHoldsPlant(d))
+			continue;   // his 10-24: no air lab in a rush; "stop making factories and just build army from what you have"
 		const bool evAir = evOn && (dClass == PC_AIR);
 		if (waterOnly && !evAir && ((dClass != PC_WATER) || !navalEx))
 			continue;

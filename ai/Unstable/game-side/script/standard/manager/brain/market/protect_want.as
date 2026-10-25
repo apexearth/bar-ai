@@ -270,6 +270,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	const double _tPw = Perf::T0();
 	if (Gate(GATE_ASSETS, gAssetsM < 1.f))
 		return w;
+	if ((half == HALF_GROUND) && StrikeHoldsDefence())
+		return w;
 	// DEFENCE MUST NOT WAIT ON A NANO. This used to require gFarmSet, which
 	// only flips when the first nano TURRET finishes -- measured at frame
 	// 5718, so no LLT, AA, radar or shield could even be proposed for the

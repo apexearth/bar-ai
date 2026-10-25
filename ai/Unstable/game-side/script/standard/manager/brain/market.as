@@ -42,6 +42,7 @@
 #include "market/armynet.as"        // tier-mix and anti-air heads
 #include "market/plannet.as"        // the team plan net; allies build one gantry together
 #include "market/planprice.as"      // every team plan priced and logged (step 1: acts on nothing)
+#include "market/strike.as"         // the RUSH plan as build-up, strike together, tech during the strike
 #include "market/joinnet.as"        // join a same-def site already rising, or open a new one
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
 #include "market/rush.as"           // their army racing a big investment of ours: floor and tech price
