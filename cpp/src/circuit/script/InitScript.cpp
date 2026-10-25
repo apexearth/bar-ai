@@ -1223,6 +1223,14 @@ static void CCircuitUnit_CmdBuildQueuedAt(CCircuitUnit* unit, CCircuitDef* build
 // message uses. For role announcements a spectator can actually see
 // (apexearth could not tell which player held the eco/tech role from
 // watching; the infolog line is invisible in-game).
+// apex: a message to the unsynced LuaRules (RecvSkirmishAIMessage) -- the dev_ai_thoughts panel reads it
+static void CCircuitAI_SendToLua(CCircuitAI* circuit, const std::string& msg)
+{
+	if (circuit->GetLua() != nullptr) {
+		circuit->GetLua()->CallRules(msg.c_str(), msg.size());
+	}
+}
+
 static void CCircuitAI_SendChat(CCircuitAI* circuit, const std::string& msg)
 {
 	circuit->GetGame()->SendTextMessage(msg.c_str(), 0);
@@ -2653,6 +2661,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void GiveUnits(const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_GiveUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SendResources(float, float, int)", asFUNCTION(CCircuitAI_SendResources), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SendChat(const string& in)", asFUNCTION(CCircuitAI_SendChat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void SendToLua(const string& in)", asFUNCTION(CCircuitAI_SendToLua), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamMetalFill(int) const", asFUNCTION(CCircuitAI_GetTeamMetalFill), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamMetalIncome(int) const", asFUNCTION(CCircuitAI_GetTeamMetalIncome), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// In-process team coordination, replacing the synced-gadget rules params.

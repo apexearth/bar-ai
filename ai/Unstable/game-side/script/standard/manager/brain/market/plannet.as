@@ -38,7 +38,9 @@ bool PlanPushes()
 	return (gPlan != NG_NORMAL) && !PlanGreedy() && (gPlan != NG_TURTLE);
 }
 
-// SAY: the team's thinking in chat, only with apex_verbose (his local watch games; never in a hosted game).
+// SAY / THINK: what this seat is thinking, on his screen through dev_ai_thoughts.lua, only with apex_verbose (his
+// local watch games; never in a hosted game -- his ruling: no plan announced in chat). Every 3 s the seat sends its
+// state and its last events as "ai_think:<team>" lines to the unsynced LuaRules (ai.SendToLua).
 int gSayOn = -1;
 bool SayOn()
 {
@@ -46,10 +48,39 @@ bool SayOn()
 		gSayOn = (ai.GetTunable("apex_verbose", TUNE_VERBOSE) > 0.f) ? 1 : 0;
 	return gSayOn > 0;
 }
+array<string> gSayEv;
+string gThinkPlans = "";
+int gThinkAt = 0;
+int gThinkSent = 0;
 void Say(const string &in msg)
 {
-	if (SayOn())
-		ai.SendChat("[t" + ai.teamId + "] " + msg);
+	if (!SayOn())
+		return;
+	gSayEv.insertLast("[" + Market::NnF(float(ai.frame) / 1800.f, 1) + "m] " + msg);
+	if (gSayEv.length() > 8)
+		gSayEv.removeAt(0);
+	gThinkAt = 0;   // an event is shown at once
+}
+void ThinkTick()
+{
+	if (!SayOn() || (ai.frame < gThinkAt))
+		return;
+	gThinkAt = ai.frame + 3 * SECOND;
+	const int ph = StrikePhase();
+	const float army = Military::TeamArmyCost();
+	string s = "ai_think:" + ai.teamId + "\n";
+	s += "plan " + NgName(gPlan) + " | phase " + SK_NAMES[uint(ph)] + " | threat mod "
+		+ Market::NnF(aiMilitaryMgr.GetAttackModMin(), 2) + "\n";
+	s += "team army " + int(army) + " | theirs seen " + int(ai.GetTeamBoard(PP_THEIRS, 0.f)) + " | eta "
+		+ int(StrikeEta()) + "s | income " + int(Eco::MInc()) + " m/s | army share "
+		+ Market::NnF(Brain::TargetShare(Brain::ARMY), 2) + "\n";
+	if (gThinkPlans != "")
+		s += gThinkPlans + "\n";
+	for (uint i = 0; i < gSayEv.length(); ++i)
+		s += gSayEv[i] + "\n";
+	if (gThinkSent++ == 0)
+		AiLog("apex: think-send t=" + ai.teamId + " first panel, " + s.length() + " chars");
+	ai.SendToLua(s);
 }
 
 bool PlanGreedy()

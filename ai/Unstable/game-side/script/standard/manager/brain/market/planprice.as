@@ -410,9 +410,8 @@ void PlanPriceTick()
 		+ " ftr=" + int(fFtr) + " eco=" + int(fEco) + "(free " + int(free) + ") inc~" + int(If) + " dAA2m=" + int(dAA)
 		+ " | ours inc=" + int(I) + " gnd=" + int(G0) + " air=" + int(airM) + " eco=" + int(ourEco)
 		+ " q=" + NnF(q, 2) + " share=" + NnF(a, 2));
-	if (SayOn() && (ai.frame >= gPpSayAt)) {
-		gPpSayAt = ai.frame + 60 * SECOND;
-		string s = "plans (playing " + NgName(gPlan) + "):";
+	if (SayOn()) {
+		string s = "plans:";
 		array<bool> used(gPpSayN.length(), false);
 		for (int k = 0; k < 4; ++k) {
 			int b = -1;
@@ -425,7 +424,7 @@ void PlanPriceTick()
 			used[uint(b)] = true;
 			s += " " + gPpSayN[uint(b)] + " " + int(gPpSayV[uint(b)]);
 		}
-		Say(s + " | theirs army " + int(A0) + " turrets " + int(D) + " AA " + int(fAA) + " | ours " + int(G0));
+		gThinkPlans = s + " | theirs army " + int(A0) + " turrets " + int(D) + " AA " + int(fAA) + " | ours " + int(G0);
 	}
 	Perf::Add("plan.price", _t);
 }
