@@ -85,8 +85,12 @@ int StrikePhase()
 {
 	if (!StrikeOn() || (gPlan != NG_RUSH))
 		return SK_NONE;
-	if (ScheduleOn())
-		return (float(ai.frame) / 1800.f < ai.GetTunable("apex_sched_go_min", TUNE_SCHED_GO_MIN)) ? SK_BUILD : SK_STRIKE;
+	if (ScheduleOn()) {
+		const float minute = float(ai.frame) / 1800.f;
+		if (minute < ai.GetTunable("apex_sched_hold_min", TUNE_SCHED_HOLD_MIN))
+			return SK_OPEN;
+		return (minute < ai.GetTunable("apex_sched_go_min", TUNE_SCHED_GO_MIN)) ? SK_BUILD : SK_STRIKE;
+	}
 	return int(ai.GetTeamBoard(BOARD_SK_PHASE, float(SK_OPEN)));
 }
 
@@ -102,12 +106,23 @@ float StrikeTechMul()
 	return StrikeBuilding() ? 0.f : 1.f;
 }
 
+// a land plant of ours stands or is coming
+bool TopOwnLandPlantTierHas()
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && (f.circuitDef !is null) && (PlantClass(int(f.circuitDef.id)) == PC_LAND))
+			return true;
+	}
+	return false;
+}
+
 // whether a plant may be proposed: none in PRODUCE; in OPEN, same tier only and no air plant
 bool StrikeHoldsPlant(int d)
 {
 	const int ph = StrikePhase();
 	if (ph == SK_BUILD)
-		return true;
+		return TopOwnLandPlantTierHas();   // never the first land plant: a schedule arm built none and lost 0-8
 	if (ph != SK_OPEN)
 		return false;
 	return (PlantClass(d) == PC_AIR) || (PlantTier(d) > TopOwnPlantTier());
@@ -122,8 +137,6 @@ int gSkDefHeld = 0;
 bool StrikeHoldsDefence()
 {
 	if (StrikePhase() != SK_BUILD)
-		return false;
-	if (ScheduleOn() && (float(ai.frame) / 1800.f < ai.GetTunable("apex_sched_hold_min", TUNE_SCHED_HOLD_MIN)))
 		return false;
 	++gSkDefHeld;
 	return true;
@@ -184,18 +197,20 @@ float DynMod(int ph, float ours)
 	if (theirs < mirror)
 		theirs = mirror;
 	const float lo = ai.GetTunable("apex_strike_mod", TUNE_STRIKE_MOD);
-	if (theirs < ours) {
+	// his 10-24: "unless we feel inferior, we probably shouldn't have a threat mod above half"
+	const float r = theirs / ours;
+	if (r <= 1.f) {
 		if (ph == SK_BUILD)
-			return 1.f;   // the mass waits for the strike whatever the odds
-		const float r = theirs / ours;
+			return 0.5f;
 		const float m = r * r;
-		return (m < lo) ? lo : m;
+		return (m < lo) ? lo : ((m > 0.5f) ? 0.5f : m);
 	}
 	if (ph == SK_BUILD) {
-		const float m = 2.f * theirs / ours;
+		const float m = 2.f * r;
 		return (m < 1.f) ? 1.f : ((m > 3.f) ? 3.f : m);
 	}
-	return 1.f;
+	const float m = 0.5f * r * r;
+	return (m > 2.f) ? 2.f : m;
 }
 
 void StrikeTick()
@@ -320,7 +335,7 @@ void StrikeTick()
 			string why = "";
 			if ((netNow > 0.f) && (rateNow >= rate60))
 				why = "peaked";
-			else if ((ours > 0.f) && (theirs > 1.5f * ours))
+			else if (Military::FoeTierAbove(TopOwnLandPlantTier()) > 0.25f)   // they field a tier we do not (a costlier T1 unit is not that: 454v0 at 2 min)
 				why = "outclassed";
 			else if (since > 4.f * eta)
 				why = "4eta";
