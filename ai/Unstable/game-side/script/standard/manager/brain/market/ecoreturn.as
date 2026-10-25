@@ -82,7 +82,8 @@ float EcoReturnArmyMul()
 {
 	// apex_er_q (the 10-24 review): q reads kill = 0 whenever we have less army than them, so all four consumers
 	// (the budget row, the army target's map-share gap, the rush extra, small_hard's k) cut army when behind
-	return (EcoReturnOn() && (ai.GetTunable("apex_er_q", TUNE_ER_Q) > 0.f)) ? gErQ : 1.f;
+	// a trial from v0.4.04 (overnight 10-25: q on 22-19, q off 27-15 vs v0.4.02): each seat's coin decides it
+	return (EcoReturnOn() && Trial::On("er_q", TUNE_ER_Q, TUNE_TRIAL_ER_Q)) ? gErQ : 1.f;
 }
 
 void ErArmyRefresh()

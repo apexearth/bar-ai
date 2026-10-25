@@ -1807,6 +1807,7 @@ const float TUNE_AA_DWELL = 1.f;   // [toggle 0/1] nnair.as NaEval: a strike pay
 const float TUNE_GUN_REFUSE = 1.f;   // [toggle 0/1] RaidTask.cpp + nnair.as: a gunship wing that takes nothing at its goal for 3 s is recalled and the cell remembered (pain point); the unseen-base cell from the enemy start box
 const float TUNE_AIR_ECO_PRICED = 1.f;
 const float TUNE_TRIAL_AIR_ECO_PRICED = 1.f;   // [toggle 0/1] trial.as: apex_air_eco_priced decided per seat by a coin (shipped in v0.3.9; end it when decided)   // [toggle 0/1] air/state.as AirEcoReady: no income bar on air (apex_air_eco_base), the bomber price decides
+const float TUNE_TRIAL_ER_Q = 1.f;   // [toggle 0/1] trial.as: apex_er_q decided per seat by a coin, logged for tools/trial_report.py (shipped in v0.4.04; end it when decided); tests that set apex_er_q must set apex_trial_er_q=0
 const float TUNE_TRIAL_AIR_RICH = 1.f;   // [toggle 0/1] trial.as: apex_air_rich decided per seat by a coin, logged for tools/trial_report.py (shipped in v0.3.8; end it when decided)   // [toggle 0/1] air/state.as StrikeGainWing: past the ScaledBombers count the next bomber is still bought while its gain beats its cost
 const float TUNE_MEX_BASIC = 1.f;   // [toggle 0/1] protect_target.as: mex cover is tower reach less raider reach, guard sites cover several mexes, a mex's first gun not scaled by the gunp head
 const float TUNE_ARMY_PRESS = 0.f;   // [toggle 0/1] StockFight.inl: an attack squad with nothing in sight walks to the nearest remembered group it outweighs, else the mirrored start
