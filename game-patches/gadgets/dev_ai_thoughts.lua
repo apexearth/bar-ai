@@ -57,6 +57,10 @@ function gadget:RecvSkirmishAIMessage(aiTeam, msg)
 		Spring.Echo("[ai-thoughts] first message from seat " .. tostring(team) .. ": " .. tostring(lines[1]))
 	end
 	seats[team] = { lines = lines, at = Spring.GetGameFrame() }
+	-- the widget draws it, scaled to the screen (dev_ai_thoughts_panel.lua)
+	if Script.LuaUI("AiThoughts") then
+		Script.LuaUI.AiThoughts(team, msg)
+	end
 end
 
 function gadget:Initialize()
@@ -69,7 +73,7 @@ function gadget:Shutdown()
 	gadgetHandler:RemoveSyncAction("ai_think_relay")
 end
 
-function gadget:DrawScreen()
+function gadget:DrawScreen_unused()
 	if #order == 0 then
 		return
 	end

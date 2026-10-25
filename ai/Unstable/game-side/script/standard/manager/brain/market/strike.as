@@ -333,7 +333,8 @@ void StrikeTick()
 			const float theirs = ai.GetEnemyMaxMobileCostM();
 			const float ours = OwnedBestMobileCostM();
 			string why = "";
-			if ((netNow > 0.f) && (rateNow >= rate60))
+			// at least one ETA of producing first: a "peaked" strike at 1.7 min went with 344 metal against nothing seen
+			if ((netNow > 0.f) && (rateNow >= rate60) && (since > eta))
 				why = "peaked";
 			else if (Military::FoeTierAbove(TopOwnLandPlantTier()) > 0.25f)   // they field a tier we do not (a costlier T1 unit is not that: 454v0 at 2 min)
 				why = "outclassed";
@@ -362,12 +363,21 @@ void StrikeTick()
 				ai.SetTeamBoard(BOARD_SK_KILL0, killed);
 				ai.SetTeamBoard(BOARD_SK_KILL0AT, float(ai.frame));
 			}
-			if (stalled || (army < 0.4f * launch)) {
+			// the balance turned (his 10-24: "We stay at plan RUSH and phase STRIKE even while threat mod is 2 because we
+			// have almost 1/10th our enemy's army"): their army as seen, never under the mirror, over 1.5x ours
+			float theirsNow = ai.GetTeamBoard(PP_THEIRS, 0.f);
+			const float mirrorNow = 0.3f * army * ai.GetTeamBoard(PP_IRATIO, 1.f);
+			if (theirsNow < mirrorNow)
+				theirsNow = mirrorNow;
+			const bool outweighed = theirsNow > 1.5f * army;
+			if (outweighed)
+				stalled = false;
+			if (stalled || outweighed || (army < 0.4f * launch)) {
 				ph = SK_AFTER;
 				ai.SetTeamBoard(BOARD_SK_AT, float(ai.frame));
-				Say("strike over (" + (stalled ? "stalled" : "spent") + "): " + int(army) + " of " + int(launch)
+				Say("strike over (" + (outweighed ? "outweighed" : (stalled ? "stalled" : "spent")) + "): " + int(army) + " of " + int(launch)
 					+ " left, killed " + int(killed));
-				AiLog(Factory::T() + "apex: strike-end t=" + ai.teamId + " why=" + (stalled ? "stalled" : "spent") + " army="
+				AiLog(Factory::T() + "apex: strike-end t=" + ai.teamId + " why=" + (outweighed ? "outweighed" : (stalled ? "stalled" : "spent")) + " army="
 					+ int(army) + "/" + int(launch) + " killed=" + int(killed) + " after=" + int(since / 30.f) + "s eta="
 					+ int(eta / 30.f) + "s");
 			}
