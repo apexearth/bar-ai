@@ -1740,7 +1740,9 @@ bool EcoRoleActive()
 		if ((seat2 < 0) || (sh[i] > sh[uint(seat2)]))
 			seat2 = int(i);
 	}
-	const bool two = (ai.GetTunable("apex_eco_seats", TUNE_ECO_SEATS) >= 2.f) && (seat2 >= 0);
+	// THE SECOND SEAT ON 8-PLAYER TEAMS until the walk-time rule is measured (his 10-25: 2 on bigger maps; the 8v8
+	// Carrot Mountains benchmark is the case measured: eco seats 624 m/s each at minute 28 vs 310)
+	const bool two = (ai.GetTunable("apex_eco_seats", TUNE_ECO_SEATS) >= 2.f) && (seat2 >= 0) && (mates.length() >= 8);
 	const float seatD = ds[seat];
 	ds.sortAsc();
 	const float dmed = ds[ds.length() / 2];

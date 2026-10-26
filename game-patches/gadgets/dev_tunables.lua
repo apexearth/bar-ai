@@ -658,8 +658,8 @@ local NAMES = {
 	"apex_scout_over_s",
 	"apex_eco_role",
 	"apex_eco_force",
-	"apex_eco_seats", -- army.as: the N most sheltered seats play eco (1)
-	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (0)
+	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
+	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)
 	"apex_team_tech",         -- teamtech.as + gift.as: one seat techs and hands out advanced cons; the others price their own first lab down (0)
 	"apex_role_share",
 	"apex_t2_fusion_pull", -- market/decide.as: while the T2 switch is on and no advanced generator stands, take the fusion instead of drawing it (0 = off)
