@@ -1346,6 +1346,15 @@ float BPGap()
 	// the hands arrive.
 	if (gap < blTerm)
 		gap = blTerm;
+	// THE OVERFLOW IS A FLOOR TOO (apex_bp_overflow_floor): metal we are throwing away each second is capacity we
+	// lack, whatever the nameplate count says -- the bank term above is an addend the -40 of `net` swallowed. His
+	// 10-26 1v1 (v0.4.07): bank 100% from minute 9.6 to 12.7 at 80-113 m/s, ~10k metal excessed by 13:18, 9 nano
+	// decisions against 69 energy and 58 mex.
+	if (ai.GetTunable("apex_bp_overflow_floor", TUNE_BP_OVERFLOW_FLOOR) > 0.f) {
+		const float over = OverflowM() * EFeedShare();
+		if (gap < over)
+			gap = over;
+	}
 	const float gapM = (gap > 0.f) ? gap : 0.f;
 	// EVERY CLAUSE SEPARATELY, once a minute. The three clauses are in the same
 	// currency and nothing printed which of them carries the number, so a gap

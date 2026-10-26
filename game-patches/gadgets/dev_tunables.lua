@@ -656,6 +656,7 @@ local NAMES = {
 	"apex_eco_role",
 	"apex_eco_force",
 	"apex_eco_lean", -- army.as: a 3-4 player team's farthest seat leans eco, this share of the phase, not strict (0)
+	"apex_bp_overflow_floor", -- want_energy.as: overflowing metal floors the build-power gap (0)
 	"apex_gantry_gap_est", -- want_super.as: the gantry gap on the one army count (0)
 	"apex_eco_seat_t3", -- ecoseat.as: past half its growth target the eco seat builds the team gantry and its T3 (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
