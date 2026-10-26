@@ -1636,15 +1636,25 @@ CCircuitDef@ SpamLineDef(CCircuitUnit@ fac)
 	return Catalog::Def(best);
 }
 
+// THE SPAM LAB KEEPS WHAT ONLY IT MAKES: its own pick first; a rez bot or a constructor keeps the order (the T1 bot
+// lab is often the only source of both), anything else is spam
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
 		return null;
-	{
-		CCircuitDef@ sp = SpamLineDef(fac);
-		if (sp !is null)
-			return sp;
-	}
+	CCircuitDef@ sp = SpamLineDef(fac);
+	if (sp is null)
+		return ConOrderForInner(fac, line, slot);
+	CCircuitDef@ own = ConOrderForInner(fac, line, slot);
+	if ((own !is null) && (Catalog::gRezzer[int(own.id)] || Catalog::gBuilder[int(own.id)]))
+		return own;
+	return sp;
+}
+
+CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
+{
+	if (fac is null)
+		return null;
 	const double _tPre = Perf::T0();
 	WorthDiag();      // self-gated, once, and only when asked for
 	LineClassDiag();  // likewise: the class split, once the field is known
