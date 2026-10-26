@@ -17,7 +17,7 @@ void EcoSeatTick()
 	if (gEsOn < 0)
 		gEsOn = (ai.GetTunable("apex_eco_seat_strict", TUNE_ECO_SEAT_STRICT) > 0.f) ? 1 : 0;
 	gEsGrow = EcoRoleGrowing();
-	gEsStrict = gEsGrow && (gEsOn > 0);
+	gEsStrict = gEsGrow && (gEsOn > 0) && !gEcoLean;   // the small-team lean is never strict
 }
 
 bool EcoSeatStrict()

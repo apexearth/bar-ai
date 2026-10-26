@@ -1515,6 +1515,7 @@ const float TUNE_TEAM_TECH = 1.f;
 //   and defence come back: 1 the whole eco target, 0.5 half of it, so half the
 //   eco phase. See docs/tunables.md.
 const float TUNE_ECO_FORCE = 0.f;
+const float TUNE_ECO_LEAN = 0.f;   // share of the eco phase a 3-4 player team's farthest seat plays, not strict (his 10-25 4v4 lean; 0 = no eco seat, his 09-02)
 const float TUNE_ECO_SEATS = 2.f;   // [1/2] how many of the most sheltered seats play eco (his 10-25: 2 on bigger maps, 1 on smaller)
 const float TUNE_ECO_SEAT_STRICT = 1.f;  // the growing eco seat's hands and labs take only economy (+AA while air kills us); see docs/tunables.md
 

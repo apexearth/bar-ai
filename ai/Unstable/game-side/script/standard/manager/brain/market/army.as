@@ -1649,6 +1649,8 @@ bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
 int gEcoLatch = -1;   // the team elected eco seat, kept while its heartbeat lives
 int gEcoLatch2 = -1;  // the second, while apex_eco_seats >= 2
+bool gEcoLean = false;   // this seat holds the small-team eco lean (not strict, a share of the phase)
+bool gEcoWalkLogged = false;
 
 // How much of the eco seat this AI has been told to play, 0 = decide normally.
 // Clamped so a value above 1 cannot ask for more eco than the seat's own
@@ -1690,7 +1692,9 @@ bool EcoRoleActive()
 	// from the fighting to be worth giving up its army and defence -- the
 	// margin test below says the same thing on a line-abreast start, and this
 	// says it for the team size regardless of how the start is shaped.
-	if ((mates is null) || (mates.length() <= 4))
+	const float lean = ai.GetTunable("apex_eco_lean", TUNE_ECO_LEAN);
+	const bool small = (mates !is null) && (mates.length() <= 4);
+	if ((mates is null) || (small && ((lean <= 0.f) || (mates.length() < 3))))
 		return false;
 	array<float> hx, hz;
 	array<int> ht;
@@ -1726,6 +1730,28 @@ bool EcoRoleActive()
 		ds.insertLast(dx * dx + dz * dz);
 	}
 	array<float>@ sh = EcoShelter(hx, hz, ex, ez);
+	// THE WALK, logged once: the enemy's ground army from their side to each home, for the second-seat rule
+	if (!gEcoWalkLogged) {
+		gEcoWalkLogged = true;
+		const float spd = Market::FoeSpeedCap();
+		string row = "";
+		for (uint i = 0; i < hx.length(); ++i)
+			row += " t" + ht[i] + "=" + int(sqrt(ds[i]) / ((spd > 1.f) ? spd : 60.f)) + "s/sh" + int(sh[i]);
+		AiLog("apex: eco-walk mates=" + mates.length() + " speed=" + int(spd) + row);
+	}
+	// THE SMALL-TEAM LEAN: the home farthest from them, not strict, a share of the phase
+	if (small) {
+		uint far = 0;
+		for (uint i = 1; i < hx.length(); ++i)
+			if (ds[i] > ds[far])
+				far = i;
+		gEcoLean = (ht[far] == ai.teamId);
+		gEcoRole = gEcoLean;
+		if (gEcoRole != was)
+			AiLog("apex: eco-lean " + (gEcoRole ? "ON" : "off") + " team=" + ai.teamId + " lean=" + lean);
+		return gEcoRole;
+	}
+	gEcoLean = false;
 	// Every ally computes the same roster in the same order, so a strict >
 	// seats exactly one even on a tie.
 	uint seat = 0;
@@ -1881,7 +1907,8 @@ float EcoRoleTargetM()
 	// against, so halving it is half the eco phase -- the length, not a
 	// separate clock.
 	const float force = EcoForce();
-	return base * IncomeMult() * ((force > 0.f) ? force : 1.f);
+	const float lean = gEcoLean ? ai.GetTunable("apex_eco_lean", TUNE_ECO_LEAN) : 1.f;
+	return base * IncomeMult() * ((force > 0.f) ? force : 1.f) * ((lean > 0.f) ? lean : 1.f);
 }
 
 // TRUE while the rear specialist is still building the economy it named --

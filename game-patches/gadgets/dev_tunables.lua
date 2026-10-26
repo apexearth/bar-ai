@@ -658,6 +658,7 @@ local NAMES = {
 	"apex_scout_over_s",
 	"apex_eco_role",
 	"apex_eco_force",
+	"apex_eco_lean", -- army.as: a 3-4 player team's farthest seat leans eco, this share of the phase, not strict (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)
 	"apex_team_tech",         -- teamtech.as + gift.as: one seat techs and hands out advanced cons; the others price their own first lab down (0)
