@@ -89,10 +89,17 @@ bool StockCtl(CCircuitUnit@ u)
 	return StockArmy() && (u !is null) && StockDef(u.circuitDef);
 }
 
+bool StockEscortOn()
+{
+	return StockArmy() && (ai.GetTunable("apex_stock_escort", TUNE_STOCK_ESCORT) > 0.f);
+}
+
 // true: the layer stands down, counted under its tag
 bool StockQuiet(const string &in tag)
 {
 	if (!StockArmy())
+		return false;
+	if ((tag == "escort") && StockEscortOn())
 		return false;
 	for (uint i = 0; i < gSaTag.length(); ++i) {
 		if (gSaTag[i] == tag) {

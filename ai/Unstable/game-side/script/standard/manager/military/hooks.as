@@ -375,6 +375,44 @@ int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 	return 1;
 }
 
+// THE ESCORT DUTY, one test for our layers and the stock army (free: the unit leaves stock control while on it)
+IUnitTask@ EscortElect(CCircuitUnit@ unit, const CCircuitDef@ cdef, bool free)
+{
+	if (!(Market::EscortWorthy(int(cdef.id)) || Market::FighterEscortWorthy(int(cdef.id)))
+		|| (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f))
+		return null;
+	// A unit back in the election is no longer guarding anyone (retreat,
+	// aborted task); its pairing dropped only on death, so its worker
+	// read escorted by nobody for the rest of the game.
+	const int was = Market::EscortOf(unit.id);
+	if (was >= 0) {
+		CCircuitUnit@ w = ai.GetTeamUnit(was);
+		IUnitTask@ ot = unit.task;
+		AiLog(Factory::T() + "apex: escort-off " + cdef.GetName() + " #" + unit.id
+			+ " from #" + was
+			+ " task=" + ((ot is null) ? -1 : int(ot.GetType()))
+			+ " dist=" + ((w is null) ? -1 : int(unit.GetPos(ai.frame).distance2D(w.GetPos(ai.frame))))
+			+ " wTask=" + (((w is null) || (w.task is null)) ? -1 : int(w.task.GetType()))
+			+ " wBt=" + (((w is null) || (w.task is null) || (w.task.GetType() != Task::Type::BUILDER)) ? -1 : int(w.task.GetBuildType())));
+	}
+	Market::EscortGone(unit.id);
+	CCircuitUnit@ vip = Market::EscortNeeded(unit);
+	if (vip is null)
+		return null;
+	if (free)
+		unit.SetScriptFree(true);
+	IUnitTask@ eg = JwJoinable(aiMilitaryMgr.Enqueue(TaskF::Guard(vip)), unit);
+	if (eg is null) {
+		if (free)
+			unit.SetScriptFree(false);
+		Market::EscortGone(unit.id);
+		return null;
+	}
+	AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
+		+ " escorts " + vip.circuitDef.GetName() + " #" + vip.id);
+	return eg;
+}
+
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 {
 
@@ -391,8 +429,16 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (sp > 0)
 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
 	}
-	if (StockCtl(unit))
+	if (StockCtl(unit) || (StockEscortOn() && StockDef(unit.circuitDef))) {
+		// TUNE_STOCK_ESCORT: the escort duty stands under the stock army; off it, back to stock
+		if (StockEscortOn()) {
+			unit.SetScriptFree(false);
+			IUnitTask@ et = JwJoinable(EscortElect(unit, unit.circuitDef, true), unit);
+			if (et !is null)
+				return NoteElect("escort", et);
+		}
 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
+	}
 	const CCircuitDef@ cdef = unit.circuitDef;
 	MarkSpearhead(cdef);
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
@@ -490,32 +536,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// enough to outlast one -- Market::EscortWorthy is the single test, shared
 	// with the production floor that ORDERS them, so nothing is built for the
 	// duty that would then refuse it.
-	if ((Market::EscortWorthy(int(cdef.id)) || Market::FighterEscortWorthy(int(cdef.id)))
-		&& (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
-		// A unit back in the election is no longer guarding anyone (retreat,
-		// aborted task); its pairing dropped only on death, so its worker
-		// read escorted by nobody for the rest of the game.
-		const int was = Market::EscortOf(unit.id);
-		if (was >= 0) {
-			CCircuitUnit@ w = ai.GetTeamUnit(was);
-			IUnitTask@ ot = unit.task;
-			AiLog(Factory::T() + "apex: escort-off " + cdef.GetName() + " #" + unit.id
-				+ " from #" + was
-				+ " task=" + ((ot is null) ? -1 : int(ot.GetType()))
-				+ " dist=" + ((w is null) ? -1 : int(unit.GetPos(ai.frame).distance2D(w.GetPos(ai.frame))))
-				+ " wTask=" + (((w is null) || (w.task is null)) ? -1 : int(w.task.GetType()))
-				+ " wBt=" + (((w is null) || (w.task is null) || (w.task.GetType() != Task::Type::BUILDER)) ? -1 : int(w.task.GetBuildType())));
-		}
-		Market::EscortGone(unit.id);
-		CCircuitUnit@ vip = Market::EscortNeeded(unit);
-		if (vip !is null) {
-			IUnitTask@ eg = JwJoinable(aiMilitaryMgr.Enqueue(TaskF::Guard(vip)), unit);
-			if (eg !is null) {
-				AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
-					+ " escorts " + vip.circuitDef.GetName() + " #" + vip.id);
-				return NoteElect("escort", eg);
-			}
-		}
+	{
+		IUnitTask@ eg = JwJoinable(EscortElect(unit, cdef, false), unit);
+		if (eg !is null)
+			return NoteElect("escort", eg);
 	}
 	// COVER UNITS: what the base buys against raiders (guardposts.as), spread
 	// over the buildings (apexearth: "keep our units spread out enough to
