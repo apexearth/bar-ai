@@ -1132,8 +1132,10 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			gain = ((gain > 0.f) ? gain : 0.f)
 					+ SiloGain(power * share);
 		gain *= PlanMul(sc);
-		if (noLines)
-			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp
+		// the seat's war comes in with its ramp -- but not the team's T3 it builds (EcoSeatT3): at the ramp's square
+		// the gantry lost to the seat's T2 air plant every election (37 vs 44) and none was built in 3 games
+		if (noLines && !((sc == SC_GANTRY) && EcoSeatT3()))
+			gain *= EcoRoleRamp();
 		// THE GANTRY IS A PRODUCTION LINE, NOT A GUN. Affordability alone
 		// rewards being CHEAP -- (budget-bill)/budget is near zero for the
 		// most expensive structure in the game -- so it lost every election
