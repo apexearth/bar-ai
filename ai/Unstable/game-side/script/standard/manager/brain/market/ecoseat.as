@@ -17,7 +17,7 @@ void EcoSeatTick()
 	if (gEsOn < 0)
 		gEsOn = (ai.GetTunable("apex_eco_seat_strict", TUNE_ECO_SEAT_STRICT) > 0.f) ? 1 : 0;
 	gEsGrow = EcoRoleGrowing();
-	gEsStrict = gEsGrow && (gEsOn > 0) && !gEcoLean;   // the small-team lean is never strict
+	gEsStrict = gEsGrow && (gEsOn > 0);
 }
 
 bool EcoSeatStrict()
@@ -44,6 +44,12 @@ bool EcoSeatDef(int d)
 		|| (!Catalog::gMobile[d] && Catalog::gBuilder[d]);
 }
 
+// THE ECO SEAT'S T3: past half its growth target the seat that grew the economy builds the team's gantry and its
+// T3 goes to the front (apex_eco_seat_t3)
+bool EcoSeatT3()
+{
+	return (ai.GetTunable("apex_eco_seat_t3", TUNE_ECO_SEAT_T3) > 0.f) && EcoRoleActive() && (EcoRoleRamp() > 0.f);
+}
 bool EcoSeatKeeps(Want@ w)
 {
 	const int k = w.kind;
@@ -72,12 +78,14 @@ bool EcoSeatKeeps(Want@ w)
 			if (ad is null)
 				return true;
 		}
-		return EcoSeatDef(int(ad.id));
+		return EcoSeatDef(int(ad.id)) || (EcoSeatT3() && (SuperClassOf(int(ad.id)) == SC_GANTRY));
 	}
 	if (w.def is null)
 		return false;
 	const int d = int(w.def.id);
 	if (Catalog::gAntiNuke[d])
+		return true;
+	if (EcoSeatT3() && (SuperClassOf(d) == SC_GANTRY))
 		return true;
 	if (EcoSeatAADef(d))
 		return EcoSeatAirDanger();
@@ -87,6 +95,8 @@ bool EcoSeatKeeps(Want@ w)
 bool EcoSeatFacKeeps(int d)
 {
 	if (Catalog::gBuilder[d])
+		return true;
+	if (EcoSeatT3() && Catalog::gMobile[d] && (TreeTier(d) >= 3))
 		return true;
 	if ((Catalog::gRole[d] == int(Unit::Role::AA.type)) || EcoSeatAADef(d))
 		return EcoSeatAirDanger();

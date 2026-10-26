@@ -1649,7 +1649,8 @@ bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
 int gEcoLatch = -1;   // the team elected eco seat, kept while its heartbeat lives
 int gEcoLatch2 = -1;  // the second, while apex_eco_seats >= 2
-bool gEcoLean = false;   // this seat holds the small-team eco lean (not strict, a share of the phase)
+bool gEcoLean = false;   // this seat holds the small-team eco lean (strict, a share of the phase)
+int gEcoLeanLatch = -1;  // the team's lean seat, elected once
 bool gEcoWalkLogged = false;
 
 // How much of the eco seat this AI has been told to play, 0 = decide normally.
@@ -1741,11 +1742,35 @@ bool EcoRoleActive()
 	}
 	// THE SMALL-TEAM LEAN: the home farthest from them, not strict, a share of the phase
 	if (small) {
-		uint far = 0;
-		for (uint i = 1; i < hx.length(); ++i)
-			if (ds[i] > ds[far])
-				far = i;
-		gEcoLean = (ht[far] == ai.teamId);
+		if (gEcoLeanLatch < 0) {
+			// the most sheltered home; on a line-abreast start (no shelter) the rear-most home that is not at either
+			// end of the line across the enemy direction: middle back, never a corner
+			uint pick = 0;
+			for (uint i = 1; i < hx.length(); ++i)
+				if (sh[i] > sh[pick])
+					pick = i;
+			if (sh[pick] <= 0.f) {
+				float ax = ez - cz, az = cx - ex;   // across the line from our centre to theirs
+				const float al = sqrt(ax * ax + az * az);
+				if (al > 1.f) { ax /= al; az /= al; }
+				uint lo = 0, hi = 0;
+				for (uint i = 1; i < hx.length(); ++i) {
+					const float p = (hx[i] - cx) * ax + (hz[i] - cz) * az;
+					if (p < (hx[lo] - cx) * ax + (hz[lo] - cz) * az) lo = i;
+					if (p > (hx[hi] - cx) * ax + (hz[hi] - cz) * az) hi = i;
+				}
+				int best = -1;
+				for (uint i = 0; i < hx.length(); ++i) {
+					if ((hx.length() > 2) && ((i == lo) || (i == hi)))
+						continue;
+					if ((best < 0) || (ds[i] > ds[uint(best)]))
+						best = int(i);
+				}
+				pick = (best >= 0) ? uint(best) : 0;
+			}
+			gEcoLeanLatch = ht[pick];
+		}
+		gEcoLean = (gEcoLeanLatch == ai.teamId);
 		gEcoRole = gEcoLean;
 		if (gEcoRole != was)
 			AiLog("apex: eco-lean " + (gEcoRole ? "ON" : "off") + " team=" + ai.teamId + " lean=" + lean);

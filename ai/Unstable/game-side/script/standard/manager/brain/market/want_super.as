@@ -991,7 +991,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// priced on the enemy's silos as before -- and the SILO comes in with
 		// the seat's ramp (his "some nuclear missile launchers" from half the
 		// target), scaled below.
-		if (noLines && (sc != SC_ANTINUKE) && !((sc == SC_SILO) && (EcoRoleRamp() > 0.f)))
+		if (noLines && (sc != SC_ANTINUKE) && !((sc == SC_SILO) && (EcoRoleRamp() > 0.f))
+				&& !((sc == SC_GANTRY) && EcoSeatT3()))
 			{ GantryWhy(sc, "eco-role"); continue; }
 		if (Catalog::gFloater[d] || Catalog::gSub[d])
 			{ GantryWhy(sc, "floater"); continue; }
