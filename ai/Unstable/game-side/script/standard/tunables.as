@@ -1547,6 +1547,7 @@ const float TUNE_ANTINUKE_R = 2000.f;
 //   (per cell for generators, in power for defences) before a building is scrap
 //   -- his "much better".
 const float TUNE_OBSOLETE_RATIO = 4.f;
+const float TUNE_OBSOLETE_ARRIVE = 0.f;   // [toggle 0/1] want_reclaim.as GenObsoleteOnArrival: a buildable denser generator obsoletes a rung only if its metal is affordable at our income before the rung pays back (the pack's epic fusion obsoleted every fusion)
 
 // LATHE_OBSOLETE: 1 = a construction turret a denser one per cell of ground
 //   replaces is obsolete on arrival and a candidate for retirement; 0 = the

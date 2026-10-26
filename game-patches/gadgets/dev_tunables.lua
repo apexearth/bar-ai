@@ -119,6 +119,7 @@ local NAMES = {
 	"apex_insure_rate",
 	"apex_nuke_risk",
 	"apex_targfac_want",
+	"apex_obsolete_arrive", -- want_reclaim.as: obsolete only against a replacement that would arrive (0)
 	"apex_obsolete_ratio",
 	"apex_expose_r",
 	"apex_exposed_loss_s",

@@ -44,6 +44,8 @@ def run(args) -> Path:
            "--map", "Comet Catcher Remake 1.8", "--minutes", str(args.minutes), "--handicap", f"{args.bonus},0",
            "--speed", str(args.speed), "--seed", str(args.seed), "--modoption", "dev_stats=1",
            "--modoption", "apex_eco_only=1", "--modoption", "deathmode=neverend", "--out", str(out)]
+    for kv in args.modoption or []:
+        cmd += ["--modoption", kv]
     for kv in args.ai_option or []:
         cmd += ["--ai-option", kv]
     env = dict(os.environ)
@@ -109,6 +111,7 @@ def main():
     ap.add_argument("--speed", type=float, default=5)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--ai-option", action="append")
+    ap.add_argument("--modoption", action="append", help="game option k=v, e.g. experimentalextraunits=1 (his scavenger pack)")
     ap.add_argument("--out")
     ap.add_argument("--read", help="re-read a finished run instead of playing one")
     args = ap.parse_args()
