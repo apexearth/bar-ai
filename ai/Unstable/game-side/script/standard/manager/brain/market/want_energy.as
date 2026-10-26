@@ -116,7 +116,6 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	const float stallDef = HardEStall() ? EnergyDeficitNowE() : 0.f;
 	float bestClose = 0.f;
 	const bool etaOn = EtaOn();
-	const bool obsEta = ai.GetTunable("apex_obsolete_eta", TUNE_OBSOLETE_ETA) > 0.f;
 	const float etaP = EcoPowerM();
 	// ...AND THE SAME ERROR IS LIVE ONE RUNG HIGHER, outside the stall: the
 	// growth premium below is linear in a generator's output and so is its
@@ -170,11 +169,11 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// 1v1: 27 basic solars, 10 advanced, one fusion, the enemy at 250
 		// m/s). A deficit is closed by what ARRIVES soonest; the ETA pick
 		// below chooses among all rungs while it lasts.
-		// ...AND NOT A VETO ON THE ETA (apex_obsolete_eta): the pack's epic fusion made every fusion obsolete by
-		// energy per cell, so the ladder never saw the fusion it would have picked; obsolete now only bars the
-		// market's pick, and the ETA ladder prices the rung on its real time to the target.
+		// ...AND NOT A VETO ON THE ETA (his 10-25: "the fix is to refine the logic, probably in the eta algorithm
+		// portion"): obsolete only bars the market's pick; the ETA ladder still prices the rung on its real time
+		// to the target. With the pack, minute-20 metal 503 -> 709 over ETA reach alone.
 		const bool obsolete = GenObsoleteOnArrival(d) && !stalled;
-		if (obsolete && !(etaOn && obsEta))
+		if (obsolete && !etaOn)
 			continue;
 		// A PREFERENCE THAT STILL LEAVES AN ANSWER. The zero-E rung cannot win
 		// ground it has none of -- on a water base solar has nowhere to stand --
@@ -435,7 +434,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			+ " local=" + formatFloat(PfCrowdAt(eSite, 400.f), "", 0, 3)
 			+ " m/cell=" + formatFloat(PfMetalPerCell(), "", 0, 1));
 	}
-	if (etaOn && obsEta && (etaD > 0) && (w.def is null)) {
+	if (etaOn && (etaD > 0) && (w.def is null)) {
 		// every rung the market could pick was obsolete: the ETA's soonest is the answer
 		w = etaW;
 		w.kind = WK_ENERGY;
