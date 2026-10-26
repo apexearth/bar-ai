@@ -3,6 +3,7 @@
 
     python tools/trial_report.py              # archive any finished game, then report every trial
     python tools/trial_report.py --no-archive # report only
+    python tools/trial_report.py --kind normal       # leave out randomizer (and unknown) games; also randomizer, unknown
 
 A release can ship a change as a TRIAL (manager/trial.as): each AI seat flips a coin for the switch, logs
 `apex: trial name=<n> arm=<0|1>` once and `apex: trial-stat ...` every minute (income, metal killed and lost,
@@ -103,6 +104,19 @@ def games():
     return out
 
 
+def kind_of(group):
+    """randomizer / normal / unknown: the BaRandom tweakdefs announce themselves in the game's own infolog, which the
+    archive keeps when it belongs to that game (his 10-25: randomizer games, unit stats changed, very wacky)."""
+    log = group[0].parent / "infolog.game.txt" if group else None
+    if log is None or not log.is_file():
+        return "unknown"
+    with open(log, encoding="utf-8", errors="replace") as fh:
+        for ln in fh:
+            if "[BaRandom]" in ln or "--BaRandom" in ln:
+                return "randomizer"
+    return "normal"
+
+
 def trade(r):
     m = max(1.0, r.get("min", 0))
     return (r.get("killedM", 0.0) - r.get("lostM", 0.0)) / m
@@ -120,13 +134,23 @@ def main(argv):
             mp_archive.STATE.write_text(__import__("json").dumps(st))
         except Exception as e:
             print("(archive step skipped: %s)" % e)
+    want = None
+    if "--kind" in argv:
+        want = set(argv[argv.index("--kind") + 1].split(","))
     seats = defaultdict(list)          # trial -> [(game index, version, arm, record)]
+    kinds = defaultdict(int)
     for gi, g in enumerate(games()):
+        k = kind_of(g)
+        kinds[k] += 1
+        if want is not None and k not in want:
+            continue
         for p in g:
             trials, ver = seat_of(p)
             for (name, _team), rec in trials.items():
                 if rec.get("min", 0) >= 5:
                     seats[name].append((gi, ver, rec["arm"], rec))
+    print("games by kind: " + ", ".join("%s %d" % kv for kv in sorted(kinds.items()))
+          + ("" if want is None else "  (reading only: %s)" % ",".join(sorted(want))))
     if not seats:
         print("no trial seats yet: play a game on a release that runs a trial (v0.3.8+), then run this again")
         return 0
