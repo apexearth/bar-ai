@@ -1648,6 +1648,7 @@ array<float>@ EcoShelter(const array<float>& in hx, const array<float>& in hz,
 bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
 int gEcoLatch = -1;   // the team elected eco seat, kept while its heartbeat lives
+int gEcoLatch2 = -1;  // the second, while apex_eco_seats >= 2
 
 // How much of the eco seat this AI has been told to play, 0 = decide normally.
 // Clamped so a value above 1 cannot ask for more eco than the seat's own
@@ -1731,6 +1732,15 @@ bool EcoRoleActive()
 	for (uint i = 1; i < hx.length(); ++i)
 		if (sh[i] > sh[seat])
 			seat = i;
+	// the runner-up by shelter, for a second eco seat (strict > again: every ally computes the same one)
+	int seat2 = -1;
+	for (uint i = 0; i < hx.length(); ++i) {
+		if ((i == seat) || (sh[i] <= 0.f))
+			continue;
+		if ((seat2 < 0) || (sh[i] > sh[uint(seat2)]))
+			seat2 = int(i);
+	}
+	const bool two = (ai.GetTunable("apex_eco_seats", TUNE_ECO_SEATS) >= 2.f) && (seat2 >= 0);
 	const float seatD = ds[seat];
 	ds.sortAsc();
 	const float dmed = ds[ds.length() / 2];
@@ -1738,8 +1748,9 @@ bool EcoRoleActive()
 	// An eight-player team seats whatever the margin (docs/doctrine.md 2026-09-13); the
 	// margin was for the 4v4 line-abreast start, which the size gate above
 	// refuses, and a line-abreast 8v8 never reaches it.
-	gEcoRole = (ht[seat] == ai.teamId) && (sh[seat] > 0.f) && (dmed > 1.f)
+	const bool seatable = (sh[seat] > 0.f) && (dmed > 1.f)
 		&& ((mates.length() >= 8) || (seatD >= dmed * margin * margin));
+	gEcoRole = seatable && ((ht[seat] == ai.teamId) || (two && (ht[uint(seat2)] == ai.teamId)));
 	// ONE ECO FOR THE GAME (his 10-15): a neighbour's death moved the role mid-game and the eco seat
 	// went back to towers while another started from nothing. Elected once; moves only when the
 	// seat's heartbeat stops.
@@ -1752,11 +1763,21 @@ bool EcoRoleActive()
 		}
 		if (!latchAlive) {
 			gEcoLatch = -1;
-			if ((sh[seat] > 0.f) && (dmed > 1.f)
-					&& ((mates.length() >= 8) || (seatD >= dmed * margin * margin)))
+			if (seatable)
 				gEcoLatch = ht[seat];
 		}
-		gEcoRole = (gEcoLatch >= 0) && (gEcoLatch == ai.teamId);
+		bool latch2Alive = false;
+		if (gEcoLatch2 >= 0) {
+			const float hb2 = ai.ReadTeamValue(gEcoLatch2, "ecohb", -1.f);
+			latch2Alive = (hb2 >= 0.f) && (float(ai.frame) - hb2 < float(60 * SECOND));
+		}
+		if (!latch2Alive) {
+			gEcoLatch2 = -1;
+			if (seatable && two && (ht[uint(seat2)] != gEcoLatch))
+				gEcoLatch2 = ht[uint(seat2)];
+		}
+		gEcoRole = ((gEcoLatch >= 0) && (gEcoLatch == ai.teamId))
+			|| (two && (gEcoLatch2 >= 0) && (gEcoLatch2 == ai.teamId));
 	}
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
@@ -1764,6 +1785,7 @@ bool EcoRoleActive()
 		for (uint i = 0; i < hx.length(); ++i)
 			row += " t" + ht[i] + "=" + int(sh[i]);
 		AiLog("apex: rear-elect homes=" + hx.length() + " seat=t" + ht[seat]
+				+ (two ? (" seat2=t" + ht[uint(seat2)]) : "")
 				+ " shelter" + row + " seatDist=" + sqrt(seatD)
 				+ " median=" + sqrt(dmed));
 	}

@@ -658,6 +658,7 @@ local NAMES = {
 	"apex_scout_over_s",
 	"apex_eco_role",
 	"apex_eco_force",
+	"apex_eco_seats", -- army.as: the N most sheltered seats play eco (1)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (0)
 	"apex_team_tech",         -- teamtech.as + gift.as: one seat techs and hands out advanced cons; the others price their own first lab down (0)
 	"apex_role_share",
