@@ -537,8 +537,10 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		Military::WindowNoteDeath(int(cdef.id), unit.GetPos(ai.frame), cdef.costM, true, true);
 		Military::SiegeNoteDeath(unit.GetPos(ai.frame), cdef.costM, true, true);
 	}
-	if ((Catalog::gExtractsM[int(cdef.id)] > 0.f) && WasFinished(int(unit.id)))
+	if ((Catalog::gExtractsM[int(cdef.id)] > 0.f) && WasFinished(int(unit.id))) {
 		Market::NoteMexKilled();
+		Market::BmNoteMexLoss(unit.GetPos(ai.frame));
+	}
 	// A BUILDING OF OURS AN ENEMY KILLED ON OUR GROUND IS THE INVASION SIGNAL --
 	// enemy only: our reclaims and the T1 mex BAR removes under a finished moho
 	// read as raids, and held a 430k-metal army home for nine minutes (his game,

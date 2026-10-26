@@ -659,6 +659,7 @@ local NAMES = {
 	"apex_bp_overflow_floor", -- want_energy.as: overflowing metal floors the build-power gap (0)
 	"apex_gantry_gap_est", -- want_super.as: the gantry gap on the one army count (0)
 	"apex_ladder_yields", -- decide.as: the ladder's mex claim yields to a tower priced above it (0)
+	"apex_bare_mex_hz", -- protect_measured.as: a bare extractor's guard on our bare extractors' death rate (0)
 	"apex_eco_seat_t3", -- ecoseat.as: past half its growth target the eco seat builds the team gantry and its T3 (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)

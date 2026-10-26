@@ -747,7 +747,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (floored && ((cover0 <= 0.f)
 				|| (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER) <= 1.f))) {
 			const float lossS = horizW;   // same tunable, read once above
-			const float mexHz = dmOn ? dmRate : ((lossS > 1.f) ? (1.f / lossS) : 0.f);
+			float mexHz = dmOn ? dmRate : ((lossS > 1.f) ? (1.f / lossS) : 0.f);
+			if (BareMexOn() && isMexG) {
+				const float bm = BareMexHzAt(s);
+				if (bm > mexHz)
+					mexHz = bm;
+			}
 			if (hz < mexHz)
 				hz = mexHz;
 		}

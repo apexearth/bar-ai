@@ -83,6 +83,149 @@ void DmNoteLoss(const AIFloat3& in at)
 	DmAdd(gDmLX, gDmLZ, gDmLN, at.x, at.z);
 }
 
+// THE BARE EXTRACTOR'S LIFE (apex_bare_mex_hz; his 10-26): a guard is insurance on the extractor we walk away from,
+// so it is priced on how fast ours die with no gun on them. Each spot row is sampled a slice per update: the
+// seconds it stood bare go to its forward bin, and a death last sampled bare is a bare death.
+const int BM_BINS = 16;
+const float BM_F0 = -0.4f;
+const float BM_W = 0.1f;
+array<float> gBmExp(BM_BINS, 0.f), gBmDie(BM_BINS, 0.f);
+const int BM_SPOTS = 1024;
+array<int> gBmAt(BM_SPOTS, -1);        // per spot id: frame of the last sample
+array<bool> gBmBare(BM_SPOTS, false);  // per spot id: our standing extractor with no gun, at that sample
+array<int> gBmBin(BM_SPOTS, 0);
+array<float> gBmX(BM_SPOTS, 0.f), gBmZ(BM_SPOTS, 0.f);
+array<int> gBmLive;                    // spot ids sampled bare, for the death match
+uint gBmIdx = 0;
+int gBmLast = 0;
+int gBmDeathN = 0;
+int gBmNextLog = 0;
+bool gBmOnSet = false, gBmOn = false;
+bool BareMexOn()
+{
+	if (!gBmOnSet) {
+		gBmOnSet = true;
+		gBmOn = ai.GetTunable("apex_bare_mex_hz", TUNE_BARE_MEX_HZ) > 0.f;
+	}
+	return gBmOn;
+}
+
+int BmBinOf(const AIFloat3& in at)
+{
+	int b = int((Military::ForwardFraction(at) - BM_F0) / BM_W);
+	if (b < 0) b = 0;
+	if (b >= BM_BINS) b = BM_BINS - 1;
+	return b;
+}
+
+void BmDecay()
+{
+	const int step = ai.frame - gBmLast;
+	if (step <= 0)
+		return;
+	gBmLast = ai.frame;
+	float k = 1.f - (float(step) / 30.f) / (4.f * LossTau());
+	if (k < 0.f)
+		k = 0.f;
+	for (int i = 0; i < BM_BINS; ++i) {
+		gBmExp[i] *= k;
+		gBmDie[i] *= k;
+	}
+}
+
+void BareMexStep()
+{
+	if (!BareMexOn() || !Builder::gHomeSet)
+		return;
+	BmDecay();
+	uint n = gLSpot.length();
+	if (gLPos.length() < n) n = gLPos.length();
+	if (gLExtract.length() < n) n = gLExtract.length();
+	const float r = Brain::LightTowerRange();
+	uint todo = n / 5 + 1;
+	while ((todo > 0) && (n > 0)) {
+		--todo;
+		if (gBmIdx >= n)
+			gBmIdx = 0;
+		const uint i = gBmIdx++;
+		const int sp = gLSpot[i];
+		if ((sp < 0) || (sp >= BM_SPOTS))
+			continue;
+		if (gBmBare[sp] && (gBmAt[sp] >= 0))
+			gBmExp[gBmBin[sp]] += float(ai.frame - gBmAt[sp]) / 30.f;
+		gBmAt[sp] = ai.frame;
+		const bool was = gBmBare[sp];
+		gBmBare[sp] = (gLExtract[i] > 0.f) && !MexHasCover(gLPos[i], r);
+		if (gBmBare[sp]) {
+			gBmBin[sp] = BmBinOf(gLPos[i]);
+			gBmX[sp] = gLPos[i].x;
+			gBmZ[sp] = gLPos[i].z;
+			if (!was)
+				gBmLive.insertLast(sp);
+		}
+	}
+	if (ai.frame >= gBmNextLog) {
+		gBmNextLog = ai.frame + 60 * SECOND;
+		AiLog("apex: baremex t=" + ai.teamId + " deaths=" + gBmDeathN
+			+ " hz(rear,mid,fwd)=" + formatFloat(BareMexHzF(0.f), "", 0, 5)
+			+ "," + formatFloat(BareMexHzF(0.3f), "", 0, 5)
+			+ "," + formatFloat(BareMexHzF(0.6f), "", 0, 5)
+			+ " prior=" + formatFloat(1.f / gDmH, "", 0, 5));
+	}
+}
+
+// One of our finished extractors died here (main.as): a bare death if its spot was last sampled bare.
+void BmNoteMexLoss(const AIFloat3& in at)
+{
+	if (!BareMexOn())
+		return;
+	int best = -1;
+	float bestD2 = 150.f * 150.f;
+	for (uint q = 0; q < gBmLive.length(); ) {
+		const int sp = gBmLive[q];
+		if (!gBmBare[sp]) {
+			gBmLive.removeAt(q);
+			continue;
+		}
+		const float dx = gBmX[sp] - at.x;
+		const float dz = gBmZ[sp] - at.z;
+		if (dx * dx + dz * dz < bestD2) {
+			bestD2 = dx * dx + dz * dz;
+			best = sp;
+		}
+		++q;
+	}
+	if (best < 0)
+		return;
+	BmDecay();
+	gBmExp[gBmBin[best]] += float(ai.frame - gBmAt[best]) / 30.f;
+	gBmDie[gBmBin[best]] += 1.f;
+	gBmAt[best] = ai.frame;
+	gBmBare[best] = false;
+	++gBmDeathN;
+}
+
+// Deaths over bare seconds near this forward fraction (a kernel over the bins), with one prior death per
+// exposure window so an empty bin reads the prior and evidence takes over as it accumulates.
+float BareMexHzF(float f)
+{
+	BmDecay();
+	DefMeasuredOn();
+	float d = 1.f, e = gDmH;
+	for (int b = 0; b < BM_BINS; ++b) {
+		const float u = (BM_F0 + (float(b) + 0.5f) * BM_W - f) / 0.15f;
+		const float k = 1.f / (1.f + u * u * u * u);
+		d += k * gBmDie[b];
+		e += k * gBmExp[b];
+	}
+	return d / e;
+}
+
+float BareMexHzAt(const AIFloat3& in at)
+{
+	return BareMexHzF(Military::ForwardFraction(at));
+}
+
 void DmProbesRebuild()
 {
 	gDmPL = gLStamp;
@@ -139,6 +282,7 @@ void DefMeasuredStep()
 		gDmPPrev[i] = m;
 	}
 	DefMeasuredLog();
+	BareMexStep();
 }
 
 // What the enemy has shown anywhere, as a per-site rate: every arrival and
