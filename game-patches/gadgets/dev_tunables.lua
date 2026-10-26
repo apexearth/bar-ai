@@ -119,6 +119,7 @@ local NAMES = {
 	"apex_insure_rate",
 	"apex_nuke_risk",
 	"apex_targfac_want",
+	"apex_obsolete_eta", -- want_energy.as: obsolete bars the market pick only, the ETA still sees it (0)
 	"apex_obsolete_arrive", -- want_reclaim.as: obsolete only against a replacement that would arrive (0)
 	"apex_obsolete_ratio",
 	"apex_expose_r",
@@ -424,7 +425,8 @@ local NAMES = {
 	"apex_strike_mod", -- strike.as: attack threat modifier during the strike (0.3)
 	"apex_plan_from_price", -- planprice.as: the team plays the best-priced plan (0)
 	"apex_er_q", -- ecoreturn.as: q scales the four army consumers (1)
-	"apex_trial_er_q", -- trial.as: apex_er_q by a coin per seat (1, from v0.4.04)
+	"apex_trial_er_q", -- trial.as: apex_er_q by a coin per seat (0: ended in v0.4.05, q kept)
+	"apex_trial_obsolete_reach", -- trial.as: apex_obsolete_arrive 2 or 0 by a coin per seat (1, from v0.4.05)
 	"apex_plan_price", -- planprice.as: the plan pricer runs (1)
 	"apex_verbose", -- plannet.as: thinking in chat, local watch games only (0)
 	"apex_produce_focus", -- strike.as: one best unit per lab in PRODUCE (0)

@@ -495,6 +495,7 @@ float gBestEcell = 0.f;
 float gBuildEcell = 0.f;
 array<float> gBuildGenEc;   // every generator a hand we own can raise: E per cell, metal
 array<float> gBuildGenM;
+array<int> gBuildGenD;
 float gBestMcell = 0.f;
 int gBestCellAt = -999999;
 
@@ -521,6 +522,7 @@ void RefreshBestCells()
 	gBuildEcell = gBestEcell;
 	gBuildGenEc.resize(0);
 	gBuildGenM.resize(0);
+	gBuildGenD.resize(0);
 	const array<int>@ _own41 = OwnedDefs();
 	for (uint _oi41 = 0; _oi41 < _own41.length(); ++_oi41) {
 		const uint b = uint(_own41[_oi41]);
@@ -538,6 +540,7 @@ void RefreshBestCells()
 				gBuildEcell = ec;
 			gBuildGenEc.insertLast(ec);
 			gBuildGenM.insertLast(Catalog::gCostM[gd]);
+			gBuildGenD.insertLast(gd);
 		}
 	}
 	// WHAT WE COULD BUILD, not only what we happen to own.
@@ -588,18 +591,55 @@ bool GenDwarfedByStanding(int d)
 			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * ec);
 }
 
+// one generator's seconds to the plan's target, built as the ladder would batch it; cached 5 s per def
+array<int> gGenEtaAt;
+array<float> gGenEtaS;
+float GenEtaS(int d)
+{
+	if (int(gGenEtaAt.length()) <= d) {
+		gGenEtaAt.resize(d + 1);
+		gGenEtaS.resize(d + 1);
+		for (int i = 0; i <= d; ++i)
+			if (gGenEtaAt[i] == 0)
+				gGenEtaAt[i] = -999999;
+	}
+	if (ai.frame - gGenEtaAt[d] < 5 * SECOND)
+		return gGenEtaS[d];
+	const float gM = Catalog::gMakeE[d] * ConvRate();
+	const float s = EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, EcoPowerM()), 0.f);
+	gGenEtaAt[d] = ai.frame;
+	gGenEtaS[d] = s;
+	return s;
+}
 bool GenObsoleteOnArrival(int d)
 {
 	RefreshBestCells();
 	const float ec = Catalog::gMakeE[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	const float ratio = ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO);
-	if ((ec <= 0.f) || (ai.GetTunable("apex_obsolete_arrive", TUNE_OBSOLETE_ARRIVE) <= 0.f))
+	float mode = ai.GetTunable("apex_obsolete_arrive", TUNE_OBSOLETE_ARRIVE);
+	// a trial from v0.4.05: each seat's coin decides ETA reach (2) or the old test (0)
+	if (Trial::Running("obsolete_reach", TUNE_TRIAL_OBSOLETE_REACH))
+		mode = Trial::On("obsolete_reach", 0.f, TUNE_TRIAL_OBSOLETE_REACH) ? 2.f : 0.f;
+	if ((ec <= 0.f) || (mode <= 0.f))
 		return (ec > 0.f) && (gBuildEcell >= ratio * ec);
 	// A STANDING denser generator is the replacement already; a buildable one is a replacement only if it would
 	// ARRIVE: its metal affordable at our income before this generator pays its own cost back.
 	if (gBestEcell >= ratio * ec)
 		return true;
+	if (mode >= 2.f) {
+		// WITHIN REACH: the denser one must get us to the target no later than this one would
+		float sd = -1.f;
+		for (uint i = 0; i < gBuildGenD.length(); ++i) {
+			if ((gBuildGenEc[i] < ratio * ec) || (gBuildGenD[i] == d))
+				continue;
+			if (sd < 0.f)
+				sd = GenEtaS(d);
+			if (GenEtaS(gBuildGenD[i]) <= sd)
+				return true;
+		}
+		return false;
+	}
 	const float payM = Catalog::gMakeE[d] * ConvRate();
 	const float payS = Catalog::gCostM[d] / ((payM > 0.01f) ? payM : 0.01f);
 	const float inc = Eco::MInc();
