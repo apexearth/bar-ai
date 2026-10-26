@@ -1953,6 +1953,9 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 
 int gDrawLadderMex = -1;    // the ranked index the ladder chose as a spot claim, this draw
 bool gDrawLadderTaken = false;
+Want@ gDrawDefJoin = null;   // this election's priced tower join, which the ladder yields to like a tower
+int gLadderYieldN = 0;
+int gLadderYieldLogAt = 0;
 int gDrawLadderTech = -1;   // the ranked index the ladder chose as tech, this draw
 bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
 {
@@ -1968,6 +1971,23 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	// the hand to a tower or a lathe nine times in ten: 1.25 mexes per
 	// player in minutes 2-10 against BARb's 3.7, the spots gone to them.
 	// A constructor's job; the commander keeps his leash and his draw.
+	// TUNE_LADDER_YIELDS: the ladder orders the economy; a tower priced above its claim is not economy and stands
+	if ((gDrawLadderMex > 0) && (gDrawLadderMex < int(ranked.length()))
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (ai.GetTunable("apex_ladder_yields", TUNE_LADDER_YIELDS) > 0.f)
+		&& ((CategoryOf(ranked[0].kind) == CAT_DEFENCE) || ((gDrawDefJoin !is null) && (ranked[0] is gDrawDefJoin)))
+		&& (ranked[0].value > ranked[uint(gDrawLadderMex)].value))
+	{
+		++gLadderYieldN;
+		if (ai.frame >= gLadderYieldLogAt) {
+			gLadderYieldLogAt = ai.frame + 30 * SECOND;
+			AiLog("apex: ladder-yield t=" + ai.teamId + " n=" + gLadderYieldN + " "
+				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
+				+ " v=" + formatFloat(ranked[0].value, "", 0, 2) + " over mex v="
+				+ formatFloat(ranked[uint(gDrawLadderMex)].value, "", 0, 2));
+		}
+		gDrawLadderMex = -1;
+	}
 	if ((gDrawLadderMex > 0) && (gDrawLadderMex < int(ranked.length()))
 		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 	{
@@ -3159,9 +3179,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	// METAL FIRST: a free hand joins the unlock in flight (want_assist.as).
 	// Not over its own metal work -- a mex, an upgrade or the plant itself.
+	const bool djPriced = (ai.GetTunable("apex_ladder_yields", TUNE_LADDER_YIELDS) > 0.f) && DefJoinPriceOn();
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
-		&& (ranked.length() > 0) && (ranked[0].kind != WK_MEX)
-		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))
+		&& (ranked.length() > 0) && (djPriced || ((ranked[0].kind != WK_MEX)
+		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))))
 	{
 		const double _tUa = Perf::T0();
 		// No hand is hoisted onto the metal unlock at a fixed v=1000 (his 10-20 eco game: free cons onto a 29,000-E
@@ -3170,7 +3191,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Want@ ua = null;
 		Perf::Add("dr.unlock", _tUa);
 		string uaWhy = "metalfirst";
-		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
+		if (((ua is null) || (ua.kind != WK_ASSIST)) && (djPriced || !mexOnList)) {
 			if (DefJoinPriceOn()) {
 				@ua = null;
 				const double _tDj = Perf::T0();
@@ -3206,6 +3227,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	Perf::Add("dec.roles", _tRoles);
 	const double _tDraw = Perf::T0();
+	@gDrawDefJoin = edDj;
 	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !upFirst && !openPush)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = gDrawLadderTaken ? "ladder" : "draw";
