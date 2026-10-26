@@ -1159,6 +1159,14 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				gapF = 0.f;
 			const float gapStream = gapF / ((fillS > 1.f) ? fillS : 60.f);
 			gain = (OverflowM() + gapStream) * afford;
+			// THE T3 GAP: their T3 (at least the biggest unit their gantry builds, once one was seen) is answered only
+			// by T3 -- his 10-26 "T3 defense and T3 units of our own increase in priority"
+			if (gapEst) {
+				float t3Gap = Military::FoeT3M() * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO)
+						- Military::OurT3M();
+				if (t3Gap > 0.f)
+					gain += t3Gap / ((fillS > 1.f) ? fillS : 60.f) * afford;
+			}
 			// CAPABILITY INSURANCE (apexearth: "If the enemy comes at us
 			// with a Behemoth and we do not have one we are in big
 			// trouble"): the answer to enemy T3 has to exist BEFORE one is

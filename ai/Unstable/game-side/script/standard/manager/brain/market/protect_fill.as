@@ -386,7 +386,16 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// a home-ground post is staked by the base it would reach and expects it inside the exposure window,
 	// both by the share of their identified army that is T3. Priced per gun's circle and at the measured
 	// rate, a Pulsar read 2.4 m/s on 3,500 m while 400k of T3 walked in (watch game 26: zero built).
-	const float t3Share = Military::FoeTierAbove(2);
+	float t3Share = Military::FoeTierAbove(2);
+	// ...floored by their T3 threat over their army (apex_gantry_gap_est): one gantry unit seen, the biggest it builds
+	// is coming, and the share read off the decaying ledger forgets it
+	if (ai.GetTunable("apex_gantry_gap_est", TUNE_GANTRY_GAP_EST) > 0.f) {
+		const float fa = Military::FoeArmyM();
+		const float ft3 = Military::FoeT3M();
+		const float sh = (fa + ft3 > 1.f) ? ft3 / ((fa > ft3) ? fa : ft3) : 0.f;
+		if (sh > t3Share)
+			t3Share = (sh > 1.f) ? 1.f : sh;
+	}
 	const float t3Stake = gPfTotal * t3Share;
 	const float t3Hz = (horizW > 1.f) ? (t3Share / horizW) : 0.f;
 	const bool dmOn = DefMeasuredOn();
