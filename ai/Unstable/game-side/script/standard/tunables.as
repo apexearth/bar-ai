@@ -1518,8 +1518,8 @@ const float TUNE_ECO_FORCE = 0.f;
 const float TUNE_ECO_LEAN = 0.f;   // share of the eco phase a 3-4 player team's middle-back seat plays, strict (his 10-25 4v4 lean; 0 = no eco seat, his 09-02)
 const float TUNE_BP_OVERFLOW_FLOOR = 0.f;   // [toggle 0/1] want_energy.as BPGap: the metal overflowing each second floors the build-power gap (the bank term was swallowed by nameplate capacity)
 const float TUNE_STOCK_ESCORT = 0.f;   // [toggle 0/1] hooks.as: under apex_stock_army the escort duty still stands (script-free while on it); his 10-26
-const float TUNE_BARE_MEX_HZ = 0.f;   // [toggle 0/1] protect_measured.as: an unguarded extractor's guard is priced on how fast our unguarded extractors die, by forward fraction (his 10-26 insurance ruling)
-const float TUNE_LADDER_YIELDS = 0.f;   // [toggle 0/1] decide.as CategoryDraw: the ladder's spot claim no longer jumps a constructor's tower priced above it (the commander was always exempt)
+const float TUNE_BARE_MEX_HZ = 1.f;   // [toggle 0/1] protect_measured.as: an unguarded extractor's guard is priced on how fast our unguarded extractors die, by forward fraction (his 10-26 insurance ruling)
+const float TUNE_LADDER_YIELDS = 1.f;   // [toggle 0/1] decide.as CategoryDraw: the ladder's spot claim no longer jumps a constructor's tower priced above it (the commander was always exempt)
 const float TUNE_GANTRY_GAP_EST = 0.f;   // [toggle 0/1] want_super.as: the gantry's army gap on the one army count (FoeArmyM vs OurArmyM), not EnemyArmyCost (a third of their army)
 const float TUNE_ECO_SEAT_T3 = 0.f;   // [toggle 0/1] ecoseat.as EcoSeatT3: past half its growth target the eco seat builds the team's gantry and its T3 (his 10-26)
 const float TUNE_ECO_SEATS = 2.f;   // [1/2] how many of the most sheltered seats play eco (his 10-25: 2 on bigger maps, 1 on smaller)
