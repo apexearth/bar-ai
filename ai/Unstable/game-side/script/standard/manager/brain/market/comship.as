@@ -98,6 +98,9 @@ float ShipDGunStr(CCircuitUnit@ u, int g)
 	if ((g < 0) || (g >= aiEnemyMgr.GetEnemyGroupCount()))
 		return 0.f;
 	array<float> s;
+	array<float> walk;   // seconds to close from its range to the D-gun's, under fire (0 when it cannot outrange it)
+	const float dgR = u.DGunRange();
+	const float cSpd = Catalog::gSpeed[int(u.circuitDef.id)];
 	float dps = 0.f, rad = 0.f, vmax = 0.f;
 	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 	for (int k = 0; k < nU; ++k) {
@@ -108,6 +111,8 @@ float ShipDGunStr(CCircuitUnit@ u, int g)
 		if (Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
 		s.insertLast(UnitStrength(d));
+		const float over = Catalog::gLandRange[d] - dgR;
+		walk.insertLast(((over > 0.f) && (cSpd > 1.f)) ? over / cSpd : 0.f);
 		rad += 4.f * float((Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d]);
 		if (Catalog::gSpeed[d] > vmax)
 			vmax = Catalog::gSpeed[d];
@@ -116,11 +121,27 @@ float ShipDGunStr(CCircuitUnit@ u, int g)
 		return 0.f;
 	const float tFight = u.GetHealthPercent() * Catalog::gHealth[int(u.circuitDef.id)] / dps;
 	float k = ComDGunKills(u, tFight, vmax, rad / float(s.length()), int(s.length()));
-	s.sortAsc();
+	// ONE AT A TIME, EACH WALKED TO: the heaviest first; a target that outranges the D-gun costs the walk from its
+	// range to his, under the group's fire, out of the seconds he lives -- and after a kill the next is walked to
+	// again (cloak would make the first walk free, but the script cannot read it: the walk is always counted)
+	const float rl = u.DGunReload();
+	float t = tFight;
 	float dgOut = 0.f;
-	for (int i = int(s.length()) - 1; (i >= 0) && (k > 0.f); --i) {
-		dgOut += s[i] * ((k >= 1.f) ? 1.f : k);
+	array<bool> used(s.length(), false);
+	while (k > 0.f) {
+		int best = -1;
+		for (uint i = 0; i < s.length(); ++i)
+			if (!used[i] && ((best < 0) || (s[i] > s[uint(best)])))
+				best = int(i);
+		if (best < 0)
+			break;
+		used[uint(best)] = true;
+		t -= walk[uint(best)];
+		if (t <= 0.f)
+			break;
+		dgOut += s[uint(best)] * ((k >= 1.f) ? 1.f : k);
 		k -= 1.f;
+		t -= (rl > 0.f) ? rl : 0.f;
 	}
 	return dgOut;
 }
