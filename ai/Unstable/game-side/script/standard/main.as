@@ -340,6 +340,7 @@ void UnitFinishedInner(CCircuitUnit@ unit, bool produced = true)
 	Market::LiftNoteFinished(unit);
 	Market::ComUnitFinished(unit);
 	Market::NoteFarm(unit);
+	Market::CalibNoteBorn(unit);
 	Brain::NoteSiloFinished(unit, produced);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;

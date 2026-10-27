@@ -46,6 +46,7 @@
 #include "market/joinnet.as"        // join a same-def site already rising, or open a new one
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
 #include "market/persona.as"        // per-seat personality dials: air, tech, aggression, unit class (apex_persona)
+#include "market/calib.as"          // calibration: the risk each finished structure was priced at (apex: calib-born)
 #include "market/rush.as"           // their army racing a big investment of ours: floor and tech price
 #include "market/pressure.as"       // short contact: shorter horizon, team push, contest their expansions
 #include "market/mapshare.as"       // under our share of the extractor spots: army nudge, aggression, claim value
