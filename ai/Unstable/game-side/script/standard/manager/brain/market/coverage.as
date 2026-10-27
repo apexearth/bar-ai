@@ -1028,9 +1028,11 @@ float StreamRisk(const AIFloat3& in pos)
 	// start (0.545 both), and the second moho went to the front (watched).
 	// A stream at the front carries the prior twice, one at the rear once.
 	// TUNE_CALIB_RISK: our own extractors' measured death rate at this forward fraction stands in its place (calib.as)
-	const float siege = CalibRiskOn() ? CalibRateAt(0, pos)
+	// ...and none in the eco test, which has no army to send (his 10-27: "your logic here just doesn't realize it is in
+	// a completely safe environment"); TechHomeRisk already stands down there
+	const float siege = EcoOnly() ? 0.f : (CalibRiskOn() ? CalibRateAt(0, pos)
 			: (SiegeWith(pos, cover, ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP
-			* (1.f + GradAt(pos)));
+			* (1.f + GradAt(pos))));
 	if (siege > risk)
 		risk = siege;
 	gSsAt[slot] = ai.frame;
