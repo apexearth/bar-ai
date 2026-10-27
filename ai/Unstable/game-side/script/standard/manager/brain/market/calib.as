@@ -38,6 +38,7 @@ void CalibNoteExec(Want@ w)
 			gCxWalk.removeAt(i); gCxBuild.removeAt(i);
 		}
 	}
+	CbWorthLog(w);
 	gCxDef.insertLast(d);
 	gCxAt.insertLast(ai.frame);
 	gCxX.insertLast(w.pos.x);
@@ -47,6 +48,25 @@ void CalibNoteExec(Want@ w)
 }
 
 float Sq(float x) { return x * x; }
+
+// STEP FIVE: WORTH. What a new extractor or generator will really make, in metal a second -- the spot's raw metal x
+// the handicap x its extractsMetal; or its energy x the handicap x the best converter's
+// metal per energy -- beside the gain the price used. `apex: calib-worth ... gain= real= x=gain/real`.
+void CbWorthLog(Want@ w)
+{
+	const int d = int(w.def.id);
+	float real = -1.f;
+	if ((w.kind == WK_MEX) && (w.spotId >= 0) && (Catalog::gExtractsM[d] > 0.f)) {
+		// GetMexSpotIncome is the spot's raw metal; extractsMetal turns it into metal a second
+		real = aiEconomyMgr.GetMexSpotIncome(w.spotId) * IncomeMult() * Catalog::gExtractsM[d];
+	} else if ((w.kind == WK_ENERGY) && (Catalog::gMakeE[d] > 0.f)) {
+		real = Catalog::gMakeE[d] * IncomeMult() * BestConvRatio();
+	}
+	if (real <= 0.f)
+		return;
+	AiLog("apex: calib-worth t=" + ai.teamId + " " + KindName(w.kind) + ":" + w.def.GetName() + " gain="
+		+ NnF(w.gain, 2) + " real=" + NnF(real, 3) + " x=" + NnF(w.gain / real, 2) + " inc=" + int(Eco::MInc()));
+}
 
 void CbBuildMatch(int d, const AIFloat3& in p)
 {

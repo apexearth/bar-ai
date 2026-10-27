@@ -96,3 +96,24 @@ if bk:
         rr = [a / max(1, w + b) for w, b, a in xs]
         print(f"{d:12s} {len(xs):4d} {statistics.median(w for w, b, a in xs):6.0f} {statistics.median(b for w, b, a in xs):6.0f} "
               f"{statistics.median(pr):7.0f} {statistics.median(ac):7.0f} {statistics.median(rr):14.2f}")
+
+
+# WORTH: the gain the price used against what the build really makes in metal a second (`apex: calib-worth`).
+WRT = re.compile(r"apex: calib-worth t=\d+ (\S+?):(\S+) gain=([-\d.]+) real=([\d.]+) x=([-\d.]+) inc=(\d+)")
+wk = defaultdict(list)
+for arg in sys.argv[1:]:
+    for d in sorted(Path().glob(arg)) if any(ch in arg for ch in "*?") else [Path(arg)]:
+        log = d / "infolog.txt" if d.is_dir() else d
+        if not log.exists():
+            continue
+        for ln in open(log, encoding="utf-8", errors="replace"):
+            m = WRT.search(ln)
+            if m:
+                wk[m[2]].append((float(m[3]), float(m[4]), int(m[6])))
+if wk:
+    import statistics
+    print(f"\n{'def':12s} {'n':>4s} {'gain':>8s} {'real m/s':>9s} {'gain/real':>10s}  by income <50 / 50-150 / >150")
+    for d, xs in sorted(wk.items(), key=lambda kv: -len(kv[1]))[:20]:
+        rr = lambda sel: statistics.median([g / r for g, r, i in xs if sel(i)]) if any(sel(i) for g, r, i in xs) else float("nan")
+        print(f"{d:12s} {len(xs):4d} {statistics.median(g for g, r, i in xs):8.2f} {statistics.median(r for g, r, i in xs):9.3f} "
+              f"{statistics.median(g / r for g, r, i in xs):10.2f}  {rr(lambda i: i < 50):6.2f} / {rr(lambda i: 50 <= i < 150):6.2f} / {rr(lambda i: i >= 150):6.2f}")
