@@ -62,6 +62,95 @@ float InFlightGainM()
 	return gIfhGain;
 }
 
+// THE HOLD UNDER SHARED METAL (apex_inflight_ps). In a stall every build runs at once and the metal is split among them,
+// so a job finishes after sum_k min(c_k, c_j)/income: a new build of cost C delays job j by min(C, c_j)/income, not
+// C/income. The jobs in progress (remaining cost, return) and each lab's current order, sorted by remaining cost once
+// per frame; the charge for any C is then sum_{c_j<C} r_j c_j + C sum_{c_j>=C} r_j, one binary search.
+array<float> gPsC, gPsRC, gPsR;   // ascending remaining cost; prefix sum of r*c; suffix sum of r
+int gPsAt = -1, gPsStamp = -1;
+bool gPsOnSet = false, gPsOn = false;
+bool InFlightPsOn()
+{
+	if (!gPsOnSet) {
+		gPsOnSet = true;
+		gPsOn = ai.GetTunable("apex_inflight_ps", TUNE_INFLIGHT_PS) > 0.f;
+	}
+	return gPsOn;
+}
+
+void PsRebuild()
+{
+	if ((gPsAt == ai.frame) && (gPsStamp == gJobStamp))
+		return;
+	gPsAt = ai.frame;
+	gPsStamp = gJobStamp;
+	array<float> c, r;
+	for (uint i = 0; i < gJobTask.length(); ++i) {
+		IUnitTask@ t = gJobTask[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null) || (gJobGain[i] <= 0.f))
+			continue;
+		const float prog = Requests::Progress(t);
+		if (prog >= 1.f)
+			continue;
+		c.insertLast(Catalog::gCostM[int(t.buildDef.id)] * (1.f - prog));
+		r.insertLast(gJobGain[i]);
+	}
+	if (LabAssistOn()) {
+		for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
+			CCircuitUnit@ f = Brain::gFQFac[i];
+			const int d = LabOrderOf(f);
+			if (d <= 0)
+				continue;
+			const float g = LabProductG(int(f.circuitDef.id), d);
+			if (g <= 0.f)
+				continue;
+			c.insertLast(Catalog::gCostM[d]);
+			r.insertLast(g);
+		}
+	}
+	const uint n = c.length();
+	array<uint> ord(n);
+	for (uint i = 0; i < n; ++i)
+		ord[i] = i;
+	for (uint i = 1; i < n; ++i) {   // insertion sort: tens of jobs
+		const uint k = ord[i];
+		int j = int(i) - 1;
+		while ((j >= 0) && (c[ord[uint(j)]] > c[k])) {
+			ord[uint(j + 1)] = ord[uint(j)];
+			--j;
+		}
+		ord[uint(j + 1)] = k;
+	}
+	gPsC.resize(n);
+	gPsRC.resize(n + 1);
+	gPsR.resize(n + 1);
+	gPsRC[0] = 0.f;
+	for (uint i = 0; i < n; ++i) {
+		gPsC[i] = c[ord[i]];
+		gPsRC[i + 1] = gPsRC[i] + r[ord[i]] * c[ord[i]];
+	}
+	gPsR[n] = 0.f;
+	for (int i = int(n) - 1; i >= 0; --i)
+		gPsR[uint(i)] = gPsR[uint(i + 1)] + r[ord[uint(i)]];
+}
+
+// sum over the jobs in progress of return x min(costX, remaining): metal-seconds of their returns a new build of
+// costX holds up, before dividing by income
+float InFlightHoldM(float costX)
+{
+	PsRebuild();
+	const uint n = gPsC.length();
+	uint lo = 0, hi = n;   // first job whose remaining cost is >= costX
+	while (lo < hi) {
+		const uint mid = (lo + hi) / 2;
+		if (gPsC[mid] < costX)
+			lo = mid + 1;
+		else
+			hi = mid;
+	}
+	return gPsRC[lo] + costX * gPsR[lo];
+}
+
 // THE HOLD'S OTHER HALF. A build that holds the projects in flight pays for their returns; a build
 // that adds income speeds every one of them by the share of income it adds (his 10-18: "if upgrading
 // a metal extractor lets us build EVERYTHING ELSE 15% faster, isn't it super valuable?"). The caller
