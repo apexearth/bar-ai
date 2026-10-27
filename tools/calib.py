@@ -72,3 +72,27 @@ print(f"{'kind':8s} {'band':5s} {'n':>5s} {'stood h':>8s} {'deaths':>7s} {'expec
 for (k, b), (n, s, dd, ex) in sorted(acc.items(), key=lambda kv: (kv[0][0], ["rear", "mid", "fwd"].index(kv[0][1]))):
     ratio = dd / ex if ex > 0 else float("inf")
     print(f"{k:8s} {b:5s} {n:5d} {s / 3600:8.1f} {dd:7d} {ex:9.1f} {ratio:7.2f}  {dd / s if s else 0:11.5f}  {ex / s if s else 0:8.5f}")
+
+
+# BUILD TIME: what the price assumed (walk + build seconds at the decision) against the seconds from the first
+# decision for that site to the building finishing (`apex: calib-build`).
+BLD = re.compile(r"apex: calib-build t=\d+ def=(\S+) fwd=(-?[\d.]+) walk=(-?\d+) build=(-?\d+) actual=(\d+)")
+bk = defaultdict(list)
+for arg in sys.argv[1:]:
+    for d in sorted(Path().glob(arg)) if any(ch in arg for ch in "*?") else [Path(arg)]:
+        log = d / "infolog.txt" if d.is_dir() else d
+        if not log.exists():
+            continue
+        for ln in open(log, encoding="utf-8", errors="replace"):
+            m = BLD.search(ln)
+            if m:
+                bk[m[1]].append((int(m[3]), int(m[4]), int(m[5])))
+if bk:
+    import statistics
+    print(f"\n{'def':12s} {'n':>4s} {'walk':>6s} {'build':>6s} {'priced':>7s} {'actual':>7s} {'actual/priced':>14s}")
+    for d, xs in sorted(bk.items(), key=lambda kv: -len(kv[1]))[:25]:
+        pr = [w + b for w, b, a in xs]
+        ac = [a for w, b, a in xs]
+        rr = [a / max(1, w + b) for w, b, a in xs]
+        print(f"{d:12s} {len(xs):4d} {statistics.median(w for w, b, a in xs):6.0f} {statistics.median(b for w, b, a in xs):6.0f} "
+              f"{statistics.median(pr):7.0f} {statistics.median(ac):7.0f} {statistics.median(rr):14.2f}")

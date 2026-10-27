@@ -11,9 +11,64 @@ void CalibNoteBorn(CCircuitUnit@ unit)
 	if (!OnMap(p))
 		return;
 	CbBorn(unit, p);
+	CbBuildMatch(int(unit.circuitDef.id), p);
 	AiLog("apex: calib-born t=" + ai.teamId + " uid=" + int(unit.id) + " def=" + unit.circuitDef.GetName()
 		+ " fwd=" + NnF(Military::ForwardFraction(p), 2) + " risk=" + NnF(StreamRisk(p), 5)
 		+ " hz=" + NnF(HazardAt(p), 5) + " short=" + NnF(ShortfallAt(p), 2));
+}
+
+// STEP THREE: BUILD TIME. An executed structure want leaves what the price assumed -- its walk and build seconds --
+// against its def and site; the first such record for a def within CB_SITE_R of where a building of that def
+// finishes is matched and all of them there are dropped, so re-elections and joiners fold into the first decision.
+// `apex: calib-build ... pred=walk+build actual=` -- tools/calib.py sets them side by side per kind.
+const float CB_SITE_R = 400.f;
+array<int> gCxDef, gCxAt;
+array<float> gCxX, gCxZ, gCxWalk, gCxBuild;
+void CalibNoteExec(Want@ w)
+{
+	if ((w is null) || (w.def is null) || Catalog::gMobile[int(w.def.id)] || !OnMap(w.pos))
+		return;
+	const int d = int(w.def.id);
+	for (uint i = 0; i < gCxDef.length(); ++i)
+		if ((gCxDef[i] == d) && (Sq(gCxX[i] - w.pos.x) + Sq(gCxZ[i] - w.pos.z) < CB_SITE_R * CB_SITE_R))
+			return;   // the first decision for this site already stands
+	for (int i = int(gCxDef.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gCxAt[i] > 20 * MINUTE) {
+			gCxDef.removeAt(i); gCxAt.removeAt(i); gCxX.removeAt(i); gCxZ.removeAt(i);
+			gCxWalk.removeAt(i); gCxBuild.removeAt(i);
+		}
+	}
+	gCxDef.insertLast(d);
+	gCxAt.insertLast(ai.frame);
+	gCxX.insertLast(w.pos.x);
+	gCxZ.insertLast(w.pos.z);
+	gCxWalk.insertLast(w.walkSec);
+	gCxBuild.insertLast(w.buildSec);
+}
+
+float Sq(float x) { return x * x; }
+
+void CbBuildMatch(int d, const AIFloat3& in p)
+{
+	int best = -1;
+	for (uint i = 0; i < gCxDef.length(); ++i) {
+		if ((gCxDef[i] != d) || (Sq(gCxX[i] - p.x) + Sq(gCxZ[i] - p.z) >= CB_SITE_R * CB_SITE_R))
+			continue;
+		if ((best < 0) || (gCxAt[i] < gCxAt[uint(best)]))
+			best = int(i);
+	}
+	if (best < 0)
+		return;
+	const uint b = uint(best);
+	AiLog("apex: calib-build t=" + ai.teamId + " def=" + Catalog::Def(d).GetName() + " fwd="
+		+ NnF(Military::ForwardFraction(p), 2) + " walk=" + int(gCxWalk[b]) + " build=" + int(gCxBuild[b])
+		+ " actual=" + int(float(ai.frame - gCxAt[b]) / 30.f) + " inc=" + int(Eco::MInc()));
+	for (int i = int(gCxDef.length()) - 1; i >= 0; --i) {
+		if ((gCxDef[i] == d) && (Sq(gCxX[i] - p.x) + Sq(gCxZ[i] - p.z) < CB_SITE_R * CB_SITE_R)) {
+			gCxDef.removeAt(i); gCxAt.removeAt(i); gCxX.removeAt(i); gCxZ.removeAt(i);
+			gCxWalk.removeAt(i); gCxBuild.removeAt(i);
+		}
+	}
 }
 
 // STEP TWO: THE MEASURED RATE (apex_calib_risk). 18 games of 2v2 at +50 (cala/b/c): the survival price read a flat

@@ -3609,6 +3609,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 					+ ExecTaskAt(t, ranked[i]));
 			if (DecideLogOn())
 				NnRecord(unit, ranked[i], depth, why);
+			CalibNoteExec(ranked[i]);
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
