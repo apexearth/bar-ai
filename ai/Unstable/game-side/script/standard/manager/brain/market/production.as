@@ -2749,7 +2749,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			// AND THE STANDING COMPOSITION TARGET: tank / middle / reach / dps
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
-			ppc *= 1.f + tLineBite * LineShortfall(LineClassOf(d));
+			ppc *= (1.f + tLineBite * LineShortfall(LineClassOf(d))) * PersClassMul(LineClassOf(d));
 			if (ebLogNow)
 				ebS += EbF("ls", ppc);
 			float aoeH = 0.f;

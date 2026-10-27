@@ -76,7 +76,7 @@ float RawTarget(Cat c)
 	// normalisation below then pays for it out of every other category. See
 	// Military::LossArmyMult -- pressure-scaled and bounded, never a switch.
 	if (c == ARMY)
-		w *= Military::LossArmyMult() * Market::EcoReturnArmyMul();
+		w *= Military::LossArmyMult() * Market::EcoReturnArmyMul() * Market::PersMul(Market::PD_AGGR);
 	return w;
 }
 

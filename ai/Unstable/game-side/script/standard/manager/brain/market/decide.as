@@ -297,7 +297,7 @@ Want@ WantCopy(Want@ s)
 	c.src = s.src;
 	c.funded = s.funded;
 	c.pcWalk = s.pcWalk; c.pcBuild = s.pcBuild; c.pcDisp = s.pcDisp; c.pcLock = s.pcLock;
-	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp;
+	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp; c.persMul = s.persMul;
 	return c;
 }
 
@@ -1271,7 +1271,7 @@ string PcPart(Want@ w)
 		+ " m=" + int(w.mCost) + " t=" + int(w.tCost)
 		+ " [walk" + int(w.pcWalk) + " build" + int(w.pcBuild) + " disp" + int(w.pcDisp) + " lock" + int(w.pcLock)
 		+ " flow" + int(w.pcFlow) + " risk" + int(w.pcRisk) + " late" + int(w.pcLate) + " opp" + int(w.pcOpp) + "]"
-		+ " nn=" + formatFloat(w.nnMult, "", 0, 3)
+		+ " nn=" + formatFloat(w.nnMult, "", 0, 3) + " pers=" + formatFloat(w.persMul, "", 0, 3)
 		+ " post=" + formatFloat((base > 0.f) ? (w.value / base) : 0.f, "", 0, 3);
 }
 void PriceCard(CCircuitUnit@ unit, Want@ top, Want@ next, const string &in why)
@@ -2303,6 +2303,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			&& (ai.GetTunable("apex_budget_lever", TUNE_BUDGET_LEVER) > 0.f)
 			&& (ai.GetTunable("apex_budget_after", TUNE_BUDGET_AFTER) <= 0.f))
 			c.value *= BudgetCatMult(CategoryOf(c.kind));
+		{
+			const float pm = PersWantMul(c);
+			c.value *= pm;
+			c.persMul = pm;
+		}
 		uint at = 0;
 		while ((at < ranked.length()) && (ranked[at].value >= c.value))
 			++at;

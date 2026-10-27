@@ -14,7 +14,7 @@ from pathlib import Path
 
 LINE = re.compile(r"\[f=0*(\d+)\].*?apex: pricecard t=(\d+) u=(\S+) why=(\S+) inc=(\d+) \| win (.*?) \| 2nd (.*)$")
 PART = re.compile(r"(\S+?):(\S+) v=([0-9.]+) g=([-0-9.]+) m=(-?\d+) t=(-?\d+) \[walk(-?\d+) build(-?\d+) disp(-?\d+) "
-                  r"lock(-?\d+) flow(-?\d+) risk(-?\d+) late(-?\d+) opp(-?\d+)\] nn=([0-9.]+) post=([0-9.]+)")
+                  r"lock(-?\d+) flow(-?\d+) risk(-?\d+) late(-?\d+) opp(-?\d+)\] nn=([0-9.]+)(?: pers=([0-9.]+))? post=([0-9.]+)")
 TERMS = ["m", "walk", "build", "disp", "lock", "flow", "risk", "late", "opp", "other"]
 
 
@@ -43,7 +43,8 @@ def parse(path, team, lo, hi):
             # what tCost holds that no named charge accounts for (a proposer's own term, a memo repricing)
             r["other"].append(float(p[6]) - sum(float(p[i]) for i in (7, 8, 9, 10, 11, 12, 13, 14)))
             r["nn"].append(float(p[15]))
-            r["post"].append(float(p[16]))
+            r["pers"].append(float(p[16]) if p[16] else 1.0)
+            r["post"].append(float(p[17]))
     return rows
 
 
@@ -61,7 +62,7 @@ def main():
     rows = parse(p, a.team, a.min_from, a.min_to)
     med = lambda xs: statistics.median(xs) if xs else 0.0
     print(f"{'def':14s} {'win':>4s} {'2nd':>4s} {'v':>8s} {'gain':>8s} " + " ".join(f"{t:>7s}" for t in TERMS)
-          + f" {'nn':>6s} {'post':>6s}  largest")
+          + f" {'nn':>6s} {'pers':>6s} {'post':>6s}  largest")
     for d, r in sorted(rows.items(), key=lambda kv: -len(kv[1]["v"])):
         if a.only and d != a.only:
             continue
@@ -70,7 +71,7 @@ def main():
         big = max(TERMS, key=lambda t: meds[t])
         print(f"{d:14s} {r['role'].count('win'):4d} {r['role'].count('2nd'):4d} {med(r['v']):8.2f} {med(r['g']):8.2f} "
               + " ".join(f"{meds[t]:7.0f}" for t in TERMS)
-              + f" {med(r['nn']):6.2f} {med(r['post']):6.2f}  {big} {100 * meds[big] / bill:.0f}%")
+              + f" {med(r['nn']):6.2f} {med(r['pers']):6.2f} {med(r['post']):6.2f}  {big} {100 * meds[big] / bill:.0f}%")
 
 
 if __name__ == "__main__":

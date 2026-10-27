@@ -53,6 +53,7 @@ final class Want {
 	float nnMult = 1.f;     // the value net's multiplier, already inside value (nnlog.as)
 	// tCost's parts as ValueOf charged them, for the price card (`apex: pricecard`)
 	float pcWalk = 0.f, pcBuild = 0.f, pcDisp = 0.f, pcLock = 0.f, pcFlow = 0.f, pcRisk = 0.f, pcLate = 0.f, pcOpp = 0.f;
+	float persMul = 1.f;    // the seat personality's lean on this want (persona.as), already inside value
 	bool nnPriced = false;  // in the list when the net looked; forced wants added after are not
 	array<float>@ nnOpt;    // the net's inputs for this option, computed once per election
 	float nnTilt = 0.f;     // trust x the net's verdict, log units: the ETA ladder reads it too
