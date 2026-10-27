@@ -384,6 +384,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	Military::SpamNoteDeath(unit);
+	Market::CalibNoteGone(unit, false);
 	Market::ComUnitDead(unit);
 	Builder::ConSlotRelease(int(unit.id));
 	Requests::RingFrameGone(int(unit.id));
@@ -552,6 +553,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		Military::FlankNoteLoss(at, int(cdef.id));
 		// the same death kept by PLACE, with no home-ground filter: outlying mexes
 		Market::NoteEcoLoss(at, cdef.costM);
+		Market::CalibNoteGone(unit, true);
 		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
 			Market::NoteTowerLost(at);
 			Market::NoteTowerGrave(at, cdef.costM, int(attackerDef.id));

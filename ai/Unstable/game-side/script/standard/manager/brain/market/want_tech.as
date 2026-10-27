@@ -43,7 +43,8 @@ float TechHomeRisk()
 	float risk = HazardAt(home) * shortH;
 	// The siege prior stands whether or not anything has been seen; it is the
 	// term that says a big economy with no army is a target.
-	const float siege = SiegeRisk(home) * shortH;
+	// TUNE_CALIB_RISK: our own structures' measured death rate at home stands in for the prior (calib.as)
+	const float siege = CalibRiskOn() ? CalibRateAt(1, home) : (SiegeRisk(home) * shortH);
 	if (siege > risk)
 		risk = siege;
 	gTsRisk = risk;
