@@ -1215,14 +1215,14 @@ const float TUNE_ESCORT_SPEED = 1.f;
 
 // A spot is worth what it RAISES us by, not what it yields (apexearth: "when a
 //   mex would double our income it is very important. See docs/tunables.md.
-const float TUNE_MEX_GROWTH = 6.f;
+const float TUNE_MEX_GROWTH = 1.f;
 
 // [toggle 0/1] -- Discount a generator by how much better a one any
 //   constructor we own could build instead, so a worker restricted to the
 //   inferior option prefers to spend its build power on the better one. See
 //   docs/tunables.md.
 
-const float TUNE_ENERGY_GROWTH = 10.f;
+const float TUNE_ENERGY_GROWTH = 1.f;
 
 // [toggle 0/1] DEFAULT OFF -- charge the energy growth premium above on the
 //   share of the plan's own horizon a generator would actually be paying over,
@@ -1518,10 +1518,10 @@ const float TUNE_ECO_FORCE = 0.f;
 const float TUNE_ECO_LEAN = 0.f;   // share of the eco phase a 3-4 player team's middle-back seat plays, strict (his 10-25 4v4 lean; 0 = no eco seat, his 09-02)
 const float TUNE_BP_OVERFLOW_FLOOR = 0.f;   // [toggle 0/1] want_energy.as BPGap: the metal overflowing each second floors the build-power gap (the bank term was swallowed by nameplate capacity)
 const float TUNE_LAND_VALUE = 0.f;   // [toggle 0/1] land.as: a footprint pays the neighbourhood's standing metal per cell (his 10-27 land value)
-const float TUNE_OPP_WAIT = 0.f;   // [toggle 0/1] decide.as OppTimeReprice: the runner-up waits only until another hand takes its kind, measured per kind (calib.as)
-const float TUNE_CALIB_RISK = 0.f;   // [toggle 0/1] calib.as: the survival price reads our structures' measured death rate by class and forward fraction in place of the siege prior (StreamRisk, TechHomeRisk)
+const float TUNE_OPP_WAIT = 1.f;   // [toggle 0/1] decide.as OppTimeReprice: the runner-up waits only until another hand takes its kind, measured per kind (calib.as)
+const float TUNE_CALIB_RISK = 1.f;   // [toggle 0/1] calib.as: the survival price reads our structures' measured death rate by class and forward fraction in place of the siege prior (StreamRisk, TechHomeRisk)
 const float TUNE_PERSONA = 0.f;   // [toggle 0/1] persona.as: each seat draws dials (air, tech, aggression, unit class) leaning their prices up to 1.5x either way (his 10-26)
-const float TUNE_INFLIGHT_PS = 0.f;   // [toggle 0/1] price.as displacedM: each job in progress waits min(this cost, its remaining cost)/income, as stalled metal is shared (floor.as InFlightHoldM)
+const float TUNE_INFLIGHT_PS = 1.f;   // [toggle 0/1] price.as displacedM: each job in progress waits min(this cost, its remaining cost)/income, as stalled metal is shared (floor.as InFlightHoldM)
 const float TUNE_GANTRY_PLANT = 0.f;   // [toggle 0/1] want_plant.as: a plant that makes no constructor (the gantry) is priced by the plant market on its production half, and the super market stops offering the gantry (his 10-26: factory agnostic)
 const float TUNE_STOCK_ESCORT = 0.f;   // [toggle 0/1] hooks.as: under apex_stock_army the escort duty still stands (script-free while on it); his 10-26
 const float TUNE_BARE_MEX_HZ = 1.f;   // [toggle 0/1] protect_measured.as: an unguarded extractor's guard is priced on how fast our unguarded extractors die, by forward fraction (his 10-26 insurance ruling)
