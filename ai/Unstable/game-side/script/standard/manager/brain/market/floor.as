@@ -64,7 +64,7 @@ float InFlightGainM()
 
 // THE HOLD UNDER SHARED METAL (apex_inflight_ps). In a stall every build runs at once and the metal is split among them,
 // so a job finishes after sum_k min(c_k, c_j)/income: a new build of cost C delays job j by min(C, c_j)/income, not
-// C/income. The jobs in progress (remaining cost, return) and each lab's current order, sorted by remaining cost once
+// C/income. The jobs in progress (remaining cost, return) and each lab (a stream: unbounded remaining cost), sorted once
 // per frame; the charge for any C is then sum_{c_j<C} r_j c_j + C sum_{c_j>=C} r_j, one binary search.
 array<float> gPsC, gPsRC, gPsR;   // ascending remaining cost; prefix sum of r*c; suffix sum of r
 int gPsAt = -1, gPsStamp = -1;
@@ -104,7 +104,10 @@ void PsRebuild()
 			const float g = LabProductG(int(f.circuitDef.id), d);
 			if (g <= 0.f)
 				continue;
-			c.insertLast(Catalog::gCostM[d]);
+			// A LINE IS A STREAM, NOT A JOB: it runs as long as its gap is open, so a build of any cost slows it
+			// for the whole of C/income. Its return is the army gap at fill speed -- zero when nothing threatens,
+			// large when their army outgrows ours: the risk of investing while the army is still needed.
+			c.insertLast(1e9f);
 			r.insertLast(g);
 		}
 	}
