@@ -279,7 +279,7 @@ float CalibRate(int cls, float f)
 		d += kk * gCbDie[cls * CB_BINS + b];
 		e += kk * gCbExp[cls * CB_BINS + b];
 	}
-	return d / e;
+	return d / e * ThreatMul();
 }
 
 float CalibRateAt(int cls, const AIFloat3& in p)

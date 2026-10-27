@@ -218,7 +218,7 @@ float BareMexHzF(float f)
 		d += k * gBmDie[b];
 		e += k * gBmExp[b];
 	}
-	return d / e;
+	return d / e * ThreatMul();
 }
 
 float BareMexHzAt(const AIFloat3& in at)
@@ -311,7 +311,7 @@ float DefMeasuredFloor()
 		const float eta = (Military::gDgNearEta >= 0.f) ? Military::gDgNearEta : tau;
 		gDmFlSeen = (seen / (seen + ((ours > 0.f) ? ours : 0.f))) / (tau + eta);
 	}
-	gDmFloor = gDmFlSpread + gDmFlSeen;
+	gDmFloor = (gDmFlSpread + gDmFlSeen) * ThreatMul();
 	return gDmFloor;
 }
 
@@ -334,7 +334,7 @@ float DefMeasuredAt(const AIFloat3& in pos)
 		if (dx * dx + dz * dz < rr2)
 			l += gDmLN[i];
 	}
-	return ((a > l) ? a : l) / LossTau() + DefMeasuredFloor();
+	return ((a > l) ? a : l) / LossTau() * ThreatMul() + DefMeasuredFloor();
 }
 
 // The chance an attack lands inside the exposure window, as a share of the

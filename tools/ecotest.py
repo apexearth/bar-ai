@@ -8,7 +8,7 @@
 
 His reference (memory canon-eco-game, from his 2026-09-08 demo): 1v1 vs NullAI on Comet Catcher Remake 1.8,
 +50% for him. The test runs at +0 by default (his 10-20: "i want to do +0 here"; --bonus 50 to match it),
-no defence needed. NullAI plays at 0, apex_eco_only=1 (labs make
+no defence needed. NullAI plays at 0, apex_eco_only=1, apex_threat_mul=0 (no threat in any price; labs make
 constructors only, no towers, sensors or super weapons), deathmode=neverend so killing NullAI's commander does
 not end it, --speed 5 (trap S24: eco runs go capped). Prints per two minutes our metal and energy income,
 extractors, mohos, nano turrets, factories and constructors beside his curve, and how long the metal bank sat
@@ -43,7 +43,7 @@ def run(args) -> Path:
     cmd = [sys.executable, str(REPO / "tools" / "run_match.py"), "--a", spec, "--b", "NullAI:0.1",
            "--map", "Comet Catcher Remake 1.8", "--minutes", str(args.minutes), "--handicap", f"{args.bonus},0",
            "--speed", str(args.speed), "--seed", str(args.seed), "--modoption", "dev_stats=1",
-           "--modoption", "apex_eco_only=1", "--modoption", "deathmode=neverend", "--out", str(out)]
+           "--modoption", "apex_eco_only=1", "--modoption", "apex_threat_mul=0", "--modoption", "deathmode=neverend", "--out", str(out)]
     for kv in args.modoption or []:
         cmd += ["--modoption", kv]
     for kv in args.ai_option or []:

@@ -726,6 +726,21 @@ float GradAt(const AIFloat3& in pos)
 // the enemy end is floored by the symmetric prior so an unscouted enemy is not
 // assumed absent -- "if we don't know the enemy strength then we shouldn't be
 // making a T2 lab".
+// THREAT PERCEPTION, ONE DIAL (apex_threat_mul; his 10-27: "a multiplier defaulting at 1, and on an eco game we just
+// set that to 0, thus we see no threat anywhere in any calculation"). Applied where each danger figure is born:
+// threat, hazard, siege, trip risk, the measured attack rate and its floor, the calibrated and bare-extractor death
+// rates. Read once.
+float gThreatMul = -1.f;
+float ThreatMul()
+{
+	if (gThreatMul < 0.f) {
+		gThreatMul = ai.GetTunable("apex_threat_mul", TUNE_THREAT_MUL);
+		if (gThreatMul < 0.f)
+			gThreatMul = 0.f;
+	}
+	return gThreatMul;
+}
+
 float ThreatAt(const AIFloat3& in pos)
 {
 	if (!OnMap(pos))
@@ -738,7 +753,7 @@ float ThreatAt(const AIFloat3& in pos)
 	if (suspected > t)
 		t = suspected;
 	const float baseline = gRkRaid + (gRkHost - gRkRaid) * GradAt(pos);
-	return (baseline > t) ? baseline : t;
+	return ((baseline > t) ? baseline : t) * ThreatMul();
 }
 
 // Per-second hazard at pos: how often lethal force ARRIVES here. Whether it
@@ -832,7 +847,7 @@ float HazardWith(const AIFloat3& in pos, float cover)
 		p = gRkFloorP;
 	if (p > 1.f)
 		p = 1.f;
-	return gRkAnchor * p;
+	return gRkAnchor * p * ThreatMul();
 }
 
 // THEY ARE COMING WHETHER WE HAVE SEEN THEM OR NOT. HazardAt is deliberately
@@ -878,7 +893,7 @@ float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)
 	}
 	const float defended = gSiegeArmy + cover;
 	return (foe / (foe + ((defended > 0.f) ? defended : 0.f)))
-			/ ((gRkTau > 1.f) ? gRkTau : 180.f);
+			/ ((gRkTau > 1.f) ? gRkTau : 180.f) * ThreatMul();
 }
 
 float ThreatGradient(const AIFloat3& in pos)
@@ -907,9 +922,9 @@ float TripRiskWith(const AIFloat3& in pos, float share)
 	const float g = GradAt(pos) * (1.f - share);
 	const float sM = Military::JsSuspectM(pos, Military::FoeReach());
 	if (sM <= 0.f)
-		return g;
+		return g * ThreatMul();
 	const float sp = sM / (sM + ((gRkOurArmy > 0.f) ? gRkOurArmy : 0.f));
-	return (sp > g) ? sp : g;
+	return ((sp > g) ? sp : g) * ThreatMul();
 }
 
 float TripRisk(const AIFloat3& in pos)
