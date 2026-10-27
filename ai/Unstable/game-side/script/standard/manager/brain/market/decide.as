@@ -941,7 +941,13 @@ void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 		if ((b.gain <= 0.f) || !OnMap(a.pos) || !OnMap(b.pos) || (a.gain <= 0.f))
 			continue;
 		const float walkAB = (spd > 1.f) ? (a.pos.distance2D(b.pos) / spd) : 0.f;
-		const float delay = a.walkSec + a.buildSec + walkAB - b.walkSec;
+		float delay = a.walkSec + a.buildSec + walkAB - b.walkSec;
+		// TUNE_OPP_WAIT: b waits only until another hand takes it, measured (calib.as OppWaitOf)
+		if (OppWaitOn()) {
+			const float w = OppWaitOf(b.kind);
+			if (delay > w)
+				delay = w;
+		}
 		if (delay <= 0.f)
 			continue;
 		const float extra = b.gain * delay - wage * (a.walkSec + a.buildSec);
@@ -3610,6 +3616,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (DecideLogOn())
 				NnRecord(unit, ranked[i], depth, why);
 			CalibNoteExec(ranked[i]);
+			OppNoteExec(unit, ranked[i].kind, (i == 0) ? ((ranked.length() > 1) ? ranked[1] : null) : ranked[0]);
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;

@@ -1517,6 +1517,7 @@ const float TUNE_TEAM_TECH = 1.f;
 const float TUNE_ECO_FORCE = 0.f;
 const float TUNE_ECO_LEAN = 0.f;   // share of the eco phase a 3-4 player team's middle-back seat plays, strict (his 10-25 4v4 lean; 0 = no eco seat, his 09-02)
 const float TUNE_BP_OVERFLOW_FLOOR = 0.f;   // [toggle 0/1] want_energy.as BPGap: the metal overflowing each second floors the build-power gap (the bank term was swallowed by nameplate capacity)
+const float TUNE_OPP_WAIT = 0.f;   // [toggle 0/1] decide.as OppTimeReprice: the runner-up waits only until another hand takes its kind, measured per kind (calib.as)
 const float TUNE_CALIB_RISK = 0.f;   // [toggle 0/1] calib.as: the survival price reads our structures' measured death rate by class and forward fraction in place of the siege prior (StreamRisk, TechHomeRisk)
 const float TUNE_PERSONA = 0.f;   // [toggle 0/1] persona.as: each seat draws dials (air, tech, aggression, unit class) leaning their prices up to 1.5x either way (his 10-26)
 const float TUNE_INFLIGHT_PS = 0.f;   // [toggle 0/1] price.as displacedM: each job in progress waits min(this cost, its remaining cost)/income, as stalled metal is shared (floor.as InFlightHoldM)

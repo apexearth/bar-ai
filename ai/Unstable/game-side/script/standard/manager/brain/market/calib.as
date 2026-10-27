@@ -71,6 +71,81 @@ void CbBuildMatch(int d, const AIFloat3& in p)
 	}
 }
 
+// STEP FOUR: THE OPPORTUNITY CHARGE'S WAIT (apex_opp_wait). OppTimeReprice charges a want the runner-up's gain for
+// the runner-up's delay, the winner's whole walk + build -- as if it waited for this hand. Measured (ckr, 2,509 cards):
+// another hand started the runner-up's kind in a median 10-19 s for extractors, towers, energy, assists, upgrades and
+// nanos, 35-80 s for converters, sensors and labs, 183 s for supers. Each execution leaves the kind it passed over;
+// the next execution of that kind by another hand closes it, and the wait is an EMA per kind from those medians.
+array<float> gOwWait;
+array<int> gOwPendAt, gOwPendKind, gOwPendUnit;
+int gOwOn = -1, gOwLogAt = 0;
+bool OppWaitOn()
+{
+	if (gOwOn < 0)
+		gOwOn = (ai.GetTunable("apex_opp_wait", TUNE_OPP_WAIT) > 0.f) ? 1 : 0;
+	return gOwOn > 0;
+}
+
+float OwPrior(int k)
+{
+	if ((k == WK_MEX) || (k == WK_MEXUP) || (k == WK_NANO) || (k == WK_ASSIST))
+		return 13.f;
+	if ((k == WK_PROTECT) || (k == WK_TECH))
+		return 16.f;
+	if (k == WK_ENERGY)
+		return 19.f;
+	if ((k == WK_CONVERT) || (k == WK_RECLAIM))
+		return 30.f;
+	if ((k == WK_AIRDEF) || (k == WK_SENSE) || (k == WK_PLANT))
+		return 70.f;
+	if (k == WK_SUPER)
+		return 180.f;
+	return 30.f;
+}
+
+float OppWaitOf(int k)
+{
+	if (k < 0)
+		return 30.f;
+	if (int(gOwWait.length()) <= k) {
+		const uint o = gOwWait.length();
+		gOwWait.resize(k + 1);
+		for (uint i = o; i < gOwWait.length(); ++i)
+			gOwWait[i] = OwPrior(int(i));
+	}
+	return gOwWait[k];
+}
+
+void OppNoteExec(CCircuitUnit@ unit, int kind, Want@ passed)
+{
+	if (!OppWaitOn() || (unit is null))
+		return;
+	const int uid = int(unit.id);
+	// this execution closes every pending pass of its kind by another hand
+	for (int i = int(gOwPendAt.length()) - 1; i >= 0; --i) {
+		const float age = float(ai.frame - gOwPendAt[i]) / 30.f;
+		const bool closes = (gOwPendKind[i] == kind) && (gOwPendUnit[i] != uid);
+		if (closes || (age > 600.f)) {
+			const int k = gOwPendKind[i];
+			const float w = closes ? age : 600.f;
+			OppWaitOf(k);
+			gOwWait[k] = 0.95f * gOwWait[k] + 0.05f * w;
+			gOwPendAt.removeAt(i); gOwPendKind.removeAt(i); gOwPendUnit.removeAt(i);
+		}
+	}
+	if ((passed !is null) && (passed.kind >= 0) && (gOwPendAt.length() < 64)) {
+		gOwPendAt.insertLast(ai.frame);
+		gOwPendKind.insertLast(passed.kind);
+		gOwPendUnit.insertLast(uid);
+	}
+	if (ai.frame >= gOwLogAt) {
+		gOwLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: opp-wait t=" + ai.teamId + " mex=" + NnF(OppWaitOf(WK_MEX), 0) + " protect="
+			+ NnF(OppWaitOf(WK_PROTECT), 0) + " energy=" + NnF(OppWaitOf(WK_ENERGY), 0) + " plant="
+			+ NnF(OppWaitOf(WK_PLANT), 0) + " super=" + NnF(OppWaitOf(WK_SUPER), 0) + " pending=" + gOwPendAt.length());
+	}
+}
+
 // STEP TWO: THE MEASURED RATE (apex_calib_risk). 18 games of 2v2 at +50 (cala/b/c): the survival price read a flat
 // 0.0020-0.0035/s everywhere -- the siege prior, foe/(foe+defended)/180 s -- while our structures died at 0.0003/s
 // (rear energy) to 0.0045/s (forward extractors). Our own structures' enemy-caused deaths over the seconds they
