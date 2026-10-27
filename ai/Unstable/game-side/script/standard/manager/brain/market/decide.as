@@ -3437,6 +3437,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			+ " (gain=" + formatFloat(top.gain, "", 0, 2)
 			+ " m=" + formatFloat(top.mCost, "", 0, 0)
 			+ " t=" + formatFloat(top.tCost, "", 0, 0) + ")"
+			+ " nn=" + formatFloat(top.nnMult, "", 0, 3)
 			+ " why=" + why
 			+ ((ConRoleOf(unit) >= 0) ? (" role=" + CatName(ConRoleOf(unit))) : "")
 			+ ((next is null) ? " over nothing"
