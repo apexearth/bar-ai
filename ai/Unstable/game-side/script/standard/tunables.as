@@ -882,7 +882,7 @@ const float TUNE_LAB_RATE = 0.f;   // [toggle 0/1] production.as: a constructor 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets
 //   exp(blend) times its market value. 0 = the net only watches. See docs/how-it-works.md.
-const float TUNE_NN_BLEND = 1.f;
+const float TUNE_NN_BLEND = 0.f;
 
 // [0..1] -- Chance per AI that it is a DISCOVERY explorer this game: every
 //   decision head mixes a uniform share into its odds. See docs/how-it-works.md.

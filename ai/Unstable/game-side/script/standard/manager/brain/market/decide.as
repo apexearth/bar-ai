@@ -264,6 +264,7 @@ Want@ MemoServe(int slot, int r, CCircuitUnit@ unit)
 	float t = c.tCost + (walk - c.walkSec) * c.walkSlope;
 	if (t < 0.f)
 		t = 0.f;
+	c.pcWalk += t - c.tCost;
 	c.tCost = t;
 	c.walkSec = walk;
 	const float after = c.mCost + t;
@@ -295,6 +296,8 @@ Want@ WantCopy(Want@ s)
 	c.wfDelta = s.wfDelta;
 	c.src = s.src;
 	c.funded = s.funded;
+	c.pcWalk = s.pcWalk; c.pcBuild = s.pcBuild; c.pcDisp = s.pcDisp; c.pcLock = s.pcLock;
+	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp;
 	return c;
 }
 
@@ -948,6 +951,7 @@ void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 		Want@ c = Want();
 		c = a;
 		c.tCost += extra;
+		c.pcOpp += extra;
 		if (wf) {
 			float extraOld = b.gain * delay - wageOld * (a.walkSec + a.buildSec);
 			if (extraOld < 0.f)
@@ -1250,6 +1254,42 @@ bool SecondAdvLabWaits(Want@ w)
 		return false;
 	UpgradeHandsWant();
 	return gUpHandsB > 0;
+}
+
+// THE PRICE CARD (his 10-26: "a lot of this is easily discoverable by logging things out more"): every term of the
+// winner's and the runner-up's price in one line -- gain, metal, each tCost charge, the net, and `post`, what is left
+// of value after gain/(m+t): any multiplier nothing names shows there. One a seat per 10 s, and the first win of a def.
+int gPcAt = 0;
+array<bool> gPcSeen;
+string PcPart(Want@ w)
+{
+	if (w is null)
+		return "-";
+	const float base = (w.mCost + w.tCost > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
+	return KindName(w.kind) + ":" + ((w.def is null) ? "-" : w.def.GetName())
+		+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2) + " g=" + formatFloat(w.gain, "", 0, 2)
+		+ " m=" + int(w.mCost) + " t=" + int(w.tCost)
+		+ " [walk" + int(w.pcWalk) + " build" + int(w.pcBuild) + " disp" + int(w.pcDisp) + " lock" + int(w.pcLock)
+		+ " flow" + int(w.pcFlow) + " risk" + int(w.pcRisk) + " late" + int(w.pcLate) + " opp" + int(w.pcOpp) + "]"
+		+ " nn=" + formatFloat(w.nnMult, "", 0, 3)
+		+ " post=" + formatFloat((base > 0.f) ? (w.value / base) : 0.f, "", 0, 3);
+}
+void PriceCard(CCircuitUnit@ unit, Want@ top, Want@ next, const string &in why)
+{
+	if (top is null)
+		return;
+	const int d = (top.def is null) ? 0 : int(top.def.id);
+	if (int(gPcSeen.length()) <= d)
+		gPcSeen.resize(d + 1);
+	const bool first = (d > 0) && !gPcSeen[d];
+	if (!first && (ai.frame < gPcAt))
+		return;
+	if (d > 0)
+		gPcSeen[d] = true;
+	if (!first)
+		gPcAt = ai.frame + 10 * SECOND;
+	AiLog(Factory::T() + "apex: pricecard t=" + ai.teamId + " u=" + unit.circuitDef.GetName() + " why=" + why
+		+ " inc=" + int(Eco::MInc()) + " | win " + PcPart(top) + " | 2nd " + PcPart(next));
 }
 
 // The exposure Decide charges an immobile want's gain at `at`.
@@ -3443,6 +3483,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			+ ((next is null) ? " over nothing"
 				: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
 					+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
+	PriceCard(unit, top, next, why);
 	Perf::Add("dec.log", _tLog);
 	const double _tPost = Perf::T0();
 

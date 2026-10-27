@@ -1028,6 +1028,13 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	gPrLastDisp = displacedM;
 	gPrLastRisk = riskM;
 	gPrLastFlow = flowM;
+	w.pcWalk = gPrLastWalkC;
+	w.pcBuild = gPrLastBuildC;
+	w.pcDisp = displacedM * gVwDisp;
+	w.pcLock = gPrLastLockC;
+	w.pcFlow = flowM;
+	w.pcRisk = riskM;
+	w.pcLate = gPrLastLateC;
 	w.value = gain / (w.mCost + w.tCost);
 	return w.value;
 }
