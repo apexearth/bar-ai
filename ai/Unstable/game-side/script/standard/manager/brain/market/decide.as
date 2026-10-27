@@ -297,7 +297,7 @@ Want@ WantCopy(Want@ s)
 	c.src = s.src;
 	c.funded = s.funded;
 	c.pcWalk = s.pcWalk; c.pcBuild = s.pcBuild; c.pcDisp = s.pcDisp; c.pcLock = s.pcLock;
-	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp; c.persMul = s.persMul;
+	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp; c.persMul = s.persMul; c.pcLand = s.pcLand;
 	return c;
 }
 
@@ -1276,7 +1276,7 @@ string PcPart(Want@ w)
 		+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2) + " g=" + formatFloat(w.gain, "", 0, 2)
 		+ " m=" + int(w.mCost) + " t=" + int(w.tCost)
 		+ " [walk" + int(w.pcWalk) + " build" + int(w.pcBuild) + " disp" + int(w.pcDisp) + " lock" + int(w.pcLock)
-		+ " flow" + int(w.pcFlow) + " risk" + int(w.pcRisk) + " late" + int(w.pcLate) + " opp" + int(w.pcOpp) + "]"
+		+ " flow" + int(w.pcFlow) + " risk" + int(w.pcRisk) + " late" + int(w.pcLate) + " opp" + int(w.pcOpp) + " land" + int(w.pcLand) + "]"
 		+ " nn=" + formatFloat(w.nnMult, "", 0, 3) + " pers=" + formatFloat(w.persMul, "", 0, 3)
 		+ " post=" + formatFloat((base > 0.f) ? (w.value / base) : 0.f, "", 0, 3);
 }
@@ -2314,6 +2314,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			c.value *= pm;
 			c.persMul = pm;
 		}
+		LandApply(c);
 		uint at = 0;
 		while ((at < ranked.length()) && (ranked[at].value >= c.value))
 			++at;

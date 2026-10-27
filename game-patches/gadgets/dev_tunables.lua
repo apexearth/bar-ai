@@ -666,6 +666,7 @@ local NAMES = {
 	"apex_persona", -- persona.as: per-seat personality dials, up to 1.5x (0)
 	"apex_calib_risk", -- calib.as: survival on our measured structure death rate (0)
 	"apex_opp_wait", -- decide.as: the opportunity charge waits only until another hand takes the job (0)
+	"apex_land_value", -- land.as: rent from the neighbours' metal per cell (0)
 	"apex_eco_seat_t3", -- ecoseat.as: past half its growth target the eco seat builds the team gantry and its T3 (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)

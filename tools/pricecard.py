@@ -14,8 +14,8 @@ from pathlib import Path
 
 LINE = re.compile(r"\[f=0*(\d+)\].*?apex: pricecard t=(\d+) u=(\S+) why=(\S+) inc=(\d+) \| win (.*?) \| 2nd (.*)$")
 PART = re.compile(r"(\S+?):(\S+) v=([0-9.]+) g=([-0-9.]+) m=(-?\d+) t=(-?\d+) \[walk(-?\d+) build(-?\d+) disp(-?\d+) "
-                  r"lock(-?\d+) flow(-?\d+) risk(-?\d+) late(-?\d+) opp(-?\d+)\] nn=([0-9.]+)(?: pers=([0-9.]+))? post=([0-9.]+)")
-TERMS = ["m", "walk", "build", "disp", "lock", "flow", "risk", "late", "opp", "other"]
+                  r"lock(-?\d+) flow(-?\d+) risk(-?\d+) late(-?\d+) opp(-?\d+)(?: land(-?\d+))?\] nn=([0-9.]+)(?: pers=([0-9.]+))? post=([0-9.]+)")
+TERMS = ["m", "walk", "build", "disp", "lock", "flow", "risk", "late", "opp", "land", "other"]
 
 
 def parse(path, team, lo, hi):
@@ -40,11 +40,13 @@ def parse(path, team, lo, hi):
             r["g"].append(float(p[4]))
             for name, idx in zip(TERMS, (5, 7, 8, 9, 10, 11, 12, 13, 14)):
                 r[name].append(float(p[idx]))
+            # land is inside m (mCost), not tCost
+            r["land"].append(float(p[15]) if p[15] else 0.0)
             # what tCost holds that no named charge accounts for (a proposer's own term, a memo repricing)
             r["other"].append(float(p[6]) - sum(float(p[i]) for i in (7, 8, 9, 10, 11, 12, 13, 14)))
-            r["nn"].append(float(p[15]))
-            r["pers"].append(float(p[16]) if p[16] else 1.0)
-            r["post"].append(float(p[17]))
+            r["nn"].append(float(p[16]))
+            r["pers"].append(float(p[17]) if p[17] else 1.0)
+            r["post"].append(float(p[18]))
     return rows
 
 
