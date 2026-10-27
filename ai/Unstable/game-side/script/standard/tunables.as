@@ -882,7 +882,7 @@ const float TUNE_LAB_RATE = 0.f;   // [toggle 0/1] production.as: a constructor 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets
 //   exp(blend) times its market value. 0 = the net only watches. See docs/how-it-works.md.
-const float TUNE_NN_BLEND = 0.f;
+const float TUNE_NN_BLEND = 1.f;
 
 // [0..1] -- Chance per AI that it is a DISCOVERY explorer this game: every
 //   decision head mixes a uniform share into its odds. See docs/how-it-works.md.
@@ -2292,7 +2292,7 @@ const float TUNE_GUARD_POSTS = 1.f;   // script: manager/military/guardposts.as
 const float TUNE_MSTALL_PREM = 1.f;   // script: manager/brain/market/price.as
 const float TUNE_NOSITE_DIAG = 0.f;   // script: manager/brain/market/protect_want.as
 const float TUNE_PN_POST = 1.f;   // script: manager/military/nnpost.as
-const float TUNE_POLICY = 0.f;   // script: manager/brain/market/policy.as
+const float TUNE_POLICY = 1.f;   // script: manager/brain/market/policy.as
 const float TUNE_RECLAIM_IDLE_NANO = 1.f;   // script: manager/brain/market/want_reclaim.as
 const float TUNE_ROLE_FLOOR_ZERO = 1.f;   // script: manager/brain/market/production.as
 const float TUNE_SPILL_OUTGROWN = 0.f;   // script: manager/brain/market/production.as

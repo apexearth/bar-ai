@@ -62,7 +62,7 @@ local options = {
 		desc    = 'How much the trained nets steer decisions. 1 = full (each net still only has the say it has earned). 0 = the hand-written rules alone -- use it if the nets misbehave.',
 		type    = 'number',
 		section = 'play',
-		def     = 0,
+		def     = 1,
 		min     = 0,
 		max     = 1,
 		step    = 0.1,
