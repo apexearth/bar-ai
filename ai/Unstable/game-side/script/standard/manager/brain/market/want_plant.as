@@ -1589,9 +1589,68 @@ int HandKinOf(int d, int con)
 }
 
 int gPlantPaybackCut = 0, gPlantPaybackLogAt = 0;
+// apex_gantry_plant: the gantry leaves the super market and is priced here like any lab (his 10-26: factory agnostic)
+bool GantryPlantOn()
+{
+	return ai.GetTunable("apex_gantry_plant", TUNE_GANTRY_PLANT) > 0.f;
+}
+
+// THE BEST LINE WE STAND: the strength per metal of the best combat line among our finished plants. A new line is worth
+// the army metal it would take times how much more strength each metal buys there (his 10-26: 600 m/s, a gap of 30k,
+// every T2 line spending and the gantry priced at 2.4 -- the same metal into stronger units is the gantry's whole case).
+int gQoAt = -1;
+float gQoBest = 0.f;
+float OwnBestLineWorth()
+{
+	if (gQoAt == ai.frame)
+		return gQoBest;
+	gQoAt = ai.frame;
+	gQoBest = 0.f;
+	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
+		CCircuitUnit@ f = Factory::gFacUnits[i];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const float q = LineBestWorth(int(f.circuitDef.id));
+		if (q > gQoBest)
+			gQoBest = q;
+	}
+	return gQoBest;
+}
+
+float LineQualityGain(int d, float armyFlow)
+{
+	if (!GantryPlantOn() || (armyFlow <= 0.f))
+		return 0.f;
+	const float own = OwnBestLineWorth();
+	const float q = LineBestWorth(d);
+	if ((own <= 0.f) || (q <= own))
+		return 0.f;
+	return armyFlow * (q / own - 1.f);
+}
+
+// where the plant market stops a gantry, for a hand that can build one: `apex: gantry-plant`
+int gGpLogAt = 0;
+bool GpAsks(int uid)
+{
+	if (!GantryPlantOn() || (ai.frame < gGpLogAt))
+		return false;
+	const array<int>@ b = Catalog::BuildsOf(uid);
+	for (uint i = 0; i < b.length(); ++i)
+		if (IsGantryDef(b[i]) && Catalog::gAvailable[b[i]])
+			return true;
+	return false;
+}
+void GpLog(const string &in stage)
+{
+	gGpLogAt = ai.frame + 20 * SECOND;
+	AiLog(Factory::T() + "apex: gantry-plant t=" + ai.teamId + " " + stage + " inc=" + int(Eco::MInc())
+		+ " lines=" + Factory::gFactoryCount + " gap=" + int(ArmyTarget() - ArmyValue()) + " spare=" + NnF(SpareMetalRate(), 1));
+}
+
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
+	const bool gpAsk = GpAsks(int(unit.circuitDef.id));
 	// ONE PLANT START AT A TIME, ANY TIER (his watched loss: armlab and
 	// armhp elected 8 frames apart at 16.7m; only T2/T3 were serialized).
 	// Starts only -- standing copies stay governed by wealth, and the
@@ -1599,6 +1658,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	if (AnyPlantInFlight()) {
 		if (!WealthWaiver()) {
 			AdvDeferLog("plant-any");
+			if (gpAsk)
+				GpLog("in-flight");
 			return w;
 		}
 		// Logged so the audit can tell a sanctioned parallel start from the
@@ -1635,8 +1696,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// apex_air_every: an air plant carries its own yield, so past the marginal line it is still priced.
 	const bool evOn = Air::EveryOn();
 	const bool navalEx = MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead();
-	if (overLine && !navalEx && !evOn)
+	if (overLine && !navalEx && !evOn) {
+		if (gpAsk)
+			GpLog("over-line supported=" + supported);
 		return w;
+	}
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	// Expansion stream while ground remains, PLUS the production appetite a
@@ -1677,8 +1741,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// what the line can put on the field whatever tier it is.
 	const float pipeTerm = BPGap() * pipe;
 	const float prodHalf = prodTerm * pipe;
-	if ((stream + pipeTerm + prodHalf <= 0.05f) && !evOn)
+	if ((stream + pipeTerm + prodHalf <= 0.05f) && !evOn) {
+		if (gpAsk)
+			GpLog("no-demand prod=" + NnF(prodHalf, 2));
 		return w;
+	}
 	// None of these varies with the candidate plant; the two flags and the
 	// denial premium were re-read per rung, and the fallback anchor -- a base
 	// interior probe -- was re-derived for every rung whose own site was unset.
@@ -1835,13 +1902,19 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				}
 			}
 		}
-		if (bestMob <= 0.f)
-			continue;
-		MeasureReach(d, bestCon, at, unit);
+		// TUNE_GANTRY_PLANT: a plant that makes no constructor is priced on its production half alone, like any lab
+		const bool hands = bestMob > 0.f;
+		if (!hands) {
+			if (!GantryPlantOn())
+				continue;
+			bestMob = 1.f;
+		}
+		if (hands)
+			MeasureReach(d, bestCon, at, unit);
 		// gMexOpen is the LAND asker's own probe and cannot see water ground,
 		// so a water line asks its own reach whether any is open.
-		const bool anyOpen = (dClass == PC_WATER)
-				? (gPlantOpenReach[d] > 0) : gMexOpen;
+		const bool anyOpen = hands && ((dClass == PC_WATER)
+				? (gPlantOpenReach[d] > 0) : gMexOpen);
 		// Land-locked ground pays its stream AND a denial premium: taking it
 		// first is also the enemy not taking it. Water only -- a shipyard's
 		// ships hold the ground they claim, where air cons hold nothing.
@@ -1854,11 +1927,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// production -- see the duplicate block. Expansion is not substitutable
 		// (a nano claims no ground), so only pipeTerm is.
 		const float rateMul = PipeRateMul(d, uid);
-		float pipeT = evAir ? Air::EvHandsTerm(pipeTerm, pipe) * Air::EvConEff(bestCon) : pipeTerm;
-		const int handKin = HandsOnceOn() ? HandKinOf(d, bestCon) : 0;
+		float pipeT = !hands ? 0.f : (evAir ? Air::EvHandsTerm(pipeTerm, pipe) * Air::EvConEff(bestCon) : pipeTerm);
+		const int handKin = (hands && HandsOnceOn()) ? HandKinOf(d, bestCon) : 0;
 		if (handKin > 0)
 			pipeT /= float(1 + handKin);
-		const bool dominated = HandsDominated(d, bestCon);
+		const bool dominated = hands && HandsDominated(d, bestCon);
 		const float conHalf = dominated ? 0.f : ((pipeT + expTerm) * rateMul);
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
@@ -1877,11 +1950,24 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if (prodOwn > spare)
 				prodOwn = (spare > 0.f) ? spare : 0.f;
 		}
+		// TUNE_GANTRY_PLANT: the army metal this line would take, at the gap's own urgency and never past the army's
+		// share of income, buys more strength here than on our best line -- a copy gains nothing
+		if (GantryPlantOn() && (aGap > 0.f)) {
+			float flow = aGap / ((fillS0 > 1.f) ? fillS0 : 180.f);
+			const float armyRate = Eco::MInc() * Brain::TargetShare(Brain::ARMY);
+			if (flow > armyRate)
+				flow = armyRate;
+			prodOwn += LineQualityGain(d, flow / float(1 + lines0)) * pipe * FoeTierPlantMul(d);
+		}
 		// Economy-only: a lab builds constructors only, so the army it would field is no part of its worth (a bot
 		// lab bought at gain 1.33 and a vehicle plant at 30 beside the air plants, 10-20).
 		if (EcoOnly())
 			prodOwn = 0.f;
 		const float gain = conHalf + prodOwn;
+		if (gpAsk && !hands)
+			GpLog("priced " + Catalog::Def(d).GetName() + " prodHalf=" + NnF(prodHalf, 2) + " prodOwn=" + NnF(prodOwn, 2)
+				+ " tierMul=" + NnF(FoeTierPlantMul(d), 2) + " q=" + NnF(LineBestWorth(d), 3)
+				+ " qOwn=" + NnF(OwnBestLineWorth(), 3) + " gain=" + NnF(gain, 2));
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per

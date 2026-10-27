@@ -982,6 +982,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
 			continue;
+		if ((sc == SC_GANTRY) && GantryPlantOn())
+			{ GantryWhy(sc, "plant-market"); continue; }
 		if (slotFull && (sc != SC_GANTRY))
 			continue;
 		if ((sc == SC_GANTRY) && StrikeBuilding())
