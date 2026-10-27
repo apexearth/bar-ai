@@ -117,3 +117,28 @@ if wk:
         rr = lambda sel: statistics.median([g / r for g, r, i in xs if sel(i)]) if any(sel(i) for g, r, i in xs) else float("nan")
         print(f"{d:12s} {len(xs):4d} {statistics.median(g for g, r, i in xs):8.2f} {statistics.median(r for g, r, i in xs):9.3f} "
               f"{statistics.median(g / r for g, r, i in xs):10.2f}  {rr(lambda i: i < 50):6.2f} / {rr(lambda i: 50 <= i < 150):6.2f} / {rr(lambda i: i >= 150):6.2f}")
+
+
+# WORTH BY WHERE IT STANDS (his 10-27: "at 150+ many mohos might be in dangerous territory"): the same comparison
+# split by forward band, with the life the measured death rate expects there (lines logged after 10-27).
+WRT2 = re.compile(r"apex: calib-worth t=\d+ (\S+?):(\S+) gain=([-\d.]+) real=([\d.]+) x=[-\d.]+ inc=(\d+) fwd=(-?[\d.]+) life=(\d+)")
+wb = defaultdict(list)
+for arg in sys.argv[1:]:
+    for d in sorted(Path().glob(arg)) if any(ch in arg for ch in "*?") else [Path(arg)]:
+        log = d / "infolog.txt" if d.is_dir() else d
+        if not log.exists():
+            continue
+        for ln in open(log, encoding="utf-8", errors="replace"):
+            m = WRT2.search(ln)
+            if m:
+                f = float(m[6])
+                b = "rear" if f < 0.2 else ("mid" if f < 0.4 else "fwd")
+                wb[(m[2], b)].append((float(m[3]), float(m[4]), int(m[5]), int(m[7])))
+if wb:
+    import statistics
+    print(f"\n{'def':12s} {'band':5s} {'n':>4s} {'gain/real':>10s} {'life s':>7s} {'income':>7s}")
+    for (d, b), xs in sorted(wb.items(), key=lambda kv: (kv[0][0], ["rear", "mid", "fwd"].index(kv[0][1]))):
+        if len(xs) < 3:
+            continue
+        print(f"{d:12s} {b:5s} {len(xs):4d} {statistics.median(g / r for g, r, i, l in xs):10.2f} "
+              f"{statistics.median(l for g, r, i, l in xs):7.0f} {statistics.median(i for g, r, i, l in xs):7.0f}")

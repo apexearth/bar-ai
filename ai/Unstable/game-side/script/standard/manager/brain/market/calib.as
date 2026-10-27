@@ -65,7 +65,8 @@ void CbWorthLog(Want@ w)
 	if (real <= 0.f)
 		return;
 	AiLog("apex: calib-worth t=" + ai.teamId + " " + KindName(w.kind) + ":" + w.def.GetName() + " gain="
-		+ NnF(w.gain, 2) + " real=" + NnF(real, 3) + " x=" + NnF(w.gain / real, 2) + " inc=" + int(Eco::MInc()));
+		+ NnF(w.gain, 2) + " real=" + NnF(real, 3) + " x=" + NnF(w.gain / real, 2) + " inc=" + int(Eco::MInc())
+		+ " fwd=" + NnF(Military::ForwardFraction(w.pos), 2) + " life=" + int(1.f / CalibRate(0, Military::ForwardFraction(w.pos))));
 }
 
 void CbBuildMatch(int d, const AIFloat3& in p)
