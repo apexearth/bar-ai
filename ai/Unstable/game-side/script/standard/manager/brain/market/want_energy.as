@@ -1736,6 +1736,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// makes that metal was the only half of the pair paying flat, so the
 		// pair could never be bought in the order that realizes it.
 		float cGain = chew * Catalog::gConvRatio[d];
+		float cAccel = 0.f;
 		if (cvBestPerCell > 0.f) {
 			const float cellsI = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 			const float mine = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d] / cellsI;
@@ -1764,10 +1765,12 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			const float cvReal = MRealizeShare(chew * Catalog::gConvRatio[d],
 					Catalog::BuildSecondsAt(d, Catalog::gBuildPower[uid]));   // its metal must be spendable too
 			cGain *= cvReal;
-			cGain += IncomeAccelM(chew * Catalog::gConvRatio[d]) * cvReal;
+			cAccel = IncomeAccelM(chew * Catalog::gConvRatio[d]) * cvReal;
+			cGain += cAccel;
 		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
+		c.accelM = cAccel;
 		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is
 		// nearly as good and far cheaper; what T2 actually buys is ten times
 		// the throughput behind the same guns, and a body that does not die to

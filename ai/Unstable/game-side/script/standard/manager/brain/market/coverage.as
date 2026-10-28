@@ -741,6 +741,7 @@ float ThreatMul()
 	return gThreatMul;
 }
 
+
 float ThreatAt(const AIFloat3& in pos)
 {
 	if (!OnMap(pos))

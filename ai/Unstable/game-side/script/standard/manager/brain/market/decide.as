@@ -297,7 +297,7 @@ Want@ WantCopy(Want@ s)
 	c.src = s.src;
 	c.funded = s.funded;
 	c.pcWalk = s.pcWalk; c.pcBuild = s.pcBuild; c.pcDisp = s.pcDisp; c.pcLock = s.pcLock;
-	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp; c.persMul = s.persMul; c.pcLand = s.pcLand;
+	c.pcFlow = s.pcFlow; c.pcRisk = s.pcRisk; c.pcLate = s.pcLate; c.pcOpp = s.pcOpp; c.persMul = s.persMul; c.pcLand = s.pcLand; c.accelM = s.accelM;
 	return c;
 }
 

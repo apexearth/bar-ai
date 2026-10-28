@@ -184,7 +184,9 @@ void NoteJob(IUnitTask@ t, Want@ w)
 	for (uint i = 0; i < gJobTask.length(); ++i) {
 		if (gJobTask[i] is t) {
 			gJobVal[i] = w.value;
-			gJobGain[i] = w.gain;
+			// without its own speed-up: a job's speed-up summed into the next job's speed-up compounded without bound
+			// once danger stopped damping it (the eco test at apex_threat_mul=0: extractor gains of 1.6-12 million)
+			gJobGain[i] = w.gain - ((w.accelM > 0.f) ? w.accelM : 0.f);
 			gJobKind[i] = w.kind;
 			return;
 		}
@@ -192,7 +194,7 @@ void NoteJob(IUnitTask@ t, Want@ w)
 	PlantBoughtNote(w);
 	gJobTask.insertLast(t);
 	gJobVal.insertLast(w.value);
-	gJobGain.insertLast(w.gain);
+	gJobGain.insertLast(w.gain - ((w.accelM > 0.f) ? w.accelM : 0.f));
 	gJobKind.insertLast(w.kind);
 }
 

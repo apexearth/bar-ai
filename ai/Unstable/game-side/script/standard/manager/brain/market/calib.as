@@ -66,7 +66,16 @@ void CbWorthLog(Want@ w)
 		return;
 	AiLog("apex: calib-worth t=" + ai.teamId + " " + KindName(w.kind) + ":" + w.def.GetName() + " gain="
 		+ NnF(w.gain, 2) + " real=" + NnF(real, 3) + " x=" + NnF(w.gain / real, 2) + " inc=" + int(Eco::MInc())
-		+ " fwd=" + NnF(Military::ForwardFraction(w.pos), 2) + " life=" + int(1.f / CalibRate(0, Military::ForwardFraction(w.pos))));
+		+ " fwd=" + NnF(Military::ForwardFraction(w.pos), 2) + " life=" + CbLifeS(Military::ForwardFraction(w.pos)));
+}
+
+// the life an extractor at forward fraction f is expected, s; -1 where no threat is perceived. A float divide by zero
+// is a script exception here, not infinity: 1/rate at apex_threat_mul=0 aborted every decision that logged it (190 a
+// game) after its order went out, and the eco test's commander never finished an extractor.
+int CbLifeS(float f)
+{
+	const float r = CalibRate(0, f);
+	return (r > 1e-9f) ? int(1.f / r) : -1;
 }
 
 void CbBuildMatch(int d, const AIFloat3& in p)

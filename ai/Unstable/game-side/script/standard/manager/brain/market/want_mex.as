@@ -1338,9 +1338,11 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// it did -- the twin of the share energy has always had to prove.
 		const float mxReal = MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
 		gain *= mxReal;
-		gain += IncomeAccelM(rawAddM) * surv * (1.f - risk) * pOpen * mxReal;
+		const float accel = IncomeAccelM(rawAddM) * surv * (1.f - risk) * pOpen * mxReal;
+		gain += accel;
 		gain *= MapShareMul();
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM, EcoReturnOn());
+		c.accelM = accel * MapShareMul();
 		// A spot with a recent loss near it is a rebuild: say what it is
 		// priced at and why (sampled 10 s).
 		// ...and any spot, sampled the same way, so a collapse in the value
