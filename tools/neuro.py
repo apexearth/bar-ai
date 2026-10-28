@@ -375,12 +375,17 @@ def play(job):
     # a mirror (his 10-11: identical factions is more fair), the faction from the seed so the
     # three come up equally; each side used to draw its own, two thirds of games unequal
     side = FACTIONS[seed % len(FACTIONS)]
+    setup = job[9] if len(job) > 9 else {}   # randsearch draws the whole game (his 10-28: maps, sizes, factions, handicap, length)
+    sides = setup.get("sides") or (side, side)
+    minutes = setup.get("minutes") or MINUTES
     cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_match.py"), "--a", AI, "--b", foe,
-           "--map", mapn, "--minutes", str(MINUTES), "--seed", str(seed), "--speed", "20",
-           "--per-side", str(per_side), "--sides", "%s,%s" % (side, side), "--out", out,
+           "--map", mapn, "--minutes", str(minutes), "--seed", str(seed), "--speed", "20",
+           "--per-side", str(per_side), "--sides", "%s,%s" % tuple(sides), "--out", out,
            "--write-dir", os.path.join("runtime", "engine-cem-%d" % slot),
            "--modoption", "apex_lag_speed=0", "--modoption", "apex_nn_explore=0",
            "--ai-options-file", opt_file]
+    if setup.get("handicap"):
+        cmd += ["--handicap", "%d,%d" % tuple(setup["handicap"])]
     # runtime/nn/watch-slot names the worker whose games open a window (his 10-13: he watches
     # the search's own games, never an outdated build)
     try:
@@ -389,7 +394,7 @@ def play(job):
     except (OSError, ValueError):
         pass
     with open(os.path.join(gen_dir, "c%02d-g%d.log" % (ci, gi)), "w", encoding="utf-8") as fh:
-        subprocess.run(cmd, cwd=REPO, stdout=fh, stderr=subprocess.STDOUT, timeout=3600)
+        subprocess.run(cmd, cwd=REPO, stdout=fh, stderr=subprocess.STDOUT, timeout=10800 if setup else 3600)
     return ci, gi, cem.score(out)
 
 

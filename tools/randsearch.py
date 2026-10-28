@@ -47,6 +47,51 @@ SETUPS = [
     (1, "Comet Catcher Remake 1.8", WRD), (2, "Comet Catcher Remake 1.8", HARD), (4, "Carrot Mountains", AGG),
     (1, "Comet Catcher Remake 1.8", AGG), (2, "Glacier Pass", AGG), (4, "Comet Catcher Remake 1.8", HARD),
 ]
+# EVERY GAME ITS OWN SETUP (his 10-28: "randomize the team sizes and maps *completely*... team sizes, factions,
+# handicap, map (do them all!), time limit"; and crowded games: "a tiny 1v1 map with 8v8 teams"). Drawn from the
+# game's seed, so a game can be replayed; team size is independent of the map's own size. Saved beside each game
+# as c<net>-g<game>.setup.json. A map whose game produced no score is skipped from then on (runtime/nn/rand_badmaps).
+RANDOM_SETUPS = True
+SIZES, SIZE_W = (1, 2, 3, 4, 5, 6, 8), (2, 2, 1.5, 1.5, 1, 1, 1)
+MINUTES_ANY = (10, 15, 20, 25, 30, 40, 50, 60)
+HANDICAPS = (0, 25, 50, 75, 100)
+MAPS_FILE = os.path.join(neuro.NN, "rand_maps.json")
+BAD_MAPS = os.path.join(neuro.NN, "rand_badmaps")
+_maps = None
+_map_lock = threading.Lock()
+
+
+def all_maps():
+    global _maps
+    if _maps is None:
+        if not os.path.exists(MAPS_FILE):
+            out = subprocess.run([sys.executable, os.path.join(REPO, "tools", "unitsync.py"), "maps", ""],
+                                 capture_output=True, text=True, cwd=REPO, timeout=600).stdout
+            names = [ln.strip() for ln in out.splitlines() if ln.startswith("  ") and not ln.startswith("      ")]
+            with open(MAPS_FILE, "w", encoding="utf-8") as fh:
+                json.dump(sorted(set(n for n in names if n)), fh)
+        _maps = json.load(open(MAPS_FILE, encoding="utf-8"))
+    bad = set(open(BAD_MAPS, encoding="utf-8").read().splitlines()) if os.path.exists(BAD_MAPS) else set()
+    return [m for m in _maps if m not in bad]
+
+
+def note_bad_map(mapn):
+    with _map_lock:
+        with open(BAD_MAPS, "a", encoding="utf-8") as fh:
+            fh.write(mapn + "\n")
+    log("map %s gave no score; skipped from now on" % mapn)
+
+
+def draw_setup(seed):
+    r = random.Random(seed * 2654435761 % (1 << 32))
+    per_side = r.choices(SIZES, SIZE_W)[0]
+    foe = r.choice(((WRD,) if per_side == 1 else ()) + (HARD, AGG))
+    ours = r.choice(("Armada", "Cortex", "Legion"))
+    theirs = r.choice(("Armada", "Cortex") if foe == WRD else ("Armada", "Cortex", "Legion"))
+    return {"per_side": per_side, "map": r.choice(all_maps()), "foe": foe, "sides": [ours, theirs],
+            "minutes": r.choice(MINUTES_ANY), "handicap": [r.choice(HANDICAPS), r.choice(HANDICAPS)]}
+
+
 neuro.FOE = WRD
 neuro.FACTIONS = ("Armada", "Cortex")   # his 10-13: WRDistilled plays Legion badly, its wins say nothing
 # runtime/nn/rand_explore raises it without a code edit: annealing needs room past the first 1000 nets.
@@ -404,8 +449,18 @@ def work(slot, st, lay, rng):
         f = os.path.join(st["dir"], "c%02d.json" % n["id"])
         sc = None
         try:
-            per_side, mapn, foe = SETUPS[gi % len(SETUPS)]
-            _, _, sc = neuro.play((st["dir"], n["id"], gi, per_side, mapn, game_seed(n.get("seed_id", n["id"]), gi), f, slot, foe))
+            seed = game_seed(n.get("seed_id", n["id"]), gi)
+            if RANDOM_SETUPS:
+                setup = draw_setup(seed)
+                per_side, mapn, foe = setup["per_side"], setup["map"], setup["foe"]
+                with open(os.path.join(st["dir"], "c%02d-g%d.setup.json" % (n["id"], gi)), "w", encoding="utf-8") as fh:
+                    json.dump(setup, fh)
+            else:
+                setup = {}
+                per_side, mapn, foe = SETUPS[gi % len(SETUPS)]
+            _, _, sc = neuro.play((st["dir"], n["id"], gi, per_side, mapn, seed, f, slot, foe, setup))
+            if setup and sc is None:
+                note_bad_map(mapn)
         except Exception:
             log("worker %d game c%d-g%d raised: %s" % (slot, n["id"], gi, traceback.format_exc().strip().replace("\n", " | ")))
         with lock:
