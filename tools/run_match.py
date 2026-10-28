@@ -566,6 +566,95 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
     return result
 
 
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+    return str(pid) in out
+
+
+def claim_write_dir(d: Path) -> bool:
+    """Atomically claim an engine write dir: create engine.lock exclusively, holding our pid. A lock whose process is
+    dead is cleared and the claim retried; a live one means the dir is taken (False)."""
+    lock = d / "engine.lock"
+    for _ in range(3):
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            try:
+                other = int(lock.read_text().strip() or "0")
+            except (OSError, ValueError):
+                other = 0
+            if other and _pid_alive(other):
+                return False
+            try:
+                lock.unlink()
+            except OSError:
+                time.sleep(0.2)
+    return False
+
+
+def release_write_dir(d: Path) -> None:
+    lock = d / "engine.lock"
+    try:
+        if lock.read_text().strip() == str(os.getpid()):
+            lock.unlink()
+    except OSError:
+        pass
+
+
+def _free_memory_gb() -> float:
+    import ctypes
+
+    class MEMSTAT(ctypes.Structure):
+        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong), ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong), ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong), ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong), ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+    st = MEMSTAT()
+    st.dwLength = ctypes.sizeof(MEMSTAT)
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))
+    return st.ullAvailPhys / 2 ** 30
+
+
+def _engines_growth_gb(game_gb: float) -> float:
+    """What engines still loading will yet take: each headless engine under the worst-case game size is charged the
+    rest of the way to it (a game reads ~2 GB a few seconds in and 4-7 GB once running)."""
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq spring-headless.exe", "/FO", "CSV", "/NH"],
+                         capture_output=True, text=True).stdout
+    owed = 0.0
+    for row in out.splitlines():
+        cells = [c.strip('"') for c in row.split('","')]
+        if len(cells) < 5 or not cells[0].lower().startswith("spring"):
+            continue
+        try:
+            ws_gb = int(re.sub(r"[^\d]", "", cells[4])) / 2 ** 20
+        except ValueError:
+            continue
+        if ws_gb < game_gb:
+            owed += game_gb - ws_gb
+    return owed
+
+
+def wait_for_memory(game_gb: float, reserve_gb: float, poll_s: float = 10.0) -> None:
+    """His 10-27: launch on free memory, not on a clock. Wait until a worst-case game fits beside his reserve, after
+    what the engines still loading will take."""
+    said = False
+    while True:
+        free = _free_memory_gb() - _engines_growth_gb(game_gb)
+        if free >= game_gb + reserve_gb:
+            return
+        if not said:
+            print(f"waiting for memory: {free:.1f} GB usable, need {game_gb + reserve_gb:.1f} "
+                  f"({game_gb:.0f} for the game + {reserve_gb:.0f} reserve)", flush=True)
+            said = True
+        time.sleep(poll_s)
+
+
 def run(args) -> int:
     env = bar_env.load(args.engine)
     ais = [AISpec.parse(s) for s in args.ai]
@@ -641,27 +730,24 @@ def run(args) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     write_dir.mkdir(parents=True, exist_ok=True)
 
+    # His 10-27: launch on free memory, not on a clock. Waits until a worst-case game fits beside his reserve.
+    if not args.no_mem_gate:
+        wait_for_memory(args.mem_game_gb, args.mem_reserve_gb)
+
     # Two engines sharing one write-dir interleave into the same infolog.txt
     # and stomp each other's config -- measured 2026-08-15: a watch game
     # launched beside a long soak run broke the watch game's AI outright and
-    # corrupted the soak's log. A pidfile marks the dir busy; if its process is
-    # still alive, silently side-step to a suffixed dir instead.
-    pidfile = write_dir / "engine.pid"
+    # corrupted the soak's log. The dir is CLAIMED atomically (an exclusive lock file), so two launches at the same
+    # moment cannot both take it (trap S61: they shared one start script and an A/B played one arm twice); a held
+    # claim side-steps to a suffixed dir, a dead one's claim is cleared.
     sidestep_dir = None
-    try:
-        other = int(pidfile.read_text().strip())
-    except (OSError, ValueError):
-        other = 0
-    if other:
-        alive = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {other}", "/NH"],
-            capture_output=True, text=True).stdout
-        if str(other) in alive:
-            write_dir = write_dir.parent / f"{write_dir.name}-{os.getpid()}"
-            write_dir.mkdir(parents=True, exist_ok=True)
-            sidestep_dir = write_dir
-            pidfile = write_dir / "engine.pid"
-            print(f"write-dir busy (engine pid {other}); using {write_dir}")
+    if not claim_write_dir(write_dir):
+        write_dir = write_dir.parent / f"{write_dir.name}-{os.getpid()}"
+        write_dir.mkdir(parents=True, exist_ok=True)
+        sidestep_dir = write_dir
+        claim_write_dir(write_dir)
+        print(f"write-dir busy; using {write_dir}")
+    pidfile = write_dir / "engine.pid"
     pidfile.write_text(str(os.getpid()))
 
     script = build_script(
@@ -908,6 +994,7 @@ def run(args) -> int:
     except Exception as e:  # noqa: BLE001 -- the match result stands regardless
         print(f"audit    failed to run: {e}")
 
+    release_write_dir(write_dir)
     # A side-stepped write dir was this run's alone, and everything in it -- the infolog with the AI
     # logs merged in, the replay -- is in outdir by now. Left behind, they piled up: 318 on one lane.
     if sidestep_dir is not None:
@@ -1050,6 +1137,12 @@ def main() -> int:
                     help="watch it play: fills the screen borderless, replay recorded. "
                          "Implies --windowed --speed 3; +/- adjust live up to 20x")
     ap.add_argument("--out", help="output directory (default: matches/<stamp>-<slug>)")
+    ap.add_argument("--mem-game-gb", type=float, default=7.0,
+                    help="worst-case memory one game takes, GB (his 10-27: 4-7)")
+    ap.add_argument("--mem-reserve-gb", type=float, default=12.0,
+                    help="memory left free for the person at the machine, GB")
+    ap.add_argument("--no-mem-gate", action="store_true",
+                    help="launch without waiting for free memory")
     ap.add_argument("--write-dir", dest="write_dir",
                     help="engine write dir; give concurrent runs separate ones "
                          "(default: matches/_engine)")
