@@ -1215,14 +1215,14 @@ const float TUNE_ESCORT_SPEED = 1.f;
 
 // A spot is worth what it RAISES us by, not what it yields (apexearth: "when a
 //   mex would double our income it is very important. See docs/tunables.md.
-const float TUNE_MEX_GROWTH = 1.f;
+const float TUNE_MEX_GROWTH = 6.f;
 
 // [toggle 0/1] -- Discount a generator by how much better a one any
 //   constructor we own could build instead, so a worker restricted to the
 //   inferior option prefers to spend its build power on the better one. See
 //   docs/tunables.md.
 
-const float TUNE_ENERGY_GROWTH = 1.f;
+const float TUNE_ENERGY_GROWTH = 10.f;
 
 // [toggle 0/1] DEFAULT OFF -- charge the energy growth premium above on the
 //   share of the plan's own horizon a generator would actually be paying over,
