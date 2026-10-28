@@ -85,7 +85,10 @@ def weights(lay, seed, s):
 # network used to draw its own random middle, so hidden neuron k meant something different in every
 # network and no block could be compared or merged. Since then every new random network is this one
 # middle (the one evolution started from) plus its own noise: a family whose neurons line up.
-FAMILY = "mid1ea92a42"
+# his 10-28: a fresh search starts AT THE RULE -- all weights 0 with apex_pn_rule_centre (output 0 = the rule's value,
+# a list head's tilt exp(0) = 1). The random middle "mid1ea92a42" leaned every net the same way: extractor claims x0.38,
+# air constructors x4.1, constructor cap x2.7, guns per post x0.23 (tools/nnshift.py).
+FAMILY = "zero"
 FAMILY_SRC = os.path.join(REPO, "tournaments", "20261010-225137-nn-neuro-g1", "c00.weights")
 _family_w = None
 
@@ -95,7 +98,8 @@ def family_middle(st):
     if _family_w is None:
         keep = os.path.join(st["dir"], FAMILY + ".weights")
         if not os.path.exists(keep):
-            shutil.copy(FAMILY_SRC, keep)
+            n = len(open(FAMILY_SRC, encoding="utf-8").read().split())
+            open(keep, "w", encoding="utf-8").write(" ".join(["0"] * n))
         _family_w = [float(x) for x in open(keep, encoding="utf-8").read().split()]
     return _family_w
 

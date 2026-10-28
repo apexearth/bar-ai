@@ -192,7 +192,7 @@ const float TUNE_TEAM_AIRLOSS = 1.f;
 // [toggle 0/1] -- A policy network's output 0 plays each continuous head at the
 //   rule's value (policy.as PnValueRule), not the log-middle of its range (aa
 //   0.63x, gunp 0.45x, mass 1.22x). His 10-14; A/B before default.
-const float TUNE_PN_RULE_CENTRE = 0.f;
+const float TUNE_PN_RULE_CENTRE = 1.f;
 
 // [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
 //   clear our structures in their reach (raidanswer.as), not only units within one
