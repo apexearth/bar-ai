@@ -2131,7 +2131,7 @@ function renderSearch() {
   const G = SV.groups, series = [];
   const add = (key, color, muted) => G[key] && series.push({label: G[key].label, color, muted, games: G[key].games,
                                                            vals: G[key].heads, kinds: G[key].kinds});
-  add("shipped", SV_COLOR.shipped); add("current", SV_COLOR.current); add("biased", SV_COLOR.biased);
+  add("shipped", SV_COLOR.shipped); add("current", SV_COLOR.current);
   const olds = Object.keys(G).filter(k => G[k].kind === "old");
   olds.forEach(k => add(k, SV_COLOR.old, true));
   if (pick !== "") {

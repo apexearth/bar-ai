@@ -23,7 +23,6 @@ from collections import defaultdict
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NN = os.path.join(REPO, "runtime", "nn")
 SHIPPED_GLOBS = ("yof-*", "ycf-*")
-FIRST_FRESH = os.path.join(NN, "rand-familymid-20261028.json")
 OLD = os.path.join(NN, "rand-oldprices-20261028.json")
 
 HEADS = {
@@ -157,12 +156,6 @@ def archive_groups(cache, old_top=3):
         files += sorted(glob.glob(os.path.join(REPO, "matches", pat, "infolog.txt")))
     groups["shipped"] = {"label": "Shipped net (v0.4.09)", "kind": "shipped",
                          **summarise(game_acc(f, cache) for f in files)}
-
-    st = load_state(FIRST_FRESH)
-    if st.get("dir"):
-        s = summarise(game_acc(f, cache) for f in glob.glob(os.path.join(st["dir"], "matches", "*", "infolog.txt")))
-        if s["games"]:
-            groups["biased"] = {"label": "First fresh run (random middle)", "kind": "biased", **s}
 
     old = load_state(OLD)
     viable = [n for n in old["nets"].values() if n.get("status") == "viable" and len(n.get("games", [])) >= 12]

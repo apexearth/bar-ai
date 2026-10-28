@@ -138,15 +138,46 @@ FAMILY_SRC = os.path.join(REPO, "tournaments", "20261010-225137-nn-neuro-g1", "c
 _family_w = None
 
 
+POLICYDATA = os.path.join(REPO, "ai", "Unstable", "game-side", "script", "standard", "manager", "brain", "market",
+                          "policydata.as")
+
+
+def layout_len():
+    """the weight count the AI's network takes: PN_BEST's length (policy.as loads a file only of exactly that size;
+    10-28 two searches shipped the 10-10 file's 8,400 against 9,413 and every game played PN_BEST)"""
+    for line in open(POLICYDATA, encoding="utf-8"):
+        if line.startswith("const array<float> PN_BEST = {"):
+            return line.count(",") + 1
+    raise RuntimeError("PN_BEST not found in " + POLICYDATA)
+
+
 def family_middle(st):
     global _family_w
     if _family_w is None:
         keep = os.path.join(st["dir"], FAMILY + ".weights")
-        if not os.path.exists(keep):
-            n = len(open(FAMILY_SRC, encoding="utf-8").read().split())
+        n = layout_len()
+        if (not os.path.exists(keep)) or (len(open(keep, encoding="utf-8").read().split()) != n):
             open(keep, "w", encoding="utf-8").write(" ".join(["0"] * n))
         _family_w = [float(x) for x in open(keep, encoding="utf-8").read().split()]
     return _family_w
+
+
+POLICY_RX = re.compile(r"apex: policy ON t=\d+ src=(\w+) n=(\d+) given=(\d+)")
+
+
+def check_loaded(out_dir, nid, gi):
+    """a game must play its own network; anything else pauses the search (runtime/nn/rand_on -> rand_on.paused)"""
+    try:
+        m = POLICY_RX.search(open(os.path.join(out_dir, "infolog.txt"), encoding="utf-8", errors="replace").read())
+    except OSError:
+        return
+    if m and m.group(1) != "file":
+        log("WEIGHTS REJECTED in c%02d-g%d: src=%s n=%s given=%s -- search paused" % (nid, gi, m.group(1), m.group(2), m.group(3)))
+        try:
+            os.replace(os.path.join(neuro.NN, "rand_on"), os.path.join(neuro.NN, "rand_on.paused"))
+        except OSError:
+            pass
+        os._exit(3)
 
 
 def family_weights(st, seed, s):
@@ -459,6 +490,7 @@ def work(slot, st, lay, rng):
                 setup = {}
                 per_side, mapn, foe = SETUPS[gi % len(SETUPS)]
             _, _, sc = neuro.play((st["dir"], n["id"], gi, per_side, mapn, seed, f, slot, foe, setup))
+            check_loaded(os.path.join(st["dir"], "matches", "c%02d-g%d" % (n["id"], gi)), n["id"], gi)
             if setup and sc is None:
                 note_bad_map(mapn)
         except Exception:
