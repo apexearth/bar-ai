@@ -24,14 +24,19 @@ dashboard rather than teaching a command.
 
 ## The tabs
 
-- **Balance** (default landing) — the guided view. Intent chips → ordered
-  recipes; the metal-split / stance / composition / pricing / growth panels; the
-  mechanism map. Everything here is editable in place and writes the repo.
-- **Games** — run and tournament browser, with the economy/units/intel/brain
-  charts per run.
-- **Launch** — start a match or tournament; carries the tunable overrides.
+- **Games** (default landing) — run and tournament browser, with the
+  economy/units/intel/brain charts per run; a search batch shows its standings.
+- **Launch** — start a match or tournament; the Advanced picker carries the
+  tunable overrides (`/api/tunables`).
+- **Net** — the policy search (`/api/search`, `tools/nnshift.py`, cached and
+  re-read at most every 3 min): score per network, each group's lean against
+  the rule per head and per auction kind, and the current search's games by
+  their random setup (team size, factions, opponent, map, length, handicap).
+- **Progress** — per-minute edges against BARb by batch (`tools/progress.py`).
 - **Deploy** — repo → live install, gadgets, patches.
-- **Tunables** — the *full reference*, all 300+. Dead knobs hidden by default.
+
+The Balance and Tunables tabs are gone; `dashboard_guide.py` and the audit
+below still describe the Balance tab's knobs.
 
 ## Do not reach for a new tunable
 

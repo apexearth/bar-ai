@@ -1,14 +1,14 @@
 """How far each policy network has moved from neutral, read from what it DID in its games (his 10-28: "see how our
-neural nets have shifted from neutral").
+neural nets have shifted from neutral"). The dashboard's Net tab draws this live; the CLI prints a summary.
 
 Neutral is the rule. Per continuous head (`apex: nnval head=X v= rule=`), the geometric mean of the net's value over
 the rule's, and the share of decisions where it asked for more. Per builder-auction kind (`apex: pricecard`, the
-winner and the runner-up), the geometric mean of the net's tilt `nn=` (1 = no lean). Plus the search's progress per
-network from runtime/nn/rand.json (and an archived state for comparison).
+winner and the runner-up), the geometric mean of the net's tilt `nn=` (1 = no lean). Per finished game of the
+current search (runtime/nn/rand.json): its net, score, result and random setup (c<NN>-g<G>.setup.json).
 
-    python tools/nnshift.py --out shift.json
-        groups: shipped (v0.4.09's built-in net, the c9 control games), fresh search nets with >= MIN games,
-        old search's viable nets (rand-oldprices-20261028.json)
+    python tools/nnshift.py [--out shift.json]
+        groups: shipped (v0.4.09's built-in net, the c9 control games), the current search's nets, the first fresh
+        run (random middle), the old search's best viable nets (rand-oldprices-20261028.json)
 """
 from __future__ import annotations
 
@@ -22,6 +22,9 @@ from collections import defaultdict
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NN = os.path.join(REPO, "runtime", "nn")
+SHIPPED_GLOBS = ("yof-*", "ycf-*")
+FIRST_FRESH = os.path.join(NN, "rand-familymid-20261028.json")
+OLD = os.path.join(NN, "rand-oldprices-20261028.json")
 
 HEADS = {
     "con": "Constructors (floor)", "cap": "Constructors (cap)", "acap": "Air constructors",
@@ -31,13 +34,16 @@ HEADS = {
 VAL = re.compile(r"apex: nnval head=(\w+) .*? v=(-?[\d.]+) rule=(-?[\d.]+) lo=(-?[\d.]+) hi=(-?[\d.]+)")
 CARD = re.compile(r"\| (?:win|2nd) (\w+):(\w+) .*? nn=([\d.]+)")
 PW = re.compile(r"apex_pw_file=([^;\s]+)")
+GAME_DIR = re.compile(r"c(\d+)-g(\d+)$")
 
 
-def read_game(path, acc):
+def read_game(path):
+    """{heads: {h: [sum log(v/rule), n, n above]}, kinds: {k: [sum log nn, n]}} for one infolog, or None"""
+    heads, kinds = defaultdict(lambda: [0.0, 0, 0]), defaultdict(lambda: [0.0, 0])
     try:
         f = open(path, encoding="utf-8", errors="replace")
     except OSError:
-        return False
+        return None
     with f:
         for line in f:
             if "apex: nnval head=" in line:
@@ -45,7 +51,7 @@ def read_game(path, acc):
                 if m and m.group(1) in HEADS:
                     v, r = float(m.group(2)), float(m.group(3))
                     if v > 0 and r > 0:
-                        h = acc["heads"][m.group(1)]
+                        h = heads[m.group(1)]
                         h[0] += math.log(v / r)
                         h[1] += 1
                         h[2] += v > r * 1.001
@@ -53,23 +59,45 @@ def read_game(path, acc):
                 for kind, _d, nn in CARD.findall(line):
                     x = float(nn)
                     if x > 0:
-                        k = acc["kinds"][kind]
+                        k = kinds[kind]
                         k[0] += math.log(x)
                         k[1] += 1
-    acc["games"] += 1
-    return True
+    return {"heads": {h: [round(v[0], 4), v[1], v[2]] for h, v in heads.items()},
+            "kinds": {k: [round(v[0], 4), v[1]] for k, v in kinds.items()}}
 
 
-def new_acc():
-    return {"heads": defaultdict(lambda: [0.0, 0, 0]), "kinds": defaultdict(lambda: [0.0, 0]), "games": 0}
+def game_acc(path, cache):
+    """read_game, memoised on the file's size and mtime"""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    key = (st.st_size, st.st_mtime)
+    hit = cache.get(path)
+    if hit and hit[0] == key:
+        return hit[1]
+    acc = read_game(path)
+    cache[path] = (key, acc)
+    return acc
 
 
-def summarise(acc):
+def summarise(accs):
+    heads, kinds, games = defaultdict(lambda: [0.0, 0, 0]), defaultdict(lambda: [0.0, 0]), 0
+    for a in accs:
+        if not a:
+            continue
+        games += 1
+        for h, v in a["heads"].items():
+            for i in range(3):
+                heads[h][i] += v[i]
+        for k, v in a["kinds"].items():
+            kinds[k][0] += v[0]
+            kinds[k][1] += v[1]
     return {
-        "games": acc["games"],
+        "games": games,
         "heads": {h: {"gm": round(math.exp(v[0] / v[1]), 4), "above": round(v[2] / v[1], 3), "n": v[1]}
-                  for h, v in acc["heads"].items() if v[1]},
-        "kinds": {k: {"gm": round(math.exp(v[0] / v[1]), 4), "n": v[1]} for k, v in acc["kinds"].items() if v[1] >= 5},
+                  for h, v in heads.items() if v[1]},
+        "kinds": {k: {"gm": round(math.exp(v[0] / v[1]), 4), "n": v[1]} for k, v in kinds.items() if v[1] >= 5},
     }
 
 
@@ -102,97 +130,110 @@ def progress(state):
     return sorted(rows, key=lambda r: r["id"])
 
 
-def group_kind(key):
-    for p in ("shipped", "biased", "neutral", "old", "fresh"):
-        if key.startswith(p):
-            return p
-    return key
+def load_state(path):
+    try:
+        return json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"nets": {}}
 
 
-def write_rows(d, groups, fresh, old):
-    """row arrays for the Net Drift dashboard: one row per (group, head), (group, kind) and network"""
-    os.makedirs(d, exist_ok=True)
-    heads, kinds = [], []
-    for key, g in groups.items():
-        base = {"group": key, "groupLabel": g["label"], "groupKind": group_kind(key), "games": g["games"]}
-        for h, v in g["heads"].items():
-            heads.append({**base, "head": h, "headLabel": HEADS[h], "ratio": v["gm"], "above": v["above"], "n": v["n"]})
-        for k, v in g["kinds"].items():
-            kinds.append({**base, "kind": k, "ratio": v["gm"], "n": v["n"]})
-    prog = [{"search": "Neutral search (10-28)", **r} for r in progress(fresh)] \
-        + [{"search": "Old search (10-11 to 10-15)", **r} for r in progress(old)]
-    for name, rows in (("heads", heads), ("kinds", kinds), ("progress", prog)):
-        json.dump(rows, open(os.path.join(d, name + ".json"), "w", encoding="utf-8"))
+def _mtime(p):
+    try:
+        return os.stat(p).st_mtime
+    except OSError:
+        return None
+
+
+def archive_groups(cache, old_top=3):
+    """The fixed references: the shipped net, the first fresh run, the old search's best viable nets.
+    Their games no longer change, so the result is memoised on the state files' mtimes."""
+    key = (_mtime(FIRST_FRESH), _mtime(OLD), old_top)
+    hit = cache.get("_archive")
+    if hit and hit[0] == key:
+        return hit[1]
+    groups = {}
+    files = []
+    for pat in SHIPPED_GLOBS:
+        files += sorted(glob.glob(os.path.join(REPO, "matches", pat, "infolog.txt")))
+    groups["shipped"] = {"label": "Shipped net (v0.4.09)", "kind": "shipped",
+                         **summarise(game_acc(f, cache) for f in files)}
+
+    st = load_state(FIRST_FRESH)
+    if st.get("dir"):
+        s = summarise(game_acc(f, cache) for f in glob.glob(os.path.join(st["dir"], "matches", "*", "infolog.txt")))
+        if s["games"]:
+            groups["biased"] = {"label": "First fresh run (random middle)", "kind": "biased", **s}
+
+    old = load_state(OLD)
+    viable = [n for n in old["nets"].values() if n.get("status") == "viable" and len(n.get("games", [])) >= 12]
+    viable.sort(key=lambda n: -(mean_score(n) or -9))
+    if viable:
+        byw = net_games(os.path.join(REPO, "tournaments", "*-nn-rand*", "matches", "*", "script.txt"))
+        for n in viable[:old_top]:
+            w = os.path.normcase(os.path.abspath(n["file"])) if n.get("file") else \
+                os.path.normcase(os.path.abspath(os.path.join(old.get("dir", ""), "c%02d.weights" % n["id"])))
+            fs = byw.get(w, [])[:24]
+            if fs:
+                groups[f"old{n['id']}"] = {"label": f"Old search net {n['id']}", "kind": "old",
+                                           "score": mean_score(n), **summarise(game_acc(f, cache) for f in fs)}
+    cache["_archive"] = (key, groups)
+    return groups
+
+
+def search_games(state, cache):
+    """One row per finished game of the search in `state`: net, game, score, result, setup and its decisions"""
+    tdir = state.get("dir") or ""
+    scored = {}
+    for k, n in state.get("nets", {}).items():
+        for x in n.get("games", []):
+            if len(x) > 3:
+                scored[(int(k), int(x[3]))] = x
+    rows = []
+    for mdir in sorted(glob.glob(os.path.join(tdir, "matches", "c*-g*"))):
+        m = GAME_DIR.search(os.path.basename(mdir))
+        if not m or not os.path.exists(os.path.join(mdir, "result.json")):
+            continue
+        net, g = int(m.group(1)), int(m.group(2))
+        acc = game_acc(os.path.join(mdir, "infolog.txt"), cache)
+        if acc is None:
+            continue
+        try:
+            setup = json.load(open(os.path.join(tdir, "c%02d-g%d.setup.json" % (net, g)), encoding="utf-8"))
+        except (OSError, ValueError):
+            setup = None
+        x = scored.get((net, g))
+        rows.append({"net": net, "g": g, "score": None if x is None else x[0], "res": None if x is None else x[1],
+                     "setup": setup, **acc})
+    return rows
+
+
+def collect(cache=None, old_top=3):
+    cache = {} if cache is None else cache
+    fresh = load_state(os.path.join(NN, "rand.json"))
+    games = search_games(fresh, cache)
+    groups = {"current": {"label": "Current search, all nets", "kind": "current", **summarise(games)}}
+    groups.update(archive_groups(cache, old_top))
+    return {"heads": HEADS, "search_dir": os.path.basename(os.path.normpath(fresh.get("dir") or "")),
+            "groups": groups, "games": games,
+            "progress": {"current": progress(fresh), "old": progress(load_state(OLD))}}
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out")
     ap.add_argument("--min-games", type=int, default=4)
     ap.add_argument("--old-top", type=int, default=3)
-    ap.add_argument("--rows-dir", help="also write heads.json, kinds.json, progress.json as row arrays")
     a = ap.parse_args()
-    groups = {}
-
-    acc = new_acc()
-    for f in sorted(glob.glob(os.path.join(REPO, "matches", "yof-*", "infolog.txt"))
-                    + glob.glob(os.path.join(REPO, "matches", "ycf-*", "infolog.txt"))):
-        read_game(f, acc)
-    groups["shipped"] = {"label": "Shipped net (v0.4.09)", **summarise(acc)}
-
-    fresh = json.load(open(os.path.join(NN, "rand.json"), encoding="utf-8"))
-    tdir = fresh.get("dir") or ""
-    byw = net_games(os.path.join(tdir, "matches", "*", "script.txt"))
-    for k, n in sorted(fresh["nets"].items(), key=lambda kv: int(kv[0])):
-        w = os.path.normcase(os.path.abspath(os.path.join(tdir, "c%02d.weights" % int(k))))
-        files = byw.get(w, [])
-        if len(files) < a.min_games:
-            continue
-        acc = new_acc()
-        for f in files:
-            read_game(f, acc)
-        groups[f"fresh{k}"] = {"label": f"Fresh net {k}", "score": mean_score(n), **summarise(acc)}
-    acc = new_acc()
-    for f in glob.glob(os.path.join(tdir, "matches", "*", "infolog.txt")):
-        read_game(f, acc)
-    if acc["games"]:
-        groups["neutral"] = {"label": "Neutral search, all nets", **summarise(acc)}
-
-    for p, key, label in ((os.path.join(NN, "rand-familymid-20261028.json"), "biased",
-                           "First fresh run (random middle)"),):
-        if not os.path.exists(p):
-            continue
-        st = json.load(open(p, encoding="utf-8"))
-        acc = new_acc()
-        for f in glob.glob(os.path.join(st.get("dir", ""), "matches", "*", "infolog.txt")):
-            read_game(f, acc)
-        if acc["games"]:
-            groups[key] = {"label": label, **summarise(acc)}
-
-    oldp = os.path.join(NN, "rand-oldprices-20261028.json")
-    old = json.load(open(oldp, encoding="utf-8")) if os.path.exists(oldp) else {"nets": {}}
-    viable = [n for n in old["nets"].values() if n.get("status") == "viable" and len(n.get("games", [])) >= 12]
-    viable.sort(key=lambda n: -(mean_score(n) or -9))
-    if viable:
-        byw_old = net_games(os.path.join(REPO, "tournaments", "*-nn-rand*", "matches", "*", "script.txt"))
-        for n in viable[:a.old_top]:
-            w = os.path.normcase(os.path.abspath(n["file"])) if n.get("file") else \
-                os.path.normcase(os.path.abspath(os.path.join(old.get("dir", ""), "c%02d.weights" % n["id"])))
-            files = byw_old.get(w, [])
-            if not files:
-                continue
-            acc = new_acc()
-            for f in files[:24]:
-                read_game(f, acc)
-            groups[f"old{n['id']}"] = {"label": f"Old search net {n['id']}", "score": mean_score(n), **summarise(acc)}
-
-    json.dump({"heads": HEADS, "groups": groups,
-               "progress": {"fresh": progress(fresh), "old": progress(old)}},
-              open(a.out, "w", encoding="utf-8"), indent=1)
-    if a.rows_dir:
-        write_rows(a.rows_dir, groups, fresh, old)
-    for g, v in groups.items():
-        print(f"{g:10} games={v['games']:3} heads={len(v['heads'])} kinds={len(v['kinds'])}")
+    d = collect(old_top=a.old_top)
+    if a.out:
+        json.dump(d, open(a.out, "w", encoding="utf-8"), indent=1)
+    bynet = defaultdict(list)
+    for r in d["games"]:
+        bynet[r["net"]].append(r)
+    rows = [(f"net{k}", summarise(v)) for k, v in sorted(bynet.items()) if len(v) >= a.min_games]
+    for name, v in list(d["groups"].items()) + rows:
+        lean = " ".join(f"{h}=x{x['gm']:.2f}" for h, x in sorted(v["heads"].items()))
+        print(f"{name:10} games={v['games']:4} {lean}")
 
 
 if __name__ == "__main__":

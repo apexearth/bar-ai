@@ -70,6 +70,21 @@
   .legend i { display:inline-block; width:10px; height:10px; border-radius:2px;
               margin-right:5px; }
   #gameback { margin-bottom:10px; }
+  .sv-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin-top:10px; }
+  .sv-tile { background:var(--panel2); border-radius:6px; padding:8px 12px; }
+  .sv-tile .lbl, .sv-tile .sub { font-size:12px; color:var(--dim); }
+  .sv-tile .big { font-size:22px; font-variant-numeric:tabular-nums; }
+  .svchart { margin-top:6px; }
+  .svchart svg { display:block; max-width:100%; height:auto; }
+  .svchart text { fill:var(--dim); font-size:11px; }
+  .svchart text.lab { fill:var(--text); font-size:12px; }
+  .svchart .grid { stroke:#232b35; }
+  .svchart .ref { stroke:var(--dim); stroke-width:1.5; }
+  .svchart .range { stroke:var(--line); stroke-width:3; stroke-linecap:round; }
+  .svchart circle { stroke:var(--panel); stroke-width:1.5; }
+  .svtip { position:fixed; z-index:30; pointer-events:none; background:var(--panel2); border:1px solid var(--line);
+           border-radius:6px; padding:6px 9px; font-size:12px; white-space:pre; font-variant-numeric:tabular-nums; }
+  .sv-setups { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:12px; margin-top:12px; }
   canvas { max-width:100%; height:auto; }
   @media (max-width: 760px) {
     header { flex-wrap:wrap; gap:4px 12px; padding:8px 12px; }
@@ -139,86 +154,47 @@
 <!-- ================= NET ================= -->
 <section id="tab-net" class="tab">
   <div class="card">
-    <button class="act" onclick="netAct('start')">Start training</button>
-    <button class="act" onclick="netAct('stop')">Stop</button>
-    <button class="act" onclick="netAct('reset')" style="float:right" title="The current net and its history move to runtime/nn-archive/; nothing is deleted">Start a fresh net (archives this one)</button>
-    <div style="margin-top:8px">Show
-      <select id="nn-range" onchange="loadNet()">
-        <option value="last=100">last 100 games</option>
-        <option value="last=300">last 300 games</option>
-        <option value="last=1000">last 1,000 games</option>
-        <option value="hours=1">last hour</option>
-        <option value="hours=6">last 6 hours</option>
-        <option value="hours=24">last 24 hours</option>
-        <option value="">everything (slow the first time)</option>
-      </select>
-      <span class="dim">-- applies to the results and every chart and table below</span></div>
-    <div id="nn-results" style="margin-top:8px"></div>
-    <div class="dim" style="margin-top:8px">Win rate averaged over the last
-      <select id="nn-win-n" onchange="uiSet('nn-win-n', this.value); loadNet()">
-        <option value="20">20</option><option value="50">50</option>
-        <option value="100">100</option><option value="200">200</option>
-      </select>
-      <b>normal</b> training games (discovery games play random choices on purpose and are left out)
-      -- overall and per opponent</div>
-    <canvas id="nn-c-win" width="1140" height="200"></canvas>
-    <div id="nn-leg-win" class="legend"></div>
-    <div id="nn-status" style="margin-top:8px"></div>
-    <div class="dim" style="margin-top:6px">The net learns <b>while games are running</b>: every few seconds it
-      reads each running game whose AI records its decisions (the logger build), and once a decision's next
-      5 minutes have been played it becomes trainable. Each batch is predicted <b>before</b> the net trains on
-      it, so every point below is data it had never seen. 1.0 is a perfect prediction; 0 is no better than
-      guessing the average; below 0 is worse than that. All running games feed this one net.</div>
-    <div class="dim" style="margin-top:6px">Every trained net <b>decides</b> in every game (since Oct 10 there
-      is no rules-only control). The trainer writes its weights into the logger build every ~800 decisions
-      and every game started afterwards loads them. A net that has not trained yet stays off and the rule plays.</div>
+    <b>The policy search</b> <span class="dim">&mdash; tools/randsearch.py plays networks drawn around the rule,
+      each game on its own random setup, and re-tests a network that scores over 4, 12 and 24 games. Neutral is
+      the rule: &times;1 means the network asks for exactly what the hand-written rule would.</span>
+    <div id="sv-status" class="dim" style="margin-top:6px"></div>
+    <div id="sv-tiles" class="sv-tiles"></div>
+    <div style="margin-top:8px">Network <select id="sv-net" onchange="uiSet('sv-net', this.value); renderSearch()">
+      <option value="">all networks</option></select>
+      <span class="dim">&mdash; adds its own dot to the lean charts and narrows the setup tables to its games</span></div>
   </div>
   <div class="card">
-    <b>Policy centres</b> <span class="dim">&mdash; the continuous choices (how many constructors, how big a
-      pool, how much defence...). Each has a centre the trainer moves 2% per new game toward the value the net
-      rates best; in the game the net may only pick inside the window around it. The rule's value is where
-      every centre started.</span>
-    <div id="nn-stage" class="dim" style="margin-top:6px"></div>
-    <div id="nn-policy" style="margin-top:6px"></div>
+    <h2>Score per network as it plays more games</h2>
+    <div class="dim">Each dot is one network: its mean score (0 is even with the opponent; a time-limit game goes to
+      the side ahead on economy and army) against games played.</div>
+    <div class="legend"><span><i style="background:var(--accent)"></i>current search</span>
+      <span><i style="background:var(--dim)"></i>old search (10-11 to 10-15, old prices)</span></div>
+    <div id="sv-scores" class="svchart"></div>
   </div>
   <div class="card">
-    <b>Every net</b> <span class="dim">&mdash; "decides" is on for every trained net. "Earned" is a quality
-      score from games it had not seen: how well its idea of what a choice adds matched what it actually added
-      (0 = no better than the rule's view yet). It no longer sets how much the net plays.</span>
-    <div id="nn-nets" style="margin-top:6px"></div>
+    <h2>Lean against the rule, decision by decision</h2>
+    <div class="dim">For each amount a network sets, the value it asked for divided by the rule's (geometric mean
+      over every decision in its games). Right of &times;1 asks for more, left for less.</div>
+    <div id="sv-heads-leg" class="legend"></div>
+    <div id="sv-heads" class="svchart"></div>
   </div>
   <div class="card">
-    <div class="dim">How well it predicts the next 3 minutes of decisions it has not seen
-      (income, energy, damage trade, waste, mexes, losses) &mdash; one dot per batch, line = average of the last 5</div>
-    <canvas id="nn-c-acc" width="1140" height="260"></canvas>
-    <div id="nn-leg-acc" class="legend"></div>
+    <h2>Builder auction tilt, by kind of build</h2>
+    <div class="dim">The multiplier the network puts on each kind of build in the constructors' auction (the price
+      card's winner and runner-up). &times;1 is no lean. The old search's games predate the price card.</div>
+    <div id="sv-kinds-leg" class="legend"></div>
+    <div id="sv-kinds" class="svchart"></div>
   </div>
   <div class="card">
-    <div class="dim">Does knowing the decision help? (with the decision minus without it, on decisions chosen on value -- forced ones left out; above 0 means the
-      choice carries information the net can learn to value)</div>
-    <canvas id="nn-c-gain" width="1140" height="180"></canvas>
-  </div>
-  <div class="card">
-    <div class="dim">Training error after each game (lower is better)</div>
-    <canvas id="nn-c-loss" width="1140" height="180"></canvas>
-    <div id="nn-leg-loss" class="legend"></div>
-  </div>
-  <div class="card">
-    <div class="dim">Each prediction, averaged over the last 5 unseen games</div>
-    <div id="nn-table"></div>
-  </div>
-  <div class="card">
-    <div class="dim">What the builder net has earned, per kind of build: how well its view of what a choice adds
-      matches what it actually added, on games it had not seen. A quality score only &mdash; the net decides
-      every kind it has trained on.</div>
-    <div id="nn-trust"></div>
-  </div>
-  <div class="card">
-    <div class="dim">The latest decisions: every option the constructor weighed, the market's price, how the net
-      moved it, and its chance in the draw (a decision forced by a role or a panic shows "fixed" -- the draw never ran)</div>
-    <div id="nn-samples"></div>
+    <h2>By setup</h2>
+    <div class="dim">Every finished game of the current search drew its own setup (team size, map, factions,
+      opponent, length, handicap). Does a lean hold at every team size, and where does the score come from?</div>
+    <div id="sv-size-leg" class="legend"></div>
+    <div id="sv-size" class="svchart"></div>
+    <div id="sv-setups" class="sv-setups"></div>
   </div>
 </section>
+<div id="svtip" class="svtip" hidden></div>
 
 <!-- ================= PROGRESS ================= -->
 <section id="tab-progress" class="tab">
@@ -227,22 +203,13 @@
     <span class="dim">Each cell is ours / theirs at that minute: 1.00 level, green ahead, red behind. Median over the games that lasted that long.</span>
     <div style="margin-top:8px">
       Since <select id="pg-since" onchange="loadProgress()">
-        <option value="stage">this curriculum stage</option>
+        <option value="search">the current search</option>
         <option value="24h">last 24 hours</option>
-        <option value="20261010-1535">nets decide + policy centres (Oct 10 15:35)</option>
-        <option value="20261009-1325">new nets (Oct 9 13:25)</option>
-        <option value="20261008-1232">even random bonus (Oct 8 12:32)</option>
-        <option value="20261007">Oct 7</option>
-        <option value="2026100">all of October</option>
-      </select>
-      Loop <select id="pg-regime" onchange="loadProgress()">
-        <option value="">both</option><option value="1v1">1v1 Comet</option><option value="2v2">2v2 three maps</option>
+        <option value="168h">last 7 days</option>
+        <option value="202610">all of October</option>
       </select>
       Games <select id="pg-all" onchange="loadProgress()">
         <option value="0">normal only</option><option value="1">with discovery</option>
-      </select>
-      AI <select id="pg-b0" onchange="loadProgress()">
-        <option value="0">nets deciding</option><option value="1">old rules-only control (-b0)</option>
       </select>
       Group by <select id="pg-by" onchange="loadProgress()">
         <option value="batch">batch</option><option value="day">day</option>
@@ -267,8 +234,8 @@
           <option value="headless">Headless (fast, telemetry)</option>
           <option value="tournament">Tournament (batch)</option>
         </select></label>
-      <label class="f">Side A <input id="l-a" list="speclist" size="28" value="Apex:Unstable:standard"></label>
-      <label class="f">Side B <input id="l-b" list="speclist" size="22" value="BARb:stable:hard"></label>
+      <label class="f">Side A <select id="l-a"><option value="Apex:Unstable:standard">Unstable (repo)</option></select></label>
+      <label class="f">Side B <select id="l-b"><option value="BARb:stable:hard">BARb stable · hard</option></select></label>
       <label class="f" title="Faction for every player on side A. Random draws per player (Armada/Cortex/Legion) -- a mixed team like a hosted game. For A/B testing pick the same faction on both sides.">Faction A
         <select id="l-sidea">
           <option value="random" selected>Random</option>
@@ -320,7 +287,6 @@
     </div>
     <div id="l-repeatstat" style="margin-top:6px;font-size:12px;display:none"></div>
     <datalist id="maplist"></datalist>
-    <datalist id="speclist"></datalist>
     <div id="l-ovsum" style="margin-top:8px;font-size:12px"></div>
     <details id="l-adv" style="margin-top:8px">
       <summary style="cursor:pointer;font-size:13px">Advanced &mdash; mod options
@@ -1786,15 +1752,33 @@ $("#l-mode").addEventListener("change", () => {
   $("#l-gameswrap").style.display =
     $("#l-mode").value === "tournament" ? "" : "none";
 });
+function fillAiPicker(sel, ais, fallback) {
+  const want = UI[sel.id] != null ? UI[sel.id] : sel.value;
+  const groups = [];
+  for (const c of ais) {
+    let g = groups.find(x => x.name === c.group);
+    if (!g) groups.push(g = {name: c.group, items: []});
+    g.items.push(c);
+  }
+  setHTML(sel, groups.map(g => `<optgroup label="${esc(g.name)}">` +
+    g.items.map(c => `<option value="${esc(c.spec)}">${esc(c.label)}</option>`).join("") +
+    "</optgroup>").join(""));
+  sel.value = ais.some(c => c.spec === want) ? want : fallback;
+}
+// Its own request: the map list behind /api/launchmeta takes ~20 s on a cold start.
+async function loadLaunchAis() {
+  try {
+    const m = await api("/api/launchais");
+    // A remembered AI that is no longer installed falls back to the default.
+    fillAiPicker($("#l-a"), m.ais, m.default_a);
+    fillAiPicker($("#l-b"), m.ais, "BARb:stable:hard");
+  } catch (e) { toast("AI list failed (" + e.message + ") — restart the dashboard", true); }
+}
 async function loadLaunchMeta() {
+  loadLaunchAis();
   try {
     const m = await api("/api/launchmeta");
     $("#maplist").innerHTML = m.maps.map(x => `<option value="${esc(x)}">`).join("");
-    $("#speclist").innerHTML = m.specs.map(x => `<option value="${esc(x)}">`).join("");
-    // The launch form is restored from localStorage, so a spec for a variant
-    // that has since been renamed survives here long after ai/<name> is gone.
-    const av = ($("#l-a").value.split(":")[1] || "");
-    if (m.default_a && m.variants && !m.variants.includes(av)) $("#l-a").value = m.default_a;
     if (m.variant) $("#btn-deploy").textContent = `Deploy ${m.variant} → game`;
     GADGET = new Set(m.gadget_tunables || []);
     renderOvSummary();
@@ -1881,9 +1865,6 @@ $("#l-perside").addEventListener("change", drawBoxPreview);
 // silently repeats a previous run, and "random" is the honest default.
 ["l-mode", "l-a", "l-b", "l-sidea", "l-sideb", "l-map", "l-perside", "l-min", "l-speed", "l-games",
  "l-boxes", "l-boxsize", "l-handicap", "l-modopt"].forEach(id => uiBind(id));
-// a new key: a remembered "everything" from before the history grew is not kept
-uiBind("nn-range", "nn-window");
-uiBind("nn-win-n");
 // Restoring per-side or the box layout changes the preview; restoring the mode
 // changes which fields are shown.
 $("#l-gameswrap").style.display =
@@ -1949,282 +1930,249 @@ async function pollOverview() {
   setTimeout(pollOverview, 8000);
 }
 
-/* ---------- net ---------- */
-const NN_FULL = "#5fbf77", NN_STATE = "#6fa8dc", NN_LOSS2 = "#d9c25e";
-let NN_TIMER = null, NN_RESET_ARMED = 0;
-function nnRolling(vals, n) {
-  return vals.map((_, i) => {
-    const w = vals.slice(Math.max(0, i - n + 1), i + 1).filter(v => v != null && isFinite(v));
-    return w.length ? w.reduce((a, b) => a + b, 0) / w.length : null;
-  });
-}
-// x = game number; y may go below zero (R2 does), so the zero line is drawn.
-function nnChart(id, series, o) {
-  const cv = $(id); if (!cv) return;
-  fitCanvas(cv);
-  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 46, B = 22;
-  ctx.clearRect(0, 0, W, H); ctx.font = "10px Consolas";
-  const all = series.flatMap(s => s.ys.filter(v => v != null && isFinite(v)));
-  const xs = series.flatMap(s => s.xs);
-  let lo = Math.min(o.lo ?? 0, ...all), hi = Math.max(o.hi ?? 0, ...all);
-  if (o.floor != null) lo = Math.max(lo, o.floor);
-  if (hi - lo < 1e-6) hi = lo + 1;
-  const xmax = Math.max(2, ...xs), xmin = 1;
-  const X = x => P + (W - P - 10) * (x - xmin) / (xmax - xmin);
-  const Y = v => H - B - (H - B - 10) * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo);
-  const fmt = o.fmt || (v => v.toFixed(2));
-  ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
-  for (let g = 0; g <= 4; g++) {
-    const v = lo + (hi - lo) * g / 4, y = Y(v);
-    ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
-    ctx.fillText(fmt(v), 3, y + 3);
-  }
-  const step = Math.max(1, Math.ceil((xmax - xmin) / 12));
-  for (let x = xmin; x <= xmax; x += step) ctx.fillText("#" + x, X(x) - 6, H - 4);
-  if (lo < 0 && hi > 0) {
-    ctx.strokeStyle = "#8a96a3"; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(P, Y(0)); ctx.lineTo(W - 10, Y(0)); ctx.stroke(); ctx.setLineDash([]);
-  }
-  if (!all.length) { ctx.fillStyle = "#8a96a3"; ctx.fillText(o.empty || "no points yet", P + 10, 20); return; }
-  for (const s of series) {
-    ctx.strokeStyle = ctx.fillStyle = s.color;
-    if (s.dots) {
-      s.xs.forEach((x, i) => { const v = s.ys[i]; if (v == null || !isFinite(v)) return;
-        ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(X(x), Y(v), 2.5, 0, 7); ctx.fill(); });
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.lineWidth = 1.8; ctx.beginPath(); let pen = false;
-      s.xs.forEach((x, i) => { const v = s.ys[i];
-        if (v == null || !isFinite(v)) { pen = false; return; }
-        pen ? ctx.lineTo(X(x), Y(v)) : ctx.moveTo(X(x), Y(v)); pen = true; });
-      ctx.stroke(); ctx.lineWidth = 1;
-    }
-  }
-}
-const NN_NAMES = {dMInc: "metal income change", dEInc: "energy income change", lnD: "damage trade",
-  eWaste: "energy wasted", mWaste: "metal wasted", dMex: "mexes gained", lostNear: "losses near the chosen site", lostFar: "losses elsewhere",
-  lostAir: "losses to air", lostStatic: "losses to turrets", lostMobile: "losses to ground units",
-  dEco: "economic power change", reclaim: "metal reclaimed per minute", lostPre: "losses in the 5 min before (check)",
-  done: "chosen build finished", survived: "chosen build survived",
-  lifeS: "chosen build: seconds it lived", lifeKill: "chosen build: metal it killed",
-  won: "won the game", endV: "game result, discounted from the decision",
-  endFast: "game result, discounted from the start (sooner wins)", comLostD: "commander lost, discounted",
-  edgeArmy: "army edge vs the enemy (change)", edgeEco: "metal income edge (change)",
-  edgeLand: "land edge (change)", edgeMex: "extractor edge (change)"};
-function nnTable(t) {
-  if (!t || !t.targets) return "<span class='dim'>no games yet</span>";
-  const last = (t.rows || []).filter(r => r.r2_full).slice(-5);
-  if (!last.length) return "<span class='dim'>waiting for a second game to test on</span>";
-  const avg = (key, j) => { const v = last.map(r => r[key][j]).filter(x => x != null);
-    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const cell = v => v == null ? "<td class='dim'>&ndash;</td>"
-    : `<td style="color:${v > 0.05 ? "var(--good)" : v < -0.05 ? "var(--bad)" : "inherit"}">${v.toFixed(3)}</td>`;
-  let h = "<table><thead><tr><th>Prediction</th><th>Horizon</th><th>With decision</th><th>State only</th></tr></thead><tbody>";
-  t.targets.forEach((tg, j) => {
-    const [hz, k] = tg.split(":");
-    h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${["won", "endV", "endFast", "comLostD"].includes(hz) ? "end of game" : (hz === "lifeS" || hz === "lifeKill") ? "its whole life" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
-      + cell(avg("r2_full", j)) + cell(avg("r2_state", j)) + "</tr>";
-  });
-  for (const [key, label] of [["done", "chosen build finished"], ["survived", "chosen build survived 5 min"]]) {
-    const acc = last.filter(r => r[key + "_acc"] != null);
-    if (!acc.length) continue;
-    const a = acc.reduce((s, r) => s + r[key + "_acc"], 0) / acc.length;
-    const b = acc.reduce((s, r) => s + r[key + "_base"], 0) / acc.length;
-    h += `<tr><td colspan="2">${label}: right / always-guess-the-common-answer</td><td colspan="2">${(100 * a).toFixed(0)}% / ${(100 * b).toFixed(0)}%</td></tr>`;
-  }
-  return h + "</tbody></table>";
-}
-function nnTrust(trust, f) {
-  f = f || {n: 0, trust: null, head_full: [], head_state: []};
-  const avg = k => { const v = (f[k] || []).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const hf = avg("head_full"), hs = avg("head_state");
-  const fac = `<div style="margin:6px 0">Factory net: ${f.n} batches &middot; earned `
-    + `<b>${f.trust != null ? f.trust.toFixed(2) : "0.00"}</b>`
-    + (hf != null ? ` &middot; unseen accuracy ${hf.toFixed(3)} (state only ${hs != null ? hs.toFixed(3) : "-"})` : "")
-    + `</div>`;
-  if (!trust) return fac + "<span class='dim'>builder kinds: not measured yet -- a kind needs a few hundred unseen decisions first</span>";
-  const rows = Object.entries(trust).sort((a, b) => b[1] - a[1]);
-  return fac + "<table><thead><tr><th>Builder kind</th><th>Earned</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
-    `<tr><td>${esc(k)}</td><td>${t.toFixed(2)}</td><td>${nnBar(t)}</td></tr>`).join("") + "</tbody></table>";
-}
-function nnBar(t) {
-  return `<div style="background:var(--good);height:8px;width:${Math.round(120 * Math.max(0, Math.min(1, t || 0)))}px;border-radius:2px"></div>`;
-}
-const nnNum = (v, d) => (v == null || !isFinite(v)) ? "&ndash;" : Number(v).toFixed(d == null ? 2 : d);
-function nnSpark(ys, lo, hi) {
-  if (!ys || ys.length < 2) return "<span class='dim'>" + (ys && ys.length ? "1 step" : "no steps yet") + "</span>";
-  const W = 90, H = 22;
-  let a = Math.min(...ys), b = Math.max(...ys);
-  if (b - a < 1e-6) { a -= 0.05; b += 0.05; }
-  const pts = ys.map((v, i) => (W * i / (ys.length - 1)).toFixed(1) + "," + (H - 2 - (H - 4) * (v - a) / (b - a)).toFixed(1)).join(" ");
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle"><polyline points="${pts}" fill="none" style="stroke:var(--accent)" stroke-width="1.5"/></svg>`
-    + ` <span class="dim mono">${a.toFixed(2)}&ndash;${b.toFixed(2)}</span>`;
-}
-function nnStage(s) {
-  if (!s) return "";
-  const t = String(s.since || "").replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*$/, "$2-$3 $4:$5");
-  return `Curriculum: <b>${s.game_minutes}-minute games</b> since ${esc(t)}, judged on each game's mean edge from minute `
-    + `${s.judged[0]} to ${s.judged[1]} (passes at eco and mex edge &ge; ${nnNum(s.pass)} over the last ${s.need["1v1"]} 1v1 and ${s.need["2v2"]} 2v2 games). `
-    + `Standing on the Progress tab.`;
-}
-function nnPolicy(p) {
-  if (!p || !p.heads || !p.heads.length) return "<span class='dim'>no continuous heads found</span>";
-  const ago = s => { if (!s) return ""; const m = Math.round((Date.now() / 1000 - s) / 60);
-    return m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago"; };
-  let h = `<div class="dim" style="margin-bottom:4px">Rule, net and played: medians over the last ${p.val_games} games the nets played. `
-    + `Centres moving since ${p.since ? esc(new Date(p.since * 1000).toLocaleString()) : "&ndash;"}; window = centre &plusmn; ${Math.round(100 * p.win)}%. `
-    + `A target pinned at the edge of the range is the net extrapolating where it has no data, not evidence.</div>`;
-  h += "<table><thead><tr><th>Choice</th><th>Rule</th><th>Centre</th><th>Window</th><th>Net wants</th><th>Played</th>"
-    + "<th>Last target</th><th>At edge</th><th>Centre over steps</th></tr></thead><tbody>";
-  for (const x of p.heads) {
-    const name = `${esc(x.name)} <span class="dim mono">${esc(x.tag)}</span>`;
-    if (x.on === false || x.centre == null) {
-      const why = x.on === false ? "not trained yet: the rule plays" : "no centre yet: the net plays its pick unclamped";
-      h += `<tr><td>${name}</td><td>${nnNum(x.rule)}</td><td colspan="7" class="dim">${why}</td></tr>`;
-      continue;
-    }
-    const exp = (x.exported != null && Math.abs(x.exported - x.centre) > 1e-3)
-      ? ` <span class="dim" title="the deployed weights still carry this centre; the next export brings the new one">(game: ${nnNum(x.exported)})</span>` : "";
-    const want = x.off ? `<span class="loss" title="the net refused its weights in game, so the rule played">off: ${esc(x.off)}</span>`
-      : !x.net_n ? "<span class='dim'>&ndash;</span>"
-      : nnNum(x.vnet) + (x.outside != null ? ` <span class="${x.outside > 0.5 ? "loss" : "dim"}" title="share of the net's picks outside the window (clamped)">${Math.round(100 * x.outside)}% out</span>` : "");
-    const l = x.last;
-    const tgt = l ? `${nnNum(l.target)} <span class="dim">(${nnNum(l.q25)}&ndash;${nnNum(l.q75)}, ${ago(l.at)})</span>` : "<span class='dim'>&ndash;</span>";
-    const edge = l ? `<span class="${l.edge >= 50 ? "loss" : ""}">${l.edge}%</span>` : "<span class='dim'>&ndash;</span>";
-    const moved = (x.first != null && x.steps) ? ` <span class="dim">${x.steps} steps from ${nnNum(x.first)}</span>` : "";
-    h += `<tr><td>${name}</td><td>${nnNum(x.rule)}</td><td><b>${nnNum(x.centre)}</b>${exp}</td>`
-      + `<td class="mono">${nnNum(x.win[0])}&ndash;${nnNum(x.win[1])} <span class="dim">of ${nnNum(x.range[0])}&ndash;${nnNum(x.range[1])}</span></td>`
-      + `<td>${want}</td><td>${nnNum(x.played)}</td><td>${tgt}</td><td>${edge}</td><td>${nnSpark(x.spark)}${moved}</td></tr>`;
-  }
-  return h + "</tbody></table>";
-}
-function nnNets(p) {
-  if (!p || !p.nets || !p.nets.length) return "<span class='dim'>no deployed weights found</span>";
-  const nets = p.nets.slice().sort((a, b) => (b.on - a.on) || ((b.earned || 0) - (a.earned || 0)));
-  const on = nets.filter(n => n.on).length;
-  const other = Object.entries(p.off_other || {});
-  let h = `<div class="dim" style="margin-bottom:4px">${on} of ${nets.length} nets decide`
-    + (p.weights_at ? ` &middot; weights written ${esc(new Date(p.weights_at * 1000).toLocaleTimeString())}` : "")
-    + (p.kind != null && p.kind < 2 ? ` &middot; <span class="loss">old trust kind ${p.kind}: the game ignores these nets</span>` : "") + "</div>";
-  if (other.length)
-    h += `<div class="loss" style="margin-bottom:4px">${other.length} net(s) refused their weights in recent games (the rule played): `
-      + other.map(([k, v]) => esc(k.slice(4)) + " (" + esc(v) + ")").join("; ") + "</div>";
-  h += "<table><thead><tr><th>Net</th><th>Decides</th><th>Earned</th><th></th></tr></thead><tbody>";
-  for (const n of nets)
-    h += `<tr><td>${esc(n.name)} <span class="dim mono">${esc(n.prefix)}</span></td>`
-      + `<td>${n.on ? "<span class='win'>yes</span>" : "<span class='dim'>no &mdash; untrained</span>"}</td>`
-      + `<td>${n.on ? nnNum(n.earned) : "<span class='dim'>&ndash;</span>"}</td><td>${n.on ? nnBar(n.earned) : ""}</td></tr>`;
-  return h + "</tbody></table>";
-}
-function nnSamples(s) {
-  if (!s.length) return "<span class='dim'>no decisions yet</span>";
-  return s.slice().reverse().map(d => {
-    const fixed = d.dm !== "draw";
-    const rows = d.opts.map((o, i) => {
-      const mark = i === d.chosen ? "&#9654; " : "";
-      const v = typeof o.value === "number" ? o.value : 0;
-      const nm = typeof o.nm === "number" ? o.nm : 1;
-      return `<tr${i === d.chosen ? ' style="font-weight:bold"' : ""}><td>${mark}${esc(o.kind)}${o.forced ? " (forced)" : ""}</td>`
-        + `<td>${esc(o.def)}</td><td>${v.toFixed(3)}</td><td>${nm === 1 ? "&ndash;" : "&times;" + nm.toFixed(2)}</td>`
-        + `<td>${fixed ? "fixed" : (100 * (o.p || 0)).toFixed(1) + "%"}</td></tr>`;
-    }).join("");
-    return `<div style="margin:8px 0 2px" class="dim">${esc(d.con)} at ${(d.f / 1800).toFixed(1)} min &middot; ${esc(d.why)}`
-      + `${d.pick ? " &middot; fell through to option " + (d.pick + 1) : ""}</div>`
-      + `<table><thead><tr><th>Option</th><th>Building</th><th>Market price</th><th>Net</th><th>Draw chance</th></tr></thead><tbody>${rows}</tbody></table>`;
-  }).join("");
-}
-async function loadNet() {
-  clearTimeout(NN_TIMER);
+/* ---------- net: the policy search (tools/nnshift.py via /api/search) ---------- */
+let SV = null, SV_TIMER = null, SV_RESIZE = null;
+const SV_COLOR = {current: "var(--accent)", shipped: "var(--warn)", biased: "#c27ba0", old: "var(--dim)", net: "var(--good)"};
+const SV_SIZES = [["1v1", n => n === 1], ["2-3 a side", n => n >= 2 && n <= 3],
+                  ["4-5 a side", n => n >= 4 && n <= 5], ["6-8 a side", n => n >= 6]];
+const SV_SIZE_COLORS = ["#6fa8dc", "#5fbf77", "#d9a441", "#e0876c"];
+const svX = v => "×" + (v >= 10 ? v.toFixed(0) : v.toFixed(2).replace(/\.?0+$/, ""));
+const svScore = v => (v == null ? "–" : (v >= 0 ? "+" : "") + v.toFixed(2));
+const svInt = v => Number(v || 0).toLocaleString();
+const svTip = lines => ` data-tip="${esc(lines.join("\n"))}"`;
+const svWidth = el => Math.max(300, Math.round(el.clientWidth || 900));
+
+async function loadNet(refresh) {
+  clearTimeout(SV_TIMER);
   if (!$("#tab-net").classList.contains("on")) return;
-  let d;
-  const rng = ($("#nn-range") && $("#nn-range").value) || "";
-  try { d = await api("/api/nn" + (rng ? "?" + rng : "")); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
-  if (d) {
-    const s = d.status || {}, c = d.charts || {x: [], hf: [], hs: [], gain: [], lf: [], ls: [], bucket: 1};
-    // builder batches only (the factory and posture nets have their own counters), numbered in order;
-    // past ~1,200 batches the server averages neighbours into one point
-    const lastGame = d.last_game;
-    const state = d.running ? `<b style="color:var(--good)">training</b> (${esc(s.phase || "starting")})`
-      : `<b>stopped</b>`;
-    const src = lastGame ? String(lastGame.source || "").split(/[\\/]/).pop() : "";
-    setHTML($("#nn-status"), `${state} &middot; ${d.running ? (s.live || 0) + " running game(s) feeding it &middot; " : ""}`
-      + `${d.batches || 0} batches${c.bucket > 1 ? " (each point averages " + c.bucket + ")" : ""}`
-      + ` &middot; ${(s.rows || 0).toLocaleString()} decisions learned`
-      + ` &middot; weights written to the game ${s.exported || 0}&times; this session`
-      + (lastGame ? ` &middot; last: ${esc(src)} (${lastGame.rows} decisions, trained in ${lastGame.train_s}s)` : ""));
-    const xs = c.x, hf = c.hf, hs = c.hs;
-    nnChart("#nn-c-acc", [
-      {xs, ys: hf, color: NN_FULL, dots: true}, {xs, ys: hs, color: NN_STATE, dots: true},
-      {xs, ys: nnRolling(hf, 5), color: NN_FULL}, {xs, ys: nnRolling(hs, 5), color: NN_STATE}],
-      {lo: -0.2, hi: 0.2, floor: -1, empty: "needs two games: the first one has nothing to be tested against"});
-    legendHTML("#nn-leg-acc", [["with the decision", NN_FULL], ["state only", NN_STATE]]);
-    // decisions chosen on value only: forced paths only tell the net which panic fired
-    const gain = c.gain;
-    nnChart("#nn-c-gain", [{xs, ys: gain, color: NN_FULL, dots: true}, {xs, ys: nnRolling(gain, 5), color: NN_FULL}],
-      {lo: -0.05, hi: 0.05, fmt: v => v.toFixed(3)});
-    nnChart("#nn-c-loss", [{xs, ys: c.lf, color: NN_FULL},
-      {xs, ys: c.ls, color: NN_LOSS2}], {lo: 0});
-    legendHTML("#nn-leg-loss", [["with the decision", NN_FULL], ["state only", NN_LOSS2]]);
-    setHTML($("#nn-table"), nnTable(d.table));
-    setHTML($("#nn-trust"), nnTrust(d.trust, d.fac));
-    setHTML($("#nn-stage"), nnStage(d.stage));
-    setHTML($("#nn-policy"), nnPolicy(d.policy));
-    setHTML($("#nn-nets"), nnNets(d.policy));
-    setHTML($("#nn-samples"), nnSamples(d.samples || []));
-    setHTML($("#nn-results"), nnResults(d.results || []));
-    nnWinChart(d.normal_games || []);
+  try { SV = await api("/api/search" + (refresh ? "?refresh=1" : "")); }
+  catch (e) { setHTML($("#sv-status"), "<span class='loss'>" + esc(e.message) + "</span>"); }
+  if (SV) renderSearch();
+  if (refresh) toast("re-reading the search's games; the page updates when it is done");
+  SV_TIMER = setTimeout(loadNet, refresh || (SV && SV.busy) ? 8000 : 30000);
+}
+
+// Mirrors nnshift.summarise: geometric mean per head and kind over the games given.
+function svSum(games) {
+  const heads = {}, kinds = {};
+  for (const g of games) {
+    for (const [h, v] of Object.entries(g.heads || {})) {
+      const a = heads[h] || (heads[h] = [0, 0, 0]);
+      a[0] += v[0]; a[1] += v[1]; a[2] += v[2];
+    }
+    for (const [k, v] of Object.entries(g.kinds || {})) {
+      const a = kinds[k] || (kinds[k] = [0, 0]);
+      a[0] += v[0]; a[1] += v[1];
+    }
   }
-  NN_TIMER = setTimeout(loadNet, 5000);
+  const out = {games: games.length, heads: {}, kinds: {}};
+  for (const [h, a] of Object.entries(heads)) if (a[1]) out.heads[h] = {gm: Math.exp(a[0] / a[1]), above: a[2] / a[1], n: a[1]};
+  for (const [k, a] of Object.entries(kinds)) if (a[1] >= 5) out.kinds[k] = {gm: Math.exp(a[0] / a[1]), n: a[1]};
+  return out;
 }
-// Training games won / lost / drawn over the chosen range, normal vs
-// discovery (discovery plays random choices on purpose, so it loses more).
-// Each line is its own games' last-20 win share, drawn at those games' positions.
-function nnWinChart(games) {
-  const NN_WIN_N = parseInt(($("#nn-win-n") && $("#nn-win-n").value) || "20", 10) || 20;
-  const line = (keep, color) => {
-    const xs = [], ys = [], recent = [];
-    games.forEach((g, i) => {
-      if (!keep(g)) return;
-      recent.push(g[2] === "win" ? 100 : 0);
-      if (recent.length > NN_WIN_N) recent.shift();
-      if (recent.length >= Math.min(NN_WIN_N, 5)) {
-        xs.push(i + 1);
-        ys.push(recent.reduce((a, b) => a + b, 0) / recent.length);
-      }
-    });
-    return {xs, ys, color};
-  };
-  const opps = [...new Set(games.map(g => g[1]))].sort();
-  const colors = [NN_STATE, NN_LOSS2, "#c27ba0", "#8e7cc3"];
-  const series = [line(() => true, NN_FULL)];
-  opps.forEach((o, i) => series.push(line(g => g[1] === o, colors[i % colors.length])));
-  nnChart("#nn-c-win", series, {lo: 0, hi: 100, fmt: v => v.toFixed(0) + "%",
-    empty: "no normal training games in this range"});
-  legendHTML("#nn-leg-win", [["all opponents", NN_FULL]].concat(opps.map((o, i) => [o, colors[i % colors.length]])));
+
+function svNetGames() {
+  const pick = $("#sv-net").value;
+  return pick === "" ? SV.games : SV.games.filter(g => String(g.net) === pick);
 }
-function nnResults(rows) {
-  if (!rows.length) return "<span class='dim'>no training games in this range</span>";
-  let h = "<table><tr><th>opponent</th><th>games</th><th>won</th><th>lost</th><th>draw</th><th>win %</th></tr>";
-  for (const r of rows) {
-    const n = r.win + r.loss + r.draw;
-    h += `<tr><td>${esc(r.opponent)} <span class="dim">${esc(r.kind)}</span></td><td>${n}</td><td>${r.win}</td>`
-      + `<td>${r.loss}</td><td>${r.draw}</td><td><b>${n ? Math.round(100 * r.win / n) : 0}%</b></td></tr>`;
+
+function svLegend(items) {
+  return items.map(([lab, col]) => `<span><i style="background:${col}"></i>${esc(lab)}</span>`).join("");
+}
+
+// One row per category, one dot per series, on a log scale of the ratio to the rule.
+function svDots(el, cats, label, series, field) {
+  const has = c => series.some(s => s.vals[c] && s.vals[c].gm > 0);
+  cats = cats.filter(has);
+  if (!cats.length) return "<div class='dim'>no decisions logged yet</div>";
+  const spread = c => Math.max(0, ...series.filter(s => !s.muted && s.vals[c]).map(s => Math.abs(Math.log(s.vals[c].gm))));
+  cats.sort((a, b) => spread(b) - spread(a));
+  const all = series.flatMap(s => cats.filter(c => s.vals[c]).map(c => s.vals[c].gm));
+  const lo = Math.min(0.1, Math.min(...all) * 0.8), hi = Math.max(10, Math.max(...all) * 1.2);
+  const W = svWidth(el), rowH = 26, top = 6, bottom = 24, H = top + bottom + rowH * cats.length;
+  const left = 14 + 6.6 * Math.max(...cats.map(c => label(c).length));
+  const x = v => left + 6 + (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (W - 14 - left - 6);
+  const yc = i => top + rowH * i + rowH / 2;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  for (const t of [0.1, 0.25, 0.5, 1, 2, 4, 10].filter(t => t >= lo && t <= hi))
+    s += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${H - bottom}"/>`
+      + `<text x="${x(t)}" y="${H - 8}" text-anchor="middle">${svX(t)}</text>`;
+  s += `<line class="ref" x1="${x(1)}" x2="${x(1)}" y1="${top}" y2="${H - bottom}"/>`;
+  cats.forEach((c, i) => {
+    const vs = series.filter(q => q.vals[c]).map(q => q.vals[c].gm);
+    s += `<text class="lab" x="${left}" y="${yc(i)}" dy="0.35em" text-anchor="end">${esc(label(c))}</text>`
+      + `<line class="range" x1="${x(Math.min(...vs))}" x2="${x(Math.max(...vs))}" y1="${yc(i)}" y2="${yc(i)}"/>`;
+  });
+  const order = series.filter(q => q.muted).concat(series.filter(q => !q.muted));
+  for (const q of order) cats.forEach((c, i) => {
+    const v = q.vals[c];
+    if (!v) return;
+    const tip = [label(c), q.label + ": " + svX(v.gm)];
+    if (v.above != null) tip.push("asked for more than the rule: " + Math.round(100 * v.above) + "%");
+    tip.push((field || "decisions") + ": " + svInt(v.n), "games: " + svInt(q.games));
+    s += `<circle cx="${x(v.gm)}" cy="${yc(i)}" r="${q.muted ? 3.5 : 5.5}" style="fill:${q.color};${q.muted ? "fill-opacity:.7" : ""}"${svTip(tip)}/>`;
+  });
+  return s + "</svg>";
+}
+
+function svScoreChart(el, pick) {
+  const P = SV.progress || {};
+  const rows = (P.old || []).filter(r => r.games > 0 && r.score != null).map(r => ({...r, old: true}))
+    .concat((P.current || []).filter(r => r.games > 0 && r.score != null));
+  if (!rows.length) return "<div class='dim'>no network has a scored game yet</div>";
+  const W = svWidth(el), H = 280, top = 10, bottom = 28, left = 44;
+  const ys = rows.map(r => r.score);
+  const ylo = Math.floor(Math.min(-2.5, ...ys) * 2) / 2, yhi = Math.ceil(Math.max(0.5, ...ys) * 2) / 2;
+  const gmax = Math.max(48, ...rows.map(r => r.games));
+  const x = g => left + 6 + Math.log(g) / Math.log(gmax) * (W - 14 - left - 6);
+  const y = v => top + (yhi - v) / (yhi - ylo) * (H - top - bottom);
+  const step = (yhi - ylo) > 6 ? 1 : 0.5;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  for (let v = ylo; v <= yhi + 1e-9; v += step)
+    s += `<line class="grid" x1="${left}" x2="${W - 12}" y1="${y(v)}" y2="${y(v)}"/>`
+      + `<text x="${left - 6}" y="${y(v)}" dy="0.35em" text-anchor="end">${svScore(v)}</text>`;
+  for (const t of [1, 4, 12, 24, 48, 96, 192].filter(t => t <= gmax))
+    s += `<text x="${x(t)}" y="${H - 10}" text-anchor="middle">${t}</text>`;
+  s += `<line class="ref" stroke-dasharray="4 3" x1="${left}" x2="${W - 12}" y1="${y(0)}" y2="${y(0)}"/>`
+    + `<text x="${W - 12}" y="${H - 10}" text-anchor="end">games played (log scale)</text>`;
+  const jit = r => x(r.games) * Math.exp((((r.id * 7919) % 13) - 6) * 0.004);
+  for (const r of rows.filter(r => r.old).concat(rows.filter(r => !r.old))) {
+    const mine = !r.old && pick !== "" && String(r.id) === pick;
+    const tip = [r.old ? "old search" : "current search", "network " + r.id, "games: " + r.games,
+                 "mean score: " + svScore(r.score), "wins: " + r.wins + " of " + r.games,
+                 "noise s: " + (r.s == null ? "–" : Number(r.s).toFixed(2)), "status: " + (r.status || "")];
+    s += `<circle cx="${jit(r)}" cy="${y(r.score)}" r="${r.old ? 3 : (mine ? 6.5 : 4.5)}" style="fill:${
+      r.old ? "var(--dim)" : (mine ? SV_COLOR.net : SV_COLOR.current)};${r.old ? "fill-opacity:.55" : ""}"${svTip(tip)}/>`;
   }
-  return h + "</table>";
+  return s + "</svg>";
 }
-async function netAct(act) {
-  if (act === "reset" && Date.now() - NN_RESET_ARMED > 4000) {
-    NN_RESET_ARMED = Date.now();
-    toast("click again within 4 s: a new net starts from nothing; this one is kept in runtime/nn-archive", true);
-    return;
+
+function svSizeBucket(g) {
+  const n = g.setup && g.setup.per_side;
+  const b = SV_SIZES.find(([, f]) => n && f(n));
+  return b ? b[0] : null;
+}
+
+const SV_SETUP_KEYS = [
+  ["Team size", g => svSizeBucket(g), (a, b) => SV_SIZES.findIndex(s => s[0] === a) - SV_SIZES.findIndex(s => s[0] === b)],
+  ["Players a side", g => g.setup && g.setup.per_side, (a, b) => a - b],
+  ["Our faction", g => g.setup && g.setup.sides && g.setup.sides[0]],
+  ["Their faction", g => g.setup && g.setup.sides && g.setup.sides[1]],
+  ["Opponent", g => g.setup && g.setup.foe],
+  ["Length (minutes)", g => g.setup && g.setup.minutes, (a, b) => a - b],
+  ["Handicap ours / theirs", g => g.setup && g.setup.handicap && ("+" + g.setup.handicap[0] + " / +" + g.setup.handicap[1])],
+  ["Map", g => g.setup && g.setup.map, null, 12],
+];
+
+function svSetupTable(games, [title, key, cmp, top]) {
+  const by = new Map();
+  for (const g of games) {
+    const k = key(g);
+    const kk = k == null ? "no setup recorded" : k;
+    if (!by.has(kk)) by.set(kk, []);
+    by.get(kk).push(g);
   }
-  try {
-    const r = await api("/api/nn", {action: act});
-    toast(r.ok ? (act === "start" ? (r.already ? "trainer already running" : "trainer started")
-      : act === "stop" ? "trainer stopped" : (r.output || "fresh net started; the old one is archived").trim()) : (r.error || r.output || "failed"), !r.ok);
-  } catch (e) { toast(e.message, true); }
-  setTimeout(loadNet, 600);
+  let rows = [...by.entries()];
+  rows.sort(cmp ? (a, b) => (a[0] === "no setup recorded") - (b[0] === "no setup recorded") || cmp(a[0], b[0])
+                : (a, b) => b[1].length - a[1].length);
+  let more = "";
+  if (top && rows.length > top) {
+    const rest = rows.slice(top);
+    more = `<div class="dim">and ${rest.length} more maps (${rest.reduce((n, r) => n + r[1].length, 0)} games)</div>`;
+    rows = rows.slice(0, top);
+  }
+  const body = rows.map(([k, gs]) => {
+    const sc = gs.filter(g => g.score != null), m = sc.length ? sc.reduce((a, g) => a + g.score, 0) / sc.length : null;
+    const n = r => gs.filter(g => g.res === r).length;
+    return `<tr><td>${esc(k)}</td><td>${gs.length}</td><td data-sort="${m == null ? "" : m.toFixed(4)}" class="${
+      m == null ? "dim" : (m > 0 ? "win" : (m < 0 ? "loss" : ""))}">${svScore(m)}</td><td>${n("W")}-${n("D")}-${n("L")}</td></tr>`;
+  }).join("");
+  return `<div><table><thead><tr><th>${esc(title)}</th><th>Games</th><th>Mean score</th><th>W-D-L</th></tr></thead>`
+    + `<tbody>${body}</tbody></table>${more}</div>`;
 }
+
+function renderSearch() {
+  if (!SV) return;
+  const at = SV.computed_at ? Math.round((Date.now() / 1000 - SV.computed_at) / 60) : null;
+  setHTML($("#sv-status"), (SV.search_dir ? `search batch <a href="${runRoute("tournaments/" + SV.search_dir)}">${esc(SV.search_dir)}</a> &middot; ` : "")
+    + (at != null ? `games read ${at <= 0 ? "just now" : at + " min ago"} (again every ${Math.round((SV.ttl || 180) / 60)} min while this tab is open)` : "")
+    + (SV.busy ? " &middot; <span style='color:var(--warn)'>reading new games&hellip;</span>" : "")
+    + (SV.error ? ` &middot; <span class="loss">${esc(SV.error)}</span>` : "")
+    + ` <button class="act" style="margin-left:8px" onclick="loadNet(true)">Re-read now</button>`);
+  if (!SV.groups) return;
+
+  const sel = $("#sv-net"), want = sel.value || (UI["sv-net"] != null ? String(UI["sv-net"]) : "");
+  const per = {};
+  for (const g of SV.games) (per[g.net] || (per[g.net] = [])).push(g);
+  const prog = {};
+  for (const r of (SV.progress.current || [])) prog[r.id] = r;
+  const ids = Object.keys(per).map(Number).sort((a, b) => a - b);
+  setHTML(sel, `<option value="">all networks (${SV.games.length} games)</option>` + ids.map(i =>
+    `<option value="${i}">network ${i} &mdash; ${per[i].length} game${per[i].length === 1 ? "" : "s"}${
+      prog[i] && prog[i].score != null ? ", mean " + svScore(prog[i].score) : ""}</option>`).join(""));
+  sel.value = ids.map(String).includes(want) ? want : "";
+  const pick = sel.value;
+
+  const cur = (SV.progress.current || []).filter(r => r.games > 0);
+  const best = cur.filter(r => r.games >= 4 && r.score != null).sort((a, b) => b.score - a.score)[0];
+  const oldBest = (SV.progress.old || []).filter(r => r.games >= 12 && r.score != null && r.status === "viable")
+    .sort((a, b) => b.score - a.score)[0];
+  const tile = (lbl, big, sub) => `<div class="sv-tile"><div class="lbl">${lbl}</div><div class="big">${big}</div><div class="sub">${sub}</div></div>`;
+  setHTML($("#sv-tiles"),
+    tile("Current search, games played", svInt(cur.reduce((a, r) => a + r.games, 0)), svInt(cur.length) + " networks tried")
+    + tile("Current search, best mean score", best ? svScore(best.score) : "&ndash;",
+           best ? `network ${best.id} over ${best.games} games` : "no network has 4 games yet")
+    + tile("Old search, best viable score", oldBest ? svScore(oldBest.score) : "&ndash;",
+           oldBest ? `network ${oldBest.id} over ${oldBest.games} games, old prices` : "")
+    + tile("Finished games read", svInt(SV.games.length), svInt(SV.games.filter(g => g.setup).length) + " with a recorded setup"));
+
+  setHTML($("#sv-scores"), svScoreChart($("#sv-scores"), pick));
+
+  const G = SV.groups, series = [];
+  const add = (key, color, muted) => G[key] && series.push({label: G[key].label, color, muted, games: G[key].games,
+                                                           vals: G[key].heads, kinds: G[key].kinds});
+  add("shipped", SV_COLOR.shipped); add("current", SV_COLOR.current); add("biased", SV_COLOR.biased);
+  const olds = Object.keys(G).filter(k => G[k].kind === "old");
+  olds.forEach(k => add(k, SV_COLOR.old, true));
+  if (pick !== "") {
+    const s = svSum(per[pick] || []);
+    series.push({label: "Network " + pick, color: SV_COLOR.net, games: s.games, vals: s.heads, kinds: s.kinds});
+  }
+  const legend = (withOld) => svLegend(series.filter(q => !q.muted).map(q => [q.label, q.color])
+    .concat(withOld && olds.length ? [["Old search nets " + olds.map(k => k.slice(3)).join(", "), SV_COLOR.old]] : []));
+  setHTML($("#sv-heads-leg"), legend(true));
+  const heads = SV.heads || {};
+  setHTML($("#sv-heads"), svDots($("#sv-heads"), Object.keys(heads), h => heads[h] || h, series));
+  const ks = series.filter(q => !q.muted).map(q => ({...q, vals: q.kinds}));
+  setHTML($("#sv-kinds-leg"), legend(false));
+  const kinds = [...new Set(ks.flatMap(q => Object.keys(q.vals || {})))];
+  setHTML($("#sv-kinds"), svDots($("#sv-kinds"), kinds, k => k, ks.map(q => ({...q, vals: q.vals || {}})), "price cards"));
+
+  const games = svNetGames();
+  const sizes = [{label: pick === "" ? "all sizes" : "network " + pick + ", all sizes", color: SV_COLOR.current, ...svSum(games)}]
+    .concat(SV_SIZES.map(([lab], i) => ({label: lab, color: SV_SIZE_COLORS[i], ...svSum(games.filter(g => svSizeBucket(g) === lab))}))
+      .filter(q => q.games));
+  setHTML($("#sv-size-leg"), svLegend(sizes.map(q => [q.label + " (" + q.games + " games)", q.color])));
+  setHTML($("#sv-size"), svDots($("#sv-size"), Object.keys(heads), h => heads[h] || h,
+    sizes.map(q => ({label: q.label, color: q.color, games: q.games, vals: q.heads}))));
+  setHTML($("#sv-setups"), games.length ? SV_SETUP_KEYS.map(k => svSetupTable(games, k)).join("")
+    : "<div class='dim'>no finished games yet</div>");
+}
+
+document.addEventListener("mousemove", e => {
+  const tip = $("#svtip");
+  const t = e.target.closest && e.target.closest(".svchart [data-tip]");
+  if (!t) { if (!tip.hidden) tip.hidden = true; return; }
+  if (tip._src !== t) { tip.textContent = t.getAttribute("data-tip"); tip._src = t; }
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = (e.clientX + 14 + w > innerWidth ? e.clientX - 14 - w : e.clientX + 14) + "px";
+  tip.style.top = (e.clientY + 14 + h > innerHeight ? e.clientY - 14 - h : e.clientY + 14) + "px";
+});
+addEventListener("resize", () => {
+  clearTimeout(SV_RESIZE);
+  SV_RESIZE = setTimeout(() => { if ($("#tab-net").classList.contains("on")) renderSearch(); }, 200);
+});
 
 /* ---------- progress ---------- */
 const PG_METRICS = [["eco", "Metal income"], ["army", "Standing army"], ["land", "Land held (map nearer our buildings)"],
@@ -2237,35 +2185,10 @@ function pgCell(x) {
                     : "rgba(224,108,108," + (0.15 + 0.6 * -t).toFixed(2) + ")";
   return "<td style='background:" + bg + ";text-align:right;font-family:var(--mono)'>" + v.toFixed(2) + "</td>";
 }
-// The curriculum's current stage and where its judged games stand (tools/curriculum.py).
-function pgStage(s, j) {
-  if (!s) return "";
-  const t = String(s.since || "").replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*$/, "$1-$2-$3 $4:$5");
-  let h = "<div class='card'><b>Curriculum stage: " + s.game_minutes + "-minute games</b> <span class='dim'>since " + esc(t)
-    + ". Each game is scored by its mean edge from minute " + s.judged[0] + " to " + s.judged[1]
-    + "; the stage passes when the median eco and mex edge is at least " + s.pass.toFixed(2)
-    + " over the last games below, and again over the newer half of them.</span>";
-  if (j && j.error) return h + "<div class='loss'>" + esc(j.error) + "</div></div>";
-  h += "<table><tr><th>Loop</th><th>Games</th><th>Eco edge</th><th>Mex edge</th><th>Newer half eco</th><th>Newer half mex</th><th></th></tr>";
-  for (const [reg, r] of Object.entries(j || {})) {
-    h += "<tr><td>" + esc(reg) + "</td><td>" + r.n + " / " + r.need + "</td>"
-      + [r.all.eco, r.all.mex, r.recent.eco, r.recent.mex].map(pgCell).join("")
-      + "<td>" + (r.ok ? "<span class='win'>PASS</span>" : "<span class='dim'>" + (r.n < r.need ? "needs games" : "not yet") + "</span>") + "</td></tr>";
-  }
-  h += "</table>";
-  for (const [reg, r] of Object.entries(j || {}))
-    for (const [m, row] of Object.entries(r.curve || {}))
-      h += "<div class='dim mono' style='overflow-x:auto;white-space:nowrap'>" + esc(reg + " " + m + ": " + row) + "</div>";
-  const pad = s.game_minutes - s.minutes;
-  const hist = (s.history || []).map(x => (x.passed ? (x.minutes + pad) + "-minute games passed"
-      : "set " + (x.minutes + pad) + " &rarr; " + (x.to + pad) + "-minute games")
-    + " " + esc(String(x.passed || x.set || "").replace(/^\d{4}(\d\d)(\d\d)-(\d\d)(\d\d).*$/, "$1-$2 $3:$4"))).join(" &middot; ");
-  return h + (hist ? "<div class='dim' style='margin-top:4px'>Stage history: " + hist + "</div>" : "") + "</div>";
-}
 async function loadProgress() {
   if (!$("#tab-progress").classList.contains("on")) return;
   const q = "since=" + $("#pg-since").value + "&all=" + $("#pg-all").value + "&by=" + $("#pg-by").value
-    + "&regime=" + $("#pg-regime").value + "&groups=" + $("#pg-groups").value + "&b0=" + $("#pg-b0").value;
+    + "&groups=" + $("#pg-groups").value;
   let d;
   try { d = await api("/api/progress?" + q); }
   catch (e) { setHTML($("#pg-body"), "<div class='card'><span class='dim'>" + esc(e.message) + "</span></div>"); return; }
@@ -2275,17 +2198,6 @@ async function loadProgress() {
   const shown = d.groups.length - 1, total = d.groups_total ?? shown;
   let html = "<div class='dim' style='margin:0 0 6px 4px'>batches started since " + esc(since)
     + (shown < total ? " &middot; newest " + shown + " of " + total + " groups shown; ALL covers every one" : "") + "</div>";
-  if (d.rules_only)
-    html += "<div class='card loss'>Showing the old rules-only control batches (-b0): the nets were switched off in these games. "
-      + "The loops stopped running them on Oct 10; this is history, not how the AI plays.</div>";
-  html += pgStage(d.stage, d.judge);
-  const nets = d.nets || [], on = nets.filter(n => n.on), earned = on.filter(n => (n.earned || 0) > 0).sort((a, b) => b.earned - a.earned);
-  html += "<div class='card'><b>Nets</b> <span class='dim'>" + on.length + " of " + nets.length + " decide (every trained net does)"
-    + (d.kind != null && d.kind < 2 ? ", <span class='loss'>old trust kind " + d.kind + ": the game ignores these nets</span>" : "")
-    + ". Earned is a quality score from games a net had not seen, not how much it plays.</span><div style='margin-top:6px'>"
-    + (earned.length ? earned.map(n => "<span class='badge' style='margin-right:6px'>" + esc(n.name) + " " + n.earned.toFixed(2) + "</span>").join("")
-      : "<span class='dim'>no net has earned above 0 yet</span>")
-    + (on.length > earned.length ? " <span class='dim'>+ " + (on.length - earned.length) + " deciding at earned 0</span>" : "") + "</div></div>";
   for (const [k, title] of PG_METRICS) {
     html += "<div class='card'><b>" + title + "</b><table>" + head + d.groups.map(g =>
       "<tr><td>" + esc(g.name) + "</td><td>" + g.n + "</td><td>" + g.w + "-" + g.l + "</td>" +
