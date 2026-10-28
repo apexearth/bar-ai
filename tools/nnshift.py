@@ -102,11 +102,35 @@ def progress(state):
     return sorted(rows, key=lambda r: r["id"])
 
 
+def group_kind(key):
+    for p in ("shipped", "biased", "neutral", "old", "fresh"):
+        if key.startswith(p):
+            return p
+    return key
+
+
+def write_rows(d, groups, fresh, old):
+    """row arrays for the Net Drift dashboard: one row per (group, head), (group, kind) and network"""
+    os.makedirs(d, exist_ok=True)
+    heads, kinds = [], []
+    for key, g in groups.items():
+        base = {"group": key, "groupLabel": g["label"], "groupKind": group_kind(key), "games": g["games"]}
+        for h, v in g["heads"].items():
+            heads.append({**base, "head": h, "headLabel": HEADS[h], "ratio": v["gm"], "above": v["above"], "n": v["n"]})
+        for k, v in g["kinds"].items():
+            kinds.append({**base, "kind": k, "ratio": v["gm"], "n": v["n"]})
+    prog = [{"search": "Neutral search (10-28)", **r} for r in progress(fresh)] \
+        + [{"search": "Old search (10-11 to 10-15)", **r} for r in progress(old)]
+    for name, rows in (("heads", heads), ("kinds", kinds), ("progress", prog)):
+        json.dump(rows, open(os.path.join(d, name + ".json"), "w", encoding="utf-8"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--min-games", type=int, default=4)
     ap.add_argument("--old-top", type=int, default=3)
+    ap.add_argument("--rows-dir", help="also write heads.json, kinds.json, progress.json as row arrays")
     a = ap.parse_args()
     groups = {}
 
@@ -128,6 +152,22 @@ def main():
         for f in files:
             read_game(f, acc)
         groups[f"fresh{k}"] = {"label": f"Fresh net {k}", "score": mean_score(n), **summarise(acc)}
+    acc = new_acc()
+    for f in glob.glob(os.path.join(tdir, "matches", "*", "infolog.txt")):
+        read_game(f, acc)
+    if acc["games"]:
+        groups["neutral"] = {"label": "Neutral search, all nets", **summarise(acc)}
+
+    for p, key, label in ((os.path.join(NN, "rand-familymid-20261028.json"), "biased",
+                           "First fresh run (random middle)"),):
+        if not os.path.exists(p):
+            continue
+        st = json.load(open(p, encoding="utf-8"))
+        acc = new_acc()
+        for f in glob.glob(os.path.join(st.get("dir", ""), "matches", "*", "infolog.txt")):
+            read_game(f, acc)
+        if acc["games"]:
+            groups[key] = {"label": label, **summarise(acc)}
 
     oldp = os.path.join(NN, "rand-oldprices-20261028.json")
     old = json.load(open(oldp, encoding="utf-8")) if os.path.exists(oldp) else {"nets": {}}
@@ -149,6 +189,8 @@ def main():
     json.dump({"heads": HEADS, "groups": groups,
                "progress": {"fresh": progress(fresh), "old": progress(old)}},
               open(a.out, "w", encoding="utf-8"), indent=1)
+    if a.rows_dir:
+        write_rows(a.rows_dir, groups, fresh, old)
     for g, v in groups.items():
         print(f"{g:10} games={v['games']:3} heads={len(v['heads'])} kinds={len(v['kinds'])}")
 
