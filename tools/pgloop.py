@@ -90,6 +90,7 @@ def play(st, v, gi, slot):
     _, _, sc = neuro.play((st["dir"], v, gi, setup["per_side"], setup["map"], seed, opts_path(st, v), slot,
                            setup["foe"], setup))
     out = os.path.join(st["dir"], "matches", "c%02d-g%d" % (v, gi))
+    sc = sc[0] if isinstance(sc, (list, tuple)) else sc   # cem.score is (score, result)
     if sc is None:
         randsearch.note_bad_map(setup["map"])
     return out, sc
@@ -120,7 +121,8 @@ def step(st, lay):
             if c["maxAbs"] > 0.01:
                 pause("%s: the trainer's copy differs from what the game did (%s)" % (p["dir"], json.dumps(c)))
                 return
-            g["score"], g["version"] = p.get("score"), p["version"]
+            s = p.get("score")
+            g["score"], g["version"] = (s[0] if isinstance(s, (list, tuple)) else s), p["version"]
             games.append(g)
     v = st["version"]
     w = pgtrain.read_weights(wpath(v), lay)
