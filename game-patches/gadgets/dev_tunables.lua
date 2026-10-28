@@ -668,6 +668,7 @@ local NAMES = {
 	"apex_opp_wait", -- decide.as: the opportunity charge waits only until another hand takes the job (0)
 	"apex_land_value", -- land.as: rent from the neighbours' metal per cell (0)
 	"apex_line_yield", -- yield.as: labs and units priced by enemy metal destroyed per metal spent (0)
+	"apex_nano_payback", -- want_nano.as: nanos pay the plant payback rule, gain x the share of turrets working (1)
 	"apex_threat_mul", -- coverage.as: threat perception multiplier, 0 in the eco test (1)
 	"apex_eco_seat_t3", -- ecoseat.as: past half its growth target the eco seat builds the team gantry and its T3 (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)

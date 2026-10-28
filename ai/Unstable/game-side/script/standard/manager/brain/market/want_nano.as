@@ -612,6 +612,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 				++gNanoMetalCut;
 			}
 		}
+		// what the turrets we stand deliver: a seat whose nanos sit idle does not get the full absorb from the next one
+		if (ai.GetTunable("apex_nano_payback", TUNE_NANO_PAYBACK) > 0.f)
+			gainN *= 1.f - gNanoIdleShare;
 		Want c;
 		ValueOf(d, gainN, WalkSecTo(unit, dSite),
 				Catalog::gBuildPower[uid], c);
@@ -623,8 +626,24 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			w.spotId = (yardSite || Catalog::gFloater[d]) ? NS_YARD : src;
 		}
 	}
+	// THE PLANT RULE ON THE NANO (his 10-20 ruling: a hand whose best buy cannot earn back its cost within the payback
+	// horizon helps a build instead). His 10-28 T1-only game: one seat stood 631 turrets at minute 35, 383 idle,
+	// bought at gain 0.06-0.26 m/s "over nothing" -- hours to repay -- and his game lagged.
+	if ((w.def !is null) && (ai.GetTunable("apex_nano_payback", TUNE_NANO_PAYBACK) > 0.f)) {
+		const float h = PayH();
+		if ((h > 1.f) && (w.gain * h < w.mCost + w.tCost)) {
+			++gNanoPaybackCut;
+			if (ai.frame >= gNanoPaybackLogAt) {
+				gNanoPaybackLogAt = ai.frame + 30 * SECOND;
+				AiLog("apex: nano-payback t=" + ai.teamId + " gain=" + NnF(w.gain, 2) + " cost="
+					+ int(w.mCost + w.tCost) + " h=" + int(h) + " cut=" + gNanoPaybackCut);
+			}
+			return Want();
+		}
+	}
 	return w;
 }
+int gNanoPaybackCut = 0, gNanoPaybackLogAt = 0;
 
 
 }  // namespace Market

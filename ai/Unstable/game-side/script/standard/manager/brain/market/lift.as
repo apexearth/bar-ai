@@ -687,6 +687,7 @@ void NanoPriorityPass()
 }
 
 int gLiftLogAt = 0;
+float gNanoIdleShare = 0.f;   // share of our turrets idle over 60 s, the last census
 void LiftUpdate()
 {
 	{ const double _t = Perf::T0(); LiftSample(); Perf::Add("lift.sample", _t); }
@@ -706,6 +707,7 @@ void LiftUpdate()
 		if ((i < gOwnNanoWorkAt.length()) && (ai.frame - gOwnNanoWorkAt[i] > 60 * SECOND))
 			++idle;
 	}
+	gNanoIdleShare = (gOwnNano.length() > 0) ? (float(idle) / float(gOwnNano.length())) : 0.f;
 	AiLog("apex: lift census t=" + ai.teamId + " turrets=" + gOwnNano.length()
 			+ " idle60=" + idle + " fleet=" + gLift.length()
 			+ " moved=" + gLiftMoved + " aborted=" + gLiftAborted + " lost=" + gLiftLost
