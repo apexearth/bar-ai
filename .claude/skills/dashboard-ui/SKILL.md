@@ -28,7 +28,7 @@ dashboard rather than teaching a command.
   economy/units/intel/brain charts per run; a search batch shows its standings.
 - **Launch** — start a match or tournament; the Advanced picker carries the
   tunable overrides (`/api/tunables`).
-- **Net** — the policy search (`/api/search`, `tools/nnshift.py`, cached and
+- **Net** — training (learning from our own choices, `/api/training` from runtime/pg: status, score per version, which pushes paid off per decision and version) above the lean views (`/api/search`, `tools/nnshift.py` over the training games by version, cached and
   re-read at most every 3 min): score per network, each group's lean against
   the rule per head and per auction kind, and the current search's games by
   their random setup (team size, factions, opponent, map, length, handicap).

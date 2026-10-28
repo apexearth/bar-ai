@@ -1309,10 +1309,42 @@ def search_view(refresh=False):
         d, at, err, busy = SEARCH["data"], SEARCH["at"], SEARCH["error"], SEARCH["thread"] is not None
     if d is None:
         return {"error": err or "still reading the games", "busy": busy}
+    if d.get("mode") == "training":
+        return {**d, "computed_at": at, "busy": busy, "error": err, "ttl": SEARCH_TTL}
     live = nnshift.load_state(str(RAND_STATE))
     return {**d, "progress": {"current": nnshift.progress(live), "old": d["progress"]["old"]},
             "search_dir": os.path.basename(os.path.normpath(live.get("dir") or "")) or d["search_dir"],
             "computed_at": at, "busy": busy, "error": err, "ttl": SEARCH_TTL}
+
+
+PG_DIR = REPO / "runtime" / "pg"
+
+
+def training_view():
+    """Learning from our own choices (tools/pgloop.py): running or paused, the version playing, games launched and
+    waiting for the next step, every step's report (games, decisions, mean score, result, step size, each
+    decision's signal t), and the loop's last log lines. Cheap: three small files, read on every call."""
+    try:
+        st = json.loads((PG_DIR / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"exists": False}
+    hist = []
+    try:
+        for line in (PG_DIR / "history.jsonl").read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                hist.append(json.loads(line))
+    except (OSError, ValueError):
+        pass
+    try:
+        log = (PG_DIR / "pg.log").read_text(encoding="utf-8").splitlines()[-8:]
+    except OSError:
+        log = []
+    on = (PG_DIR / "pg_on").exists()
+    return {"exists": True, "on": on, "paused": (PG_DIR / "pg_on.paused").exists() and not on,
+            "version": st.get("version", 0), "launched": st.get("next_game", 0),
+            "waiting": len(st.get("pending", [])), "started": st.get("started"),
+            "dir": os.path.basename(os.path.normpath(st.get("dir") or "")), "history": hist, "log": log,
+            "updated": (PG_DIR / "state.json").stat().st_mtime}
 
 
 PROGRESS_LOCK = threading.Lock()
@@ -1647,6 +1679,8 @@ class Handler(BaseHTTPRequestHandler):
                                 "repo": str(REPO)})
             elif u.path == "/api/search":
                 self.send_json(search_view(q.get("refresh") == "1"))
+            elif u.path == "/api/training":
+                self.send_json(training_view())
             elif u.path == "/api/progress":
                 self.send_json(progress_view(q))
             elif u.path == "/api/games":

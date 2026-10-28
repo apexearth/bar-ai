@@ -154,22 +154,35 @@
 <!-- ================= NET ================= -->
 <section id="tab-net" class="tab">
   <div class="card">
-    <b>The policy search</b> <span class="dim">&mdash; tools/randsearch.py plays networks drawn around the rule,
-      each game on its own random setup, and re-tests a network that scores over 4, 12 and 24 games. Neutral is
-      the rule: &times;1 means the network asks for exactly what the hand-written rule would.</span>
-    <div id="sv-status" class="dim" style="margin-top:6px"></div>
-    <div id="sv-tiles" class="sv-tiles"></div>
-    <div style="margin-top:8px">Network <select id="sv-net" onchange="uiSet('sv-net', this.value); renderSearch()">
-      <option value="">all networks</option></select>
-      <span class="dim">&mdash; adds its own dot to the lean charts and narrows the setup tables to its games</span></div>
+    <b>Training</b> <span class="dim">&mdash; learning from our own choices (tools/pgloop.py). In every training game
+      each decision gets a small random push, and each push is credited with how our economy, army and trade against
+      theirs moved over the next 2 minutes, against what the position predicted. Every 16 games one small step makes a
+      new version, which the next games play. Every game draws its own setup (map, team size, factions, opponent,
+      handicap, length). It started at the rule: &times;1 below means asking for exactly what the hand-written rule
+      would.</span>
+    <div id="tr-status" class="dim" style="margin-top:6px"></div>
+    <div id="tr-tiles" class="sv-tiles"></div>
   </div>
   <div class="card">
-    <h2>Score per network as it plays more games</h2>
-    <div class="dim">Each dot is one network: its mean score (0 is even with the opponent; a time-limit game goes to
-      the side ahead on economy and army) against games played.</div>
-    <div class="legend"><span><i style="background:var(--accent)"></i>current search</span>
-      <span><i style="background:var(--dim)"></i>old search (10-11 to 10-15, old prices)</span></div>
-    <div id="sv-scores" class="svchart"></div>
+    <h2>Score per version</h2>
+    <div class="dim">The mean score of the games each version's step learned from (0 is even with the opponent; a
+      time-limit game goes to the side ahead on economy and army). Random setups make one batch swing a lot: read the
+      line, the mean of the last 4 versions, not one bar.</div>
+    <div id="tr-scores" class="svchart"></div>
+  </div>
+  <div class="card">
+    <h2>Which pushes paid off, decision by decision</h2>
+    <div class="dim">For each decision and version, how strongly pushing it one way lined up with better results
+      (a t-score: beyond &plusmn;2 is unlikely to be luck). Blue: asking for more went with better results;
+      orange: asking for less did. A choice with several options shows its strongest one. A decision that stays the
+      same colour version after version is a real finding; one that flips is noise.</div>
+    <div id="tr-signal" class="svchart"></div>
+  </div>
+  <div class="card">
+    <div id="sv-status" class="dim"></div>
+    <div style="margin-top:6px"><span id="sv-net-lbl">Version</span> <select id="sv-net" onchange="uiSet('sv-net', this.value); renderSearch()">
+      <option value="">all versions</option></select>
+      <span class="dim">&mdash; adds its own dot to the lean charts below and narrows the setup tables to its games</span></div>
   </div>
   <div class="card">
     <h2>Lean against the rule, decision by decision</h2>
@@ -187,7 +200,7 @@
   </div>
   <div class="card">
     <h2>By setup</h2>
-    <div class="dim">Every finished game of the current search drew its own setup (team size, map, factions,
+    <div class="dim">Every finished training game drew its own setup (team size, map, factions,
       opponent, length, handicap). Does a lean hold at every team size, and where does the score come from?</div>
     <div id="sv-size-leg" class="legend"></div>
     <div id="sv-size" class="svchart"></div>
@@ -1932,7 +1945,7 @@ async function pollOverview() {
 
 /* ---------- net: the policy search (tools/nnshift.py via /api/search) ---------- */
 let SV = null, SV_TIMER = null, SV_RESIZE = null;
-const SV_COLOR = {current: "var(--accent)", shipped: "var(--warn)", biased: "#c27ba0", old: "var(--dim)", net: "var(--good)"};
+const SV_COLOR = {current: "var(--accent)", shipped: "var(--warn)", early: "#9fb6d9", latest: "#c27ba0", old: "var(--dim)", net: "var(--good)"};
 const SV_SIZES = [["1v1", n => n === 1], ["2-3 a side", n => n >= 2 && n <= 3],
                   ["4-5 a side", n => n >= 4 && n <= 5], ["6-8 a side", n => n >= 6]];
 const SV_SIZE_COLORS = ["#6fa8dc", "#5fbf77", "#d9a441", "#e0876c"];
@@ -1945,6 +1958,8 @@ const svWidth = el => Math.max(300, Math.round(el.clientWidth || 900));
 async function loadNet(refresh) {
   clearTimeout(SV_TIMER);
   if (!$("#tab-net").classList.contains("on")) return;
+  try { TR = await api("/api/training"); renderTraining(); }
+  catch (e) { setHTML($("#tr-status"), "<span class='loss'>" + esc(e.message) + "</span>"); }
   try { SV = await api("/api/search" + (refresh ? "?refresh=1" : "")); }
   catch (e) { setHTML($("#sv-status"), "<span class='loss'>" + esc(e.message) + "</span>"); }
   if (SV) renderSearch();
@@ -2015,35 +2030,98 @@ function svDots(el, cats, label, series, field) {
   return s + "</svg>";
 }
 
-function svScoreChart(el, pick) {
-  const P = SV.progress || {};
-  const rows = (P.old || []).filter(r => r.games > 0 && r.score != null).map(r => ({...r, old: true}))
-    .concat((P.current || []).filter(r => r.games > 0 && r.score != null));
-  if (!rows.length) return "<div class='dim'>no network has a scored game yet</div>";
-  const W = svWidth(el), H = 280, top = 10, bottom = 28, left = 44;
-  const ys = rows.map(r => r.score);
-  const ylo = Math.floor(Math.min(-2.5, ...ys) * 2) / 2, yhi = Math.ceil(Math.max(0.5, ...ys) * 2) / 2;
-  const gmax = Math.max(48, ...rows.map(r => r.games));
-  const x = g => left + 6 + Math.log(g) / Math.log(gmax) * (W - 14 - left - 6);
-  const y = v => top + (yhi - v) / (yhi - ylo) * (H - top - bottom);
-  const step = (yhi - ylo) > 6 ? 1 : 0.5;
-  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
-  for (let v = ylo; v <= yhi + 1e-9; v += step)
-    s += `<line class="grid" x1="${left}" x2="${W - 12}" y1="${y(v)}" y2="${y(v)}"/>`
-      + `<text x="${left - 6}" y="${y(v)}" dy="0.35em" text-anchor="end">${svScore(v)}</text>`;
-  for (const t of [1, 4, 12, 24, 48, 96, 192].filter(t => t <= gmax))
-    s += `<text x="${x(t)}" y="${H - 10}" text-anchor="middle">${t}</text>`;
-  s += `<line class="ref" stroke-dasharray="4 3" x1="${left}" x2="${W - 12}" y1="${y(0)}" y2="${y(0)}"/>`
-    + `<text x="${W - 12}" y="${H - 10}" text-anchor="end">games played (log scale)</text>`;
-  const jit = r => x(r.games) * Math.exp((((r.id * 7919) % 13) - 6) * 0.004);
-  for (const r of rows.filter(r => r.old).concat(rows.filter(r => !r.old))) {
-    const mine = !r.old && pick !== "" && String(r.id) === pick;
-    const tip = [r.old ? "old search" : "current search", "network " + r.id, "games: " + r.games,
-                 "mean score: " + svScore(r.score), "wins: " + r.wins + " of " + r.games,
-                 "noise s: " + (r.s == null ? "–" : Number(r.s).toFixed(2)), "status: " + (r.status || "")];
-    s += `<circle cx="${jit(r)}" cy="${y(r.score)}" r="${r.old ? 3 : (mine ? 6.5 : 4.5)}" style="fill:${
-      r.old ? "var(--dim)" : (mine ? SV_COLOR.net : SV_COLOR.current)};${r.old ? "fill-opacity:.55" : ""}"${svTip(tip)}/>`;
+/* ---------- training: learning from our own choices (/api/training) ---------- */
+let TR = null;
+
+function trAgo(t) {
+  if (!t) return "";
+  const m = Math.round((Date.now() / 1000 - t) / 60);
+  return m <= 0 ? "just now" : (m < 120 ? m + " min ago" : Math.round(m / 60) + " h ago");
+}
+
+function renderTraining() {
+  if (!TR) return;
+  if (!TR.exists) {
+    setHTML($("#tr-status"), "No training run yet. It starts when runtime/pg/pg_on exists (the keepalive runs tools/pgloop.py).");
+    setHTML($("#tr-tiles"), ""); setHTML($("#tr-scores"), ""); setHTML($("#tr-signal"), "");
+    return;
   }
+  const H = TR.history || [], last = H[H.length - 1];
+  const state = TR.on ? "<span class='win'>running</span>" : (TR.paused ? "<span class='loss'>paused</span>" : "<span class='dim'>stopped</span>");
+  setHTML($("#tr-status"), `${state} &middot; started ${esc(TR.started || "?")} &middot; games in `
+    + `<a href="${runRoute("tournaments/" + TR.dir)}">${esc(TR.dir)}</a> &middot; state updated ${trAgo(TR.updated)}`
+    + (TR.log && TR.log.length ? `<div class="mono" style="margin-top:4px;white-space:pre-wrap">${esc(TR.log.slice(-3).join("\n"))}</div>` : ""));
+  const decisions = H.reduce((a, r) => a + (r.decisions || 0), 0);
+  const recent = H.slice(-4).filter(r => r.meanScore != null), early = H.slice(0, 4).filter(r => r.meanScore != null);
+  const mean = rs => rs.length ? rs.reduce((a, r) => a + r.meanScore, 0) / rs.length : null;
+  const tile = (lbl, big, sub) => `<div class="sv-tile"><div class="lbl">${lbl}</div><div class="big">${big}</div><div class="sub">${sub}</div></div>`;
+  setHTML($("#tr-tiles"),
+    tile("Version playing now", "v" + TR.version, last ? "last step " + esc(last.at || "") : "first step after 16 games")
+    + tile("Games played", svInt(TR.launched - 0), svInt(TR.waiting) + " waiting for the next step")
+    + tile("Decisions learned from", svInt(decisions), svInt(H.length) + " steps")
+    + tile("Mean score, last 4 versions", svScore(mean(recent)), "first 4 versions: " + svScore(mean(early))));
+  setHTML($("#tr-scores"), trScoreChart($("#tr-scores"), H));
+  setHTML($("#tr-signal"), trSignalMap($("#tr-signal"), H));
+}
+
+function trScoreChart(el, H) {
+  const rows = H.filter(r => r.meanScore != null);
+  if (!rows.length) return "<div class='dim'>no step yet: the first comes after 16 games</div>";
+  const W = svWidth(el), Ht = 240, top = 10, bottom = 28, left = 44;
+  const ys = rows.map(r => r.meanScore);
+  const ylo = Math.floor(Math.min(-1, ...ys) * 2) / 2, yhi = Math.ceil(Math.max(0.5, ...ys) * 2) / 2;
+  const n = rows.length, bw = Math.max(3, Math.min(28, (W - left - 20) / n * 0.7));
+  const x = i => left + 10 + (n === 1 ? (W - left - 20) / 2 : i * (W - left - 30) / (n - 1));
+  const y = v => top + (yhi - v) / (yhi - ylo) * (Ht - top - bottom);
+  let s = `<svg viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}">`;
+  for (let v = ylo; v <= yhi + 1e-9; v += 0.5)
+    s += `<line class="grid" x1="${left}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}"/>`
+      + `<text x="${left - 6}" y="${y(v)}" dy="0.35em" text-anchor="end">${svScore(v)}</text>`;
+  s += `<line class="ref" x1="${left}" x2="${W - 8}" y1="${y(0)}" y2="${y(0)}"/>`;
+  const every = Math.ceil(n / 16);
+  rows.forEach((r, i) => {
+    const v = r.meanScore, y0 = y(0), y1 = y(v);
+    const tip = ["version " + r.version + " (" + (r.at || "") + ")", "mean score: " + svScore(v),
+                 "games: " + r.games + "  W" + r.wins + " L" + r.losses + " D" + (r.games - r.wins - r.losses),
+                 "decisions: " + svInt(r.decisions), "step: " + r.steps + " updates, outputs moved " + Number(r.meanShift).toFixed(3)];
+    s += `<rect x="${x(i) - bw / 2}" y="${Math.min(y0, y1)}" width="${bw}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="2"
+      style="fill:${v >= 0 ? "var(--good)" : "var(--bad)"};fill-opacity:.55"${svTip(tip)}/>`;
+    if (i % every === 0 || i === n - 1) s += `<text x="${x(i)}" y="${Ht - 10}" text-anchor="middle">v${r.version}</text>`;
+  });
+  const roll = rows.map((r, i) => { const w = rows.slice(Math.max(0, i - 3), i + 1); return w.reduce((a, q) => a + q.meanScore, 0) / w.length; });
+  if (n > 1) s += `<polyline fill="none" style="stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round" points="${
+    roll.map((v, i) => x(i) + "," + y(v)).join(" ")}"/>`;
+  return s + "</svg>";
+}
+
+function trSignalMap(el, H) {
+  const hist = H.slice(-40);
+  if (!hist.length) return "<div class='dim'>no step yet</div>";
+  const names = [];
+  for (const r of hist) for (const h of (r.heads || [])) if (!names.includes(h.name)) names.push(h.name);
+  const strongest = t => (t || []).reduce((a, v) => (Math.abs(v) > Math.abs(a) ? v : a), 0);
+  const cell = {};
+  hist.forEach((r, j) => (r.heads || []).forEach(h => { cell[h.name + "|" + j] = {t: strongest(h.t), n: h.n}; }));
+  const persist = nm => Math.abs(hist.reduce((a, r, j) => a + ((cell[nm + "|" + j] || {}).t || 0), 0));
+  names.sort((a, b) => persist(b) - persist(a));
+  const label = nm => (SV && SV.heads && SV.heads[nm]) || nm.replace(/^choice(\d+):/, "choice $1: ");
+  const W = svWidth(el), rowH = 18, top = 6, bottom = 22, left = 14 + 6.2 * Math.max(...names.map(n => label(n).length));
+  const cw = Math.max(6, Math.min(34, (W - left - 10) / hist.length)), Ht = top + bottom + rowH * names.length;
+  let s = `<svg viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}">`;
+  names.forEach((nm, i) => {
+    s += `<text class="lab" x="${left - 6}" y="${top + rowH * i + rowH / 2}" dy="0.35em" text-anchor="end">${esc(label(nm))}</text>`;
+    hist.forEach((r, j) => {
+      const c = cell[nm + "|" + j];
+      if (!c) return;
+      const a = Math.min(1, Math.abs(c.t) / 3), col = c.t >= 0 ? "70,130,220" : "230,140,50";
+      const tip = [label(nm), "version " + r.version, "t = " + c.t.toFixed(2) + (Math.abs(c.t) >= 2 ? "  (beyond ±2)" : ""), "decisions: " + svInt(c.n)];
+      s += `<rect x="${left + j * cw}" y="${top + rowH * i + 1}" width="${cw - 1.5}" height="${rowH - 2}" rx="2"
+        style="fill:rgba(${col},${(0.08 + 0.85 * a).toFixed(2)});${Math.abs(c.t) >= 2 ? "stroke:var(--text);stroke-width:1" : ""}"${svTip(tip)}/>`;
+    });
+  });
+  const every = Math.ceil(hist.length / 12);
+  hist.forEach((r, j) => { if (j % every === 0 || j === hist.length - 1)
+    s += `<text x="${left + j * cw + cw / 2}" y="${Ht - 6}" text-anchor="middle">v${r.version}</text>`; });
   return s + "</svg>";
 }
 
@@ -2107,36 +2185,24 @@ function renderSearch() {
   const prog = {};
   for (const r of (SV.progress.current || [])) prog[r.id] = r;
   const ids = Object.keys(per).map(Number).sort((a, b) => a - b);
-  setHTML(sel, `<option value="">all networks (${SV.games.length} games)</option>` + ids.map(i =>
-    `<option value="${i}">network ${i} &mdash; ${per[i].length} game${per[i].length === 1 ? "" : "s"}${
+  const unit = SV.mode === "training" ? "version" : "network";
+  setHTML($("#sv-net-lbl"), unit === "version" ? "Version" : "Network");
+  setHTML(sel, `<option value="">all ${unit}s (${SV.games.length} games)</option>` + ids.map(i =>
+    `<option value="${i}">${unit} ${i} &mdash; ${per[i].length} game${per[i].length === 1 ? "" : "s"}${
       prog[i] && prog[i].score != null ? ", mean " + svScore(prog[i].score) : ""}</option>`).join(""));
   sel.value = ids.map(String).includes(want) ? want : "";
   const pick = sel.value;
-
-  const cur = (SV.progress.current || []).filter(r => r.games > 0);
-  const best = cur.filter(r => r.games >= 4 && r.score != null).sort((a, b) => b.score - a.score)[0];
-  const oldBest = (SV.progress.old || []).filter(r => r.games >= 12 && r.score != null && r.status === "viable")
-    .sort((a, b) => b.score - a.score)[0];
-  const tile = (lbl, big, sub) => `<div class="sv-tile"><div class="lbl">${lbl}</div><div class="big">${big}</div><div class="sub">${sub}</div></div>`;
-  setHTML($("#sv-tiles"),
-    tile("Current search, games played", svInt(cur.reduce((a, r) => a + r.games, 0)), svInt(cur.length) + " networks tried")
-    + tile("Current search, best mean score", best ? svScore(best.score) : "&ndash;",
-           best ? `network ${best.id} over ${best.games} games` : "no network has 4 games yet")
-    + tile("Old search, best viable score", oldBest ? svScore(oldBest.score) : "&ndash;",
-           oldBest ? `network ${oldBest.id} over ${oldBest.games} games, old prices` : "")
-    + tile("Finished games read", svInt(SV.games.length), svInt(SV.games.filter(g => g.setup).length) + " with a recorded setup"));
-
-  setHTML($("#sv-scores"), svScoreChart($("#sv-scores"), pick));
 
   const G = SV.groups, series = [];
   const add = (key, color, muted) => G[key] && series.push({label: G[key].label, color, muted, games: G[key].games,
                                                            vals: G[key].heads, kinds: G[key].kinds});
   add("shipped", SV_COLOR.shipped); add("current", SV_COLOR.current);
+  add("early", SV_COLOR.early); add("latest", SV_COLOR.latest);
   const olds = Object.keys(G).filter(k => G[k].kind === "old");
   olds.forEach(k => add(k, SV_COLOR.old, true));
   if (pick !== "") {
     const s = svSum(per[pick] || []);
-    series.push({label: "Network " + pick, color: SV_COLOR.net, games: s.games, vals: s.heads, kinds: s.kinds});
+    series.push({label: (unit === "version" ? "Version " : "Network ") + pick, color: SV_COLOR.net, games: s.games, vals: s.heads, kinds: s.kinds});
   }
   const legend = (withOld) => svLegend(series.filter(q => !q.muted).map(q => [q.label, q.color])
     .concat(withOld && olds.length ? [["Old search nets " + olds.map(k => k.slice(3)).join(", "), SV_COLOR.old]] : []));

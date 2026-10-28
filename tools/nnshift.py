@@ -146,7 +146,7 @@ def _mtime(p):
 def archive_groups(cache, old_top=3):
     """The fixed references: the shipped net, the first fresh run, the old search's best viable nets.
     Their games no longer change, so the result is memoised on the state files' mtimes."""
-    key = (_mtime(FIRST_FRESH), _mtime(OLD), old_top)
+    key = (_mtime(OLD), old_top)
     hit = cache.get("_archive")
     if hit and hit[0] == key:
         return hit[1]
@@ -200,15 +200,65 @@ def search_games(state, cache):
     return rows
 
 
+PG_STATE = os.path.join(REPO, "runtime", "pg", "state.json")
+
+
+def game_score(mdir, cache):
+    """cem.score of a finished game, (score, result), memoised on its result.json"""
+    p = os.path.join(mdir, "result.json")
+    try:
+        key = ("score", os.stat(p).st_mtime)
+    except OSError:
+        return None, None
+    hit = cache.get(p)
+    if hit and hit[0] == key:
+        return hit[1]
+    import cem
+    sc = cem.score(mdir)
+    v = (sc[0], sc[1]) if isinstance(sc, (list, tuple)) else (sc, None)
+    cache[p] = (key, v)
+    return v
+
+
+def version_progress(games):
+    """the training's games by the version that played them"""
+    by = defaultdict(list)
+    for g in games:
+        by[g["net"]].append(g)
+    rows = []
+    for v, gs in sorted(by.items()):
+        sc = [g["score"] for g in gs if g["score"] is not None]
+        rows.append({"id": v, "games": len(gs), "score": round(sum(sc) / len(sc), 3) if sc else None,
+                     "wins": sum(1 for g in gs if g["res"] == "W"), "losses": sum(1 for g in gs if g["res"] == "L")})
+    return rows
+
+
 def collect(cache=None, old_top=3):
+    """the training's games (learning from our choices, runtime/pg) when it has a run, else the random search's;
+    in training a game's `net` is the version of the network that played it"""
     cache = {} if cache is None else cache
-    fresh = load_state(os.path.join(NN, "rand.json"))
-    games = search_games(fresh, cache)
-    groups = {"current": {"label": "Current search, all nets", "kind": "current", **summarise(games)}}
+    pg = load_state(PG_STATE)
+    training = bool(pg.get("dir"))
+    state = pg if training else load_state(os.path.join(NN, "rand.json"))
+    games = search_games(state, cache)
+    for g in games:
+        if g["score"] is None:
+            g["score"], g["res"] = game_score(os.path.join(state["dir"], "matches", "c%02d-g%d" % (g["net"], g["g"])), cache)
+    label = "Training, all versions" if training else "Current search, all nets"
+    groups = {"current": {"label": label, "kind": "current", **summarise(games)}}
+    if training and games:
+        vs = sorted({g["net"] for g in games})
+        early = [g for g in games if g["net"] <= vs[0] + 1]
+        late = [g for g in games if g["net"] >= vs[-1] - 1]
+        groups["early"] = {"label": "Training v%d-v%d" % (vs[0], min(vs[0] + 1, vs[-1])), "kind": "early", **summarise(early)}
+        if vs[-1] - 1 > vs[0] + 1:
+            groups["latest"] = {"label": "Training v%d-v%d" % (vs[-1] - 1, vs[-1]), "kind": "latest", **summarise(late)}
     groups.update(archive_groups(cache, old_top))
-    return {"heads": HEADS, "search_dir": os.path.basename(os.path.normpath(fresh.get("dir") or "")),
+    return {"heads": HEADS, "mode": "training" if training else "search",
+            "search_dir": os.path.basename(os.path.normpath(state.get("dir") or "")),
             "groups": groups, "games": games,
-            "progress": {"current": progress(fresh), "old": progress(load_state(OLD))}}
+            "progress": {"current": version_progress(games) if training else progress(state),
+                         "old": progress(load_state(OLD))}}
 
 
 def main():
