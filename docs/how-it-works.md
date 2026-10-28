@@ -228,7 +228,8 @@ and factory production). Head names and weights are in `policydata.as`.
 - Weights reach a game from the file the per-AI start-script option apex_pw_file names (read by the
   DLL, not a modoption), else `PN_BEST` in
   `policydata.as`. `apex_policy=0` turns the network off.
-- Training is **search, not regression**: `tools/randsearch.py` plays networks drawn around the (zero-weight, rule-centred since 10-28; every game its own random map, team size 1-8 regardless of map size, factions, opponent, handicap and length since his 10-28, saved as `c<net>-g<game>.setup.json`)
+- Training **learns from our own choices** since his 10-28 (`tools/pgloop.py` + `tools/pgtrain.py`, state in `runtime/pg/`, started by `runtime/pg/pg_on`): training games push every network output by a small random amount (`apex_pn_explore` 0.15 for amounts, `apex_pn_explore_tilt` 0.05 for choices and list options, logged as `apex: pnx`), each push is credited with how our economy, army and trade against theirs moved over the next 2 minutes against what the position predicted, and every 16 games one cautious policy-gradient step makes a new version. It starts at the rule (output layer 0). Games draw random setups as below.
+- Before that, the **random search**: `tools/randsearch.py` (stopped 10-28) played networks drawn around the (zero-weight, rule-centred since 10-28; every game its own random map, team size 1-8 regardless of map size, factions, opponent, handicap and length since his 10-28, saved as `c<net>-g<game>.setup.json`)
   middle (or annealed around a centre), one game each on rotating maps, sizes and opponents, every
   game its own seed, and re-tests winners up a 1/4/12/24-game ladder; `tools/weightmine.py` merges
   what winners share. State in `runtime/nn/`. The older regression trainer (`nntrain.py`, the

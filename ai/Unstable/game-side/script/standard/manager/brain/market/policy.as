@@ -77,6 +77,12 @@ bool PnOn()
 	}
 	gPnMode = 1;
 	gPnA1At = -1;
+	gPnSigma = ai.GetTunable("apex_pn_explore", TUNE_PN_EXPLORE);
+	gPnLogRate = ai.GetTunable("apex_pn_log_rate", TUNE_PN_LOG_RATE);
+	gPnSigmaTilt = (gPnSigma > 0.f) ? ai.GetTunable("apex_pn_explore_tilt", TUNE_PN_EXPLORE_TILT) : 0.f;
+	if (gPnSigma > 0.f)
+		AiLog("apex: pnx-schema t=" + ai.teamId + " sigma=" + NnF(gPnSigma, 3) + " sigmaTilt=" + NnF(gPnSigmaTilt, 3) + " listRate=" + NnF(gPnLogRate, 3)
+			+ " lgain=" + NnF(PN_LGAIN, 2) + " floor=" + NnF(PN_FLOOR, 3));
 	AiLog("apex: policy ON t=" + ai.teamId + " src=" + src + " n=" + n + " given=" + given
 		+ " in=" + N + " h1=" + PN_H1 + " h2=" + PN_H2 + " heads=" + PN_HEADS.length());
 	return true;
@@ -152,6 +158,41 @@ void PnHeadOut(int h, const array<float>& in st, const array<float>& in f, array
 		for (int j = 0; j < PN_H2; ++j)
 			a += gPnW[w++] * gPnA2[j];
 		o[k] = tanh(a + gPnW[w++]);
+	}
+	if (gPnSigma > 0.f)
+		PnExplore(h, F, o);
+}
+
+// LEARNING FROM OUR OWN CHOICES (his 10-28): in training games every output gets a push N(0, sigma), and the push is
+// logged with the inputs that made the output, so tools/pgtrain.py can recompute the network and credit each push
+// with what followed. A list head (auction, production) is called once per option: a sample of those is logged.
+float gPnSigma = 0.f;       // amounts (a continuous head)
+float gPnSigmaTilt = 0.f;   // choices and list options: their output is a tilt exp(PN_LGAIN x o), so a smaller push
+float gPnLogRate = 0.f;
+int gPnLogged = 0;
+void PnExplore(int h, int F, array<float>& o)
+{
+	const bool listHead = PN_HK[h] < 0;
+	const bool logIt = !listHead || (NnU01() < gPnLogRate);
+	string ln;
+	if (logIt) {
+		ln = "apex: pnx h=" + h + " t=" + ai.teamId + " f=" + ai.frame + " |";
+		for (uint i = 0; i < gPnZ.length(); ++i)
+			ln += ((i == 0) ? " " : ",") + NnF(gPnZ[i], 3);
+		ln += " |";
+		for (int i = 0; i < F; ++i)
+			ln += ((i == 0) ? " " : ",") + NnF(gPnX[i], 3);
+		ln += " |";
+	}
+	for (uint k = 0; k < o.length(); ++k) {
+		const float e = ((PN_HK[h] == 0) ? gPnSigma : gPnSigmaTilt) * NnGauss();
+		if (logIt)
+			ln += ((k == 0) ? " " : ",") + NnF(o[k], 4) + ":" + NnF(e, 4);
+		o[k] += e;
+	}
+	if (logIt) {
+		AiLog(ln);
+		++gPnLogged;
 	}
 }
 

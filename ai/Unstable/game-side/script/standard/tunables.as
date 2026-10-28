@@ -193,6 +193,9 @@ const float TUNE_TEAM_AIRLOSS = 1.f;
 //   rule's value (policy.as PnValueRule), not the log-middle of its range (aa
 //   0.63x, gunp 0.45x, mass 1.22x). His 10-14; A/B before default.
 const float TUNE_PN_RULE_CENTRE = 1.f;
+const float TUNE_PN_EXPLORE = 0.f;   // policy.as: the training push on every network output, N(0, sigma); 0 off (releases, tests)
+const float TUNE_PN_EXPLORE_TILT = 0.05f;   // policy.as: the push on a choice or list option's output under exploration (a tilt exp(8 x o): 0.05 is about x1.5)
+const float TUNE_PN_LOG_RATE = 0.02f;   // policy.as: share of auction/production option calls logged under exploration
 
 // [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
 //   clear our structures in their reach (raidanswer.as), not only units within one
