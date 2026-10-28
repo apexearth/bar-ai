@@ -2674,6 +2674,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float OptionFloat(int) const", asFUNCTION(CCircuitAI_OptionFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetSpeedFactor() const", asFUNCTION(CCircuitAI_GetSpeedFactor), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatio(const CCircuitDef@, int) const", asMETHOD(CCircuitAI, RecordRatio), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float YieldDealt(const CCircuitDef@, bool) const", asMETHOD(CCircuitAI, YieldDealt), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float YieldSpent(const CCircuitDef@, bool) const", asMETHOD(CCircuitAI, YieldSpent), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int RecordCount(const CCircuitDef@, int) const", asMETHOD(CCircuitAI, RecordCount), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void RecordSetTier(const CCircuitDef@, int)", asMETHOD(CCircuitAI, RecordSetTier), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatioVs(const CCircuitDef@, const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordRatioVs), asCALL_THISCALL); ASSERT(r >= 0);

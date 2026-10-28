@@ -1519,6 +1519,7 @@ const float TUNE_ECO_LEAN = 0.f;   // share of the eco phase a 3-4 player team's
 const float TUNE_BP_OVERFLOW_FLOOR = 0.f;   // [toggle 0/1] want_energy.as BPGap: the metal overflowing each second floors the build-power gap (the bank term was swallowed by nameplate capacity)
 const float TUNE_THREAT_MUL = 1.f;   // [0..] coverage.as: one multiplier on threat perception at every danger figure's root; the eco test sets 0 (his 10-27)
 const float TUNE_LAND_VALUE = 0.f;   // [toggle 0/1] land.as: a footprint pays the neighbourhood's standing metal per cell (his 10-27 land value)
+const float TUNE_LINE_YIELD = 0.f;   // [toggle 0/1] yield.as: labs, the gantry included (in the plant market), and each unit in its lab priced by the enemy metal its units destroyed per metal spent, against our army (his 10-27)
 const float TUNE_OPP_WAIT = 1.f;   // [toggle 0/1] decide.as OppTimeReprice: the runner-up waits only until another hand takes its kind, measured per kind (calib.as)
 const float TUNE_CALIB_RISK = 1.f;   // [toggle 0/1] calib.as: the survival price reads our structures' measured death rate by class and forward fraction in place of the siege prior (StreamRisk, TechHomeRisk)
 const float TUNE_PERSONA = 0.f;   // [toggle 0/1] persona.as: each seat draws dials (air, tech, aggression, unit class) leaning their prices up to 1.5x either way (his 10-26)

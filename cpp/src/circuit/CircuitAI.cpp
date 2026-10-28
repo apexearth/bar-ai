@@ -1617,6 +1617,9 @@ int CCircuitAI::UnitFinished(CCircuitUnit* unit)
 		return 0;
 	}
 	unit->SetIsFinished();  // TODO: Investigate rezz, plop and capture
+	if (unit->GetCircuitDef()->IsMobile()) {
+		yldGame[unit->GetCircuitDef()->GetId()].taken += unit->GetCircuitDef()->GetCostM();
+	}
 
 	// NOTE: "response" structure and limits are per AI
 	if (isSlave
@@ -2514,6 +2517,9 @@ void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float 
 	CEnemyInfo* e = GetEnemyInfo(enemy);
 	CCircuitDef* a = ours->GetCircuitDef();
 	CCircuitDef* b = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+	if ((a != nullptr) && (b != nullptr)) {
+		yldGame[a->GetId()].dealt += MetalOf(b, damage);
+	}
 	// Both sides armed: a mex we shelled is raid value, not a matchup.
 	if (!RecordCounts(a) || !RecordCounts(b)) {
 		return;
@@ -2638,6 +2644,26 @@ float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
 	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
 	const SXch& g = RecordAggOf(cdef->GetId(), tier);
 	return (prior + g.dealt) / (prior + g.taken);
+}
+
+float CCircuitAI::YieldDealt(CCircuitDef* cdef, bool game) const
+{
+	if (cdef == nullptr) {
+		return .0f;
+	}
+	const auto& m = game ? yldGame : yldStored;
+	auto it = m.find(cdef->GetId());
+	return (it != m.end()) ? it->second.dealt : .0f;
+}
+
+float CCircuitAI::YieldSpent(CCircuitDef* cdef, bool game) const
+{
+	if (cdef == nullptr) {
+		return .0f;
+	}
+	const auto& m = game ? yldGame : yldStored;
+	auto it = m.find(cdef->GetId());
+	return (it != m.end()) ? it->second.taken : .0f;
 }
 
 int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
@@ -2870,7 +2896,15 @@ void CCircuitAI::RecordLoad()
 	if (byName.empty() && (recLegacyPath != recPath)) {
 		RecordRead(recLegacyPath, byName);
 	}
+	yldStored.clear();
 	for (auto& kv : byName) {
+		if (kv.first.second == "#yield") {
+			CCircuitDef* y = GetCircuitDef(kv.first.first.c_str());
+			if (y != nullptr) {
+				yldStored[y->GetId()] = kv.second;
+			}
+			continue;
+		}
 		CCircuitDef* a = GetCircuitDef(kv.first.first.c_str());
 		CCircuitDef* b = GetCircuitDef(kv.first.second.c_str());
 		if ((a == nullptr) || (b == nullptr)) {
@@ -2885,7 +2919,7 @@ void CCircuitAI::RecordLoad()
 // whatever the file holds by then, so eight teams do not overwrite each other.
 void CCircuitAI::RecordSave()
 {
-	if (recPath.empty() || recTweaked || recGame.empty()) {
+	if (recPath.empty() || recTweaked || (recGame.empty() && yldGame.empty())) {
 		return;
 	}
 	std::map<std::pair<std::string, std::string>, SXch> all;
@@ -2901,6 +2935,21 @@ void CCircuitAI::RecordSave()
 			continue;
 		}
 		SXch& x = all[std::make_pair(std::string(a->GetDef()->GetName()), std::string(b->GetDef()->GetName()))];
+		x.dealt += kv.second.dealt;
+		x.taken += kv.second.taken;
+		const float cap = window * a->GetCostM();
+		if ((cap > .0f) && (x.taken > cap)) {
+			const float k = cap / x.taken;
+			x.dealt *= k;
+			x.taken *= k;
+		}
+	}
+	for (auto& kv : yldGame) {
+		CCircuitDef* a = GetCircuitDef(kv.first);
+		if (a == nullptr) {
+			continue;
+		}
+		SXch& x = all[std::make_pair(std::string(a->GetDef()->GetName()), std::string("#yield"))];
 		x.dealt += kv.second.dealt;
 		x.taken += kv.second.taken;
 		const float cap = window * a->GetCostM();

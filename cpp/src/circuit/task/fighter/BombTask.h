@@ -46,6 +46,7 @@ private:
 	void CheckCommit(const springai::AIFloat3& pos, const springai::AIFloat3& focusPos, float focusR);
 	void AttackSpread(int frame);
 	void IssueAims(int frame);
+	bool AimLive(ICoreUnit::Id id) const;
 	void PlanSpread(int frame);
 	float SplashSpacing(int frame);
 	void AssignSlots(int frame);
@@ -74,6 +75,7 @@ private:
 	// The order each bomber is flying: a re-issued attack restarts its run.
 	std::map<ICoreUnit::Id, std::pair<ICoreUnit::Id, int>> issued;
 	int nRetarget = 0;
+	int nGone = 0;   // aims dropped because their entry was hidden (looked at and empty, dead or dying)
 
 	// Past the point where going home costs more AA than reaching the cell.
 	bool committed = false;

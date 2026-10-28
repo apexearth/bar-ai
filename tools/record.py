@@ -36,7 +36,7 @@ def read_matrix(path):
     cells = {}
     for line in open(path):
         f = line.split()
-        if len(f) != 4 or f[1] == '-' or f[1][0].isdigit():
+        if len(f) != 4 or f[1] == '-' or f[1][0].isdigit() or f[1][0] == '#':   # '#yield': the per-type yield ledger
             continue
         try:
             cells[(f[0], f[1])] = (float(f[2]), float(f[3]))

@@ -793,6 +793,15 @@ void CBombTask::FindTarget()
 			if (value < minValue) {
 				raw *= 0.1f;   // still allowed, but only if nothing else offers
 			}
+			// apex: a sighting fades over the horizon the memory keeps it (apex_ghost_stale_min): we hear of a death
+			// only inside our sight, so an old ghost may be a crater (10-27: 60 of 1,513 commits went at a dead one)
+			if (enemy->NotInRadarAndLOS() && (enemy->GetSeenFrame() >= 0)) {
+				const float staleS = circuit->GetTunable("apex_ghost_stale_min", 15.f) * 60.f;
+				const float ageS = float(circuit->GetLastFrame() - enemy->GetSeenFrame()) / float(FRAMES_PER_SEC);
+				if (staleS > 1.f) {
+					raw *= std::max(0.f, 1.f - ageS / staleS);
+				}
+			}
 			// TARGET VARIANCE (apexearth: "our air tends to repeatedly try
 			// bombing the same thing"). A target another squad committed to
 			// within apex_bomb_revisit_s is discounted, fading back to full
@@ -1041,7 +1050,7 @@ void CBombTask::PlanSpread(int frame)
 	std::vector<std::pair<float, CCircuitUnit*>> planes;
 	for (CCircuitUnit* u : units) {
 		auto it = aims.find(u->GetId());
-		if ((it != aims.end()) && (circuit->GetEnemyInfo(it->second) != nullptr)) {
+		if ((it != aims.end()) && AimLive(it->second)) {
 			keep[u->GetId()] = it->second;
 			++kept[it->second];
 			continue;
@@ -1073,22 +1082,24 @@ void CBombTask::PlanSpread(int frame)
 					(plan[i].edef != nullptr) ? plan[i].edef->GetDef()->GetName() : "?", plan[i].got, plan[i].need);
 		}
 	}
-	circuit->LOG("apex: bomb spread units=%d keep=%d retarget=%d aims=%d surv=%.2f bomber=%s primary=%s hp=%.0f pass=%.0f need=%d got=%d width=%.0f depth=%.0f cands=%d rest=%s",
-			n, (int)keep.size(), nRetarget, (int)plan.size(), surv, bdef->GetDef()->GetName(),
+	circuit->LOG("apex: bomb spread units=%d keep=%d retarget=%d gone=%d aims=%d surv=%.2f bomber=%s primary=%s hp=%.0f pass=%.0f need=%d got=%d width=%.0f depth=%.0f cands=%d rest=%s",
+			n, (int)keep.size(), nRetarget, nGone, (int)plan.size(), surv, bdef->GetDef()->GetName(),
 			(prim.edef != nullptr) ? prim.edef->GetDef()->GetName() : "?",
 			prim.health, prim.pass, prim.need, prim.got, hi - lo, deep, (int)spreadCands.size(), rest.c_str());
 }
 
 void CBombTask::AttackSpread(int frame)
 {
-	CCircuitAI* circuit = manager->GetCircuit();
 	// Only a plane without a live aim is planned: a bomber turned off its run
 	// flies a full arc to come back round (apexearth). A dead plane does not
 	// re-plan either: its loss is already in the allotment.
 	bool replan = false;
 	for (CCircuitUnit* u : units) {
 		auto it = aims.find(u->GetId());
-		if ((it == aims.end()) || (circuit->GetEnemyInfo(it->second) == nullptr)) {
+		if ((it == aims.end()) || !AimLive(it->second)) {
+			if ((it != aims.end()) && (manager->GetCircuit()->GetEnemyInfo(it->second) != nullptr)) {
+				++nGone;
+			}
 			replan = true;
 			break;
 		}
@@ -1097,6 +1108,14 @@ void CBombTask::AttackSpread(int frame)
 		PlanSpread(frame);
 	}
 	IssueAims(frame);
+}
+
+// A hidden entry is one whose ground we looked at and found empty, or one that died or is dying: an aim at it is a
+// pass over a crater. Null alone (the purge, the ally leader's, 30 s later) kept planes on empty ground that long.
+bool CBombTask::AimLive(ICoreUnit::Id id) const
+{
+	const CEnemyInfo* e = manager->GetCircuit()->GetEnemyInfo(id);
+	return (e != nullptr) && !e->IsHidden();
 }
 
 void CBombTask::IssueAims(int frame)
@@ -1108,9 +1127,12 @@ void CBombTask::IssueAims(int frame)
 			continue;
 		}
 		auto it = aims.find(u->GetId());
-		CEnemyInfo* e = (it != aims.end()) ? circuit->GetEnemyInfo(it->second) : nullptr;
+		CEnemyInfo* e = ((it != aims.end()) && AimLive(it->second)) ? circuit->GetEnemyInfo(it->second) : nullptr;
 		if (e == nullptr) {
 			e = GetTarget();
+		}
+		if ((e == nullptr) || e->IsHidden()) {
+			continue;
 		}
 		// A re-issued attack restarts the run: send one only for a new aim or
 		// an order that has run out.
@@ -1123,8 +1145,10 @@ void CBombTask::IssueAims(int frame)
 				++nRetarget;
 			}
 		}
-		const bool isGround = e->NotInRadarAndLOS() || (e->GetCircuitDef() == nullptr)
-				|| !e->GetCircuitDef()->IsMobile() || circuit->IsCheating();
+		// a building in sight is attacked as a unit, so the engine ends the order when it dies; a ground attack
+		// (all a target out of sight allows) runs on over the crater (AirCAI checks targetDied for unit targets only)
+		const bool isGround = !e->IsInLOS() && (e->NotInRadarAndLOS() || (e->GetCircuitDef() == nullptr)
+				|| !e->GetCircuitDef()->IsMobile() || circuit->IsCheating());
 		if (u->GetTravelAct() != nullptr) {
 			u->GetTravelAct()->StateWait();
 		}

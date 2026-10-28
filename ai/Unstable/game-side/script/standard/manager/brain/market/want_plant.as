@@ -1592,7 +1592,7 @@ int gPlantPaybackCut = 0, gPlantPaybackLogAt = 0;
 // apex_gantry_plant: the gantry leaves the super market and is priced here like any lab (his 10-26: factory agnostic)
 bool GantryPlantOn()
 {
-	return ai.GetTunable("apex_gantry_plant", TUNE_GANTRY_PLANT) > 0.f;
+	return (ai.GetTunable("apex_gantry_plant", TUNE_GANTRY_PLANT) > 0.f) || YieldOn();   // the gantry is priced by its yield in the plant market
 }
 
 // THE BEST LINE WE STAND: the strength per metal of the best combat line among our finished plants. A new line is worth
@@ -1621,8 +1621,8 @@ float LineQualityGain(int d, float armyFlow)
 {
 	if (!GantryPlantOn() || (armyFlow <= 0.f))
 		return 0.f;
-	const float own = OwnBestLineWorth();
-	const float q = LineBestWorth(d);
+	const float own = YieldOn() ? OwnBestLineQY() : OwnBestLineWorth();
+	const float q = YieldOn() ? (LineBestWorth(d) * LineYieldCorr(d)) : LineBestWorth(d);
 	if ((own <= 0.f) || (q <= own))
 		return 0.f;
 	return armyFlow * (q / own - 1.f);
@@ -1781,8 +1781,13 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (StrikeHoldsPlant(d))
 			continue;   // his 10-24: no air lab in a rush; "stop making factories and just build army from what you have"
 		const bool evAir = evOn && (dClass == PC_AIR);
-		if (waterOnly && !evAir && ((dClass != PC_WATER) || !navalEx))
+		// a line that out-yields our best is not another mouth to feed: it takes the army metal we already spend (his
+		// 10-27 games: the gantry unoffered until 150 m/s with a lab and two air plants standing)
+		if (waterOnly && !evAir && ((dClass != PC_WATER) || !navalEx) && !BetterLine(d)) {
+			if (gpAsk && IsGantryDef(d))
+				GpLog("over-line lines=" + Factory::gFactoryCount + " supported=" + supported);
 			continue;
+		}
 		// A naval lead with no hand that can reach its water buys the plant
 		// that makes one before any other land plant.
 		if ((dClass == PC_LAND) && MapHasWater() && NavalLead()
@@ -1940,7 +1945,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
 		float prodOwn = evAir ? Air::EvPlantProdYield(d, fillS0)
 				: prodHalf * FoeTierPlantMul(d)
-					* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d);
+					* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d) * LineYieldMul(d);
+		if (evAir)
+			prodOwn *= LineYieldMul(d);
 		// A LINE WE CANNOT FEED ADDS NO THROUGHPUT, air too (his 10-19: "we still build the second T2 plant too
 		// early... I'd never do that until I have multiple fusion alive with energy converters"). The ground
 		// half is already capped at the metal nothing spends (prodTerm above); the air yield was not. Converted
@@ -1950,24 +1957,30 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if (prodOwn > spare)
 				prodOwn = (spare > 0.f) ? spare : 0.f;
 		}
+		float qualOwn = 0.f;   // the better-line part: what nanos on our other lines cannot substitute
 		// TUNE_GANTRY_PLANT: the army metal this line would take, at the gap's own urgency and never past the army's
 		// share of income, buys more strength here than on our best line -- a copy gains nothing
-		if (GantryPlantOn() && (aGap > 0.f)) {
-			float flow = aGap / ((fillS0 > 1.f) ? fillS0 : 180.f);
+		if (GantryPlantOn() && ((aGap > 0.f) || YieldOn())) {
+			float flow = (aGap > 0.f) ? (aGap / ((fillS0 > 1.f) ? fillS0 : 180.f)) : 0.f;
 			const float armyRate = Eco::MInc() * Brain::TargetShare(Brain::ARMY);
 			if (flow > armyRate)
 				flow = armyRate;
-			prodOwn += LineQualityGain(d, flow / float(1 + lines0)) * pipe * FoeTierPlantMul(d);
+			// yield: a better line re-prices the army metal we will be spending once it is ready, not the gap's slice (his
+			// 10-27: stats 4.6 against our best line's 1.2 priced the gantry at gain 0.9, the gap split four ways)
+			const float qFlow = YieldOn() ? LineFlowAtReady(d, Catalog::gBuildPower[uid]) : (flow / float(1 + lines0));
+			qualOwn = LineQualityGain(d, qFlow) * pipe * FoeTierPlantMul(d);
+			prodOwn += qualOwn;
 		}
 		// Economy-only: a lab builds constructors only, so the army it would field is no part of its worth (a bot
 		// lab bought at gain 1.33 and a vehicle plant at 30 beside the air plants, 10-20).
 		if (EcoOnly())
-			prodOwn = 0.f;
+			{ prodOwn = 0.f; qualOwn = 0.f; }
 		const float gain = conHalf + prodOwn;
 		if (gpAsk && !hands)
 			GpLog("priced " + Catalog::Def(d).GetName() + " prodHalf=" + NnF(prodHalf, 2) + " prodOwn=" + NnF(prodOwn, 2)
 				+ " tierMul=" + NnF(FoeTierPlantMul(d), 2) + " q=" + NnF(LineBestWorth(d), 3)
-				+ " qOwn=" + NnF(OwnBestLineWorth(), 3) + " gain=" + NnF(gain, 2));
+				+ " qOwn=" + NnF(YieldOn() ? OwnBestLineQY() : OwnBestLineWorth(), 3) + " gain=" + NnF(gain, 2)
+				+ (YieldOn() ? (" corr=" + NnF(LineYieldCorr(d), 2) + " flow=" + NnF(gYdFlow, 1) + " readyS=" + int(gYdReadyS) + " incT=" + int(gYdIncT)) : ""));
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
@@ -2125,8 +2138,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// the air constructors are the hands that raise the turrets (his 10-20: "we don't have nano turrets because
 		// we don't have the air cons building them"). On the whole price it zeroed the plant while no army stood.
 		const float evCaution = evAir ? Air::EvSeatCaution() : 1.f;
-		float dupGain = (conSub + prodOwn * evCaution * ((evAir && !isCopy) ? 1.f : dupSubst))
-				/ float(1 + dupKin);
+		// the better-line part takes no build-power substitution: nanos on our other lines cannot make its units (his
+		// 10-27 games: the gantry's 200-940 reached the decision as 1-27 through dupSubst ~0.07 and the latency)
+		float dupGain = (conSub + (prodOwn - qualOwn) * evCaution * ((evAir && !isCopy) ? 1.f : dupSubst)
+				+ qualOwn * evCaution) / float(1 + dupKin);
 		if (liveOther > 0)
 			dupGain /= float(1 + liveOther);
 		// the value below is built from dupGain, not gain: the line factor

@@ -244,6 +244,7 @@ public:
 	bool IsInRadarOrLOS()   const { return data->IsInRadarOrLOS(); }
 	bool NotInRadarAndLOS() const { return data->NotInRadarAndLOS(); }
 	bool IsHidden()         const { return data->IsHidden(); }
+	int GetSeenFrame() const { return data->GetSeenFrame(); }
 
 	CEnemyUnit* GetData() const { return data; }
 

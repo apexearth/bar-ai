@@ -48,6 +48,7 @@
 #include "market/persona.as"        // per-seat personality dials: air, tech, aggression, unit class (apex_persona)
 #include "market/calib.as"          // calibration: the risk each finished structure was priced at (apex: calib-born)
 #include "market/land.as"           // land value: rent from the neighbours' metal per cell (apex_land_value)
+#include "market/yield.as"          // line yield: enemy metal destroyed per metal spent, per type and lab (apex_line_yield)
 #include "market/rush.as"           // their army racing a big investment of ours: floor and tech price
 #include "market/pressure.as"       // short contact: shorter horizon, team push, contest their expansions
 #include "market/mapshare.as"       // under our share of the extractor spots: army nudge, aggression, claim value

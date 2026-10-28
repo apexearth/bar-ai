@@ -265,6 +265,8 @@ public:
 	// A's exchange against the B's of this tier (0 = unknown B, always
 	// counted), or against everything for -1.
 	float RecordRatio(CCircuitDef* cdef, int tier) const;
+	float YieldDealt(CCircuitDef* cdef, bool game) const;   // metal of enemy destroyed by this type
+	float YieldSpent(CCircuitDef* cdef, bool game) const;   // metal of this type finished
 	int RecordCount(CCircuitDef* cdef, int tier) const;   // A-equivalents of metal lost
 	// One matchup, shrunk toward B's tier when the pair has little history.
 	float RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const;
@@ -613,6 +615,8 @@ private:
 	std::unordered_map<ICoreUnit::Id, float> recDealt;      // per unit this game, for the death line
 	std::unordered_map<long long, SXch> recGame;     // this game, (our def, their def)
 	std::unordered_map<long long, SXch> recStored;   // from the file
+	// per our type, ANY target (the matrix keeps armed pairs only): dealt = metal destroyed, taken = metal spent
+	std::unordered_map<CCircuitDef::Id, SXch> yldGame, yldStored;
 	std::unordered_map<CCircuitDef::Id, int> recTier;   // the script's DefTier
 	// Each type's totals over both tables, both sides: [0] all, [1+t] against
 	// opponent tier t. Read per candidate per enemy def, so never a table walk.

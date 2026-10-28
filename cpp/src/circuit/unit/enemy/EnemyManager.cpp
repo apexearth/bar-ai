@@ -98,7 +98,7 @@ float CEnemyManager::GetEnemyStructCostAt(const springai::AIFloat3& pos, float r
 	for (const auto& kv : circuit->GetEnemyInfos()) {
 		const CEnemyInfo* e = kv.second;
 		const CCircuitDef* cdef = e->GetCircuitDef();
-		if ((cdef == nullptr) || cdef->IsMobile()) {
+		if ((cdef == nullptr) || cdef->IsMobile() || e->IsHidden()) {   // hidden: its ground was seen empty, or it died
 			continue;
 		}
 		if (e->GetPos().SqDistance2D(pos) > sqRadius) {
