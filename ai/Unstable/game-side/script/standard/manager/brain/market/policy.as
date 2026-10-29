@@ -279,7 +279,8 @@ string PnLeanSays(int i, float v)
 
 void PnSay(const string& in s)
 {
-	ai.SendChat(s);
+	// the engine drops an AI's text unless it is a /command (CAICallback::SendTextMsg): /echo puts it in the console
+	ai.SendChat("/echo [Apex training] " + s);
 	AiLog("apex: pn-say t=" + ai.teamId + " " + s);
 }
 
