@@ -35,16 +35,64 @@ STATE = os.path.join(PG, "state.json")
 HISTORY = os.path.join(PG, "history.jsonl")
 LOG = os.path.join(PG, "pg.log")
 ON = os.path.join(PG, "pg_on")
-BATCH = 16
+BATCH = 24
 SIGMA, SIGMA_TILT = 0.15, 0.05
 # his 10-28: "allow the weights to move more ... then maybe over time we start to lower the learning rate as we mature":
-# a step may move the outputs SHIFT_START on average, halving every SHIFT_HALF versions down to SHIFT_FLOOR
+# a step may move the outputs SHIFT_START on average, halving every SHIFT_HALF versions down to SHIFT_FLOOR, times
+# the run's shiftScale (halved by every rollback). 10-29: at 0.08 per step the network walked off after v21 (games
+# played by v12-v17 +0.27 setup-adjusted, by v22-v24 -1.2), so 0.04 and 24 games a step.
 LR = 1e-2
-SHIFT_START, SHIFT_HALF, SHIFT_FLOOR = 0.08, 40, 0.01
+SHIFT_START, SHIFT_HALF, SHIFT_FLOOR = 0.04, 40, 0.01
+# THE GUARD: a game's score minus the mean of all games of its team-size bucket (setups differ by 1.0 between 1v1 and
+# 8v8). When the last GUARD_N games fall GUARD_DROP below the best stretch of 3 versions, the next version is that
+# stretch's weights again and the step size halves.
+GUARD_N, GUARD_DROP, GUARD_MIN = 48, 0.5, 24
 
 
-def max_shift(v):
-    return max(SHIFT_FLOOR, SHIFT_START * 0.5 ** (v / SHIFT_HALF))
+def max_shift(v, st=None):
+    return max(SHIFT_FLOOR, SHIFT_START * 0.5 ** (v / SHIFT_HALF)) * ((st or {}).get("shiftScale", 1.0))
+
+
+def size_bucket(n):
+    return "1" if n == 1 else ("2-3" if n <= 3 else ("4-5" if n <= 5 else "6-8"))
+
+
+def note_perf(st, version, mdir, score):
+    """one game's setup-adjusted score into st["perf"]"""
+    if score is None:
+        return
+    try:
+        setup = json.load(open(os.path.join(st["dir"], os.path.basename(mdir) + ".setup.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    b = size_bucket(setup["per_side"])
+    ss = st.setdefault("sizeStats", {}).setdefault(b, [0.0, 0])
+    ss[0] += score
+    ss[1] += 1
+    st.setdefault("perf", []).append([version, round(score - ss[0] / ss[1], 4)])
+
+
+def guard(st):
+    """the version to roll back to, or None"""
+    perf = st.get("perf", [])
+    since = st.get("guardFrom", 0)
+    if len(perf) - since < GUARD_N:
+        return None
+    recent = [a for _, a in perf[-GUARD_N:]]
+    by = {}
+    for v, a in perf[:-GUARD_N]:
+        by.setdefault(v, []).append(a)
+    best = None
+    vs = sorted(by)
+    for i in range(len(vs)):
+        win = [a for v in vs[i:i + 3] for a in by[v]]
+        if len(win) >= GUARD_MIN:
+            m = sum(win) / len(win)
+            if best is None or m > best[1]:
+                best = (vs[min(i + 2, len(vs) - 1)], m)
+    if best and sum(recent) / len(recent) < best[1] - GUARD_DROP:
+        return best[0], best[1], sum(recent) / len(recent)
+    return None
 POLICY_RX = re.compile(r"apex: policy ON t=\d+ src=(\w+) n=(\d+) given=(\d+)")
 
 
@@ -132,10 +180,27 @@ def step(st, lay):
             g["score"], g["version"] = (s[0] if isinstance(s, (list, tuple)) else s), p["version"]
             games.append(g)
     v = st["version"]
+    for p in st["pending"]:
+        s = p.get("score")
+        note_perf(st, p["version"], p["dir"], s[0] if isinstance(s, (list, tuple)) else s)
+    back = guard(st)
+    if back:
+        to, best, now = back
+        pgtrain.write_weights(wpath(v + 1), pgtrain.read_weights(wpath(to), lay))
+        st["shiftScale"] = st.get("shiftScale", 1.0) * 0.5
+        st["guardFrom"] = len(st.get("perf", []))
+        st.setdefault("rollbacks", []).append({"at": time.strftime("%Y-%m-%d %H:%M"), "from": v, "to": to,
+                                               "best": round(best, 3), "recent": round(now, 3)})
+        st["version"] = v + 1
+        st["pending"] = []
+        save(st)
+        log("ROLLBACK: the last %d games scored %+.2f setup-adjusted against %+.2f for the stretch ending v%d; "
+            "v%d = v%d's weights, step size now x%.2f" % (GUARD_N, now, best, to, v + 1, to, st["shiftScale"]))
+        return
     w = pgtrain.read_weights(wpath(v), lay)
     try:
-        w2, rep = pgtrain.train(w, games, lay, LR, max_shift(v), steps=400)
-        rep["maxShift"] = round(max_shift(v), 4)
+        w2, rep = pgtrain.train(w, games, lay, LR, max_shift(v, st), steps=400)
+        rep["maxShift"] = round(max_shift(v, st), 4)
     except SystemExit as e:
         log("no step: %s" % e)
         return
