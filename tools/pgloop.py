@@ -37,7 +37,14 @@ LOG = os.path.join(PG, "pg.log")
 ON = os.path.join(PG, "pg_on")
 BATCH = 16
 SIGMA, SIGMA_TILT = 0.15, 0.05
-LR, MAX_SHIFT = 3e-3, 0.02
+# his 10-28: "allow the weights to move more ... then maybe over time we start to lower the learning rate as we mature":
+# a step may move the outputs SHIFT_START on average, halving every SHIFT_HALF versions down to SHIFT_FLOOR
+LR = 1e-2
+SHIFT_START, SHIFT_HALF, SHIFT_FLOOR = 0.08, 40, 0.01
+
+
+def max_shift(v):
+    return max(SHIFT_FLOOR, SHIFT_START * 0.5 ** (v / SHIFT_HALF))
 POLICY_RX = re.compile(r"apex: policy ON t=\d+ src=(\w+) n=(\d+) given=(\d+)")
 
 
@@ -127,7 +134,8 @@ def step(st, lay):
     v = st["version"]
     w = pgtrain.read_weights(wpath(v), lay)
     try:
-        w2, rep = pgtrain.train(w, games, lay, LR, MAX_SHIFT)
+        w2, rep = pgtrain.train(w, games, lay, LR, max_shift(v), steps=400)
+        rep["maxShift"] = round(max_shift(v), 4)
     except SystemExit as e:
         log("no step: %s" % e)
         return
