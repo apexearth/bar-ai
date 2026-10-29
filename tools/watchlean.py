@@ -1,5 +1,5 @@
 """Watched training games, one after another (his 10-29: "a 9th game in watch mode so I can see the training live"):
-a random training setup (at most 4 a side, at least 25 minutes), 10x, no handicap, playing this moment's leans plus a
+a random training setup (at most 4 a side, at least 25 minutes, its own handicaps), 10x, playing this moment's leans plus a
 fresh push. The AI says in chat what the game tries and what training has found (policy.as PnWatchSay). Not counted
 by the training. Runs while runtime/lean/watch_on exists.
 
@@ -33,7 +33,7 @@ def main():
         subprocess.run([sys.executable, os.path.join(REPO, "tools", "run_match.py"), "--a", leanloop.neuro.AI,
                         "--b", s["foe"], "--per-side", str(s["per_side"]), "--map", s["map"], "--minutes",
                         str(s["minutes"]), "--seed", str(seed), "--sides", "%s,%s" % tuple(s["sides"]), "--watch",
-                        "--speed", "10", "--handicap", "0,0", "--ai-options-file", w[:-len(".weights")] + ".json",
+                        "--speed", "10", "--handicap", "%d,%d" % tuple(s["handicap"]), "--ai-options-file", w[:-len(".weights")] + ".json",
                         "--out", out], cwd=REPO, env=dict(os.environ, BARAI_LANE="nnlog"),
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
