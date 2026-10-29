@@ -235,7 +235,7 @@ def train(w, games, lay, lr=3e-3, max_shift=0.05, steps=200):
         a = torch.tensor(adv[np.array(d["i"])], dtype=torch.float64)[:, None]
         push = torch.tensor(d["act"], dtype=torch.float64) - o_now
         sig = (a * push / s).numpy()
-        t = sig.mean(0) / (sig.std(0) / math.sqrt(len(sig)) + 1e-12)
+        t = (sig.mean(0) / (sig.std(0) / math.sqrt(len(sig)) + 1e-12)) if len(sig) >= 8 else np.zeros(sig.shape[1])
         heads[h] = {"name": head_name(lay, h), "n": len(sig), "t": [round(float(v), 2) for v in t],
                     "z": z, "x": x, "o0": o_now, "c": a * push / (s * s)}
     total = sum(v["n"] for v in heads.values())
