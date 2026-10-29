@@ -60,13 +60,28 @@ bool PnOn()
 		n += PnHeadSize(h);
 		nf += PN_HF[h];
 	}
+	int nl = 0;
+	gPnLOff.resize(PN_HEADS.length());
+	for (uint h = 0; h < PN_HEADS.length(); ++h) {
+		gPnLOff[h] = nl;
+		nl += PnLeanSlots(h);
+	}
 	const int given = ai.LoadOptionFloats("apex_pw_file");
 	gPnW.resize(n);
 	string src = "middle";
-	if (given == n) {
+	if ((given == n) || (given == n + nl)) {
 		for (int i = 0; i < n; ++i)
 			gPnW[i] = ai.OptionFloat(i);
 		src = "file";
+		if (given == n + nl) {
+			gPnLean.resize(nl);
+			int set = 0;
+			for (int i = 0; i < nl; ++i) {
+				gPnLean[i] = ai.OptionFloat(n + i);
+				set += (gPnLean[i] != 0.f) ? 1 : 0;
+			}
+			AiLog("apex: pn-lean t=" + ai.teamId + " slots=" + nl + " set=" + set);
+		}
 	} else if (PN_BEST.length() == uint(n)) {
 		for (int i = 0; i < n; ++i)
 			gPnW[i] = PN_BEST[i];
@@ -159,8 +174,43 @@ void PnHeadOut(int h, const array<float>& in st, const array<float>& in f, array
 			a += gPnW[w++] * gPnA2[j];
 		o[k] = tanh(a + gPnW[w++]);
 	}
+	if (gPnLean.length() > 0) {
+		const int lo = gPnLOff[h];
+		if (PN_HK[h] < 0)
+			o[0] += gPnLean[lo + PnLeanSlot(h, f)];
+		else
+			for (int k = 0; k < K; ++k)
+				o[k] += gPnLean[lo + k];
+	}
 	if (gPnSigma > 0.f)
 		PnExplore(h, F, o);
+}
+
+// A LEAN per output, held for the whole game (10-29): the training file carries one after the weights, the trained lean
+// plus this game's push, so tools/leanloop.py credits the push with the game's result. A list head leans per kind of
+// option: the auction per want kind, production per constructor / rez bot / aircraft / the rest.
+array<float> gPnLean;
+array<int> gPnLOff;
+int PnLeanSlots(int h)
+{
+	if (PN_HK[h] >= 0)
+		return (PN_HK[h] > 0) ? PN_HK[h] : 1;
+	return (PN_HEADS[h] == "builder") ? WK_TEETH + 1 : 4;
+}
+
+int PnLeanSlot(int h, const array<float>& in f)
+{
+	if (PN_HEADS[h] == "builder") {
+		for (int k = 0; (k <= WK_TEETH) && (k < int(f.length())); ++k)
+			if (f[k] > 0.5f)
+				return k;
+		return 0;
+	}
+	if ((f.length() > 13) && (f[12] > 0.5f))
+		return 1;
+	if ((f.length() > 13) && (f[13] > 0.5f))
+		return 2;
+	return ((f.length() > 11) && (f[11] > 0.5f)) ? 3 : 0;
 }
 
 // LEARNING FROM OUR OWN CHOICES (his 10-28): in training games every output gets a push N(0, sigma), and the push is
