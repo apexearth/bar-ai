@@ -293,7 +293,7 @@ void PnWatchSay(const array<float>& in st)
 	ai.SetTeamBoard(BOARD_PN_SAY, float(report));
 	const int nl = int(gPnLean.length());
 	if (report == 0) {
-		PnSay("Apex training game: " + gPnPairs + " pairs played so far. Each pair plays one setup twice, every decision leaning opposite ways.");
+		PnSay("Apex training: " + gPnPairs + " pairs played so far (each pair plays one setup twice, its decisions leaning opposite ways).");
 		array<int> top;
 		for (int pass = 0; pass < 4; ++pass) {
 			int bi = -1;
@@ -308,7 +308,7 @@ void PnWatchSay(const array<float>& in st)
 			if (bi >= 0)
 				top.insertLast(bi);
 		}
-		string s = "This game tries:";
+		string s = (top.length() == 0) ? "This game plays what training has learned, with no exploration." : "This game tries:";
 		for (uint j = 0; j < top.length(); ++j)
 			s += ((j == 0) ? " " : "; ") + PnSlotName(top[j]) + " " + PnLeanSays(top[j], gPnLean[top[j]]);
 		PnSay(s);

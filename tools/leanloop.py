@@ -265,15 +265,16 @@ def status():
                                                                     m["pairs"]))
 
 
-def watch_file(path):
-    """weights for a watched training game: base, this game's leans (the trained ones plus a fresh push), then the
-    trained leans, each slot's evidence t and the pairs played, so the AI can say them in chat (policy.as PnWatchSay)"""
+def watch_file(path, push_on=True):
+    """weights for a watched game: base, this game's leans (the trained ones, plus a fresh push unless push_on is
+    False), then the trained leans, each slot's evidence t and the pairs played, so the AI can say them in chat
+    (policy.as PnWatchSay)"""
     lay = pgtrain.Layout()
     st = json.load(open(STATE, encoding="utf-8"))
     pairs = read_pairs()
     sl = slopes(st, pairs)
     rng = random.Random()
-    push = [rng.gauss(0.0, sigma(st, i)) if st["live"][i] else 0.0 for i in range(len(st["lean"]))]
+    push = [rng.gauss(0.0, sigma(st, i)) if (st["live"][i] and push_on) else 0.0 for i in range(len(st["lean"]))]
     played = [st["lean"][i] + push[i] for i in range(len(push))]
     vals = list(pgtrain.read_weights(BASE, lay)) + played + list(st["lean"]) + [t for _, t, _ in sl] + [len(pairs)]
     with open(path, "w", encoding="utf-8") as fh:
