@@ -10,6 +10,19 @@ const string TV_TT_WANT  = "ttwant";
 const string TV_TT_LAB   = "ttlab";
 const string TV_TT_READY = "ttready";
 const string TV_TT_RATE  = "ttrate";
+// THE TEAM PAYS FOR IT (his 10-29: "they can even pay the team which goes for the advanced lab to get there earlier"):
+// while the tech seat's lab, or its constructors for the team, waits on metal, it publishes the shortfall and every
+// other seat sends its income share of it out of its bank. The inflow counts in the seat's published rate and ready
+// time, so the others see the shared lab as the fast path it is.
+const string TV_TT_SHORT = "ttshort";
+const string TV_TT_PAID  = "ttpaid";
+const string TV_TT_INC   = "ttinc";
+int gTtPayOn = -1;
+float gTtPaid = 0.f;
+float gTtShort = 0.f;
+float gTtInflow = 0.f;
+float gTtExtraInc = 0.f;
+array<float> gTtSeenPaid;
 
 int gTtOn = -1;
 int gTtAt = 0;
@@ -181,7 +194,7 @@ int TtConOf(int lab)
 
 float TtFeedSec(float costM)
 {
-	const float inc = Eco::MInc();
+	const float inc = Eco::MInc() + gTtExtraInc;
 	const float s = (costM - 0.5f * Eco::MCur()) / ((inc > 0.1f) ? inc : 0.1f);
 	return (s > 0.f) ? s : 0.f;
 }
@@ -197,7 +210,7 @@ float TtLabSec(int lab, float prog)
 float TtConSec(int con, int lab)
 {
 	const float b = Catalog::BuildSecondsAt(con, Catalog::gBuildPower[lab]);
-	const float inc = Eco::MInc();
+	const float inc = Eco::MInc() + gTtExtraInc;
 	const float f = Catalog::gCostM[con] / ((inc > 0.1f) ? inc : 0.1f);
 	return (b > f) ? b : f;
 }
@@ -267,6 +280,64 @@ void TeamTechTick()
 	const int st = TtOwnLab(prog, lab);
 	if (!me && (coverBefore > 0.f) && (gTtOwnAdv > advBefore))
 		gTtAnyway += gTtOwnAdv - advBefore;
+	ai.PublishTeamValue(TV_TT_INC, Eco::MInc());
+	gTtExtraInc = 0.f;
+	gTtShort = 0.f;
+	if (gTtPayOn < 0)
+		gTtPayOn = (ai.GetTunable("apex_team_pay", TUNE_TEAM_PAY) > 0.f) ? 1 : 0;
+	if (gTtPayOn == 0) {
+	} else if (me) {
+		float got = 0.f;
+		for (uint i = 0; i < gTtRoster.length(); ++i) {
+			const int id = gTtRoster[i];
+			if (id == ai.teamId)
+				continue;
+			while (int(gTtSeenPaid.length()) <= id)
+				gTtSeenPaid.insertLast(0.f);
+			const float p = ai.ReadTeamValue(id, TV_TT_PAID, 0.f);
+			if (p > gTtSeenPaid[id])
+				got += p - gTtSeenPaid[id];
+			gTtSeenPaid[id] = p;
+		}
+		gTtInflow += 0.3f * (got / 5.f - gTtInflow);
+		gTtExtraInc = gTtInflow;
+		float drain = 0.f;
+		if ((st == 1) && (lab > 0)) {
+			const float bs = Catalog::BuildSecondsAt(lab, EffBP(0.f));
+			drain = Catalog::gCostM[lab] / ((bs > 1.f) ? bs : 1.f);
+		} else if ((st == 2) && (lab > 0) && (TtConOf(lab) >= 0)) {
+			float owed = 0.f;
+			for (uint i = 0; i < gTtRoster.length(); ++i)
+				if (gTtRoster[i] != ai.teamId)
+					owed += TtUncovered(gTtRoster[i]);
+			if (owed > 0.5f) {
+				const int con = TtConOf(lab);
+				const float bs = Catalog::BuildSecondsAt(con, Catalog::gBuildPower[lab]);
+				drain = Catalog::gCostM[con] / ((bs > 1.f) ? bs : 1.f);
+			}
+		}
+		const float gap = Eco::MPull() - Eco::MInc();
+		if ((gap > 0.f) && (Eco::MCur() < 5.f * gap))
+			gTtShort = (gap < drain) ? gap : drain;
+		ai.PublishTeamValue(TV_TT_SHORT, gTtShort);
+	} else if (TeamTechActive()) {
+		const float short = ai.ReadTeamValue(gTtSeat, TV_TT_SHORT, 0.f);
+		if (short > 0.f) {
+			float all = 0.f;
+			for (uint i = 0; i < gTtRoster.length(); ++i)
+				if (gTtRoster[i] != gTtSeat)
+					all += ai.ReadTeamValue(gTtRoster[i], TV_TT_INC, 0.f);
+			const float mine = Eco::MInc();
+			float amt = (all > 0.f) ? (short * 5.f * mine / all) : 0.f;
+			if (amt > Eco::MCur())
+				amt = Eco::MCur();
+			if (amt >= 1.f) {
+				ai.SendResources(amt, 0.f, gTtSeat);
+				gTtPaid += amt;
+			}
+		}
+		ai.PublishTeamValue(TV_TT_PAID, gTtPaid);
+	}
 	gTtOwed = 0.f;
 	gTtCover = 0.f;
 	gTtLabState = 0;
@@ -397,7 +468,9 @@ void TeamTechStat()
 		+ " cover=" + formatFloat(gTtCover, "", 0, 2) + " upShare=" + formatFloat(gTtUpShare, "", 0, 2)
 		+ " ready=" + int(gTtReadyS) + "s ownPath=" + int(gTtTown) + "s rate=" + formatFloat(gTtRateA, "", 0, 3)
 		+ " disc=" + gTtDiscN + " mul=" + formatFloat((gTtDiscN > 0) ? (gTtDiscSum / float(gTtDiscN)) : 1.f, "", 0, 2)
-		+ " ownAdv=" + gTtOwnAdv + " anyway=" + gTtAnyway);
+		+ " ownAdv=" + gTtOwnAdv + " anyway=" + gTtAnyway
+		+ " | pay short=" + formatFloat(gTtShort, "", 0, 1) + " inflow=" + formatFloat(gTtInflow, "", 0, 1)
+		+ " paid=" + int(gTtPaid));
 	gTtDiscN = 0;
 	gTtDiscSum = 0.f;
 	gTtAnyway = 0;
