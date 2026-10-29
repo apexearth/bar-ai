@@ -14,6 +14,7 @@ tournaments/<stamp>-pg/matches/c<version>-g<game>.
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import re
@@ -82,15 +83,23 @@ def guard(st):
     by = {}
     for v, a in perf[:-GUARD_N]:
         by.setdefault(v, []).append(a)
-    best = None
+    best, k = None, 0
     vs = sorted(by)
     for i in range(len(vs)):
         win = [a for v in vs[i:i + 3] for a in by[v]]
         if len(win) >= GUARD_MIN:
+            k += 1
             m = sum(win) / len(win)
             if best is None or m > best[1]:
-                best = (vs[min(i + 2, len(vs) - 1)], m)
-    if best and sum(recent) / len(recent) < best[1] - GUARD_DROP:
+                best = (vs[min(i + 2, len(vs) - 1)], m, len(win))
+    if not best:
+        return None
+    # the best of k noisy stretches is lucky by about sqrt(2 ln k) of its own standard error (10-29 03:36: the
+    # last 48 games -0.24 against the best stretch's +0.49 rolled back on the luck of the best of ~20)
+    xs = [a for _, a in perf]
+    sd = (sum((a - sum(xs) / len(xs)) ** 2 for a in xs) / max(1, len(xs) - 1)) ** 0.5
+    luck = math.sqrt(2.0 * math.log(max(k, 1))) * sd / math.sqrt(best[2]) if k > 1 else 0.0
+    if sum(recent) / len(recent) < best[1] - luck - GUARD_DROP:
         return best[0], best[1], sum(recent) / len(recent)
     return None
 POLICY_RX = re.compile(r"apex: policy ON t=\d+ src=(\w+) n=(\d+) given=(\d+)")
