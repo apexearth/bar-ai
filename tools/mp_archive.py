@@ -47,14 +47,16 @@ def bot_logs(env):
 def his_game_running():
     # A lobby game runs INSIDE the lobby's spring.exe, so no process tells it
     # apart: our bots' logs being written does. A separate non-lobby
-    # spring.exe (a dashboard game) counts too.
+    # spring.exe (a dashboard game) counts too. A watch game we launched for him (its start script under this repo's
+    # matches/) does not: he asked for it on top of the running games (10-29: "a 9th game in watch mode").
     try:
         env = bar_env.load()
         if any(time.time() - p.stat().st_mtime < QUIET_S for p in bot_logs(env)):
             return True
         out = subprocess.run(["powershell", "-NoProfile", "-Command",
                               "(Get-CimInstance Win32_Process -Filter \"Name='spring.exe'\" | "
-                              "Where-Object { $_.CommandLine -notmatch '--menu' } | Measure-Object).Count"],
+                              "Where-Object { $_.CommandLine -notmatch '--menu' -and "
+                              "$_.CommandLine -notmatch 'bar-ai.matches.watch-' } | Measure-Object).Count"],
                              capture_output=True, text=True, timeout=30).stdout.strip()
         return out not in ("", "0")
     except (OSError, subprocess.SubprocessError):

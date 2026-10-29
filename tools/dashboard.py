@@ -1320,10 +1320,42 @@ def search_view(refresh=False):
 PG_DIR = REPO / "runtime" / "pg"
 
 
+LEAN_DIR = REPO / "runtime" / "lean"
+
+
+def lean_view():
+    """Training by held leans (tools/leanloop.py): every slot's lean and its slope over the pairs since it last moved,
+    the moves, each finished pair's two scores."""
+    import leanloop
+    st = json.loads((LEAN_DIR / "state.json").read_text(encoding="utf-8"))
+    pairs = leanloop.read_pairs()
+    sl = leanloop.slopes(st, pairs)
+    try:
+        log = (LEAN_DIR / "lean.log").read_text(encoding="utf-8").splitlines()[-6:]
+    except OSError:
+        log = []
+    on = (LEAN_DIR / "lean_on").exists()
+    return {"exists": True, "mode": "lean", "on": on, "paused": (LEAN_DIR / "lean_on.paused").exists() and not on,
+            "started": st.get("started"), "dir": os.path.basename(os.path.normpath(st.get("dir") or "")),
+            "steps": st.get("steps", 0), "running": len(st.get("running", {})), "log": log,
+            "pairs": [{"n": p["n"], "at": p["at"], "score": p["score"], "setup": p.get("setup")} for p in pairs],
+            "slots": [{"name": st["names"][i], "amount": st["amount"][i], "live": st["live"][i],
+                       "lean": st["lean"][i], "slope": round(g, 3), "t": round(t, 2), "n": n}
+                      for i, (g, t, n) in enumerate(sl)],
+            "moves": st.get("moves", []), "tMove": leanloop.T_MOVE, "minPairs": leanloop.MIN_PAIRS,
+            "kinds": leanloop.kind_names(), "updated": (LEAN_DIR / "state.json").stat().st_mtime}
+
+
 def training_view():
-    """Learning from our own choices (tools/pgloop.py): running or paused, the version playing, games launched and
-    waiting for the next step, every step's report (games, decisions, mean score, result, step size, each
-    decision's signal t), and the loop's last log lines. Cheap: three small files, read on every call."""
+    """The training run: held leans (tools/leanloop.py) when one exists, else learning from our own choices
+    (tools/pgloop.py): running or paused, the version playing, games launched and waiting for the next step, every
+    step's report (games, decisions, mean score, result, step size, each decision's signal t), and the loop's last
+    log lines. Cheap: a few small files, read on every call."""
+    if (LEAN_DIR / "state.json").exists():
+        try:
+            return lean_view()
+        except (OSError, ValueError, KeyError):
+            pass
     try:
         st = json.loads((PG_DIR / "state.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):

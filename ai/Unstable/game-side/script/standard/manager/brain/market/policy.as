@@ -69,11 +69,20 @@ bool PnOn()
 	const int given = ai.LoadOptionFloats("apex_pw_file");
 	gPnW.resize(n);
 	string src = "middle";
-	if ((given == n) || (given == n + nl)) {
+	if ((given == n) || (given == n + nl) || (given == n + 3 * nl + 1)) {
 		for (int i = 0; i < n; ++i)
 			gPnW[i] = ai.OptionFloat(i);
 		src = "file";
-		if (given == n + nl) {
+		if (given == n + 3 * nl + 1) {
+			gPnTrained.resize(nl);
+			gPnEvidence.resize(nl);
+			for (int i = 0; i < nl; ++i) {
+				gPnTrained[i] = ai.OptionFloat(n + nl + i);
+				gPnEvidence[i] = ai.OptionFloat(n + 2 * nl + i);
+			}
+			gPnPairs = int(ai.OptionFloat(n + 3 * nl));
+		}
+		if (given > n) {
 			gPnLean.resize(nl);
 			int set = 0;
 			for (int i = 0; i < nl; ++i) {
@@ -127,6 +136,8 @@ void PnTrunk(const array<float>& in st)
 			if ((PN_IDX[i] == int(NN_I_COMM)) || (PN_IDX[i] == int(NN_I_HOMED)))
 				gPnAskerIn = 1;
 	}
+	if ((gPnTrained.length() > 0) && (ai.frame >= gPnSayAt))
+		PnWatchSay(st);
 	const int key = (gPnAskerIn > 0) ? -2 : gNnStAt;
 	if ((key >= 0) && (gPnA1At == key))
 		return;
@@ -211,6 +222,138 @@ int PnLeanSlot(int h, const array<float>& in f)
 	if ((f.length() > 13) && (f[13] > 0.5f))
 		return 2;
 	return ((f.length() > 11) && (f[11] > 0.5f)) ? 3 : 0;
+}
+
+// A WATCHED TRAINING GAME (his 10-29: "see the training live ... periodic reports of our learnings"): a file that also
+// carries the trained leans, each lean's evidence (t) and the pairs played makes one seat of the team say in chat what
+// this game tries and what training has found, at the start and every 5 minutes.
+array<float> gPnTrained;
+array<float> gPnEvidence;
+int gPnPairs = 0;
+int gPnSayAt = 20 * SECOND;
+const int BOARD_PN_SAY = 9100;
+
+string PnSlotName(int i)
+{
+	for (uint h = PN_HEADS.length(); h-- > 0;) {
+		if (gPnLOff[h] > i)
+			continue;
+		const int k = i - gPnLOff[h];
+		const string tag = PN_HEADS[h];
+		if (tag == "builder")
+			return "auction " + KindName(k);
+		if (tag == "factory")
+			return "production " + ((k == 1) ? "constructors" : ((k == 2) ? "rez bots" : ((k == 3) ? "aircraft" : "combat units")));
+		if (PN_HK[h] == 0) {
+			const array<string> tags = {"con", "cap", "acap", "scap", "mex", "esc", "ecap", "cfear", "defamt", "mexg", "gunp", "aplant"};
+			const array<string> says = {"constructors", "constructor cap", "air constructors", "scouts", "extractor claims",
+				"escort strength", "escorts", "constructor caution", "defence amount", "extractor guards", "guns per post", "air plants"};
+			const int at = tags.find(tag);
+			return (at >= 0) ? says[at] : tag;
+		}
+		const string first = tag.split(",")[0];
+		if (first == "hp") {
+			const array<string> com = {"work", "fight", "turret", "retreat"};
+			return "commander " + ((k < 4) ? com[k] : ("option " + k));
+		}
+		const array<string> firsts = {"foeStaticM", "labM", "comM", "travelS", "dMe", "kind", "defM", "ruleM", "grpM", "foeSeenM", "armyM"};
+		const array<string> says = {"team plan", "tech", "opening", "reinforce", "join a build", "air wave", "defence site",
+			"defence type", "hunt", "strike", "post"};
+		const int at = firsts.find(first);
+		return ((at >= 0) ? says[at] : ("choice " + h)) + " option " + k;
+	}
+	return "slot " + i;
+}
+
+string PnLeanSays(int i, float v)
+{
+	for (uint h = PN_HEADS.length(); h-- > 0;) {
+		if (gPnLOff[h] > i)
+			continue;
+		if (PN_HK[h] == 0)
+			return ((v >= 0.f) ? "more " : "less ") + NnF(abs(v), 2);
+		return "x" + NnF(pow(2.718282f, PN_LGAIN * v), 2);
+	}
+	return NnF(v, 2);
+}
+
+void PnSay(const string& in s)
+{
+	ai.SendChat(s);
+	AiLog("apex: pn-say t=" + ai.teamId + " " + s);
+}
+
+void PnWatchSay(const array<float>& in st)
+{
+	gPnSayAt = ai.frame + 5 * MINUTE;
+	const int report = ai.frame / (5 * MINUTE);
+	if (ai.GetTeamBoard(BOARD_PN_SAY, -1.f) >= float(report))
+		return;
+	ai.SetTeamBoard(BOARD_PN_SAY, float(report));
+	const int nl = int(gPnLean.length());
+	if (report == 0) {
+		PnSay("Apex training game: " + gPnPairs + " pairs played so far. Each pair plays one setup twice, every decision leaning opposite ways.");
+		array<int> top;
+		for (int pass = 0; pass < 4; ++pass) {
+			int bi = -1;
+			float bv = 0.f;
+			for (int i = 0; i < nl; ++i) {
+				const float d = abs(gPnLean[i] - gPnTrained[i]) / (PnLeanSlotIsAmount(i) ? 0.25f : 0.1f);
+				if ((top.find(i) < 0) && (d > bv)) {
+					bv = d;
+					bi = i;
+				}
+			}
+			if (bi >= 0)
+				top.insertLast(bi);
+		}
+		string s = "This game tries:";
+		for (uint j = 0; j < top.length(); ++j)
+			s += ((j == 0) ? " " : "; ") + PnSlotName(top[j]) + " " + PnLeanSays(top[j], gPnLean[top[j]]);
+		PnSay(s);
+	} else if (st.length() > 32) {
+		PnSay("Minute " + (report * 5) + ": metal income " + NnF(st[1], 1) + "/s, team army "
+			+ NnF(st[25], 0) + " vs " + NnF(st[26], 0) + " seen, trade " + NnF(st[32], 2));
+	}
+	if ((report % 3) != 0)
+		return;
+	string m = "Learned so far:";
+	int moved = 0;
+	for (int i = 0; i < nl; ++i) {
+		if (gPnTrained[i] != 0.f) {
+			m += ((moved == 0) ? " " : "; ") + PnSlotName(i) + " " + PnLeanSays(i, gPnTrained[i]);
+			++moved;
+		}
+	}
+	if (moved == 0)
+		m += " no lean has moved yet (one moves when its evidence passes 3).";
+	PnSay(m);
+	string e = "Strongest evidence:";
+	array<int> used;
+	for (int pass = 0; pass < 3; ++pass) {
+		int bi = -1;
+		float bt = 0.f;
+		for (int i = 0; i < nl; ++i) {
+			if ((used.find(i) < 0) && (abs(gPnEvidence[i]) > bt)) {
+				bt = abs(gPnEvidence[i]);
+				bi = i;
+			}
+		}
+		if (bi < 0)
+			break;
+		used.insertLast(bi);
+		e += ((pass == 0) ? " " : "; ") + PnSlotName(bi) + ((gPnEvidence[bi] > 0.f) ? " more pays" : " less pays")
+			+ " (t " + NnF(gPnEvidence[bi], 1) + ")";
+	}
+	PnSay(e);
+}
+
+bool PnLeanSlotIsAmount(int i)
+{
+	for (uint h = PN_HEADS.length(); h-- > 0;)
+		if (gPnLOff[h] <= i)
+			return PN_HK[h] == 0;
+	return false;
 }
 
 // LEARNING FROM OUR OWN CHOICES (his 10-28): in training games every output gets a push N(0, sigma), and the push is

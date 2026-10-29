@@ -154,7 +154,7 @@
 <!-- ================= NET ================= -->
 <section id="tab-net" class="tab">
   <div class="card">
-    <b>Training</b> <span class="dim">&mdash; learning from our own choices (tools/pgloop.py). In every training game
+    <b>Training</b> <span class="dim" id="tr-about">&mdash; learning from our own choices (tools/pgloop.py). In every training game
       each decision gets a small random push, and each push is credited with how our economy, army and trade against
       theirs moved over the next 2 minutes, against what the position predicted. Every 16 games one small step makes a
       new version, which the next games play. Every game draws its own setup (map, team size, factions, opponent,
@@ -164,15 +164,15 @@
     <div id="tr-tiles" class="sv-tiles"></div>
   </div>
   <div class="card">
-    <h2>Score per version</h2>
-    <div class="dim">The mean score of the games each version's step learned from (0 is even with the opponent; a
+    <h2 id="tr-h1">Score per version</h2>
+    <div class="dim" id="tr-d1">The mean score of the games each version's step learned from (0 is even with the opponent; a
       time-limit game goes to the side ahead on economy and army). Random setups make one batch swing a lot: read the
       line, the mean of the last 4 versions, not one bar.</div>
     <div id="tr-scores" class="svchart"></div>
   </div>
   <div class="card">
-    <h2>Which pushes paid off, decision by decision</h2>
-    <div class="dim">For each decision and version, how strongly pushing it one way lined up with better results
+    <h2 id="tr-h2">Which pushes paid off, decision by decision</h2>
+    <div class="dim" id="tr-d2">For each decision and version, how strongly pushing it one way lined up with better results
       (a t-score: beyond &plusmn;2 is unlikely to be luck). Blue: asking for more went with better results;
       orange: asking for less did. A choice with several options shows its strongest one. A decision that stays the
       same colour version after version is a real finding; one that flips is noise.</div>
@@ -2046,6 +2046,7 @@ function renderTraining() {
     setHTML($("#tr-tiles"), ""); setHTML($("#tr-scores"), ""); setHTML($("#tr-signal"), "");
     return;
   }
+  if (TR.mode === "lean") return renderLean();
   const H = TR.history || [], last = H[H.length - 1];
   const state = TR.on ? "<span class='win'>running</span>" : (TR.paused ? "<span class='loss'>paused</span>" : "<span class='dim'>stopped</span>");
   setHTML($("#tr-status"), `${state} &middot; started ${esc(TR.started || "?")} &middot; games in `
@@ -2062,6 +2063,83 @@ function renderTraining() {
     + tile("Mean score, last 4 versions", svScore(mean(recent)), "first 4 versions: " + svScore(mean(early))));
   setHTML($("#tr-scores"), trScoreChart($("#tr-scores"), H));
   setHTML($("#tr-signal"), trSignalMap($("#tr-signal"), H));
+}
+
+/* held leans (tools/leanloop.py): pairs of games on one setup at lean + push and lean - push */
+function leanLabel(s) {
+  const m = /^builder\/(\d+)$/.exec(s.name);
+  if (m) return "auction: " + ((TR.kinds || {})[m[1]] || ("kind " + m[1]));
+  if (s.name.startsWith("factory/")) return "production: " + s.name.slice(8);
+  const c = /^choice(\d+):[^/]*\/(\d+)$/.exec(s.name);
+  if (c) return ((SV && SV.heads && SV.heads["choice" + c[1] + ":" + s.name.split(":")[1].split("/")[0]]) || ("choice " + c[1])) + " option " + c[2];
+  return (SV && SV.heads && SV.heads[s.name]) || s.name;
+}
+
+function leanMult(s, v) {
+  // an amount's lean is in output units (1 = the top of its range); a tilt's moves the odds by exp(8 x lean)
+  return s.amount ? (v >= 0 ? "+" : "") + v.toFixed(2) : "×" + Math.exp(8 * v).toFixed(2);
+}
+
+function renderLean() {
+  setHTML($("#tr-about"), "&mdash; training by held leans (tools/leanloop.py). Every decision the network makes carries a "
+    + "lean held for the whole game: one per amount and per choice option, the auction one per kind of build, production "
+    + "one per kind of unit. Games come in pairs on one random setup and seed (map, team size, factions, opponent, "
+    + "handicap, length): one game leans every decision a random way, the other the opposite way. The pair's score "
+    + "difference shows which way each lean pays with the setup's luck cancelled; a lean moves only when that is 3 "
+    + "standard errors from zero. It starts at the rule: a lean of 0 (×1) asks for exactly what the rule would.");
+  const P = TR.pairs || [], S = (TR.slots || []).filter(s => s.live);
+  const state = TR.on ? "<span class='win'>running</span>" : (TR.paused ? "<span class='loss'>paused</span>" : "<span class='dim'>stopped</span>");
+  setHTML($("#tr-status"), `${state} &middot; started ${esc(TR.started || "?")} &middot; games in `
+    + `<a href="${runRoute("tournaments/" + TR.dir)}">${esc(TR.dir)}</a> &middot; state updated ${trAgo(TR.updated)}`
+    + (TR.log && TR.log.length ? `<div class="mono" style="margin-top:4px;white-space:pre-wrap">${esc(TR.log.slice(-3).join("\n"))}</div>` : ""));
+  const moved = S.filter(s => s.lean !== 0).length;
+  const near = S.filter(s => s.n >= TR.minPairs && Math.abs(s.t) >= 2).length;
+  const tile = (lbl, big, sub) => `<div class="sv-tile"><div class="lbl">${lbl}</div><div class="big">${big}</div><div class="sub">${sub}</div></div>`;
+  setHTML($("#tr-tiles"),
+    tile("Pairs finished", svInt(P.length), svInt(P.length * 2) + " games, " + svInt(TR.running) + " pairs playing")
+    + tile("Leans moved", svInt(moved), "of " + svInt(S.length) + " live; " + svInt((TR.moves || []).length) + " moves in all")
+    + tile("Leans near a move", svInt(near), "slope beyond 2 standard errors")
+    + tile("Steps", svInt(TR.steps), "one every 12 pairs"));
+  setHTML($("#tr-h1"), "Score per block of 12 pairs");
+  setHTML($("#tr-d1"), "The mean score of both games of each pair (0 is even with the opponent). The leans change only "
+    + "where the evidence is strong, so this line should drift up slowly if at all; random setups make one block swing a lot.");
+  const blocks = [];
+  for (let i = 0; i < P.length; i += 12) {
+    const b = P.slice(i, i + 12);
+    blocks.push({version: Math.floor(i / 12) + 1, at: b[b.length - 1].at, games: 2 * b.length, wins: 0, losses: 0,
+                 decisions: 0, steps: 0, meanShift: 0, meanScore: b.reduce((a, p) => a + (p.score[0] + p.score[1]) / 2, 0) / b.length});
+  }
+  setHTML($("#tr-scores"), trScoreChart($("#tr-scores"), blocks));
+  setHTML($("#tr-h2"), "Every lean and which way the evidence points");
+  setHTML($("#tr-d2"), "Bar: the lean now (right of the line asks for more than the rule, left for less). Dot: the slope's "
+    + "t-score over the pairs since that lean last moved, on its own scale; beyond ±3 (the outlined band) moves it "
+    + "half a push. A dot that drifts out and stays out is a finding; one that wanders is noise.");
+  setHTML($("#tr-signal"), leanChart($("#tr-signal"), S));
+}
+
+function leanChart(el, S) {
+  if (!S.length) return "<div class='dim'>no live leans</div>";
+  const rows = S.slice().sort((a, b) => Math.abs(b.t) - Math.abs(a.t) || Math.abs(b.lean) - Math.abs(a.lean));
+  const W = svWidth(el), rowH = 18, top = 22, bottom = 8;
+  const left = 14 + 6.2 * Math.max(...rows.map(s => leanLabel(s).length)), mid = (W - left) / 2;
+  const Ht = top + bottom + rowH * rows.length;
+  const xl = v => left + mid * 0.5 + v * mid * 0.45 / 1.0;          // lean, -1..1 for amounts, scaled for tilts
+  const xt = t => left + mid + mid * 0.5 + Math.max(-5, Math.min(5, t)) * mid * 0.45 / 5;
+  let s = `<svg viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}">`;
+  s += `<text x="${xl(0)}" y="12" text-anchor="middle">lean</text><text x="${xt(0)}" y="12" text-anchor="middle">evidence (t)</text>`;
+  s += `<line class="ref" x1="${xl(0)}" x2="${xl(0)}" y1="${top}" y2="${Ht - bottom}"/><line class="ref" x1="${xt(0)}" x2="${xt(0)}" y1="${top}" y2="${Ht - bottom}"/>`;
+  s += `<rect x="${xt(-TR.tMove)}" y="${top}" width="${xt(TR.tMove) - xt(-TR.tMove)}" height="${Ht - top - bottom}" style="fill:none;stroke:var(--grid);stroke-dasharray:3 3"/>`;
+  rows.forEach((r, i) => {
+    const y = top + rowH * i, lv = r.amount ? r.lean : r.lean * 2;
+    const tip = [leanLabel(r), "lean " + r.lean.toFixed(3) + " (" + leanMult(r, r.lean) + ")",
+                 "slope t " + r.t.toFixed(2) + " over " + r.n + " pairs" + (r.n < TR.minPairs ? " (too few to move yet)" : "")];
+    s += `<text class="lab" x="${left - 6}" y="${y + rowH / 2}" dy="0.35em" text-anchor="end">${esc(leanLabel(r))}</text>`;
+    if (r.lean !== 0) s += `<rect x="${Math.min(xl(0), xl(lv))}" y="${y + 3}" width="${Math.max(1.5, Math.abs(xl(lv) - xl(0)))}" height="${rowH - 6}" rx="2"
+      style="fill:${r.lean > 0 ? "rgb(70,130,220)" : "rgb(230,140,50)"};fill-opacity:.7"${svTip(tip)}/>`;
+    s += `<circle cx="${xt(r.t)}" cy="${y + rowH / 2}" r="4.5" style="fill:${Math.abs(r.t) >= 2 ? (r.t > 0 ? "rgb(70,130,220)" : "rgb(230,140,50)") : "var(--dim)"}"${svTip(tip)}/>`;
+    s += `<rect x="${left}" y="${y}" width="${W - left}" height="${rowH}" style="fill:transparent"${svTip(tip)}/>`;
+  });
+  return s + "</svg>";
 }
 
 function trScoreChart(el, H) {

@@ -265,9 +265,29 @@ def status():
                                                                     m["pairs"]))
 
 
+def watch_file(path):
+    """weights for a watched training game: base, this game's leans (the trained ones plus a fresh push), then the
+    trained leans, each slot's evidence t and the pairs played, so the AI can say them in chat (policy.as PnWatchSay)"""
+    lay = pgtrain.Layout()
+    st = json.load(open(STATE, encoding="utf-8"))
+    pairs = read_pairs()
+    sl = slopes(st, pairs)
+    rng = random.Random()
+    push = [rng.gauss(0.0, sigma(st, i)) if st["live"][i] else 0.0 for i in range(len(st["lean"]))]
+    played = [st["lean"][i] + push[i] for i in range(len(push))]
+    vals = list(pgtrain.read_weights(BASE, lay)) + played + list(st["lean"]) + [t for _, t, _ in sl] + [len(pairs)]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(" ".join("%.6g" % x for x in vals))
+    with open(path[:-len(".weights")] + ".json", "w", encoding="utf-8") as fh:
+        json.dump({"apex_pw_file": path.replace("\\", "/")}, fh)
+
+
 def main(argv):
     if "--status" in argv:
         status()
+        return 0
+    if "--watch-file" in argv:
+        watch_file(os.path.abspath(argv[argv.index("--watch-file") + 1]))
         return 0
     lay = pgtrain.Layout()
     st = load_state(lay)
