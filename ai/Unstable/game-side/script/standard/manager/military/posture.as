@@ -606,6 +606,11 @@ void UpdatePosture()
 	{ double _t = Perf::T0(); Brain::BudgetLog(); Perf::Add("post.budgetlog", _t); }
 	{ double _t = Perf::T0(); IntelDiag(); Perf::Add("post.inteldiag", _t); }       // read-only: the enemy reading every gate above consumed
 	PublishArmy();
+	// readings, not the army's posture: below the stock return they went dead with the stock army on 10-16 (airSeen 0
+	// in every one of 2.16M training rows; the AA gates and the commander's caution never fired)
+	UpdateAirThreat();
+	UpdateCorridorProbe();
+	Commander::UpdateCaution();
 	if (StockQuiet("posture"))
 		return;   // what follows sets the army's bars, holds and pushes
 	{ double _t = Perf::T0(); UpdateGifts(); Perf::Add("post.gifts", _t); }
@@ -640,9 +645,6 @@ void UpdatePosture()
 	{
 		aiMilitaryMgr.quota.attack = TURTLE_ATTACK;
 	}
-	UpdateAirThreat();
-	UpdateCorridorProbe();
-	Commander::UpdateCaution();
 	// DISABLED: engine aborts (exit -1003) jumped sharply the moment this
 	// landed. Either CmdMoveTo issued outside a task context or
 	// GetEnemyCostAt's GetEnemyUnitsIn walk is unsafe here.
