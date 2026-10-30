@@ -131,6 +131,7 @@ int gNanoAssistNext = 0;
 // remembered and put back on patrol once its queue is empty.
 array<CCircuitUnit@> gNanoSent;
 const int NANO_SEND_MAX = 64;   // one pass's orders; the rest go next pass
+const uint OBS_PASS_MAX = 16;   // dwarfed converters one 15 s pass hands to the turrets
 // The census drops a dead turret here before its handle is read again.
 void NanoSentDrop(CCircuitUnit@ u)
 {
@@ -265,7 +266,11 @@ void NanoReclaimAssist()
 		const float ePM = EPrice();
 		const float hzR = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 		const float hz = (hzR > 1.f) ? hzR : 300.f;
-		for (uint i = 0; (i < gOwnConv.length()) && (sent < NANO_SEND_MAX); ++i) {
+		// EVERY TURRET IN REACH, NOT ONLY THE IDLE ONES (rich13: "priced and still standing" on nearly every seat -- a rich
+		// base's turrets are all on an assist): the dwarfed converters this pass may take, then TurretsReclaim splits the
+		// turrets around each over all of them, working ones included.
+		array<CCircuitUnit@> obs;
+		for (uint i = 0; (i < gOwnConv.length()) && (obs.length() < OBS_PASS_MAX); ++i) {
 			CCircuitUnit@ cv = gOwnConv[i];
 			if ((cv is null) || (cv.circuitDef is null) || ReclaimClaimed(cv.id, cv.id))
 				continue;
@@ -275,13 +280,15 @@ void NanoReclaimAssist()
 				continue;
 			if (RetireGain(cv, d, ePM, hz, 0.f) <= 0.f)
 				continue;
-			const AIFloat3 vp = cv.GetPos(ai.frame);
-			const int k = NanoSendReclaim(cv, vp, reach, NANO_SEND_MAX - sent);
+			idle -= capD;
+			obs.insertLast(cv);
+		}
+		for (uint i = 0; i < obs.length(); ++i) {
+			const int d = int(obs[i].circuitDef.id);
+			const int k = ai.TurretsReclaim(obs[i], int((30.f + Catalog::gBuildTime[d] / 200.f) * float(SECOND)),
+					int(obs.length()));
 			if (k == 0)
 				continue;
-			ai.MarkReclaim(cv, int((30.f + Catalog::gBuildTime[d] / 200.f) * float(SECOND)));
-			idle -= capD;
-			sent += k;
 			obsSent += k;
 			++obsTgt;
 		}

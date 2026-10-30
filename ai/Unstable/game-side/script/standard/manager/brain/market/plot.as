@@ -26,6 +26,8 @@ int gPlotNextAt = 0;
 int gPlotN = 0, gPlotClearedN = 0, gPlotBadN = 0;
 int gPlotRound = 0;
 const int PLOT_ROUNDS = 3;
+int gPlotUnitWaits = 0;
+const int PLOT_UNIT_WAITS = 6;   // scans (5 s) a cleared plot waits for units standing on it
 const int PLOT_GRID_MAX = 48;   // flat grid cells a scan may test
 int gPlotWhyAt = -1;
 array<AIFloat3> gPlotBad;
@@ -412,6 +414,7 @@ void RefreshPlot()
 	gPlotAt = bestAt;
 	gPlotOcc = bestOcc;
 	gPlotRound = 0;
+	gPlotUnitWaits = 0;
 	gPlotGain = gPlantAskGain[uint(ai0)];
 	gPlotValue = gPlantAskValue[uint(ai0)];
 	++gPlotN;
@@ -450,6 +453,15 @@ bool PlotSite(int d, AIFloat3& out site)
 		gPlotOcc.resize(0);
 		site = cell;
 		return true;
+	}
+	// UNITS ON THE CLEARED GROUND MOVE ON (rich13: 14 of 24 engine refusals had 1-9 of them standing on it, the
+	// reclaimers among them): the plot holds, up to PLOT_UNIT_WAITS scans, rather than dropping ground that is clear.
+	{
+		const string why = ai.PlaceWhy(Catalog::Def(d), gPlotAt);
+		if ((why.findFirst("engine:") == 0) && (why.findFirst("units=0") < 0) && (gPlotUnitWaits < PLOT_UNIT_WAITS)) {
+			++gPlotUnitWaits;
+			return false;
+		}
 	}
 	// WHAT STANDS THERE NOW IS THE NEXT ROUND (plotsmoke: a turret whose frame was rising when the plot was drawn --
 	// frames are not our structures yet -- finished on the cleared ground): the blocking map's own blockers, if every
