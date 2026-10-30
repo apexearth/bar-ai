@@ -28760,7 +28760,7 @@ index 8e35f245..a7b63ab9 100644
  
  std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/TerrainManager.cpp b/src/circuit/terrain/TerrainManager.cpp
-index 78713628..773c4b49 100644
+index 78713628..e1ee17b1 100644
 --- a/src/circuit/terrain/TerrainManager.cpp
 +++ b/src/circuit/terrain/TerrainManager.cpp
 @@ -20,6 +20,7 @@
@@ -28821,7 +28821,7 @@ index 78713628..773c4b49 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
  				if (predicate(probePos)) {																		\
  					return probePos;																			\
-@@ -1369,6 +1377,217 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
+@@ -1369,6 +1377,218 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
  #undef DECLARE_MARKER
  }
  
@@ -28950,7 +28950,8 @@ index 78713628..773c4b49 100644
 +}
 +
 +// apex: cdef's body at pos lands on ground the map itself reserves -- a factory's exit path (TERRA), a metal or geo
-+// spot -- which no reclaim frees (rich17-19: 13 cleared plots refused by b=0x2000 and b=0x2).
++// spot -- which no reclaim frees (rich17-19: 13 cleared plots refused by b=0x2000 and b=0x2). The blocker bits only:
++// IsBlocked also reads any standing structure (rich20: every candidate refused, 6 plots against 54).
 +bool CTerrainManager::Reserved(CCircuitDef* cdef, const AIFloat3& pos, int facing)
 +{
 +	if ((cdef == nullptr) || !utils::is_valid(pos)) {
@@ -28962,7 +28963,7 @@ index 78713628..773c4b49 100644
 +	const SBlockingMap::SM fixed = notIgnore & (STRUCT_BIT(TERRA) | STRUCT_BIT(MEX) | STRUCT_BIT(GEO));
 +	for (const auto& c : cells) {
 +		if ((c.second == 2) && blockingMap.IsInBounds(c.first.x, c.first.y)
-+			&& blockingMap.IsBlocked(c.first.x, c.first.y, fixed))
++			&& (blockingMap.grid[c.first.y * blockingMap.columns + c.first.x].blockerMask & fixed))
 +		{
 +			return true;
 +		}
@@ -29039,7 +29040,7 @@ index 78713628..773c4b49 100644
  void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
  {
  	CCircuitDef* cdef = building.cdef;
-@@ -1640,6 +1859,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
+@@ -1640,6 +1860,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
  	return std::make_pair(area, area != nullptr);
  }
  
@@ -29060,7 +29061,7 @@ index 78713628..773c4b49 100644
  bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  {
  	const int iS = GetSectorIndex(destination);
-@@ -1649,6 +1882,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+@@ -1649,6 +1883,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
  		return true;
  	}
@@ -29070,7 +29071,7 @@ index 78713628..773c4b49 100644
  	if (area == GetSectorList(area)[iS].area) {
  		return true;
  	}
-@@ -1683,8 +1919,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
+@@ -1683,8 +1920,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
  	AIFloat3 pos = position;
  //	CorrectPosition(pos);
  	const int iS = GetSectorIndex(pos);
@@ -29084,7 +29085,7 @@ index 78713628..773c4b49 100644
  }
  
  AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
-@@ -1949,6 +2188,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
+@@ -1949,6 +2189,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
  	return true;
  }
  
@@ -29123,7 +29124,7 @@ index 78713628..773c4b49 100644
  bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)
  {
  	if (circuit->GetThreatMap()->GetBuilderThreatAt(position) > THREAT_MIN) {
-@@ -1957,8 +2228,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
+@@ -1957,8 +2229,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
  	return CanBeBuiltAt(cdef, position);
  }
  
@@ -29203,7 +29204,7 @@ index 78713628..773c4b49 100644
  	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
  		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
  	}
-@@ -1966,15 +2308,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+@@ -1966,15 +2309,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29227,7 +29228,7 @@ index 78713628..773c4b49 100644
  	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
  		return false;
  	}
-@@ -1994,11 +2343,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
+@@ -1994,11 +2344,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}

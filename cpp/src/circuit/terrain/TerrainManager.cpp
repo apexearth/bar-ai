@@ -1502,7 +1502,8 @@ bool CTerrainManager::GroundTakes(CCircuitDef* cdef, const AIFloat3& pos)
 }
 
 // apex: cdef's body at pos lands on ground the map itself reserves -- a factory's exit path (TERRA), a metal or geo
-// spot -- which no reclaim frees (rich17-19: 13 cleared plots refused by b=0x2000 and b=0x2).
+// spot -- which no reclaim frees (rich17-19: 13 cleared plots refused by b=0x2000 and b=0x2). The blocker bits only:
+// IsBlocked also reads any standing structure (rich20: every candidate refused, 6 plots against 54).
 bool CTerrainManager::Reserved(CCircuitDef* cdef, const AIFloat3& pos, int facing)
 {
 	if ((cdef == nullptr) || !utils::is_valid(pos)) {
@@ -1514,7 +1515,7 @@ bool CTerrainManager::Reserved(CCircuitDef* cdef, const AIFloat3& pos, int facin
 	const SBlockingMap::SM fixed = notIgnore & (STRUCT_BIT(TERRA) | STRUCT_BIT(MEX) | STRUCT_BIT(GEO));
 	for (const auto& c : cells) {
 		if ((c.second == 2) && blockingMap.IsInBounds(c.first.x, c.first.y)
-			&& blockingMap.IsBlocked(c.first.x, c.first.y, fixed))
+			&& (blockingMap.grid[c.first.y * blockingMap.columns + c.first.x].blockerMask & fixed))
 		{
 			return true;
 		}
