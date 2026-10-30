@@ -1034,6 +1034,136 @@ float CTerrainManager::ExitGap(CCircuitUnit* fac, const AIFloat3& goal, AIFloat3
 	return outStop.distance2D(outGoal);
 }
 
+// apex: THE EXIT PATH IS CLEARED, NOT ONLY RESERVED (crowd8: 5 plants penned per game for ~10 minutes, mostly gantries
+// inside nano rings; a factory's path is laid as it rises, and the wide query costs structure sectors high but crosses
+// them, so a packed base's path runs over turrets that then stand on it -- 108 such marks from one seat). What stands on
+// the cells is named here; the script eats ours and asks for an ally's, and the TERRA mark refuses it being rebuilt.
+void CTerrainManager::ExitPathBlockers(std::vector<float>& out)
+{
+	out.clear();
+	auto it = TeamBus().find(circuit->GetAllyTeamId());
+	if (it == TeamBus().end()) {
+		return;
+	}
+	auto mine = it->second.find(circuit->GetTeamId());
+	if ((mine == it->second.end()) || mine->second.set.empty()) {
+		return;
+	}
+	const std::unordered_set<long long>& set = mine->second.set;
+	int x1 = std::numeric_limits<int>::max(), z1 = x1, x2 = -x1, z2 = -x1;
+	for (const int2& p : mine->second.cells) {
+		x1 = std::min(x1, p.x); x2 = std::max(x2, p.x);
+		z1 = std::min(z1, p.y); z2 = std::max(z2, p.y);
+	}
+	const float cell = SQUARE_SIZE * 2;
+	const float bx1 = x1 * cell - 128.f, bx2 = (x2 + 1) * cell + 128.f;
+	const float bz1 = z1 * cell - 128.f, bz2 = (z2 + 1) * cell + 128.f;
+	const int frame = circuit->GetLastFrame();
+	circuit->UpdateFriendlyUnits();
+	std::vector<std::pair<int2, char>> cells;
+	for (const auto& kv : circuit->GetFriendlyUnits()) {
+		CAllyUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || (u->GetUnit() == nullptr) || u->GetCircuitDef()->IsMobile()) {
+			continue;
+		}
+		const AIFloat3& p = u->GetPos(frame);
+		if ((p.x < bx1) || (p.x > bx2) || (p.z < bz1) || (p.z > bz2)) {
+			continue;
+		}
+		const int facing = u->GetUnit()->GetBuildingFacing();
+		int notIgnore = 0, typeMask = 0;
+		MaskCells(u->GetCircuitDef(), p + u->GetCircuitDef()->GetMidPosOffset(facing), facing, cells, notIgnore, typeMask);
+		bool hit = false;
+		for (const auto& c : cells) {
+			if ((c.second == 2) && (set.count((long long)c.first.y * 100000LL + c.first.x) > 0)) {
+				hit = true;
+				break;
+			}
+		}
+		if (!hit) {
+			continue;
+		}
+		out.push_back(p.x);
+		out.push_back(p.z);
+		out.push_back(float(u->GetCircuitDef()->GetId()));
+		out.push_back(float(kv.first));
+		out.push_back(float(u->GetUnit()->GetTeam()));
+	}
+}
+
+bool CTerrainManager::OnTeamExitPath(CCircuitDef* cdef, const AIFloat3& pos, int facing)
+{
+	auto it = TeamBus().find(circuit->GetAllyTeamId());
+	if ((cdef == nullptr) || (it == TeamBus().end())) {
+		return false;
+	}
+	std::vector<std::pair<int2, char>> cells;
+	int notIgnore = 0, typeMask = 0;
+	MaskCells(cdef, pos, facing, cells, notIgnore, typeMask);
+	for (const auto& kv : it->second) {
+		for (const auto& c : cells) {
+			if ((c.second == 2) && (kv.second.set.count((long long)c.first.y * 100000LL + c.first.x) > 0)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+AIFloat3 CTerrainManager::PathStop(int pathType, const AIFloat3& start, const AIFloat3& goal)
+{
+	springai::Pathing* pathing = circuit->GetPathing();
+	const int pathId = pathing->InitPath(start, goal, pathType, 64.f);
+	if (pathId == 0) {
+		return start;
+	}
+	AIFloat3 stop = start, prev = -RgtVector;
+	for (int i = 0; i < 400; ++i) {
+		const AIFloat3 p = pathing->GetNextWaypoint(pathId);
+		if ((p.x < 0.f) || (p.z < 0.f) || (p == prev)) {
+			break;
+		}
+		if (utils::is_valid(prev) && (p.distance2D(prev) > SQUARE_SIZE * 64.f)) {
+			break;   // a jump: what follows is not walked
+		}
+		stop = p;
+		prev = p;
+	}
+	pathing->FreePath(pathId);
+	return stop;
+}
+
+// apex: A FACTORY IS NOT PLACED FACING A DEAD END (crowd8: 5 plants per game penned ~10 minutes, gantries placed into
+// nano blocks by design). The engine path, which sees every building already standing, from the door the new plant
+// would have toward the front: refused when it stops nearer the door than the front.
+bool CTerrainManager::DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, const AIFloat3& pos, int facing,
+		const AIFloat3& goal)
+{
+	if ((facDef == nullptr) || (mobileDef == nullptr) || !utils::is_valid(goal)) {
+		return true;
+	}
+	springai::MoveData* md = mobileDef->GetDef()->GetMoveData();
+	if (md == nullptr) {
+		return true;
+	}
+	const int pathType = md->GetPathType();
+	delete md;
+	const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
+	const float depth = (turned ? facDef->GetDef()->GetXSize() : facDef->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f
+			+ SQUARE_SIZE * 6;
+	AIFloat3 door = pos;
+	switch (facing) {
+		default:
+		case UNIT_FACING_SOUTH: door.z += depth; break;
+		case UNIT_FACING_EAST:  door.x += depth; break;
+		case UNIT_FACING_NORTH: door.z -= depth; break;
+		case UNIT_FACING_WEST:  door.x -= depth; break;
+	}
+	CorrectPosition(door);
+	const AIFloat3 stop = PathStop(pathType, door, goal);
+	return stop.distance2D(door) >= stop.distance2D(goal);
+}
+
 void CTerrainManager::MarkAllyBuildings()
 {
 	SyncAllyBus();

@@ -182,6 +182,7 @@ void UpdateChunk(int c)
 		{ double _t = Perf::T0(); Military::UpdateUnstick(); Perf::Add("up.unstick", _t); }
 		{ double _t = Perf::T0(); Brain::YardWatch(); Perf::Add("up.yard", _t); }
 		{ double _t = Perf::T0(); Brain::FacExitWatch(); Perf::Add("up.facexit", _t); }
+		{ double _t = Perf::T0(); Brain::ExitPathClear(); Perf::Add("up.exitclear", _t); }
 	}
 	if (!ApexActive())
 		return;

@@ -196,6 +196,16 @@ private:
 public:
 	// apex: by the engine's own pathing, how far short of `goal` a unit leaving fac's door stops; -1 unknown
 	float ExitGap(CCircuitUnit* fac, const springai::AIFloat3& goal, springai::AIFloat3& outDoor, springai::AIFloat3& outStop);
+	// apex: every friendly structure (ours or an ally's) whose body stands on this bot's own factory exit cells, as
+	// (x, z, def, id, team) quintuples
+	void ExitPathBlockers(std::vector<float>& out);
+	// apex: cdef's body at pos on any exit path of this ally team's bots, ours included
+	bool OnTeamExitPath(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
+	// apex: from the door a factory facDef would have at pos, a unit it makes gets nearer `goal` than the door
+	bool DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, const springai::AIFloat3& pos, int facing,
+			const springai::AIFloat3& goal);
+	// apex: the engine path's last walked waypoint from start toward goal (the engine appends the goal itself)
+	springai::AIFloat3 PathStop(int pathType, const springai::AIFloat3& start, const springai::AIFloat3& goal);
 private:
 	void MarkBusPath();
 	void FillParentBusNodes(CPathInfo* pathInfo);

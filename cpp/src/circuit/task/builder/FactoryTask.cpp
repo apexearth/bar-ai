@@ -8,6 +8,7 @@
 #include "task/builder/FactoryTask.h"
 #include "module/BuilderManager.h"
 #include "module/FactoryManager.h"
+#include "setup/SetupManager.h"
 #include "scheduler/Scheduler.h"
 #include "terrain/TerrainManager.h"
 #include "CircuitAI.h"
@@ -218,12 +219,31 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	auto exitOpen = [this, exitTerrain, &laneClear, &othersClear](const AIFloat3& bp) {
 		return laneClear(bp) && othersClear(bp) && exitTerrain->FactoryExitOpen(buildDef, bp, facing);
 	};
+	// apex: ...NOR ON A TEAMMATE'S EXIT PATH, AND ITS OWN DOOR LEADS OUT (crowd8: labs and air plants placed on other
+	// seats' exit paths by the handed-site branch below, which takes a site the engine accepts without the blocking
+	// map; gantries placed into nano blocks with no way out). Asked once per final candidate -- the engine path is
+	// dear -- not per spiral step.
+	CCircuitDef* exitMobile = circuit->GetFactoryManager()->GetLargestDef(buildDef);
+	const AIFloat3 exitGoal = circuit->GetSetupManager()->GetLanePos();
+	auto leadsOut = [this, circuit, exitTerrain, exitMobile, &exitGoal](const AIFloat3& bp) {
+		if (exitTerrain->OnTeamExitPath(buildDef, bp, facing)) {
+			circuit->LOG("apex: fac-site-refused t=%i %s at=%.0f,%.0f why=exit-path", circuit->GetTeamId(),
+					buildDef->GetDef()->GetName(), bp.x, bp.z);
+			return false;
+		}
+		if ((exitMobile != nullptr) && !exitTerrain->DoorEscapes(buildDef, exitMobile, bp, facing, exitGoal)) {
+			circuit->LOG("apex: fac-site-refused t=%i %s at=%.0f,%.0f why=dead-end facing=%i", circuit->GetTeamId(),
+					buildDef->GetDef()->GetName(), bp.x, bp.z, facing);
+			return false;
+		}
+		return true;
+	};
 	// The handed site as is -- but the engine's test passes an unclaimed metal
 	// spot, which the spiral below would refuse (a corlab on its own mex spot).
 	if ((facing != UNIT_NO_FACING) && clearsBuilder(pos)
 		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing)
 		&& !exitTerrain->ZoneRefuses(buildDef, pos, facing)   // held ground (apex zones)
-		&& !exitTerrain->FootprintOnSpot(buildDef, pos, facing) && exitOpen(pos)) {
+		&& !exitTerrain->FootprintOnSpot(buildDef, pos, facing) && exitOpen(pos) && leadsOut(pos)) {
 		circuit->LOG("apex: fac-site-taken t=%i %s asked=%.0f,%.0f fails=%i at=%.0f,%.0f facing=%i",
 				circuit->GetTeamId(), buildDef->GetDef()->GetName(), position.x, position.z, buildFails, pos.x, pos.z, facing);
 		SetBuildPos(pos);
@@ -257,7 +277,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 		};
 	}
 	const float testSize = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
-	auto checkFacing = [this, map, terrainMgr, testSize, &predicate, &pos, searchRadius, &exitOpen]() {
+	auto checkFacing = [this, map, terrainMgr, testSize, &predicate, &pos, searchRadius, &exitOpen, &leadsOut]() {
 		AIFloat3 bp = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate);
 		if (!utils::is_valid(bp)) {
 			return false;
@@ -280,7 +300,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 				posOffset.x -= testSize;
 			} break;
 		}
-		if (map->IsPossibleToBuildAt(buildDef->GetDef(), posOffset, facing) && exitOpen(bp)) {
+		if (map->IsPossibleToBuildAt(buildDef->GetDef(), posOffset, facing) && exitOpen(bp) && leadsOut(bp)) {
 			SetBuildPos(bp);
 			return true;
 		}

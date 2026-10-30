@@ -1733,6 +1733,24 @@ static float CCircuitAI_FacExitGap(CCircuitAI* circuit, CCircuitUnit* fac, const
 	return circuit->GetTerrainManager()->ExitGap(fac, goal, door, stop);
 }
 
+static asITypeInfo* FloatArrayType();
+
+// apex: friendly structures standing on this bot's own factory exit cells (TerrainManager::ExitPathBlockers)
+static CScriptArray* CCircuitAI_ExitPathBlockers(CCircuitAI* circuit)
+{
+	std::vector<float> out;
+	circuit->GetTerrainManager()->ExitPathBlockers(out);
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, out.size());
+	for (asUINT i = 0; i < out.size(); ++i) {
+		arr->SetValue(i, &out[i]);
+	}
+	return arr;
+}
+
 static const std::string CCircuitAI_PlaceWhy(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
 {
 	if ((def == nullptr) || !utils::is_valid(pos)) {
@@ -2859,6 +2877,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundTakes(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundTakes), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool PlotReserved(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotReserved), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int PlotShoo(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotShoo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ ExitPathBlockers()", asFUNCTION(CCircuitAI_ExitPathBlockers), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float FacExitGap(CCircuitUnit@, const AIFloat3& in, AIFloat3& out, AIFloat3& out)", asFUNCTION(CCircuitAI_FacExitGap), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
