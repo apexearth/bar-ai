@@ -11125,7 +11125,7 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..72e4f536 100644
+index 2839b72e..f643413e 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,16 +10,30 @@
@@ -11172,9 +11172,10 @@ index 2839b72e..72e4f536 100644
  
  namespace circuit {
  
--using namespace springai;
-+using namespace springai;
-+
+ using namespace springai;
+ 
+-asITypeInfo* gUnitArrayType;  // cache
+-asITypeInfo* gIdArrayType;  // cache
 +// apex: THE ARRAY TYPE IS PER ENGINE, AND THIS USED TO BE ONE GLOBAL.
 +//
 +// Every CCircuitAI instance builds its own asIScriptEngine and its own
@@ -12948,9 +12949,7 @@ index 2839b72e..72e4f536 100644
 +{
 +	return circuit->GetGame()->GetTeamIncomeMultiplier(team);
 +}
- 
--asITypeInfo* gUnitArrayType;  // cache
--asITypeInfo* gIdArrayType;  // cache
++
 +// The largest bonus on any team not allied to ours (gaia reads 1, so a max).
 +static float CCircuitAI_GetFoeIncomeMultMax(CCircuitAI* circuit)
 +{
@@ -13002,11 +13001,11 @@ index 2839b72e..72e4f536 100644
 +	asITypeInfo* at2 = FloatArrayType();
 +	if (at2 == nullptr) {
 +		return nullptr;
-+	}
+ 	}
 +	CScriptArray* arr = CScriptArray::Create(at2, out.size());
 +	for (asUINT i = 0; i < out.size(); ++i) {
 +		arr->SetValue(i, &out[i]);
- 	}
++	}
 +	return arr;
  }
  
@@ -13334,7 +13333,7 @@ index 2839b72e..72e4f536 100644
  static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
  {
  	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
-@@ -240,12 +2180,239 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,12 +2180,245 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -13495,6 +13494,12 @@ index 2839b72e..72e4f536 100644
 +	return cdef->GetDef()->GetMinWaterDepth();
 +}
 +
++// apex: how far the ground under a footprint may rise from its build height (the engine's flatness test)
++static float CCircuitDef_GetMaxHeightDif(CCircuitDef* cdef)
++{
++	return cdef->GetDef()->GetMaxHeightDif();
++}
++
 +// apex: the builder-only members (buildDef, target, GetBuildType, GetBuildPos)
 +// were registered on the base IUnitTask type as raw IBuilderTask field
 +// offsets and THISCALLs -- so a script read on a FIGHTER, WAIT or IDLE task
@@ -13575,7 +13580,7 @@ index 2839b72e..72e4f536 100644
  	asUINT i = 0;
  	for (CCircuitUnit* unit : task->GetAssignees()) {
  		arr->SetValue(i++, &unit);
-@@ -472,14 +2639,34 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,14 +2645,34 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13617,7 +13622,7 @@ index 2839b72e..72e4f536 100644
  
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int frame", asOFFSET(CCircuitAI, lastFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int skirmishAIId", asOFFSET(CCircuitAI, skirmishAIId)); ASSERT(r >= 0);
-@@ -490,21 +2677,142 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,21 +2683,142 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13762,7 +13767,7 @@ index 2839b72e..72e4f536 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -549,6 +2857,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -549,6 +2863,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectProperty("CCircuitDef", "const float minRange", asOFFSET(CCircuitDef, minRange)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange(Type) const", asMETHODPR(CCircuitDef, GetMaxRange, (CCircuitDef::RangeType) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange() const", asMETHODPR(CCircuitDef, GetMaxRange, () const, float), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13772,7 +13777,7 @@ index 2839b72e..72e4f536 100644
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(Type, float)", asMETHODPR(CCircuitDef, SetRange, (CCircuitDef::RangeType, float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(float)", asMETHODPR(CCircuitDef, SetRange, (float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAirThreat() const", asMETHOD(CCircuitDef, GetAirThreat), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -556,6 +2867,74 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +2873,75 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13801,6 +13806,7 @@ index 2839b72e..72e4f536 100644
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetHealth() const", asMETHOD(CCircuitDef, GetHealth), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAutoHealPerSec() const", asFUNCTION(CCircuitDef_GetAutoHealPerSec), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMinWaterDepth() const", asFUNCTION(CCircuitDef_GetMinWaterDepth), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxHeightDif() const", asFUNCTION(CCircuitDef_GetMaxHeightDif), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAoe() const", asMETHOD(CCircuitDef, GetAoe), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAlwaysHitDef() const", asMETHOD(CCircuitDef, IsAlwaysHit), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsDumbFireDef() const", asMETHOD(CCircuitDef, IsDumbFire), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13847,7 +13853,7 @@ index 2839b72e..72e4f536 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +2943,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +2950,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13874,7 +13880,7 @@ index 2839b72e..72e4f536 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -572,9 +2971,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -572,9 +2978,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13948,7 +13954,7 @@ index 2839b72e..72e4f536 100644
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
  	// RulesParams accessor on Unit
  	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -585,6 +3045,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +3052,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -13960,7 +13966,7 @@ index 2839b72e..72e4f536 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +3168,34 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +3175,34 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13995,7 +14001,7 @@ index 2839b72e..72e4f536 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -718,12 +3211,39 @@ bool CInitScript::Init()
+@@ -718,12 +3218,39 @@ bool CInitScript::Init()
  	}
  
  	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
@@ -14035,7 +14041,7 @@ index 2839b72e..72e4f536 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +3260,43 @@ void CInitScript::Update()
+@@ -740,9 +3267,43 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -14079,7 +14085,7 @@ index 2839b72e..72e4f536 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -768,6 +3322,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
+@@ -768,6 +3329,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -14097,7 +14103,7 @@ index 2839b72e..72e4f536 100644
  void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  {
  	if (mainInfo.unitDestroyed == nullptr) {
-@@ -779,6 +3344,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +3351,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -14131,7 +14137,7 @@ index 2839b72e..72e4f536 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +3494,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +3501,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});

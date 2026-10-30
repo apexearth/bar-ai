@@ -2337,6 +2337,12 @@ static float CCircuitDef_GetMinWaterDepth(CCircuitDef* cdef)
 	return cdef->GetDef()->GetMinWaterDepth();
 }
 
+// apex: how far the ground under a footprint may rise from its build height (the engine's flatness test)
+static float CCircuitDef_GetMaxHeightDif(CCircuitDef* cdef)
+{
+	return cdef->GetDef()->GetMaxHeightDif();
+}
+
 // apex: the builder-only members (buildDef, target, GetBuildType, GetBuildPos)
 // were registered on the base IUnitTask type as raw IBuilderTask field
 // offsets and THISCALLs -- so a script read on a FIGHTER, WAIT or IDLE task
@@ -2892,6 +2898,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetHealth() const", asMETHOD(CCircuitDef, GetHealth), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAutoHealPerSec() const", asFUNCTION(CCircuitDef_GetAutoHealPerSec), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMinWaterDepth() const", asFUNCTION(CCircuitDef_GetMinWaterDepth), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxHeightDif() const", asFUNCTION(CCircuitDef_GetMaxHeightDif), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAoe() const", asMETHOD(CCircuitDef, GetAoe), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAlwaysHitDef() const", asMETHOD(CCircuitDef, IsAlwaysHit), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsDumbFireDef() const", asMETHOD(CCircuitDef, IsDumbFire), asCALL_THISCALL); ASSERT(r >= 0);

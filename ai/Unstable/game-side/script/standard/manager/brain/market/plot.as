@@ -143,16 +143,18 @@ bool PlotGround(int d, const AIFloat3& in c)
 	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
 	const bool wet = Catalog::gFloater[d] || Catalog::gSub[d] || (Catalog::Def(d).GetMinWaterDepth() > 0.f);
 	float lo = 1e9f, hi = -1e9f;
-	for (int ix = -1; ix <= 1; ++ix) {
-		for (int iz = -1; iz <= 1; ++iz) {
-			const float e = ai.GetElevationAt(AIFloat3(c.x + float(ix) * hx, 0.f, c.z + float(iz) * hz));
+	for (int ix = -2; ix <= 2; ++ix) {
+		for (int iz = -2; iz <= 2; ++iz) {
+			const float e = ai.GetElevationAt(AIFloat3(c.x + float(ix) * hx * 0.5f, 0.f, c.z + float(iz) * hz * 0.5f));
 			if (wet ? (e >= 0.f) : (e < 0.f))
 				return false;
 			lo = (e < lo) ? e : lo;
 			hi = (e > hi) ? e : hi;
 		}
 	}
-	return wet || (hi - lo <= 64.f);
+	// the engine's flatness test: each square within maxHeightDif of the build height, about the middle of the
+	// range (rich9: 37 of 43 cleared plots refused by the engine, on 5-28 of rise against a gantry's maxslope 10)
+	return wet || (hi - lo <= 2.f * Catalog::Def(d).GetMaxHeightDif());
 }
 
 bool IsNanoTurret(int d)
