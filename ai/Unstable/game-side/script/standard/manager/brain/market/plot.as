@@ -80,6 +80,49 @@ bool IsPlant(int d)
 	return !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0) && (Catalog::gBuildPower[d] > 0.f);
 }
 
+// THE DOORWAY'S APRON (block_map.json, rich6: 32 cleared plots with nothing on the footprint still refused, the site
+// search finding nothing within 600 in half): a ground plant's blocker runs offset + yard/2 squares out of its door --
+// a land lab 7 + 10, the gantry 12 + 10, 16 elmos each -- and only nanos may stand in the gantry's. An air plant's
+// ignores eco and nanos.
+float PlotApronFront(int bd)
+{
+	if (!IsPlant(bd) || AirPlant(bd))
+		return 0.f;
+	return (PlantTier(bd) >= 3) ? 352.f : 272.f;
+}
+
+AIFloat3 PlotExitDir()
+{
+	AIFloat3 e(0.f, 0.f, 1.f);
+	if (Base::Ready()) {
+		e = Base::gFwd;
+		if (Base::AxisIsRearward()) {
+			e.x = -e.x;
+			e.z = -e.z;
+		}
+	}
+	return e;
+}
+
+// u stands in bd's apron at c: within the footprint's width, out of the door by up to PlotApronFront.
+bool PlotInApron(CCircuitUnit@ u, int bd, const AIFloat3& in c)
+{
+	const float front = PlotApronFront(bd);
+	if (front <= 0.f)
+		return false;
+	const int ud = int(u.circuitDef.id);
+	if (IsNanoTurret(ud) && (PlantTier(bd) >= 3))
+		return false;
+	const AIFloat3 e = PlotExitDir();
+	const AIFloat3 p = u.GetPos(ai.frame);
+	const float dx = p.x - c.x, dz = p.z - c.z;
+	const float along = dx * e.x + dz * e.z;
+	const float across = abs(dx * e.z - dz * e.x);
+	const float us = float((Catalog::gFootX[ud] > Catalog::gFootZ[ud]) ? Catalog::gFootX[ud] : Catalog::gFootZ[ud]) * 4.f;
+	const float half = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 4.f;
+	return (along > -us) && (along < half + front + us) && (across < half + 64.f + us);
+}
+
 // What may be cleared for an important building: anything that is not an extractor or geo, a gun, a plant (those go by
 // PlotCovered), a big reactor or converter, or a building worth half the one waiting for the ground.
 bool PlotClearable(int ud, int bd)
@@ -188,6 +231,16 @@ void PlotHold(int bd, const AIFloat3& in c)
 	const float hx = float(Catalog::gFootX[bd]) * 4.f + apron, hz = float(Catalog::gFootZ[bd]) * 4.f + apron;
 	ai.ClearZones();
 	ai.ReserveZone(c.x - hx, c.z - hz, c.x + hx, c.z + hz, Catalog::Def(bd));
+	const float front = PlotApronFront(bd);
+	if (front > 0.f) {
+		const AIFloat3 e = PlotExitDir();
+		const float half = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 4.f;
+		const AIFloat3 far = c + e * (half + front);
+		const float w = half + 64.f;
+		const float wx = abs(e.z) * w, wz = abs(e.x) * w;
+		ai.ReserveZone(((c.x < far.x) ? c.x : far.x) - wx, ((c.z < far.z) ? c.z : far.z) - wz,
+				((c.x > far.x) ? c.x : far.x) + wx, ((c.z > far.z) ? c.z : far.z) + wz, Catalog::Def(bd));
+	}
 }
 
 // Once per PLOT_SCAN while a gantry has no room: the cheapest clearable plot.
@@ -227,7 +280,7 @@ void RefreshPlot()
 	// a plant's doorway and apron are part of what must be clear (rich3: 115 plots emptied, then no fit)
 	const float apron = IsPlant(bd) ? 48.f : 16.f;
 	const float hx = float(Catalog::gFootX[bd]) * 8.f + apron, hz = float(Catalog::gFootZ[bd]) * 8.f + apron;
-	const float r = sqrt(hx * hx + hz * hz) + 120.f;
+	const float r = sqrt(hx * hx + hz * hz) + 120.f + PlotApronFront(bd);
 	float bestCost = 1e30f;
 	AIFloat3 bestAt;
 	array<Id> bestOcc;
@@ -282,7 +335,7 @@ void RefreshPlot()
 		bool ok = true;
 		for (uint k = 0; ok && (k < near.length()); ++k) {
 			CCircuitUnit@ u = near[k];
-			if ((u is null) || (u.circuitDef is null) || !PlotOverlaps(u, c, hx, hz))
+			if ((u is null) || (u.circuitDef is null) || !(PlotOverlaps(u, c, hx, hz) || PlotInApron(u, bd, c)))
 				continue;
 			const int ud = int(u.circuitDef.id);
 			if (IsPlant(ud) && (PlantTier(ud) < tier) && HasUnit(Factory::gFacUnits, u))
