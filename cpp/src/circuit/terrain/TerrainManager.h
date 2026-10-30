@@ -182,6 +182,12 @@ private:
 	};
 	std::map<CCircuitUnit*, WidePathInfo> busPath;
 	std::map<CCircuitUnit*, FactoryPathQuery> busQueries;
+	// apex: our teammates' (other bots in this process) factory exit paths, as TERRA in our map: team id ->
+	// (their version, the cells we marked)
+	std::map<int, std::pair<int, std::vector<int2>>> busApplied;
+	void BusCells(const CPathInfo* pathInfo, int howWide, std::vector<int2>& out);
+	void PublishBus();
+	void SyncAllyBus();
 	void MarkBusPath();
 	void FillParentBusNodes(CPathInfo* pathInfo);
 

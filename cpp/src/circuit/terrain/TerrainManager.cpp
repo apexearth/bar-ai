@@ -34,6 +34,18 @@
 
 namespace circuit {
 
+// apex: the team's factory exit paths, one entry per bot (CTerrainManager::PublishBus)
+struct SBusShare {
+	int version = 0;
+	std::vector<int2> cells;
+};
+static std::map<int, std::map<int, SBusShare>>& TeamBus()
+{
+	static std::map<int, std::map<int, SBusShare>> bus;
+	return bus;
+}
+
+
 using namespace springai;
 using namespace terrain;
 
@@ -70,6 +82,7 @@ CTerrainManager::CTerrainManager(CCircuitAI* circuit, CTerrainData* terrainData)
 
 CTerrainManager::~CTerrainManager()
 {
+	TeamBus()[circuit->GetAllyTeamId()].erase(circuit->GetTeamId());
 	for (auto& kv : blockInfos) {
 		delete kv.second;
 	}
@@ -580,6 +593,7 @@ void CTerrainManager::DelBusPath(CCircuitUnit* unit)
 	}
 	busPath.erase(it);
 	busQueries.erase(unit);
+	PublishBus();
 }
 
 AIFloat3 CTerrainManager::GetBusPos(CCircuitDef* facDef, const AIFloat3& pos, int& outFacing)
@@ -809,8 +823,86 @@ void CTerrainManager::ApplyAuthority()
 	}
 }
 
+// apex: ONE SET OF FACTORY EXIT PATHS FOR THE TEAM (his 10-30 crowd game: a teammate's AA shut a T2 lab's way out;
+// 27 anti-air, ~100 converters and ~300 nano turrets went up within 320 of a teammate's plant). Each bot keeps its own
+// factories' paths as TERRA blockers; every bot of the same ally team in this process now marks the others' too, so the
+// placement rules that refuse a bot's own exit path refuse a teammate's.
+void CTerrainManager::BusCells(const CPathInfo* pathInfo, int howWide, std::vector<int2>& out)
+{
+	if (pathInfo == nullptr) {
+		return;
+	}
+	CPathFinder* pathfinder = circuit->GetPathfinder();
+	const int granularity = pathfinder->GetSquareSize() / (SQUARE_SIZE * 2);
+	const int squares = howWide * granularity;
+	for (int index : pathInfo->path) {
+		int ix, iz;
+		pathfinder->PathIndex2PathXY(index, &ix, &iz);
+		ix = ix * granularity + granularity / 2;
+		iz = iz * granularity + granularity / 2;
+		int2 m1 = (howWide & 1) ? int2(ix - squares / 2, iz - squares / 2)
+				: int2(ix - (squares - granularity) / 2, iz - (squares - granularity) / 2);
+		int2 m2 = (howWide & 1) ? int2(ix + squares / 2, iz + squares / 2)
+				: int2(ix + (squares + granularity) / 2, iz + (squares + granularity) / 2);
+		blockingMap.Bound(m1, m2);
+		for (int z = m1.y; z < m2.y; ++z) {
+			for (int x = m1.x; x < m2.x; ++x) {
+				out.push_back(int2(x, z));
+			}
+		}
+	}
+}
+
+void CTerrainManager::PublishBus()
+{
+	SBusShare& s = TeamBus()[circuit->GetAllyTeamId()][circuit->GetTeamId()];
+	s.cells.clear();
+	for (const auto& kv : busPath) {
+		BusCells(kv.second.pPath.get(), kv.second.howWide, s.cells);
+	}
+	++s.version;
+}
+
+void CTerrainManager::SyncAllyBus()
+{
+	auto it = TeamBus().find(circuit->GetAllyTeamId());
+	const int me = circuit->GetTeamId();
+	// a teammate that left: its cells come off
+	for (auto ai = busApplied.begin(); ai != busApplied.end(); ) {
+		if ((it == TeamBus().end()) || (it->second.find(ai->first) == it->second.end())) {
+			for (const int2& p : ai->second.second) {
+				blockingMap.DelBlocker(p.x, p.y, SBlockingMap::StructType::TERRA);
+			}
+			ai = busApplied.erase(ai);
+		} else {
+			++ai;
+		}
+	}
+	if (it == TeamBus().end()) {
+		return;
+	}
+	for (const auto& kv : it->second) {
+		if (kv.first == me) {
+			continue;
+		}
+		auto& applied = busApplied[kv.first];
+		if (applied.first == kv.second.version) {
+			continue;
+		}
+		for (const int2& p : applied.second) {
+			blockingMap.DelBlocker(p.x, p.y, SBlockingMap::StructType::TERRA);
+		}
+		for (const int2& p : kv.second.cells) {
+			blockingMap.AddBlocker(p.x, p.y, SBlockingMap::StructType::TERRA);
+		}
+		applied.first = kv.second.version;
+		applied.second = kv.second.cells;
+	}
+}
+
 void CTerrainManager::MarkAllyBuildings()
 {
+	SyncAllyBus();
 	if (markFrame /*+ FRAMES_PER_SEC*/ >= circuit->GetLastFrame()) {
 		return;
 	}
@@ -1757,6 +1849,7 @@ void CTerrainManager::MarkBusPath()
 			it->second.pPath = q->GetPathInfo();
 			it->second.howWide = q->GetHowWide();
 			busQueries.erase(query->GetUnit());
+			PublishBus();
 		});
 
 		/*
