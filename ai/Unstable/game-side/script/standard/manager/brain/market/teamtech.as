@@ -283,6 +283,40 @@ int TtOwnLab(float &out prog, int &out lab)
 }
 
 // What our own first advanced lab would take to deliver one advanced hand.
+// ...and the hands this seat is short of, all of them, from its own lab: the window the shared lab is compared over
+// (labtest 10-29: against the first hand alone, 36-91 s in a rich game, the shared lab covered 5-7% and every seat
+// built its own).
+float TtOwnAllSec(int hands)
+{
+	int lab = -1;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !TtAdvPlant(d)
+				|| ((Factory::userData[d].attr & Factory::Attr::T2) == 0) || !CanBuildEver(d))
+			continue;
+		if (((lab < 0) || (Catalog::gCostM[d] < Catalog::gCostM[lab])) && (TtConOf(d) >= 0))
+			lab = d;
+	}
+	if (lab < 0)
+		return 0.f;
+	return TtLabSec(lab, 0.f) + float((hands > 1) ? hands : 1) * TtConSec(TtConOf(lab), lab);
+}
+
+// The constructors the team is owed, as metal per second over the time the team's own labs would take to make
+// them: what the tech seat's lab line must be able to absorb, so its turrets are priced for the team.
+float TeamTechLineNeed(CCircuitUnit@ f)
+{
+	if (!TeamTechIsSeat() || (gTtOwed <= 0.f) || (f is null) || (f.circuitDef is null))
+		return 0.f;
+	const int lab = int(f.circuitDef.id);
+	if (!TtAdvPlant(lab))
+		return 0.f;
+	const int con = TtConOf(lab);
+	if (con < 0)
+		return 0.f;
+	const float horizon = TtOwnAllSec(int(gTtOwed + 0.5f));
+	return gTtOwed * Catalog::gCostM[con] / ((horizon > 30.f) ? horizon : 30.f);
+}
+
 float TtOwnPathSec()
 {
 	int lab = -1;
@@ -440,7 +474,7 @@ void TeamTechTick()
 	gTtRateA = ai.ReadTeamValue(gTtSeat, TV_TT_RATE, 0.f) * dAll / (dAll + techU);
 	const float readyF = ai.ReadTeamValue(gTtSeat, TV_TT_READY, float(ai.frame));
 	gTtReadyS = (readyF > float(ai.frame)) ? ((readyF - float(ai.frame)) / float(SECOND)) : 0.f;
-	gTtTown = TtOwnPathSec();
+	gTtTown = TtOwnAllSec(int(d + 0.5f));
 	const float span = gTtTown - gTtReadyS;
 	float served = (span > 0.f) ? (gTtRateA * span * d / dAll) : 0.f;
 	if (served > d)

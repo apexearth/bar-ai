@@ -157,7 +157,7 @@ bool NearSpot(const AIFloat3& in p)
 float FreeMetalFlow()
 {
 	const float free = (Eco::MInc() - Eco::MPull())
-			+ Eco::MCur() / 60.f;
+			+ Eco::MCur() / 60.f + TeamTechInflow();
 	return (free > 0.f) ? free : 0.f;
 }
 
@@ -2014,6 +2014,8 @@ float NeediestLine(AIFloat3& out at)
 		if (f is null)
 			continue;
 		float u = LineUnserved(f, feed, spendFloor, sumCeil);
+		// the tech seat's lab also makes the team's constructors (teamtech.as), and its ring is bought for them
+		u += TeamTechLineNeed(f);
 		float sh = 0.f;
 		// A higher line's turrets shift metal off the lines below it, but only
 		// what those lines eat: past parity the flow shifts nothing, so with an
