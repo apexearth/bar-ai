@@ -28760,7 +28760,7 @@ index 8e35f245..a7b63ab9 100644
  
  std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/TerrainManager.cpp b/src/circuit/terrain/TerrainManager.cpp
-index 78713628..e1ee17b1 100644
+index 78713628..a99ec06e 100644
 --- a/src/circuit/terrain/TerrainManager.cpp
 +++ b/src/circuit/terrain/TerrainManager.cpp
 @@ -20,6 +20,7 @@
@@ -28821,7 +28821,7 @@ index 78713628..e1ee17b1 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
  				if (predicate(probePos)) {																		\
  					return probePos;																			\
-@@ -1369,6 +1377,218 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
+@@ -1369,6 +1377,242 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
  #undef DECLARE_MARKER
  }
  
@@ -28993,11 +28993,35 @@ index 78713628..e1ee17b1 100644
 +				hi = std::max(hi, e);
 +			}
 +		}
-+		auto friends = circuit->GetCallback()->GetFriendlyUnitsIn(pos, std::max(hx, hz));
++		// what stands ON the footprint, by name: b = being built, m = mobile, a = an ally's (rich21: a move-off for our
++		// mobiles moved nothing in 43 waits, so the "units" there were not ours, or not mobile)
++		circuit->UpdateFriendlyUnits();
++		auto friends = circuit->GetCallback()->GetFriendlyUnitsIn(pos, std::max(hx, hz) * 1.5f);
 +		const int nu = (int)friends.size();
++		std::string on;
++		for (springai::Unit* u : friends) {
++			if ((u == nullptr) || (on.size() > 90)) {
++				continue;
++			}
++			auto [au, isTeam] = circuit->GetTeamOrAllyUnit(u);
++			const AIFloat3 up = u->GetPos();
++			CCircuitDef* udef = (au != nullptr) ? au->GetCircuitDef() : nullptr;
++			const float ux = (udef != nullptr) ? udef->GetDef()->GetXSize() * SQUARE_SIZE * 0.5f : 8.f;
++			const float uz = (udef != nullptr) ? udef->GetDef()->GetZSize() * SQUARE_SIZE * 0.5f : 8.f;
++			if ((std::fabs(up.x - pos.x) >= hx + ux) || (std::fabs(up.z - pos.z) >= hz + uz)) {
++				continue;
++			}
++			on += " ";
++			on += (udef != nullptr) ? udef->GetDef()->GetName() : "?";
++			on += "[";
++			if (u->IsBeingBuilt()) on += "b";
++			if ((udef != nullptr) && udef->IsMobile()) on += "m";
++			if (!isTeam) on += "a";
++			on += "]";
++		}
 +		utils::free(friends);
-+		char buf[128];
-+		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f,units=%d", nf, hi - lo, ud->GetMaxHeightDif(), lo, nu);
++		char buf[256];
++		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f,units=%d,on=%s", nf, hi - lo, ud->GetMaxHeightDif(), lo, nu, on.c_str());
 +		return std::string(buf);
 +	}
 +	if (circuit->GetThreatMap()->GetBuilderThreatAt(pos) > THREAT_MIN) {
@@ -29040,7 +29064,7 @@ index 78713628..e1ee17b1 100644
  void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
  {
  	CCircuitDef* cdef = building.cdef;
-@@ -1640,6 +1860,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
+@@ -1640,6 +1884,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
  	return std::make_pair(area, area != nullptr);
  }
  
@@ -29061,7 +29085,7 @@ index 78713628..e1ee17b1 100644
  bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  {
  	const int iS = GetSectorIndex(destination);
-@@ -1649,6 +1883,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+@@ -1649,6 +1907,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
  		return true;
  	}
@@ -29071,7 +29095,7 @@ index 78713628..e1ee17b1 100644
  	if (area == GetSectorList(area)[iS].area) {
  		return true;
  	}
-@@ -1683,8 +1920,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
+@@ -1683,8 +1944,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
  	AIFloat3 pos = position;
  //	CorrectPosition(pos);
  	const int iS = GetSectorIndex(pos);
@@ -29085,7 +29109,7 @@ index 78713628..e1ee17b1 100644
  }
  
  AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
-@@ -1949,6 +2189,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
+@@ -1949,6 +2213,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
  	return true;
  }
  
@@ -29124,7 +29148,7 @@ index 78713628..e1ee17b1 100644
  bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)
  {
  	if (circuit->GetThreatMap()->GetBuilderThreatAt(position) > THREAT_MIN) {
-@@ -1957,8 +2229,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
+@@ -1957,8 +2253,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
  	return CanBeBuiltAt(cdef, position);
  }
  
@@ -29204,7 +29228,7 @@ index 78713628..e1ee17b1 100644
  	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
  		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
  	}
-@@ -1966,15 +2309,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+@@ -1966,15 +2333,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29228,7 +29252,7 @@ index 78713628..e1ee17b1 100644
  	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
  		return false;
  	}
-@@ -1994,11 +2344,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
+@@ -1994,11 +2368,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}

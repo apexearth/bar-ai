@@ -1545,11 +1545,35 @@ std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, in
 				hi = std::max(hi, e);
 			}
 		}
-		auto friends = circuit->GetCallback()->GetFriendlyUnitsIn(pos, std::max(hx, hz));
+		// what stands ON the footprint, by name: b = being built, m = mobile, a = an ally's (rich21: a move-off for our
+		// mobiles moved nothing in 43 waits, so the "units" there were not ours, or not mobile)
+		circuit->UpdateFriendlyUnits();
+		auto friends = circuit->GetCallback()->GetFriendlyUnitsIn(pos, std::max(hx, hz) * 1.5f);
 		const int nu = (int)friends.size();
+		std::string on;
+		for (springai::Unit* u : friends) {
+			if ((u == nullptr) || (on.size() > 90)) {
+				continue;
+			}
+			auto [au, isTeam] = circuit->GetTeamOrAllyUnit(u);
+			const AIFloat3 up = u->GetPos();
+			CCircuitDef* udef = (au != nullptr) ? au->GetCircuitDef() : nullptr;
+			const float ux = (udef != nullptr) ? udef->GetDef()->GetXSize() * SQUARE_SIZE * 0.5f : 8.f;
+			const float uz = (udef != nullptr) ? udef->GetDef()->GetZSize() * SQUARE_SIZE * 0.5f : 8.f;
+			if ((std::fabs(up.x - pos.x) >= hx + ux) || (std::fabs(up.z - pos.z) >= hz + uz)) {
+				continue;
+			}
+			on += " ";
+			on += (udef != nullptr) ? udef->GetDef()->GetName() : "?";
+			on += "[";
+			if (u->IsBeingBuilt()) on += "b";
+			if ((udef != nullptr) && udef->IsMobile()) on += "m";
+			if (!isTeam) on += "a";
+			on += "]";
+		}
 		utils::free(friends);
-		char buf[128];
-		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f,units=%d", nf, hi - lo, ud->GetMaxHeightDif(), lo, nu);
+		char buf[256];
+		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f,units=%d,on=%s", nf, hi - lo, ud->GetMaxHeightDif(), lo, nu, on.c_str());
 		return std::string(buf);
 	}
 	if (circuit->GetThreatMap()->GetBuilderThreatAt(pos) > THREAT_MIN) {
