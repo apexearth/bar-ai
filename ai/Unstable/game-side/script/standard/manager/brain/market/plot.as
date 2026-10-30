@@ -26,6 +26,7 @@ int gPlotNextAt = 0;
 int gPlotN = 0, gPlotClearedN = 0, gPlotBadN = 0;
 int gPlotRound = 0;
 const int PLOT_ROUNDS = 3;
+const int PLOT_GRID_MAX = 48;   // flat grid cells a scan may test
 int gPlotWhyAt = -1;
 array<AIFloat3> gPlotBad;
 
@@ -129,9 +130,12 @@ bool PlotInApron(CCircuitUnit@ u, int bd, const AIFloat3& in c)
 // PlotCovered), a big reactor or converter, or a building worth half the one waiting for the ground.
 bool PlotClearable(int ud, int bd)
 {
-	if ((Catalog::gExtractsM[ud] > 0.f) || Catalog::gNeedGeo[ud] || (Catalog::gMaxRange[ud] > 0.f) || IsPlant(ud)
-			|| BigEcoDef(ud) || Catalog::gMobile[ud])
+	if ((Catalog::gExtractsM[ud] > 0.f) || Catalog::gNeedGeo[ud] || IsPlant(ud) || BigEcoDef(ud) || Catalog::gMobile[ud])
 		return false;
+	// a gun goes only when it is cheap beside the building waiting (rich10: towers blocked 24 of 108 plots); the
+	// defence target buys a replacement where it is needed
+	if (Catalog::gMaxRange[ud] > 0.f)
+		return Catalog::gCostM[ud] < 0.25f * Catalog::gCostM[bd];
 	return Catalog::gCostM[ud] < 0.5f * Catalog::gCostM[bd];
 }
 
@@ -316,6 +320,27 @@ void RefreshPlot()
 	}
 	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const bool doorPlant = !AirPlant(bd) && (Catalog::gBuildsList[bd].length() > 0);
+	// ...and every FLAT cell of the eco leash, nearest the anchor first (rich10: with the engine's flatness held, the
+	// plants' and blocks' own ground was flat nowhere in 117 of 225 searches)
+	if (Base::gAnchorSet) {
+		const float step = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 8.f;
+		int flat = 0;
+		for (int ring = 1; (flat < PLOT_GRID_MAX) && (float(ring) * step <= leash); ++ring) {
+			for (int k = -ring; (k <= ring) && (flat < PLOT_GRID_MAX); ++k) {
+				for (int side = 0; (side < 4) && (flat < PLOT_GRID_MAX); ++side) {
+					const float ox = (side < 2) ? float(k) : float((side == 2) ? -ring : ring);
+					const float oz = (side < 2) ? float((side == 0) ? -ring : ring) : float(k);
+					if ((side >= 2) && ((k == -ring) || (k == ring)))
+						continue;
+					const AIFloat3 g(Base::gAnchor.x + ox * step, 0.f, Base::gAnchor.z + oz * step);
+					if (OnMap(g) && PlotGround(bd, g)) {
+						cand.insertLast(g);
+						++flat;
+					}
+				}
+			}
+		}
+	}
 	for (uint ci = 0; ci < cand.length(); ++ci) {
 		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), cand[ci]);
 		if (!OnMap(c) || !PlotGround(bd, c))
