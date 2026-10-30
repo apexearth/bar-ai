@@ -81,6 +81,17 @@ void NoteNoRoom(int d)
 	gNoRoomLogAts.insertLast(-1);
 }
 
+// A big reactor or converter found no site within PLOT_MEMORY: the eco ground is short (factories stay in the front
+// half, his 10-30, so a plant waiting is not).
+bool EcoRoomShort()
+{
+	for (uint k = 0; k < gNoRoomDefs.length(); ++k) {
+		if (BigEcoDef(gNoRoomDefs[k]) && (ai.frame - gNoRoomAts[k] <= PLOT_MEMORY))
+			return true;
+	}
+	return false;
+}
+
 int NoRoomAt(int d)
 {
 	const int k = gNoRoomDefs.find(d);

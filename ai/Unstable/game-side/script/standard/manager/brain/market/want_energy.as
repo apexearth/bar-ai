@@ -1768,6 +1768,17 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			cAccel = IncomeAccelM(chew * Catalog::gConvRatio[d]) * cvReal;
 			cGain += cAccel;
 		}
+		// ITS GROUND IS WORTH THE DENSEST CONVERTER'S OUTPUT WHILE AN ECO BUILDING WAITS FOR ROOM (his 10-30, rich at
+		// 500+ m/s: basic converters still going up beside advanced ones; rich22: 682 of 699 basic orders came while that
+		// seat already counted its basics obsolete, at v=10-23 against a one-off rent of 25-42). Holding the ground is a
+		// flow, so it comes off the gain: per cell, what the best converter we can build makes there beyond this one.
+		if (EcoRoomShort()) {
+			RefreshBestCells();
+			const float cellsR = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+			const float mineE = Catalog::gConvCapacity[d] / cellsR;
+			if (gBestMcell > mineE)
+				cGain -= cellsR * (gBestMcell - mineE) * BestConvRatio();
+		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
 		c.accelM = cAccel;
