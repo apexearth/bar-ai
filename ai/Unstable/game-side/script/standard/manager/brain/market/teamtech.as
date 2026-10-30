@@ -17,6 +17,7 @@ const string TV_TT_RATE  = "ttrate";
 const string TV_TT_SHORT = "ttshort";
 const string TV_TT_PAID  = "ttpaid";
 const string TV_TT_INC   = "ttinc";
+const string TV_TT_OWN   = "ttown";   // every seat's own advanced lab: 2 standing, 1 coming, 0 none
 int gTtPayOn = -1;
 float gTtPaid = 0.f;
 float gTtShort = 0.f;
@@ -130,8 +131,26 @@ void TtElect()
 			claim = id;
 	}
 	if ((gTtSeat >= 0) && TtAlive(gTtSeat)) {
+		if (ai.ReadTeamValue(gTtSeat, TV_TT_OWN, 0.f) >= 0.5f)
+			return;
+		// THE FIRST ADVANCED LAB COMMITTED IS THE TEAM'S (10-29 pay test: in 3 of 12 setups the elected seat never
+		// ordered one while two others built their own): a seat with one standing or coming takes the role from a
+		// seat with none, standing before coming, then the lowest id.
+		int lead = -1;
+		float leadSt = 0.f;
+		for (uint i = 0; i < gTtRoster.length(); ++i) {
+			const float s = ai.ReadTeamValue(gTtRoster[i], TV_TT_OWN, 0.f);
+			if (s > leadSt + 0.5f) {
+				lead = gTtRoster[i];
+				leadSt = s;
+			}
+		}
+		if (lead >= 0) {
+			gTtSeat = lead;
+			return;
+		}
 		// The eco seat already makes only constructors; it takes the role while no lab is committed.
-		if ((eco >= 0) && (eco != gTtSeat) && (ai.ReadTeamValue(gTtSeat, TV_TT_LAB, 0.f) < 0.5f))
+		if ((eco >= 0) && (eco != gTtSeat))
 			gTtSeat = eco;
 		return;
 	}
@@ -207,9 +226,25 @@ float TtLabSec(int lab, float prog)
 	return (b > f) ? b : f;
 }
 
-float TtConSec(int con, int lab)
+float TeamTechInflow()
 {
-	const float b = Catalog::BuildSecondsAt(con, Catalog::gBuildPower[lab]);
+	return TeamTechIsSeat() ? gTtInflow : 0.f;
+}
+
+// The lab's real lathe: its own arm plus the nano ring reaching it (Brain::LineBuildPower), once it stands.
+float TtLabBP(int lab)
+{
+	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
+		CCircuitUnit@ f = Factory::gFacUnits[i];
+		if ((f !is null) && (f.circuitDef !is null) && (int(f.circuitDef.id) == lab))
+			return Brain::LineBuildPower(f);
+	}
+	return Catalog::gBuildPower[lab];
+}
+
+float TtConSec(int con, int lab, float bp = -1.f)
+{
+	const float b = Catalog::BuildSecondsAt(con, (bp > 0.f) ? bp : Catalog::gBuildPower[lab]);
 	const float inc = Eco::MInc() + gTtExtraInc;
 	const float f = Catalog::gCostM[con] / ((inc > 0.1f) ? inc : 0.1f);
 	return (b > f) ? b : f;
@@ -281,6 +316,7 @@ void TeamTechTick()
 	if (!me && (coverBefore > 0.f) && (gTtOwnAdv > advBefore))
 		gTtAnyway += gTtOwnAdv - advBefore;
 	ai.PublishTeamValue(TV_TT_INC, Eco::MInc());
+	ai.PublishTeamValue(TV_TT_OWN, float(st));
 	gTtExtraInc = 0.f;
 	gTtShort = 0.f;
 	if (gTtPayOn < 0)
@@ -312,7 +348,7 @@ void TeamTechTick()
 					owed += TtUncovered(gTtRoster[i]);
 			if (owed > 0.5f) {
 				const int con = TtConOf(lab);
-				const float bs = Catalog::BuildSecondsAt(con, Catalog::gBuildPower[lab]);
+				const float bs = Catalog::BuildSecondsAt(con, TtLabBP(lab));
 				drain = Catalog::gCostM[con] / ((bs > 1.f) ? bs : 1.f);
 			}
 		}
@@ -351,7 +387,7 @@ void TeamTechTick()
 		float ready = float(ai.frame);
 		if ((st > 0) && (lab > 0)) {
 			const int con = TtConOf(lab);
-			const float cs = TtConSec(con, lab);
+			const float cs = TtConSec(con, lab, (st == 2) ? TtLabBP(lab) : -1.f);
 			rate = (cs > 0.f) ? (1.f / cs) : 0.f;
 			if (st == 1)
 				ready += float(SECOND) * (TtLabSec(lab, prog) + cs);

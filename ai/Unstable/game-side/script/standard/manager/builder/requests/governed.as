@@ -252,7 +252,10 @@ uint InFlightCap()
 	// against 380-500 made).
 	const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
 	const float bankFlow = Eco::MCur() / ((look > 1.f) ? look : 30.f);
-	const float want = (Eco::MInc() + bankFlow) / drain;
+	// ...and the metal the team sends the tech seat for its lab and constructors (teamtech.as): a funded seat
+	// with its own income's crew left the team's money waiting on two hands (his 10-29: "you need to dedicate
+	// the build power to the proper things")
+	const float want = (Eco::MInc() + bankFlow + Market::TeamTechInflow()) / drain;
 	if (want <= float(MIN_INFLIGHT))
 		return MIN_INFLIGHT;
 	return uint(want);
