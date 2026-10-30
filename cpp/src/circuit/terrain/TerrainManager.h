@@ -71,6 +71,9 @@ public:
 	void Init();
 	void AddBlocker(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing, bool isOffset = false);
 	void DelBlocker(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing, bool isOffset = false);
+	// apex: which of `near` refuse cdef at pos/facing, by the cell tests FindBuildSiteByMask makes
+	std::vector<CCircuitUnit*> BlockersOf(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing,
+			const std::vector<CCircuitUnit*>& nearby, int frame);
 	bool IsObstruct(const springai::AIFloat3& pos) const;
 //	springai::AIFloat3 CheckObstruct(CCircuitUnit* unit) const;
 	void AddBusPath(CCircuitUnit* unit, const springai::AIFloat3& toPos, CCircuitDef* mobileDef);
@@ -156,6 +159,9 @@ private:
 	std::unordered_map<CCircuitDef::Id, IBlockMask*> blockInfos;  // owner
 	void MarkBlockerByMask(const SStructure& building, bool block, IBlockMask* mask);
 	void MarkBlocker(const SStructure& building, bool block);
+	// apex: the cells a building's mask covers at pos/facing (1 = yard, 2 = body), its notIgnore and type mask
+	void MaskCells(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing,
+			std::vector<std::pair<int2, char>>& out, int& notIgnore, int& typeMask);
 	void MarkZoneAlly(const springai::AIFloat3& pos, bool block);
 	void MarkZoneOwn(const springai::AIFloat3& pos, bool block);
 

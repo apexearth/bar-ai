@@ -1634,6 +1634,29 @@ static int CCircuitAI_TurretsReclaim(CCircuitAI* circuit, CCircuitUnit* target, 
 	return sent;
 }
 
+// apex: our structures that refuse `def` at the cell CanPlaceCell would test there (TerrainManager::BlockersOf): what a
+// plot must clear for the building to fit, by the blocking map's own rules (his 10-29 mass reclaim).
+static CScriptArray* CCircuitAI_PlotBlockers(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos, float radius)
+{
+	asITypeInfo* at = UnitArrayType();
+	if ((at == nullptr) || (def == nullptr) || !utils::is_valid(pos)) {
+		return nullptr;
+	}
+	std::vector<CCircuitUnit*> found;
+	const int facing = circuit->GetBaseGridFacing(pos);
+	AIFloat3 cell;
+	if (circuit->SnapToBaseGrid(pos, cell, def, facing)) {
+		const std::vector<CCircuitUnit*> nearby = circuit->GetOwnStructsNear(cell, radius);
+		found = circuit->GetTerrainManager()->BlockersOf(def, cell, facing, nearby, circuit->GetLastFrame());
+	}
+	CScriptArray* arr = CScriptArray::Create(at, found.size());
+	asUINT i = 0;
+	for (CCircuitUnit* unit : found) {
+		arr->SetValue(i++, &unit);
+	}
+	return arr;
+}
+
 static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	const std::vector<CCircuitUnit*> found = circuit->GetOwnStructsNear(pos, radius);
@@ -2294,6 +2317,12 @@ static float CCircuitDef_GetAutoHealPerSec(CCircuitDef* cdef)
 	return cdef->GetDef()->GetAutoHeal() * (FRAMES_PER_SEC / 16.f);
 }
 
+// apex: a building that must stand in water (an underwater fusion is neither a floater nor a submarine)
+static float CCircuitDef_GetMinWaterDepth(CCircuitDef* cdef)
+{
+	return cdef->GetDef()->GetMinWaterDepth();
+}
+
 // apex: the builder-only members (buildDef, target, GetBuildType, GetBuildPos)
 // were registered on the base IUnitTask type as raw IBuilderTask field
 // offsets and THISCALLs -- so a script read on a FIGHTER, WAIT or IDLE task
@@ -2730,6 +2759,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ PlotBlockers(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_PlotBlockers), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -2846,6 +2876,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootZ() const", asMETHOD(CCircuitDef, GetFootZ), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetHealth() const", asMETHOD(CCircuitDef, GetHealth), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAutoHealPerSec() const", asFUNCTION(CCircuitDef_GetAutoHealPerSec), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMinWaterDepth() const", asFUNCTION(CCircuitDef_GetMinWaterDepth), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAoe() const", asMETHOD(CCircuitDef, GetAoe), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAlwaysHitDef() const", asMETHOD(CCircuitDef, IsAlwaysHit), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsDumbFireDef() const", asMETHOD(CCircuitDef, IsDumbFire), asCALL_THISCALL); ASSERT(r >= 0);

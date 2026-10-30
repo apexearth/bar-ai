@@ -24,6 +24,8 @@ float gPlotValue = 0.f;
 array<Id> gPlotOcc;
 int gPlotNextAt = 0;
 int gPlotN = 0, gPlotClearedN = 0, gPlotBadN = 0;
+int gPlotRound = 0;
+const int PLOT_ROUNDS = 3;
 int gPlotWhyAt = -1;
 array<AIFloat3> gPlotBad;
 
@@ -139,7 +141,7 @@ bool PlotClearable(int ud, int bd)
 bool PlotGround(int d, const AIFloat3& in c)
 {
 	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
-	const bool wet = Catalog::gFloater[d] || Catalog::gSub[d];
+	const bool wet = Catalog::gFloater[d] || Catalog::gSub[d] || (Catalog::Def(d).GetMinWaterDepth() > 0.f);
 	float lo = 1e9f, hi = -1e9f;
 	for (int ix = -1; ix <= 1; ++ix) {
 		for (int iz = -1; iz <= 1; ++iz) {
@@ -205,9 +207,9 @@ string PlotStanding()
 {
 	const float hx = float(Catalog::gFootX[gPlotDef]) * 8.f, hz = float(Catalog::gFootZ[gPlotDef]) * 8.f;
 	string s;
-	array<CCircuitUnit@>@ on = ai.GetOwnStructsNear(gPlotAt, sqrt(hx * hx + hz * hz) + 64.f);
+	array<CCircuitUnit@>@ on = ai.PlotBlockers(Catalog::Def(gPlotDef), gPlotAt, sqrt(hx * hx + hz * hz) + 480.f);
 	for (uint i = 0; (on !is null) && (i < on.length()) && (s.length() < 120); ++i) {
-		if ((on[i] !is null) && (on[i].circuitDef !is null) && PlotOverlaps(on[i], gPlotAt, hx, hz))
+		if ((on[i] !is null) && (on[i].circuitDef !is null))
 			s += " " + on[i].circuitDef.GetName();
 	}
 	return s;
@@ -326,7 +328,8 @@ void RefreshPlot()
 			++nBad;
 			continue;
 		}
-		array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(c, r);
+		// exactly what refuses the building here, by the C++ blocking map's rules (yards, ignores, the doorway apron)
+		array<CCircuitUnit@>@ near = ai.PlotBlockers(Catalog::Def(bd), c, r);
 		if (near is null)
 			continue;
 		array<CCircuitUnit@> plants;
@@ -335,7 +338,7 @@ void RefreshPlot()
 		bool ok = true;
 		for (uint k = 0; ok && (k < near.length()); ++k) {
 			CCircuitUnit@ u = near[k];
-			if ((u is null) || (u.circuitDef is null) || !(PlotOverlaps(u, c, hx, hz) || PlotInApron(u, bd, c)))
+			if ((u is null) || (u.circuitDef is null))
 				continue;
 			const int ud = int(u.circuitDef.id);
 			if (IsPlant(ud) && (PlantTier(ud) < tier) && HasUnit(Factory::gFacUnits, u))
@@ -374,6 +377,7 @@ void RefreshPlot()
 	gPlotDef = bd;
 	gPlotAt = bestAt;
 	gPlotOcc = bestOcc;
+	gPlotRound = 0;
 	gPlotGain = gPlantAskGain[uint(ai0)];
 	gPlotValue = gPlantAskValue[uint(ai0)];
 	++gPlotN;
@@ -412,6 +416,30 @@ bool PlotSite(int d, AIFloat3& out site)
 		gPlotOcc.resize(0);
 		site = cell;
 		return true;
+	}
+	// WHAT STANDS THERE NOW IS THE NEXT ROUND (plotsmoke: a turret whose frame was rising when the plot was drawn --
+	// frames are not our structures yet -- finished on the cleared ground): the blocking map's own blockers, if every
+	// one may be cleared, become the plot's occupants again, up to PLOT_ROUNDS times.
+	if (gPlotRound < PLOT_ROUNDS) {
+		const float fx = float(Catalog::gFootX[d]) * 8.f, fz = float(Catalog::gFootZ[d]) * 8.f;
+		array<CCircuitUnit@>@ now = ai.PlotBlockers(Catalog::Def(d), gPlotAt, sqrt(fx * fx + fz * fz) + 480.f);
+		bool clearable = (now !is null) && (now.length() > 0);
+		for (uint i = 0; clearable && (i < now.length()); ++i) {
+			const int ud = (now[i].circuitDef !is null) ? int(now[i].circuitDef.id) : -1;
+			clearable = (ud >= 0) && (IsNanoTurret(ud) || PlotClearable(ud, d));
+		}
+		if (clearable) {
+			++gPlotRound;
+			gPlotOcc.resize(0);
+			string names;
+			for (uint i = 0; i < now.length(); ++i) {
+				gPlotOcc.insertLast(now[i].id);
+				names += " " + now[i].circuitDef.GetName();
+			}
+			AiLog("apex: plot-reclear t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(gPlotAt.x) + ","
+				+ int(gPlotAt.z) + " round=" + gPlotRound + " clear=" + names);
+			return false;
+		}
 	}
 	++gPlotBadN;
 	gPlotBad.insertLast(gPlotAt);

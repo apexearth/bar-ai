@@ -1376,6 +1376,102 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block, 
 #undef DECLARE_MARKER
 }
 
+void CTerrainManager::MaskCells(CCircuitDef* cdef, const AIFloat3& pos, int facing,
+		std::vector<std::pair<int2, char>>& out, int& notIgnore, int& typeMask)
+{
+	out.clear();
+	UnitDef* unitDef = cdef->GetDef();
+	auto search = blockInfos.find(cdef->GetId());
+	if (search == blockInfos.end()) {
+		// MarkBlocker's default marker: the footprint as structure, blocking every type
+		const int xsize = (((facing & 1) == 0) ? unitDef->GetXSize() : unitDef->GetZSize()) / 2;
+		const int zsize = (((facing & 1) == 1) ? unitDef->GetXSize() : unitDef->GetZSize()) / 2;
+		const int x1 = int(pos.x + 0.5f) / (SQUARE_SIZE * 2) - (xsize / 2);
+		const int z1 = int(pos.z + 0.5f) / (SQUARE_SIZE * 2) - (zsize / 2);
+		for (int x = x1; x < x1 + xsize; ++x) {
+			for (int z = z1; z < z1 + zsize; ++z) {
+				out.push_back({int2(x, z), 2});
+			}
+		}
+		notIgnore = static_cast<int>(SBlockingMap::StructMask::ALL);
+		typeMask = static_cast<int>(SBlockingMap::GetStructMask(SBlockingMap::StructType::UNKNOWN));
+		return;
+	}
+	IBlockMask* mask = search->second;
+	const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
+	const int xmsize = turned ? mask->GetZSize() : mask->GetXSize();
+	const int zmsize = turned ? mask->GetXSize() : mask->GetZSize();
+	const int xssize = (turned ? unitDef->GetZSize() : unitDef->GetXSize()) / 2;
+	const int zssize = (turned ? unitDef->GetXSize() : unitDef->GetZSize()) / 2;
+	int2 corner;
+	corner.x = int(pos.x + 0.5f) / (SQUARE_SIZE * 2) - (xssize / 2);
+	corner.y = int(pos.z + 0.5f) / (SQUARE_SIZE * 2) - (zssize / 2);
+	const int2 m1 = corner - mask->GetStructOffset(facing);
+	for (int zm = 0; zm < zmsize; ++zm) {
+		for (int xm = 0; xm < xmsize; ++xm) {
+			IBlockMask::BlockType t;
+			switch (facing) {
+				case UNIT_FACING_EAST: t = mask->GetTypeEast(xm, zm); break;
+				case UNIT_FACING_NORTH: t = mask->GetTypeNorth(xm, zm); break;
+				case UNIT_FACING_WEST: t = mask->GetTypeWest(xm, zm); break;
+				default: t = mask->GetTypeSouth(xm, zm); break;
+			}
+			if (t != IBlockMask::BlockType::OPEN) {
+				out.push_back({int2(m1.x + xm, m1.y + zm), (t == IBlockMask::BlockType::STRUCT) ? char(2) : char(1)});
+			}
+		}
+	}
+	notIgnore = ~mask->GetIgnoreMask();
+	typeMask = static_cast<int>(SBlockingMap::GetStructMask(mask->GetStructType()));
+}
+
+// apex: a building of ours refuses cdef where FindBuildSiteByMask's tests would fail on its cells alone: cdef's yard on
+// its body when it does not admit cdef's type, cdef's body on its yard when cdef does not ignore its type, or the two
+// bodies on one cell (his 10-29 rich games: plots emptied by the turrets that still could not take the gantry).
+std::vector<CCircuitUnit*> CTerrainManager::BlockersOf(CCircuitDef* cdef, const AIFloat3& pos, int facing,
+		const std::vector<CCircuitUnit*>& nearby, int frame)
+{
+	std::vector<CCircuitUnit*> out;
+	if ((cdef == nullptr) || !utils::is_valid(pos)) {
+		return out;
+	}
+	std::vector<std::pair<int2, char>> mine;
+	int dNot = 0, dType = 0;
+	MaskCells(cdef, pos, facing, mine, dNot, dType);
+	std::unordered_map<long long, char> at;
+	for (const auto& c : mine) {
+		at[(long long)c.first.y * 100000LL + c.first.x] = c.second;
+	}
+	std::vector<std::pair<int2, char>> theirs;
+	for (CCircuitUnit* u : nearby) {
+		if ((u == nullptr) || u->GetCircuitDef()->IsMobile()) {
+			continue;
+		}
+		const AIFloat3 up = u->GetPos(frame) + u->GetCircuitDef()->GetMidPosOffset(u->GetUnit()->GetBuildingFacing());
+		int sNot = 0, sType = 0;
+		MaskCells(u->GetCircuitDef(), up, u->GetUnit()->GetBuildingFacing(), theirs, sNot, sType);
+		bool hit = false;
+		for (const auto& c : theirs) {
+			auto f = at.find((long long)c.first.y * 100000LL + c.first.x);
+			if (f == at.end()) {
+				continue;
+			}
+			const char d = f->second, s = c.second;
+			if (((d == 1) && (s == 2) && (sNot & dType))     // our yard on its body, which does not admit us
+				|| ((d == 2) && (s == 1) && (sType & dNot))  // our body on its yard, which we do not ignore
+				|| ((d == 2) && (s == 2)))                   // body on body
+			{
+				hit = true;
+				break;
+			}
+		}
+		if (hit) {
+			out.push_back(u);
+		}
+	}
+	return out;
+}
+
 void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
 {
 	CCircuitDef* cdef = building.cdef;
