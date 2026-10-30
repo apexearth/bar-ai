@@ -479,7 +479,7 @@ void FacExitWatch()
 	++gFxPenSeen[uint(k)];
 	if ((gFxPenSeen[uint(k)] < 2) || (ai.frame < gFxPenActAt[uint(k)]))
 		return;
-	gFxPenActAt[uint(k)] = ai.frame + 30 * SECOND;
+	gFxPenActAt[uint(k)] = ai.frame + 10 * SECOND;
 	FacExitCure(f, stop, door);
 }
 
@@ -592,15 +592,20 @@ void FacExitCure(CCircuitUnit@ f, const AIFloat3& in stop, const AIFloat3& in do
 		++gFxCured;
 		ate += " " + b.circuitDef.GetName() + ((n > 0) ? ("x" + n) : "@mkt");
 	}
+	// one ask per teammate per cure (each teammate's board holds one): crowd10, a gantry waited 8 minutes at a stop held
+	// by two teammates' buildings while the cure asked one teammate in all every 30 s
 	array<float>@ al = ai.GetAllyStructsNear(stop, 160.f);
+	array<int> askedTeams;
 	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
 		const int bd = int(al[i + 2]);
-		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f))
+		const int team = int(al[i + 4]);
+		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f)
+			|| (askedTeams.find(team) >= 0))
 			continue;
-		if (Military::AskAllyReclaim(int(al[i + 3]), int(al[i + 4]), flow)) {
+		if (Military::AskAllyReclaim(int(al[i + 3]), team, flow)) {
+			askedTeams.insertLast(team);
 			++gFxAsked;
-			ate += " " + Catalog::Def(bd).GetName() + "@t" + int(al[i + 4]);
-			break;   // one ask per team board slot at a time
+			ate += " " + Catalog::Def(bd).GetName() + "@t" + team;
 		}
 	}
 	AiLog("apex: fac-exit-cure t=" + ai.teamId + " " + f.circuitDef.GetName() + "#" + f.id + " flow="
