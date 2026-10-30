@@ -24,6 +24,7 @@ NOFIT = re.compile(r"nofit\(([^)]*)\)")
 ORDER = re.compile(r"apex: exec t=(\d+) \S+ #\d+ \w+:(\w+) ")
 PLOT = re.compile(r"apex: (plot|plot-clear|plot-built|plot-none|plot-drop) t=(\d+) (\w+)")
 IMPORTANT = re.compile(r"(gant|alab|aap|avp|asy|amsub|afus|fus|mmkr|adveconv|shltx)")
+ECO_IMPORTANT = re.compile(r"(afus|fus|mmkr|adveconv)")
 DWARF_MIN, DWARF_MINUTES = 10, 8
 ROOM_SHORT_MINUTES = 4   # minutes of 10+ obsolete converters while an important building had no site
 NOSITE_MIN = 10
@@ -40,7 +41,8 @@ def check_obsolete_kept(text, rep):
     # they cost room -- minutes in which an important building's site search found no site at all in this seat
     nosite = defaultdict(set)
     for m in LATHE_F.finditer(text):
-        if IMPORTANT.search(m.group(3)) and int(m.group(4)) < 0 and int(m.group(5)) < 0:
+        # eco ground only: factories stay in the front half (his 10-30), so converter fields cannot be their room
+        if ECO_IMPORTANT.search(m.group(3)) and int(m.group(4)) < 0 and int(m.group(5)) < 0:
             nosite[int(m.group(2))].add(int(int(m.group(1)) / 1800))
     for team in sorted(by):
         rows = sorted(by[team].items())

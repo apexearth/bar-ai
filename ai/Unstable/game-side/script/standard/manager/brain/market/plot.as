@@ -151,6 +151,18 @@ bool PlotGround(int d, const AIFloat3& in c)
 	return ai.GroundTakes(Catalog::Def(d), c);
 }
 
+// Ground no reclaim can free (rich17: cleared plots refused by a street's terra blocker, b=0x2000, and a metal spot's
+// yard, b=0x2): a base lane through the footprint, or a metal spot inside it.
+bool PlotUnfreeable(int d, const AIFloat3& in c)
+{
+	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
+	for (int ix = -1; ix <= 1; ++ix)
+		for (int iz = -1; iz <= 1; ++iz)
+			if (ai.InAnyBaseLane(AIFloat3(c.x + float(ix) * hx, 0.f, c.z + float(iz) * hz)))
+				return true;
+	return NearSpotR(c, ((hx > hz) ? hx : hz) + 48.f);
+}
+
 bool PlotGroundSampled(int d, const AIFloat3& in c)
 {
 	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
@@ -355,7 +367,7 @@ void RefreshPlot()
 	for (uint ci = 0; ci < cand.length(); ++ci) {
 		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), cand[ci]);
 		++nCand;
-		if (!OnMap(c) || !PlotGround(bd, c)) {
+		if (!OnMap(c) || !PlotGround(bd, c) || PlotUnfreeable(bd, c)) {
 			++nGround;
 			continue;
 		}
