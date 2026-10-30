@@ -343,7 +343,8 @@ void RefreshPlot()
 					if ((side >= 2) && ((k == -ring) || (k == ring)))
 						continue;
 					const AIFloat3 g(Base::gAnchor.x + ox * step, 0.f, Base::gAnchor.z + oz * step);
-					if (OnMap(g) && PlotGround(bd, g)) {
+					// his 10-30: factories stay in the front half, so the budget is spent only on ground the depth rule admits
+					if (OnMap(g) && LatheDepthOk(bd, doorPlant, g) && PlotGround(bd, g)) {
 						cand.insertLast(g);
 						++flat;
 					}
