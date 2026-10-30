@@ -1772,7 +1772,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// 500+ m/s: basic converters still going up beside advanced ones; rich22: 682 of 699 basic orders came while that
 		// seat already counted its basics obsolete, at v=10-23 against a one-off rent of 25-42). Holding the ground is a
 		// flow, so it comes off the gain: per cell, what the best converter we can build makes there beyond this one.
-		if (EcoRoomShort()) {
+		// AND FROM THE MOMENT A HAND OF OURS CAN RAISE THE DENSER ONE (his 10-30 crowd replay, "still making basic
+		// converters when WE NEED ADVANCED CONVERTERS": t10 ordered 97 basics against 29 advanced at 1,100 m/s, all
+		// from T1 hands, with every fusion still finding a site). Per builder-second the basic converts 1.6x more (70 E
+		// for 2,600 against 600 for 35,000), so only the ground decides, and once the seat has the denser converter
+		// every basic is ground the advanced fleet will want and a building it will have to reclaim.
+		DenserHandsSecs(d, 0.f);
+		if (EcoRoomShort() || (gDhBest >= 0)) {
 			RefreshBestCells();
 			const float cellsR = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 			const float mineE = Catalog::gConvCapacity[d] / cellsR;
