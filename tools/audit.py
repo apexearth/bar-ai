@@ -34,6 +34,10 @@ def load(path):
         parts.append(gad.read_text(errors="replace"))
     for f in sorted(p.glob("AI/Skirmish/*/*/apex-t*.log")):
         parts.append(f.read_text(errors="replace"))
+    # one of his hosted games archived by tools/mp_archive.py: the AI logs sit beside the game's infolog
+    if not parts or (p / "infolog.game.txt").exists():
+        for f in sorted(p.glob("apex-t*.log")):
+            parts.append(f.read_text(errors="replace"))
     return "\n".join(parts)
 
 
@@ -1496,7 +1500,8 @@ CHECKS = [check_health, check_ledger, check_commitments, check_priority,
           check_military, check_missteps, check_efficiency, check_vs_enemy,
           check_structures, check_geometry, check_perf, check_overflow_spend]
 from audit_extra import EXTRA_CHECKS  # noqa: E402
-CHECKS += EXTRA_CHECKS
+from audit_room import ROOM_CHECKS  # noqa: E402
+CHECKS += EXTRA_CHECKS + ROOM_CHECKS
 
 
 def main():

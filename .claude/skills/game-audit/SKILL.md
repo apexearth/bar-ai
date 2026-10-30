@@ -79,6 +79,13 @@ with none standing).
   (converters within 350 of a plant). Both read the per-team
   `AI/Skirmish/*/*/apex-t*.log` files too, which is where a dashboard
   game's `apex:` lines live (the infolog carries none with 8 players).
+  Since 10-29 (`tools/audit_room.py`, his rich online games boxed in by
+  basic converters): `tN-obsolete-converters-kept` (10+ dwarfed converters
+  for 8+ minutes on `apex: reclobs conv=`, with the stage they stop at) and
+  `tN-gantry-room` (10+ gantry site searches with room=0 and no gantry
+  order, with what filled the spots). Both read only the AI's own lines, so
+  `python tools/audit.py runtime/mpgames/<game>` runs them on his hosted
+  games too.
 - **GEOMETRY** — `front-band` (band/R ~1.0 = the trim is inert and "front"
   wraps the base), `front-towers` (sites won vs towers standing),
   `grid-tightness` (% of eco structures touching a neighbour).
