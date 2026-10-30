@@ -1472,6 +1472,53 @@ std::vector<CCircuitUnit*> CTerrainManager::BlockersOf(CCircuitDef* cdef, const 
 	return out;
 }
 
+// apex: the placement tests FindBuildSite runs, one by one, at exactly this cell (rich8: 26 of 29 cleared plots with
+// no structure of ours blocking still refused). "map:" carries the struct and blocker masks of the refusing cells.
+std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, int facing)
+{
+	if ((cdef == nullptr) || !utils::is_valid(pos)) {
+		return "invalid";
+	}
+	if (!circuit->GetMap()->IsPossibleToBuildAt(cdef->GetDef(), pos, facing)) {
+		return "engine";
+	}
+	if (circuit->GetThreatMap()->GetBuilderThreatAt(pos) > THREAT_MIN) {
+		return "threat";
+	}
+	if (!CanBeBuiltAt(cdef, pos)) {
+		return "area";
+	}
+	if (ZoneRefuses(cdef, pos, facing)) {
+		return "zone";
+	}
+	std::vector<std::pair<int2, char>> cells;
+	int notIgnore = 0, typeMask = 0;
+	MaskCells(cdef, pos, facing, cells, notIgnore, typeMask);
+	int structs = 0, blockers = 0, n = 0, out = 0;
+	for (const auto& c : cells) {
+		const int x = c.first.x, z = c.first.y;
+		if (!blockingMap.IsInBounds(x, z)) {
+			++out;
+			continue;
+		}
+		const SBlockingMap::SBlockCell& cell = blockingMap.grid[z * blockingMap.columns + x];
+		if ((c.second == 1) && blockingMap.IsStructed(x, z, static_cast<SBlockingMap::StructMask>(typeMask))) {
+			structs |= static_cast<int>(cell.structMask);
+			++n;
+		} else if ((c.second == 2) && blockingMap.IsBlocked(x, z, static_cast<SBlockingMap::SM>(notIgnore))) {
+			structs |= static_cast<int>(cell.structMask);
+			blockers |= (cell.blockerMask & notIgnore);
+			++n;
+		}
+	}
+	if ((n == 0) && (out == 0)) {
+		return "ok";
+	}
+	char buf[96];
+	snprintf(buf, sizeof(buf), "map:s=0x%x,b=0x%x,cells=%d,out=%d", structs, blockers, n, out);
+	return std::string(buf);
+}
+
 void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
 {
 	CCircuitDef* cdef = building.cdef;

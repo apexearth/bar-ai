@@ -458,7 +458,8 @@ bool PlotSite(int d, AIFloat3& out site)
 			+ int(gPlotAt.z) + " cell=" + int(cell.x) + "," + int(cell.z) + " cellMoved=" + int(cell.distance2D(gPlotAt))
 			+ " lane=" + (ai.InAnyBaseLane(gPlotAt) ? 1 : 0) + " rise=" + int(hi - lo)
 			+ " wreck=" + int(ai.GetWreckValueAt(gPlotAt, hx + hz))
-			+ " near600=" + (OnMap(nb) ? int(nb.distance2D(gPlotAt)) : -1));
+			+ " near600=" + (OnMap(nb) ? int(nb.distance2D(gPlotAt)) : -1)
+			+ " why=" + ai.PlaceWhy(Catalog::Def(d), gPlotAt));
 	}
 	PlotDrop("cleared-no-fit");
 	return false;
