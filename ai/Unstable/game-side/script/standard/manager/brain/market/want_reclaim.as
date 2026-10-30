@@ -276,9 +276,18 @@ void NanoReclaimAssist()
 				continue;
 			const int d = int(cv.circuitDef.id);
 			const float capD = Catalog::gConvCapacity[d];
-			if ((capD <= 0.f) || (capD > idle) || !ConvObsoleteOnArrival(d) || BuiltYoung(cv))
+			if ((capD <= 0.f) || !ConvObsoleteOnArrival(d) || BuiltYoung(cv))
 				continue;
-			if (RetireGain(cv, d, ePM, hz, 0.f) <= 0.f)
+			// still converting (rich14: every converter busy on a huge surplus, so 20-40 dwarfed basics waited on idle
+			// capacity until minute 25): its output is lost until a denser one stands, priced as the market prices it
+			float lostM = 0.f;
+			if (capD > idle) {
+				const float swapS = DenserHandsSecs(d, ClaimedConvE() + capD);
+				if (swapS < 0.f)
+					continue;
+				lostM = (capD - ((idle > 0.f) ? idle : 0.f)) * Catalog::gConvRatio[d] * swapS;
+			}
+			if (RetireGain(cv, d, ePM, hz, lostM) <= 0.f)
 				continue;
 			idle -= capD;
 			obs.insertLast(cv);
