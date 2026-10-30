@@ -485,10 +485,11 @@ void FacExitWatch()
 
 // WHAT STANDS ON OUR FACTORIES' EXIT PATHS GOES (crowd8: the cure at the stop ate 155 blockers and the rings grew back;
 // 5 plants per game stayed penned ~10 minutes). A plant's path is reserved as it rises, but laid over what already
-// stands -- turret rings above all -- so those are eaten (ours) or asked for (a teammate's, one per call), and the
+// stands -- turret rings above all -- so those are eaten (ours) or asked for (one per teammate per pass: crowd9, a
+// gantry waited 4 minutes behind asks to other seats), and the
 // reservation then refuses them being rebuilt. Never a plant or an extractor, and never a building dearer than the
 // dearest ground plant it frees.
-const int XP_STEP = 10 * SECOND;
+const int XP_STEP = 5 * SECOND;   // one ask per teammate per pass bounds how fast a teammate's ring is cleared
 int gXpNextAt = 0;
 int gXpOwn = 0, gXpAsked = 0, gXpSkipped = 0;
 
@@ -514,7 +515,7 @@ void ExitPathClear()
 		}
 	}
 	string ate;
-	bool asked = false;
+	array<int> askedTeams;   // one ask per teammate per pass: its board holds one
 	int own = 0, ally = 0, skip = 0;
 	for (uint i = 0; i + 4 < b.length(); i += 5) {
 		const int bd = int(b[i + 2]);
@@ -534,8 +535,8 @@ void ExitPathClear()
 			++own;
 			if (ate.length() < 160)
 				ate += " " + u.circuitDef.GetName() + ((n > 0) ? ("x" + n) : "@mkt");
-		} else if (!asked && Military::AskAllyReclaim(int(b[i + 3]), team, flow)) {
-			asked = true;
+		} else if ((askedTeams.find(team) < 0) && Military::AskAllyReclaim(int(b[i + 3]), team, flow)) {
+			askedTeams.insertLast(team);
 			++ally;
 			if (ate.length() < 160)
 				ate += " " + Catalog::Def(bd).GetName() + "@t" + team;
