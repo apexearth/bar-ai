@@ -90,6 +90,26 @@ bool PlotClearable(int ud, int bd)
 	return Catalog::gCostM[ud] < 0.5f * Catalog::gCostM[bd];
 }
 
+// The ground under the footprint could take the building once cleared: dry for a land building, wet for a
+// floating or underwater one, and no steeper than the land plants stand on (rich3: an underwater fusion plotted on
+// a land converter field, cleared, and never fit).
+bool PlotGround(int d, const AIFloat3& in c)
+{
+	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
+	const bool wet = Catalog::gFloater[d] || Catalog::gSub[d];
+	float lo = 1e9f, hi = -1e9f;
+	for (int ix = -1; ix <= 1; ++ix) {
+		for (int iz = -1; iz <= 1; ++iz) {
+			const float e = ai.GetElevationAt(AIFloat3(c.x + float(ix) * hx, 0.f, c.z + float(iz) * hz));
+			if (wet ? (e >= 0.f) : (e < 0.f))
+				return false;
+			lo = (e < lo) ? e : lo;
+			hi = (e > hi) ? e : hi;
+		}
+	}
+	return wet || (hi - lo <= 64.f);
+}
+
 bool IsNanoTurret(int d)
 {
 	return !Catalog::gMobile[d] && (Catalog::gBuildPower[d] > 0.f) && (Catalog::gBuildsList[d].length() == 0);
@@ -178,7 +198,9 @@ void RefreshPlot()
 	string foreign;
 	const int bd = gNoRoomDef;
 	const int tier = PlantTier(bd);
-	const float hx = float(Catalog::gFootX[bd]) * 8.f, hz = float(Catalog::gFootZ[bd]) * 8.f;
+	// a plant's doorway and apron are part of what must be clear (rich3: 115 plots emptied, then no fit)
+	const float apron = IsPlant(bd) ? 48.f : 16.f;
+	const float hx = float(Catalog::gFootX[bd]) * 8.f + apron, hz = float(Catalog::gFootZ[bd]) * 8.f + apron;
 	const float r = sqrt(hx * hx + hz * hz) + 120.f;
 	float bestCost = 1e30f;
 	AIFloat3 bestAt;
@@ -213,7 +235,7 @@ void RefreshPlot()
 	const bool doorPlant = !AirPlant(bd) && (Catalog::gBuildsList[bd].length() > 0);
 	for (uint ci = 0; ci < cand.length(); ++ci) {
 		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), cand[ci]);
-		if (!OnMap(c))
+		if (!OnMap(c) || !PlotGround(bd, c))
 			continue;
 		if (Base::gAnchorSet && ((c.distance2D(Base::gAnchor) > leash) || Builder::PastFront(c)
 				|| !LatheDepthOk(bd, doorPlant, c)))
@@ -294,7 +316,14 @@ bool PlotSite(int d, AIFloat3& out site)
 	if ((gPlotDef < 0) || (d != gPlotDef) || (PlotLeft() > 0))
 		return false;
 	AIFloat3 cell;
-	if (ai.CanPlaceCell(Catalog::Def(d), gPlotAt, cell)) {
+	bool fit = ai.CanPlaceCell(Catalog::Def(d), gPlotAt, cell);
+	if (!fit) {
+		// the cleared ground, a footprint either way: the lattice cell itself can still sit on a lane or a lip
+		const AIFloat3 near = ai.FindBuildSiteNear(Catalog::Def(d), gPlotAt, float(Catalog::gFootX[d]) * 8.f);
+		fit = OnMap(near) && (near.distance2D(gPlotAt) <= float(Catalog::gFootX[d]) * 8.f)
+				&& ai.CanPlaceCell(Catalog::Def(d), near, cell);
+	}
+	if (fit) {
 		if (gPlotOcc.length() > 0) {
 			++gPlotClearedN;
 			AiLog("apex: plot-clear t=" + ai.teamId + " " + Catalog::Def(d).GetName()
