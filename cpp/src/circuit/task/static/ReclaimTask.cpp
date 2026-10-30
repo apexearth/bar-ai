@@ -118,4 +118,58 @@ void CSReclaimTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	}
 }
 
+CSReclaimAllyTask::CSReclaimAllyTask(ITaskModule* mgr, Priority priority, ICoreUnit::Id allyId,
+									 const AIFloat3& position, int timeout)
+		: CSReclaimTask(mgr, priority, position, {0.f, 0.f}, timeout, 0.f)
+		, allyId(allyId)
+{
+}
+
+CSReclaimAllyTask::~CSReclaimAllyTask()
+{
+}
+
+bool CSReclaimAllyTask::CanAssignTo(CCircuitUnit* unit) const
+{
+	return unit->GetCircuitDef()->IsAbleToReclaim();
+}
+
+bool CSReclaimAllyTask::Execute(CCircuitUnit* unit)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CAllyUnit* a = circuit->GetFriendlyUnit(allyId);
+	if ((a == nullptr) || (a->GetUnit() == nullptr)) {
+		return false;   // Update ends the task
+	}
+	TRY_UNIT(circuit, unit,
+		unit->CmdReclaimUnit(a, UNIT_CMD_OPTION, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
+	)
+	return true;
+}
+
+void CSReclaimAllyTask::Update()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetFriendlyUnit(allyId) == nullptr) {
+		manager->AbortTask(this);
+		return;
+	}
+	// a raw order is overwritten by nothing here, but re-sent now and then: an order the engine dropped (out of range
+	// after a turret was moved, a building being built) is not a reason to stand idle on a held task
+	if ((++updN % 8 == 0) && !units.empty()) {
+		for (CCircuitUnit* u : units) {
+			Execute(u);
+		}
+	}
+}
+
+void CSReclaimAllyTask::OnUnitIdle(CCircuitUnit* unit)
+{
+	if (manager->GetCircuit()->GetFriendlyUnit(allyId) == nullptr) {
+		manager->AbortTask(this);
+		return;
+	}
+	Execute(unit);
+}
+
 } // namespace circuit

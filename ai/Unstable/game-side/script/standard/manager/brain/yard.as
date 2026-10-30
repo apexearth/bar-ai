@@ -419,7 +419,8 @@ void FacExitWatch()
 	if (ai.frame >= gFxLogAt) {
 		gFxLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: facexit-stat t=" + ai.teamId + " plants=" + n + " checked=" + gFxChecked + " shut=" + gFxShut
-			+ " cured=" + gFxCured + " asked=" + gFxAsked + " offered=" + gFxOffered
+			+ " cured=" + gFxCured + " allyEat=" + gFxAllyEat + " asked=" + gFxAsked + " offered=" + gFxOffered
+			+ " pathOwn=" + gXpOwn + " pathAllyEat=" + gXpAllyEat + " pathAsked=" + gXpAsked
 			+ " nopath=" + gFxNoPath + " worstGap=" + int(gFxWorst));
 		gFxChecked = 0;
 		gFxShut = 0;
@@ -491,7 +492,7 @@ void FacExitWatch()
 // dearest ground plant it frees.
 const int XP_STEP = 5 * SECOND;   // one ask per teammate per pass bounds how fast a teammate's ring is cleared
 int gXpNextAt = 0;
-int gXpOwn = 0, gXpAsked = 0, gXpSkipped = 0;
+int gXpOwn = 0, gXpAsked = 0, gXpSkipped = 0, gXpAllyEat = 0;
 
 void ExitPathClear()
 {
@@ -535,11 +536,20 @@ void ExitPathClear()
 			++own;
 			if (ate.length() < 160)
 				ate += " " + u.circuitDef.GetName() + ((n > 0) ? ("x" + n) : "@mkt");
-		} else if ((askedTeams.find(team) < 0) && Military::AskAllyReclaim(int(b[i + 3]), team, flow)) {
-			askedTeams.insertLast(team);
-			++ally;
-			if (ate.length() < 160)
-				ate += " " + Catalog::Def(bd).GetName() + "@t" + team;
+		} else {
+			// OUR TURRETS EAT IT (his 10-30: "why ask a teammate to reclaim when we can do it ourselves?"): our turrets
+			// stand in our lanes; the teammate is asked only when none of ours reaches it
+			const int n = ai.TurretsReclaimAlly(int(b[i + 3]), int((60.f + Catalog::gCostM[bd] / 90.f) * float(SECOND)), 1);
+			if (n > 0) {
+				++gXpAllyEat;
+				if (ate.length() < 160)
+					ate += " " + Catalog::Def(bd).GetName() + "@t" + team + "x" + n;
+			} else if ((askedTeams.find(team) < 0) && Military::AskAllyReclaim(int(b[i + 3]), team, flow)) {
+				askedTeams.insertLast(team);
+				++ally;
+				if (ate.length() < 160)
+					ate += " " + Catalog::Def(bd).GetName() + "@t" + team + "?";
+			}
 		}
 	}
 	gXpOwn += own;
@@ -552,7 +562,7 @@ void ExitPathClear()
 array<int> gFxPenPlant;    // a plant found penned
 array<int> gFxPenSeen;     // ...checks it has been found so
 array<int> gFxPenActAt;    // ...earliest frame of its next cure
-int gFxCured = 0, gFxAsked = 0, gFxOffered = 0;
+int gFxCured = 0, gFxAsked = 0, gFxOffered = 0, gFxAllyEat = 0;
 
 // What the plant puts into the field each second while it can: its build power on the mean of what it makes.
 float FacFlowM(CCircuitUnit@ fac)
@@ -599,13 +609,16 @@ void FacExitCure(CCircuitUnit@ f, const AIFloat3& in stop, const AIFloat3& in do
 	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
 		const int bd = int(al[i + 2]);
 		const int team = int(al[i + 4]);
-		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f)
-			|| (askedTeams.find(team) >= 0))
+		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f))
 			continue;
-		if (Military::AskAllyReclaim(int(al[i + 3]), team, flow)) {
+		const int n = ai.TurretsReclaimAlly(int(al[i + 3]), int((60.f + Catalog::gCostM[bd] / 90.f) * float(SECOND)), 1);
+		if (n > 0) {
+			++gFxAllyEat;
+			ate += " " + Catalog::Def(bd).GetName() + "@t" + team + "x" + n;
+		} else if ((askedTeams.find(team) < 0) && Military::AskAllyReclaim(int(al[i + 3]), team, flow)) {
 			askedTeams.insertLast(team);
 			++gFxAsked;
-			ate += " " + Catalog::Def(bd).GetName() + "@t" + team;
+			ate += " " + Catalog::Def(bd).GetName() + "@t" + team + "?";
 		}
 	}
 	AiLog("apex: fac-exit-cure t=" + ai.teamId + " " + f.circuitDef.GetName() + "#" + f.id + " flow="
