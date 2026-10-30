@@ -1442,7 +1442,8 @@ int gCwBank = 0;       // ...refused: the energy bank is not near full
 int gCwNoSurplus = 0;  // ...refused: nothing left after what is ordered
 int gCwBand = 0;       // ...refused: the storage band is full, storage priced instead
 int gCwCand = 0;       // buildable converter defs seen
-int gCwObsolete = 0;   // ...dropped as edible by a better one
+int gCwObsolete = 0;
+int gCwGround = 0;   // ...whose yield net of its ground was nothing   // ...dropped as edible by a better one
 int gCwNoDef = 0;      // reached the loop and priced nothing
 int gCwProposed = 0;   // a Want came out
 float gCwSurplus = 0.f;
@@ -1462,6 +1463,7 @@ void ConvWhyLog()
 		+ " bandFull=" + gCwBand + " band=" + int(ConvBandE())
 		+ " cand=" + gCwCand
 		+ " obsolete=" + gCwObsolete
+		+ " ground=" + gCwGround
 		+ " nodef=" + gCwNoDef
 		+ " proposed=" + gCwProposed
 		+ " surplus=" + int(gCwSurplus)
@@ -1735,7 +1737,28 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// what that adds to total economic power; the converter that actually
 		// makes that metal was the only half of the pair paying flat, so the
 		// pair could never be bought in the order that realizes it.
-		float cGain = chew * Catalog::gConvRatio[d];
+		// ITS GROUND IS WORTH THE DENSEST CONVERTER'S OUTPUT WHILE AN ECO BUILDING WAITS FOR ROOM, AND FROM THE MOMENT A
+		// HAND OF OURS CAN RAISE THE DENSER ONE (his 10-30: "still making basic converters when WE NEED ADVANCED
+		// CONVERTERS"; crowd replay: 373 basic against 117 advanced orders from minute 8, all from T1 hands and the
+		// commander). Per builder-second the basic converts 1.6x more (70 E for 2,600 against 600 for 35,000), so only
+		// the ground decides. Holding it is a flow: per cell, what the best converter we can build makes there beyond this
+		// one comes off the yield BEFORE the growth premium, realize share and acceleration, which scale the yield (a seat
+		// at 0-6 m/s of its own priced a basic at 41-87 m/s, and the charge taken after them changed nothing: crowd3,
+		// 537 basic against 171 advanced).
+		float cYield = chew * Catalog::gConvRatio[d];
+		DenserHandsSecs(d, 0.f);
+		if (EcoRoomShort() || (gDhBest >= 0)) {
+			RefreshBestCells();
+			const float cellsR = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+			const float mineE = Catalog::gConvCapacity[d] / cellsR;
+			if (gBestMcell > mineE)
+				cYield -= cellsR * (gBestMcell - mineE) * BestConvRatio();
+		}
+		if (cYield <= 0.f) {
+			++gCwGround;
+			continue;
+		}
+		float cGain = cYield;
 		float cAccel = 0.f;
 		if (cvBestPerCell > 0.f) {
 			const float cellsI = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
@@ -1762,28 +1785,11 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 					* growC / ((cvPower > growC) ? cvPower : ((growC > 0.f) ? growC : 1.f));
 		}
 		{
-			const float cvReal = MRealizeShare(chew * Catalog::gConvRatio[d],
+			const float cvReal = MRealizeShare(cYield,
 					Catalog::BuildSecondsAt(d, Catalog::gBuildPower[uid]));   // its metal must be spendable too
 			cGain *= cvReal;
-			cAccel = IncomeAccelM(chew * Catalog::gConvRatio[d]) * cvReal;
+			cAccel = IncomeAccelM(cYield) * cvReal;
 			cGain += cAccel;
-		}
-		// ITS GROUND IS WORTH THE DENSEST CONVERTER'S OUTPUT WHILE AN ECO BUILDING WAITS FOR ROOM (his 10-30, rich at
-		// 500+ m/s: basic converters still going up beside advanced ones; rich22: 682 of 699 basic orders came while that
-		// seat already counted its basics obsolete, at v=10-23 against a one-off rent of 25-42). Holding the ground is a
-		// flow, so it comes off the gain: per cell, what the best converter we can build makes there beyond this one.
-		// AND FROM THE MOMENT A HAND OF OURS CAN RAISE THE DENSER ONE (his 10-30 crowd replay, "still making basic
-		// converters when WE NEED ADVANCED CONVERTERS": t10 ordered 97 basics against 29 advanced at 1,100 m/s, all
-		// from T1 hands, with every fusion still finding a site). Per builder-second the basic converts 1.6x more (70 E
-		// for 2,600 against 600 for 35,000), so only the ground decides, and once the seat has the denser converter
-		// every basic is ground the advanced fleet will want and a building it will have to reclaim.
-		DenserHandsSecs(d, 0.f);
-		if (EcoRoomShort() || (gDhBest >= 0)) {
-			RefreshBestCells();
-			const float cellsR = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
-			const float mineE = Catalog::gConvCapacity[d] / cellsR;
-			if (gBestMcell > mineE)
-				cGain -= cellsR * (gBestMcell - mineE) * BestConvRatio();
 		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn() || EcoReturnOn());
