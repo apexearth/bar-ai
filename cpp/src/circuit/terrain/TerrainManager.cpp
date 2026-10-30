@@ -20,6 +20,7 @@
 #include "setup/SetupManager.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
+#include "spring/SpringCallback.h"
 #include "util/Profiler.h"
 #include "json/json.h"
 
@@ -1480,7 +1481,23 @@ std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, in
 		return "invalid";
 	}
 	if (!circuit->GetMap()->IsPossibleToBuildAt(cdef->GetDef(), pos, facing)) {
-		return "engine";
+		// the engine's own test: features on the footprint, and the height spread under it against maxHeightDif
+		UnitDef* ud = cdef->GetDef();
+		const float hx = ud->GetXSize() * SQUARE_SIZE * 0.5f, hz = ud->GetZSize() * SQUARE_SIZE * 0.5f;
+		auto features = circuit->GetCallback()->GetFeaturesIn(pos, std::max(hx, hz));
+		const int nf = (int)features.size();
+		utils::free(features);
+		float lo = std::numeric_limits<float>::max(), hi = -lo;
+		for (float x = pos.x - hx; x <= pos.x + hx; x += SQUARE_SIZE) {
+			for (float z = pos.z - hz; z <= pos.z + hz; z += SQUARE_SIZE) {
+				const float e = circuit->GetMap()->GetElevationAt(x, z);
+				lo = std::min(lo, e);
+				hi = std::max(hi, e);
+			}
+		}
+		char buf[96];
+		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f", nf, hi - lo, ud->GetMaxHeightDif(), lo);
+		return std::string(buf);
 	}
 	if (circuit->GetThreatMap()->GetBuilderThreatAt(pos) > THREAT_MIN) {
 		return "threat";
