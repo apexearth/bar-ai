@@ -419,6 +419,7 @@ void FacExitWatch()
 	if (ai.frame >= gFxLogAt) {
 		gFxLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: facexit-stat t=" + ai.teamId + " plants=" + n + " checked=" + gFxChecked + " shut=" + gFxShut
+			+ " cured=" + gFxCured + " asked=" + gFxAsked + " offered=" + gFxOffered
 			+ " nopath=" + gFxNoPath + " worstGap=" + int(gFxWorst));
 		gFxChecked = 0;
 		gFxShut = 0;
@@ -463,6 +464,81 @@ void FacExitWatch()
 	AiLog("apex: fac-exit-shut t=" + ai.teamId + " " + f.circuitDef.GetName() + "#" + f.id
 		+ " door=" + int(door.x) + "," + int(door.z) + " goal=" + int(goal.x) + "," + int(goal.z)
 		+ " stop=" + int(stop.x) + "," + int(stop.z) + " gap=" + int(gap) + " near=" + near);
+	// PENNED: the path stops nearer the door than the goal (a path that crosses the map and stops beside the target
+	// is terrain there). Twice running, the buildings where it stops are eaten (crowd7: 6 plants penned for 3-11
+	// minutes, by teammates' AA, nano turrets, solars and converters as much as by our own).
+	if (door.distance2D(stop) >= gap)
+		return;
+	const int k = gFxPenPlant.find(int(f.id));
+	if (k < 0) {
+		gFxPenPlant.insertLast(int(f.id));
+		gFxPenSeen.insertLast(1);
+		gFxPenActAt.insertLast(0);
+		return;
+	}
+	++gFxPenSeen[uint(k)];
+	if ((gFxPenSeen[uint(k)] < 2) || (ai.frame < gFxPenActAt[uint(k)]))
+		return;
+	gFxPenActAt[uint(k)] = ai.frame + 30 * SECOND;
+	FacExitCure(f, stop, door);
+}
+
+array<int> gFxPenPlant;    // a plant found penned
+array<int> gFxPenSeen;     // ...checks it has been found so
+array<int> gFxPenActAt;    // ...earliest frame of its next cure
+int gFxCured = 0, gFxAsked = 0, gFxOffered = 0;
+
+// What the plant puts into the field each second while it can: its build power on the mean of what it makes.
+float FacFlowM(CCircuitUnit@ fac)
+{
+	const int fd = int(fac.circuitDef.id);
+	const array<int>@ b = Catalog::gBuildsList[fd];
+	float sum = 0.f;
+	int n = 0;
+	for (uint i = 0; i < b.length(); ++i) {
+		if (!Catalog::gMobile[b[i]] || (Catalog::gBuildTime[b[i]] <= 0.f))
+			continue;
+		sum += Catalog::gCostM[b[i]] / Catalog::gBuildTime[b[i]];
+		++n;
+	}
+	return (n > 0) ? (Catalog::gBuildPower[fd] * sum / float(n)) : 0.f;
+}
+
+// The buildings where a penned plant's path stops: ours eaten by the turrets in reach, or offered to the reclaim market
+// at the plant's flow; a teammate's asked of its owner (one of our bots), as the yard watch asks for a door strip. No
+// plant is eaten here: a plant against a plant is the plot's and the yard's call.
+void FacExitCure(CCircuitUnit@ f, const AIFloat3& in stop, const AIFloat3& in door)
+{
+	const float flow = FacFlowM(f);
+	const AIFloat3 dir = (stop.distance2D(door) > 1.f) ? (stop - door) / stop.distance2D(door) : AIFloat3(0.f, 0.f, 1.f);
+	string ate;
+	array<CCircuitUnit@>@ own = ai.GetOwnStructsNear(stop, 160.f);
+	for (uint i = 0; (own !is null) && (i < own.length()); ++i) {
+		CCircuitUnit@ b = own[i];
+		if ((b is null) || (b.circuitDef is null) || (b is f) || (Catalog::gBuildsList[int(b.circuitDef.id)].length() > 0)
+			|| (Catalog::gExtractsM[int(b.circuitDef.id)] > 0.f))
+			continue;
+		const int n = NanosEat(b, 1);
+		if (n == 0) {
+			Military::NotePenVerdict(f.id, b.id, b.GetPos(ai.frame), dir, flow);
+			++gFxOffered;
+		}
+		++gFxCured;
+		ate += " " + b.circuitDef.GetName() + ((n > 0) ? ("x" + n) : "@mkt");
+	}
+	array<float>@ al = ai.GetAllyStructsNear(stop, 160.f);
+	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
+		const int bd = int(al[i + 2]);
+		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f))
+			continue;
+		if (Military::AskAllyReclaim(int(al[i + 3]), int(al[i + 4]), flow)) {
+			++gFxAsked;
+			ate += " " + Catalog::Def(bd).GetName() + "@t" + int(al[i + 4]);
+			break;   // one ask per team board slot at a time
+		}
+	}
+	AiLog("apex: fac-exit-cure t=" + ai.teamId + " " + f.circuitDef.GetName() + "#" + f.id + " flow="
+		+ formatFloat(flow, "", 0, 2) + " ate=" + (ate.isEmpty() ? " none" : ate));
 }
 
 }  // namespace Brain

@@ -590,6 +590,15 @@ def claim_write_dir(d: Path) -> bool:
                 other = 0
             if other and _pid_alive(other):
                 return False
+            # An empty lock is a claim between its create and its write, not a dead one (crowd7, 10-30: two launches in
+            # one instant -- the second read it empty, unlinked it, and both engines ran in one write dir, so both
+            # matches got one merged infolog). Only an empty lock older than a few seconds is stale.
+            if not other:
+                try:
+                    if time.time() - lock.stat().st_mtime < 10.0:
+                        return False
+                except OSError:
+                    pass
             try:
                 lock.unlink()
             except OSError:

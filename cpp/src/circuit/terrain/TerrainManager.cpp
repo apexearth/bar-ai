@@ -40,6 +40,7 @@ namespace circuit {
 // apex: the team's factory exit paths, one entry per bot (CTerrainManager::PublishBus)
 struct SBusShare {
 	int version = 0;
+	int frame = 0;   // apex: when it was last published
 	std::vector<int2> cells;
 	std::unordered_set<long long> set;  // apex: cells as z*100000+x
 };
@@ -392,7 +393,7 @@ void CTerrainManager::AddBlocker(CCircuitDef* cdef, const AIFloat3& pos, int fac
 
 	SStructure building = {-1, cdef, newPos, facing};
 	MarkBlocker(building, true);
-	NoteExitHit(cdef, newPos, facing);
+	NoteExitHit(cdef, newPos, facing, isOffset);   // isOffset: a standing unit's mark (BuilderManager, FactoryManager)
 
 #ifdef DEBUG_VIS
 	UpdateVis();
@@ -873,6 +874,7 @@ void CTerrainManager::PublishBus()
 		s.set.insert((long long)p.y * 100000LL + p.x);
 	}
 	++s.version;
+	s.frame = circuit->GetLastFrame();
 }
 
 void CTerrainManager::SyncAllyBus()
@@ -914,7 +916,7 @@ void CTerrainManager::SyncAllyBus()
 
 // apex: A BUILDING ON A FACTORY'S EXIT PATH, OURS OR A TEAMMATE'S (his 10-30: "do proper diagnostic logging so you can
 // find these issues without guessing"). Its body cells against every bot's published bus cells; logged once per site.
-void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int facing)
+void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int facing, bool standing)
 {
 	if ((cdef == nullptr) || cdef->IsMobile() || !utils::is_valid(pos)) {
 		return;
@@ -924,7 +926,8 @@ void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int fa
 		return;
 	}
 	static std::set<std::tuple<int, int, int, int>> seen;
-	const auto key = std::make_tuple(circuit->GetTeamId(), cdef->GetId(), int(pos.x), int(pos.z));
+	const auto key = std::make_tuple(circuit->GetTeamId() * 2 + (standing ? 1 : 0), cdef->GetId(), int(pos.x) / 16,
+			int(pos.z) / 16);
 	if (seen.count(key) > 0) {
 		return;
 	}
@@ -941,8 +944,11 @@ void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int fa
 		if (n > 0) {
 			seen.insert(key);
 			const bool ignoresTerra = (notIgnore & STRUCT_BIT(TERRA)) == 0;
-			circuit->LOG("apex: exitblock t=%i %s at=%.0f,%.0f path-of=t%i cells=%i ignoresTerra=%i synced=%i",
-					circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, kv.first, n, ignoresTerra ? 1 : 0,
+			// when=site: the site search chose it with that path in the map (or the def ignores paths); when=standing:
+			// the building was marked as it stood, and pathAge says whether the path is newer than the building
+			circuit->LOG("apex: exitblock t=%i %s at=%.0f,%.0f path-of=t%i cells=%i when=%s pathAge=%i ignoresTerra=%i synced=%i",
+					circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, kv.first, n, standing ? "standing" : "site",
+					circuit->GetLastFrame() - kv.second.frame, ignoresTerra ? 1 : 0,
 					(kv.first == circuit->GetTeamId()) ? 1
 						: ((busApplied.count(kv.first) > 0) && (busApplied[kv.first].first == kv.second.version) ? 1 : 0));
 		}

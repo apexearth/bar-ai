@@ -191,7 +191,7 @@ private:
 	void BusCells(const CPathInfo* pathInfo, int howWide, std::vector<int2>& out);
 	void PublishBus();
 	void SyncAllyBus();
-	void NoteExitHit(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
+	void NoteExitHit(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing, bool standing);
 	void NotePathOnStructs(CCircuitUnit* fac, const std::vector<int2>& cells);
 public:
 	// apex: by the engine's own pathing, how far short of `goal` a unit leaving fac's door stops; -1 unknown

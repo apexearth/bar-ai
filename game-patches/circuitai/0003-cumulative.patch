@@ -28771,7 +28771,7 @@ index 8e35f245..a7b63ab9 100644
  
  std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/TerrainManager.cpp b/src/circuit/terrain/TerrainManager.cpp
-index 78713628..60c03f67 100644
+index 78713628..bd0caaa2 100644
 --- a/src/circuit/terrain/TerrainManager.cpp
 +++ b/src/circuit/terrain/TerrainManager.cpp
 @@ -6,6 +6,9 @@
@@ -28792,13 +28792,14 @@ index 78713628..60c03f67 100644
  #include "util/Profiler.h"
  #include "json/json.h"
  
-@@ -33,6 +37,19 @@
+@@ -33,6 +37,20 @@
  
  namespace circuit {
  
 +// apex: the team's factory exit paths, one entry per bot (CTerrainManager::PublishBus)
 +struct SBusShare {
 +	int version = 0;
++	int frame = 0;   // apex: when it was last published
 +	std::vector<int2> cells;
 +	std::unordered_set<long long> set;  // apex: cells as z*100000+x
 +};
@@ -28812,7 +28813,7 @@ index 78713628..60c03f67 100644
  using namespace springai;
  using namespace terrain;
  
-@@ -69,6 +86,7 @@ CTerrainManager::CTerrainManager(CCircuitAI* circuit, CTerrainData* terrainData)
+@@ -69,6 +87,7 @@ CTerrainManager::CTerrainManager(CCircuitAI* circuit, CTerrainData* terrainData)
  
  CTerrainManager::~CTerrainManager()
  {
@@ -28820,15 +28821,15 @@ index 78713628..60c03f67 100644
  	for (auto& kv : blockInfos) {
  		delete kv.second;
  	}
-@@ -374,6 +392,7 @@ void CTerrainManager::AddBlocker(CCircuitDef* cdef, const AIFloat3& pos, int fac
+@@ -374,6 +393,7 @@ void CTerrainManager::AddBlocker(CCircuitDef* cdef, const AIFloat3& pos, int fac
  
  	SStructure building = {-1, cdef, newPos, facing};
  	MarkBlocker(building, true);
-+	NoteExitHit(cdef, newPos, facing);
++	NoteExitHit(cdef, newPos, facing, isOffset);   // isOffset: a standing unit's mark (BuilderManager, FactoryManager)
  
  #ifdef DEBUG_VIS
  	UpdateVis();
-@@ -541,7 +560,7 @@ void CTerrainManager::AddBusPath(CCircuitUnit* unit, const AIFloat3& toPos, CCir
+@@ -541,7 +561,7 @@ void CTerrainManager::AddBusPath(CCircuitUnit* unit, const AIFloat3& toPos, CCir
  	fpq.startPos = startPos;
  	fpq.endPos = endPos;
  	fpq.targets = std::move(targets);
@@ -28837,7 +28838,7 @@ index 78713628..60c03f67 100644
  }
  
  void CTerrainManager::DelBusPath(CCircuitUnit* unit)
-@@ -579,6 +598,7 @@ void CTerrainManager::DelBusPath(CCircuitUnit* unit)
+@@ -579,6 +599,7 @@ void CTerrainManager::DelBusPath(CCircuitUnit* unit)
  	}
  	busPath.erase(it);
  	busQueries.erase(unit);
@@ -28845,7 +28846,7 @@ index 78713628..60c03f67 100644
  }
  
  AIFloat3 CTerrainManager::GetBusPos(CCircuitDef* facDef, const AIFloat3& pos, int& outFacing)
-@@ -711,7 +731,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
+@@ -711,7 +732,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
  
  		probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
  		probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
@@ -28854,7 +28855,7 @@ index 78713628..60c03f67 100644
  			probePos.y = map->GetElevationAt(probePos.x, probePos.z);
  			if (predicate(probePos)) {
  				return probePos;
-@@ -808,14 +828,222 @@ void CTerrainManager::ApplyAuthority()
+@@ -808,14 +829,227 @@ void CTerrainManager::ApplyAuthority()
  	}
  }
  
@@ -28903,6 +28904,7 @@ index 78713628..60c03f67 100644
 +		s.set.insert((long long)p.y * 100000LL + p.x);
 +	}
 +	++s.version;
++	s.frame = circuit->GetLastFrame();
 +}
 +
 +void CTerrainManager::SyncAllyBus()
@@ -28944,7 +28946,7 @@ index 78713628..60c03f67 100644
 +
 +// apex: A BUILDING ON A FACTORY'S EXIT PATH, OURS OR A TEAMMATE'S (his 10-30: "do proper diagnostic logging so you can
 +// find these issues without guessing"). Its body cells against every bot's published bus cells; logged once per site.
-+void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int facing)
++void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int facing, bool standing)
 +{
 +	if ((cdef == nullptr) || cdef->IsMobile() || !utils::is_valid(pos)) {
 +		return;
@@ -28954,7 +28956,8 @@ index 78713628..60c03f67 100644
 +		return;
 +	}
 +	static std::set<std::tuple<int, int, int, int>> seen;
-+	const auto key = std::make_tuple(circuit->GetTeamId(), cdef->GetId(), int(pos.x), int(pos.z));
++	const auto key = std::make_tuple(circuit->GetTeamId() * 2 + (standing ? 1 : 0), cdef->GetId(), int(pos.x) / 16,
++			int(pos.z) / 16);
 +	if (seen.count(key) > 0) {
 +		return;
 +	}
@@ -28971,8 +28974,11 @@ index 78713628..60c03f67 100644
 +		if (n > 0) {
 +			seen.insert(key);
 +			const bool ignoresTerra = (notIgnore & STRUCT_BIT(TERRA)) == 0;
-+			circuit->LOG("apex: exitblock t=%i %s at=%.0f,%.0f path-of=t%i cells=%i ignoresTerra=%i synced=%i",
-+					circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, kv.first, n, ignoresTerra ? 1 : 0,
++			// when=site: the site search chose it with that path in the map (or the def ignores paths); when=standing:
++			// the building was marked as it stood, and pathAge says whether the path is newer than the building
++			circuit->LOG("apex: exitblock t=%i %s at=%.0f,%.0f path-of=t%i cells=%i when=%s pathAge=%i ignoresTerra=%i synced=%i",
++					circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, kv.first, n, standing ? "standing" : "site",
++					circuit->GetLastFrame() - kv.second.frame, ignoresTerra ? 1 : 0,
 +					(kv.first == circuit->GetTeamId()) ? 1
 +						: ((busApplied.count(kv.first) > 0) && (busApplied[kv.first].first == kv.second.version) ? 1 : 0));
 +		}
@@ -29077,7 +29083,7 @@ index 78713628..60c03f67 100644
  	const CAllyTeam::AllyUnits& friendlies = circuit->GetFriendlyUnits();
  	const int teamId = circuit->GetTeamId();
  	const int frame = circuit->GetLastFrame();
-@@ -1019,7 +1247,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
+@@ -1019,7 +1253,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
  
  			probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
  			probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
@@ -29086,7 +29092,7 @@ index 78713628..60c03f67 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);
  				if (predicate(probePos)) {
  					return probePos;
-@@ -1117,7 +1345,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
+@@ -1117,7 +1351,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
  			continue;																					\
  		}																								\
  																										\
@@ -29095,7 +29101,7 @@ index 78713628..60c03f67 100644
  			probePos.y = map->GetElevationAt(probePos.x, probePos.z);									\
  			if (predicate(probePos)) {																	\
  				return probePos;																		\
-@@ -1255,7 +1483,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloa
+@@ -1255,7 +1489,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloa
  				continue;																						\
  			}																									\
  																												\
@@ -29104,7 +29110,7 @@ index 78713628..60c03f67 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
  				if (predicate(probePos)) {																		\
  					return probePos;																			\
-@@ -1369,6 +1597,242 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
+@@ -1369,6 +1603,242 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
  #undef DECLARE_MARKER
  }
  
@@ -29347,7 +29353,7 @@ index 78713628..60c03f67 100644
  void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
  {
  	CCircuitDef* cdef = building.cdef;
-@@ -1513,6 +1977,7 @@ void CTerrainManager::MarkBusPath()
+@@ -1513,6 +1983,7 @@ void CTerrainManager::MarkBusPath()
  			it->second.pPath = q->GetPathInfo();
  			it->second.howWide = q->GetHowWide();
  			busQueries.erase(query->GetUnit());
@@ -29355,7 +29361,7 @@ index 78713628..60c03f67 100644
  		});
  
  		/*
-@@ -1640,6 +2105,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
+@@ -1640,6 +2111,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
  	return std::make_pair(area, area != nullptr);
  }
  
@@ -29376,7 +29382,7 @@ index 78713628..60c03f67 100644
  bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  {
  	const int iS = GetSectorIndex(destination);
-@@ -1649,6 +2128,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+@@ -1649,6 +2134,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
  		return true;
  	}
@@ -29386,7 +29392,7 @@ index 78713628..60c03f67 100644
  	if (area == GetSectorList(area)[iS].area) {
  		return true;
  	}
-@@ -1683,8 +2165,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
+@@ -1683,8 +2171,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
  	AIFloat3 pos = position;
  //	CorrectPosition(pos);
  	const int iS = GetSectorIndex(pos);
@@ -29400,7 +29406,7 @@ index 78713628..60c03f67 100644
  }
  
  AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
-@@ -1949,6 +2434,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
+@@ -1949,6 +2440,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
  	return true;
  }
  
@@ -29439,7 +29445,7 @@ index 78713628..60c03f67 100644
  bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)
  {
  	if (circuit->GetThreatMap()->GetBuilderThreatAt(position) > THREAT_MIN) {
-@@ -1957,8 +2474,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
+@@ -1957,8 +2480,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
  	return CanBeBuiltAt(cdef, position);
  }
  
@@ -29519,7 +29525,7 @@ index 78713628..60c03f67 100644
  	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
  		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
  	}
-@@ -1966,15 +2554,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+@@ -1966,15 +2560,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29543,7 +29549,7 @@ index 78713628..60c03f67 100644
  	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
  		return false;
  	}
-@@ -1994,11 +2589,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
+@@ -1994,11 +2595,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29562,7 +29568,7 @@ index 78713628..60c03f67 100644
  
  bool CTerrainManager::CanMobileReachAtSafe(SArea* area, const AIFloat3& destination, const float range, const float threat)
 diff --git a/src/circuit/terrain/TerrainManager.h b/src/circuit/terrain/TerrainManager.h
-index 67097de0..c33fc14d 100644
+index 67097de0..c06d2747 100644
 --- a/src/circuit/terrain/TerrainManager.h
 +++ b/src/circuit/terrain/TerrainManager.h
 @@ -42,6 +42,17 @@ public:
@@ -29638,7 +29644,7 @@ index 67097de0..c33fc14d 100644
 +	void BusCells(const CPathInfo* pathInfo, int howWide, std::vector<int2>& out);
 +	void PublishBus();
 +	void SyncAllyBus();
-+	void NoteExitHit(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
++	void NoteExitHit(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing, bool standing);
 +	void NotePathOnStructs(CCircuitUnit* fac, const std::vector<int2>& cells);
 +public:
 +	// apex: by the engine's own pathing, how far short of `goal` a unit leaving fac's door stops; -1 unknown

@@ -102,8 +102,10 @@ def check_room(text, rep):
         rep.add("STRUCTURES", ok, "t%d-room-for-%s" % (team, d), detail)
 
 
-EXITBLOCK = re.compile(r"apex: exitblock t=(\d+) (\w+) at=(-?\d+),(-?\d+) path-of=t(\d+) cells=(\d+) ignoresTerra=(\d) synced=(\d)")
-EXITSHUT = re.compile(r"\[f=(\d+)\][^\n]*apex: fac-exit-shut t=(\d+) (\w+)#(\d+) door=\S+ goal=\S+ stop=(\S+) gap=(\d+) near=([^\n]*)")
+EXITBLOCK = re.compile(r"apex: exitblock t=(\d+) (\w+) at=(-?\d+),(-?\d+) path-of=t(\d+) cells=(\d+)"
+                       r"(?: when=(\w+) pathAge=(-?\d+))? ignoresTerra=(\d) synced=(\d)")
+EXITSHUT = re.compile(r"\[f=(\d+)\][^\n]*apex: fac-exit-shut t=(\d+) (\w+)#(\d+) door=(-?\d+),(-?\d+) goal=\S+ "
+                      r"stop=(-?\d+),(-?\d+) gap=(\d+) near=([^\n]*)")
 EXITSTAT = re.compile(r"apex: facexit-stat t=(\d+) plants=\d+ checked=(\d+) shut=(\d+)")
 EXIT_SHUT_CHECKS = 3   # a plant found shut this many times is penned, not a unit passing through its door
 
@@ -118,8 +120,12 @@ def check_exits(text, rep):
         return
     checked = sum(int(c) for _, c, _ in stats)
     blocks = defaultdict(Counter)
-    for t, d, _x, _z, owner, _cells, ign, syn in EXITBLOCK.findall(text):
-        why = "ignores-exit-paths" if ign == "1" else ("path-not-synced" if syn == "0" else "placed-through-the-rule")
+    for t, d, _x, _z, owner, _cells, when, _age, ign, syn in EXITBLOCK.findall(text):
+        # when=standing: marked as the building stood, the path newer than its site choice (or a sync gap);
+        # when=site: the site search took ground the path already held
+        why = ("ignores-exit-paths" if ign == "1" else "path-not-synced" if syn == "0"
+               else "path-came-after" if when == "standing" else "site-search-took-it" if when == "site"
+               else "placed-through-the-rule")
         blocks[int(t)][(d, "own" if owner == t else "t" + owner, why)] += 1
     for team in sorted(blocks):
         n = sum(blocks[team].values())
@@ -127,8 +133,14 @@ def check_exits(text, rep):
             n, ", ".join("%s on %s path (%s) x%d" % (d, o, w, c) for (d, o, w), c in blocks[team].most_common(6)))
         rep.add("STRUCTURES", False, "t%d-builds-on-exit-paths" % team, detail)
     shut = defaultdict(list)
-    for f, t, d, fid, stop, gap, near in EXITSHUT.findall(text):
-        shut[(int(t), d, fid)].append((int(f) // 1800, int(gap), stop, near.strip()))
+    for f, t, d, fid, dx, dz, sx, sz, gap, near in EXITSHUT.findall(text):
+        # PENNED: the path stops nearer the door than the goal -- the units cannot get away from home. A path that
+        # crosses the map and stops a few hundred short beside the target is terrain there, not a pen (crowd7: four
+        # gantries at 284-392 with nothing standing at the stop).
+        escape = ((int(sx) - int(dx)) ** 2 + (int(sz) - int(dz)) ** 2) ** 0.5
+        if escape >= int(gap):
+            continue
+        shut[(int(t), d, fid)].append((int(f) // 1800, int(gap), "%s,%s" % (sx, sz), near.strip()))
     for (team, d, fid), rows in sorted(shut.items()):
         if len(rows) < EXIT_SHUT_CHECKS:
             continue
