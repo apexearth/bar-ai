@@ -1501,6 +1501,27 @@ bool CTerrainManager::GroundTakes(CCircuitDef* cdef, const AIFloat3& pos)
 	return wet || (hi - lo <= ud->GetMaxHeightDif());
 }
 
+// apex: cdef's body at pos lands on ground the map itself reserves -- a factory's exit path (TERRA), a metal or geo
+// spot -- which no reclaim frees (rich17-19: 13 cleared plots refused by b=0x2000 and b=0x2).
+bool CTerrainManager::Reserved(CCircuitDef* cdef, const AIFloat3& pos, int facing)
+{
+	if ((cdef == nullptr) || !utils::is_valid(pos)) {
+		return true;
+	}
+	std::vector<std::pair<int2, char>> cells;
+	int notIgnore = 0, typeMask = 0;
+	MaskCells(cdef, pos, facing, cells, notIgnore, typeMask);
+	const SBlockingMap::SM fixed = notIgnore & (STRUCT_BIT(TERRA) | STRUCT_BIT(MEX) | STRUCT_BIT(GEO));
+	for (const auto& c : cells) {
+		if ((c.second == 2) && blockingMap.IsInBounds(c.first.x, c.first.y)
+			&& blockingMap.IsBlocked(c.first.x, c.first.y, fixed))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 // apex: the placement tests FindBuildSite runs, one by one, at exactly this cell (rich8: 26 of 29 cleared plots with
 // no structure of ours blocking still refused). "map:" carries the struct and blocker masks of the refusing cells.
 std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, int facing)

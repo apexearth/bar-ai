@@ -149,8 +149,9 @@ bool PlotGround(int d, const AIFloat3& in c)
 	return ai.GroundTakes(Catalog::Def(d), c);
 }
 
-// Ground no reclaim can free (rich17: cleared plots refused by a street's terra blocker, b=0x2000, and a metal spot's
-// yard, b=0x2): a base lane through the footprint, or a metal spot inside it.
+// Ground no reclaim can free: a base lane through the footprint, or what the blocking map itself reserves -- a factory's
+// exit path, a metal or geo spot (C++ PlotReserved; rich19: 10 of 14 map refusals after clearing were b=0x2000/0x2 that
+// a lane-and-spot guess missed).
 bool PlotUnfreeable(int d, const AIFloat3& in c)
 {
 	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
@@ -158,7 +159,7 @@ bool PlotUnfreeable(int d, const AIFloat3& in c)
 		for (int iz = -1; iz <= 1; ++iz)
 			if (ai.InAnyBaseLane(AIFloat3(c.x + float(ix) * hx, 0.f, c.z + float(iz) * hz)))
 				return true;
-	return NearSpotR(c, ((hx > hz) ? hx : hz) + 48.f);
+	return ai.PlotReserved(Catalog::Def(d), c);
 }
 
 bool HasUnit(const array<CCircuitUnit@>& in a, CCircuitUnit@ u)
@@ -516,11 +517,16 @@ bool PlotSite(int d, AIFloat3& out site)
 		return true;
 	}
 	// UNITS ON THE CLEARED GROUND MOVE ON (rich13: 14 of 24 engine refusals had 1-9 of them standing on it, the
-	// reclaimers among them): the plot holds, up to PLOT_UNIT_WAITS scans, rather than dropping ground that is clear.
+	// reclaimers among them): they are moved off, and the plot holds up to PLOT_UNIT_WAITS scans rather than dropping
+	// ground that is clear (rich19: 13 of 34 drops still had 1-9 standing there after the wait alone).
 	{
 		const string why = ai.PlaceWhy(Catalog::Def(d), p.at);
 		if ((why.findFirst("engine:") == 0) && (why.findFirst("units=0") < 0) && (p.unitWaits < PLOT_UNIT_WAITS)) {
 			++p.unitWaits;
+			const int moved = ai.PlotShoo(Catalog::Def(d), p.at);
+			if (p.unitWaits == 1)
+				AiLog("apex: plot-shoo t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(p.at.x) + ","
+					+ int(p.at.z) + " moved=" + moved + " " + why);
 			return false;
 		}
 	}

@@ -1669,6 +1669,60 @@ static bool CCircuitAI_GroundTakes(CCircuitAI* circuit, CCircuitDef* def, const 
 	return circuit->SnapToBaseGrid(pos, cell, def, facing) && circuit->GetTerrainManager()->GroundTakes(def, cell);
 }
 
+// apex: ground no reclaim frees under `def` at the cell CanPlaceCell would test (TerrainManager::Reserved)
+static bool CCircuitAI_PlotReserved(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
+{
+	if ((def == nullptr) || !utils::is_valid(pos)) {
+		return true;
+	}
+	const int facing = circuit->GetBaseGridFacing(pos);
+	AIFloat3 cell;
+	return !circuit->SnapToBaseGrid(pos, cell, def, facing) || circuit->GetTerrainManager()->Reserved(def, cell, facing);
+}
+
+// apex: our own ground units standing on `def`'s footprint at the cell CanPlaceCell would test step off it (rich13-19:
+// cleared plots refused by the engine with 1-9 units on the ground, the reclaimers among them). Returns how many moved.
+static int CCircuitAI_PlotShoo(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
+{
+	if ((def == nullptr) || !utils::is_valid(pos)) {
+		return 0;
+	}
+	const int facing = circuit->GetBaseGridFacing(pos);
+	AIFloat3 cell;
+	if (!circuit->SnapToBaseGrid(pos, cell, def, facing)) {
+		return 0;
+	}
+	UnitDef* ud = def->GetDef();
+	const float hx = ud->GetXSize() * SQUARE_SIZE * 0.5f, hz = ud->GetZSize() * SQUARE_SIZE * 0.5f;
+	const float r = std::max(hx, hz);
+	const int frame = circuit->GetLastFrame();
+	auto units = circuit->GetCallback()->GetFriendlyUnitsIn(cell, r + 32.f);
+	int n = 0;
+	for (springai::Unit* u : units) {
+		CCircuitUnit* cu = (u != nullptr) ? circuit->GetTeamUnit(u->GetUnitId()) : nullptr;
+		if ((cu == nullptr) || cu->IsDead() || !cu->GetCircuitDef()->IsMobile() || cu->GetCircuitDef()->IsAbleToFly()) {
+			continue;
+		}
+		const AIFloat3 p = cu->GetPos(frame);
+		if ((std::fabs(p.x - cell.x) > hx + 24.f) || (std::fabs(p.z - cell.z) > hz + 24.f)) {
+			continue;
+		}
+		AIFloat3 d = p - cell;
+		d.y = 0.f;
+		const float len = d.Length2D();
+		d = (len > 1.f) ? (d / len) : AIFloat3(1.f, 0.f, 0.f);
+		AIFloat3 to = cell + d * (std::sqrt(hx * hx + hz * hz) + 64.f);
+		CTerrainManager::CorrectPosition(to);
+		try {
+			cu->CmdMoveTo(to, 0, frame + FRAMES_PER_SEC * 10, CCircuitUnit::OrdSrc::SCRIPT);
+			++n;
+		} catch (const std::exception&) {
+		}
+	}
+	utils::free(units);
+	return n;
+}
+
 static const std::string CCircuitAI_PlaceWhy(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
 {
 	if ((def == nullptr) || !utils::is_valid(pos)) {
@@ -2793,6 +2847,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ PlotBlockers(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_PlotBlockers), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "const string PlaceWhy(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlaceWhy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundTakes(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundTakes), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool PlotReserved(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotReserved), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int PlotShoo(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotShoo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
