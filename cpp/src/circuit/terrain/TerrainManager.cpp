@@ -1473,6 +1473,34 @@ std::vector<CCircuitUnit*> CTerrainManager::BlockersOf(CCircuitDef* cdef, const 
 	return out;
 }
 
+// apex: the ground alone could take cdef at pos: every square dry enough (or wet enough) for it and within
+// maxHeightDif of the lowest (rich12: 15 cleared plots with a shore under them, 4 too steep, against a 5x5 sample)
+bool CTerrainManager::GroundTakes(CCircuitDef* cdef, const AIFloat3& pos)
+{
+	if ((cdef == nullptr) || !utils::is_valid(pos)) {
+		return false;
+	}
+	UnitDef* ud = cdef->GetDef();
+	const float hx = ud->GetXSize() * SQUARE_SIZE * 0.5f, hz = ud->GetZSize() * SQUARE_SIZE * 0.5f;
+	const bool wet = cdef->IsFloater() || (ud->GetMinWaterDepth() > 0.f);
+	const float maxDepth = ud->GetMaxWaterDepth();
+	float lo = std::numeric_limits<float>::max(), hi = -lo;
+	for (float x = pos.x - hx; x <= pos.x + hx; x += SQUARE_SIZE) {
+		for (float z = pos.z - hz; z <= pos.z + hz; z += SQUARE_SIZE) {
+			if ((x < 0.f) || (z < 0.f) || (x >= GetTerrainWidth()) || (z >= GetTerrainHeight())) {
+				return false;
+			}
+			const float e = circuit->GetMap()->GetElevationAt(x, z);
+			if (wet ? (e >= -ud->GetMinWaterDepth()) : (e < -maxDepth)) {
+				return false;
+			}
+			lo = std::min(lo, e);
+			hi = std::max(hi, e);
+		}
+	}
+	return wet || (hi - lo <= ud->GetMaxHeightDif());
+}
+
 // apex: the placement tests FindBuildSite runs, one by one, at exactly this cell (rich8: 26 of 29 cleared plots with
 // no structure of ours blocking still refused). "map:" carries the struct and blocker masks of the refusing cells.
 std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, int facing)
@@ -1495,8 +1523,11 @@ std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, in
 				hi = std::max(hi, e);
 			}
 		}
-		char buf[96];
-		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f", nf, hi - lo, ud->GetMaxHeightDif(), lo);
+		auto friends = circuit->GetCallback()->GetFriendlyUnitsIn(pos, std::max(hx, hz));
+		const int nu = (int)friends.size();
+		utils::free(friends);
+		char buf[128];
+		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f,units=%d", nf, hi - lo, ud->GetMaxHeightDif(), lo, nu);
 		return std::string(buf);
 	}
 	if (circuit->GetThreatMap()->GetBuilderThreatAt(pos) > THREAT_MIN) {

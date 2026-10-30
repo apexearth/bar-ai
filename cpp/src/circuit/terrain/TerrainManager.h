@@ -74,6 +74,7 @@ public:
 	// apex: which of `near` refuse cdef at pos/facing, by the cell tests FindBuildSiteByMask makes
 	// apex: which test refuses cdef at exactly pos/facing: "engine", "threat", "area", "zone", "map:<struct mask>", or "ok"
 	std::string PlaceWhy(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
+	bool GroundTakes(CCircuitDef* cdef, const springai::AIFloat3& pos);
 	std::vector<CCircuitUnit*> BlockersOf(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing,
 			const std::vector<CCircuitUnit*>& nearby, int frame);
 	bool IsObstruct(const springai::AIFloat3& pos) const;

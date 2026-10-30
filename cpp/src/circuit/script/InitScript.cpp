@@ -1658,6 +1658,17 @@ static CScriptArray* CCircuitAI_PlotBlockers(CCircuitAI* circuit, CCircuitDef* d
 }
 
 // apex: which placement test refuses `def` at the cell CanPlaceCell would test (TerrainManager::PlaceWhy)
+// apex: the ground alone could take `def` at the cell CanPlaceCell would test (TerrainManager::GroundTakes)
+static bool CCircuitAI_GroundTakes(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
+{
+	if ((def == nullptr) || !utils::is_valid(pos)) {
+		return false;
+	}
+	const int facing = circuit->GetBaseGridFacing(pos);
+	AIFloat3 cell;
+	return circuit->SnapToBaseGrid(pos, cell, def, facing) && circuit->GetTerrainManager()->GroundTakes(def, cell);
+}
+
 static const std::string CCircuitAI_PlaceWhy(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
 {
 	if ((def == nullptr) || !utils::is_valid(pos)) {
@@ -2781,6 +2792,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ PlotBlockers(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_PlotBlockers), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "const string PlaceWhy(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlaceWhy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundTakes(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundTakes), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

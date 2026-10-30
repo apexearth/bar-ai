@@ -144,6 +144,13 @@ bool PlotClearable(int ud, int bd)
 // a land converter field, cleared, and never fit).
 bool PlotGround(int d, const AIFloat3& in c)
 {
+	// every square, by the engine's water and maxHeightDif rules (C++ GroundTakes; rich12: 15 cleared plots had a shore
+	// under them and 4 were too steep against the 5x5 sample below)
+	return ai.GroundTakes(Catalog::Def(d), c);
+}
+
+bool PlotGroundSampled(int d, const AIFloat3& in c)
+{
 	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
 	const bool wet = Catalog::gFloater[d] || Catalog::gSub[d] || (Catalog::Def(d).GetMinWaterDepth() > 0.f);
 	float lo = 1e9f, hi = -1e9f;

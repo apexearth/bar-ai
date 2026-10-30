@@ -11125,7 +11125,7 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..f643413e 100644
+index 2839b72e..6e4d259b 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,16 +10,30 @@
@@ -11159,7 +11159,7 @@ index 2839b72e..f643413e 100644
  #include "angelscript/include/angelscript.h"
  #include "angelscript/add_on/scriptarray/scriptarray.h"
  #include "angelscript/add_on/scriptdictionary/scriptdictionary.h"
-@@ -34,165 +48,2064 @@
+@@ -34,165 +48,2075 @@
  #include "Game.h"
  #include "Team.h"
  #include "Lua.h"
@@ -12775,6 +12775,17 @@ index 2839b72e..f643413e 100644
 +}
 +
 +// apex: which placement test refuses `def` at the cell CanPlaceCell would test (TerrainManager::PlaceWhy)
++// apex: the ground alone could take `def` at the cell CanPlaceCell would test (TerrainManager::GroundTakes)
++static bool CCircuitAI_GroundTakes(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
++{
++	if ((def == nullptr) || !utils::is_valid(pos)) {
++		return false;
++	}
++	const int facing = circuit->GetBaseGridFacing(pos);
++	AIFloat3 cell;
++	return circuit->SnapToBaseGrid(pos, cell, def, facing) && circuit->GetTerrainManager()->GroundTakes(def, cell);
++}
++
 +static const std::string CCircuitAI_PlaceWhy(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
 +{
 +	if ((def == nullptr) || !utils::is_valid(pos)) {
@@ -13299,7 +13310,7 @@ index 2839b72e..f643413e 100644
  }
  
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
-@@ -205,6 +2118,33 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
+@@ -205,6 +2129,33 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
  	return circuit->GetLua()->CallUI(data.c_str(), data.size());
  }
  
@@ -13333,7 +13344,7 @@ index 2839b72e..f643413e 100644
  static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
  {
  	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
-@@ -240,12 +2180,245 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,12 +2191,245 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -13580,7 +13591,7 @@ index 2839b72e..f643413e 100644
  	asUINT i = 0;
  	for (CCircuitUnit* unit : task->GetAssignees()) {
  		arr->SetValue(i++, &unit);
-@@ -472,14 +2645,34 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,14 +2656,34 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13622,7 +13633,7 @@ index 2839b72e..f643413e 100644
  
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int frame", asOFFSET(CCircuitAI, lastFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int skirmishAIId", asOFFSET(CCircuitAI, skirmishAIId)); ASSERT(r >= 0);
-@@ -490,21 +2683,142 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,21 +2694,143 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13726,6 +13737,7 @@ index 2839b72e..f643413e 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ PlotBlockers(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_PlotBlockers), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "const string PlaceWhy(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlaceWhy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundTakes(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundTakes), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13767,7 +13779,7 @@ index 2839b72e..f643413e 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -549,6 +2863,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -549,6 +2875,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectProperty("CCircuitDef", "const float minRange", asOFFSET(CCircuitDef, minRange)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange(Type) const", asMETHODPR(CCircuitDef, GetMaxRange, (CCircuitDef::RangeType) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange() const", asMETHODPR(CCircuitDef, GetMaxRange, () const, float), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13777,7 +13789,7 @@ index 2839b72e..f643413e 100644
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(Type, float)", asMETHODPR(CCircuitDef, SetRange, (CCircuitDef::RangeType, float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(float)", asMETHODPR(CCircuitDef, SetRange, (float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAirThreat() const", asMETHOD(CCircuitDef, GetAirThreat), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -556,6 +2873,75 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +2885,75 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13853,7 +13865,7 @@ index 2839b72e..f643413e 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +2950,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +2962,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13880,7 +13892,7 @@ index 2839b72e..f643413e 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -572,9 +2978,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -572,9 +2990,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13954,7 +13966,7 @@ index 2839b72e..f643413e 100644
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
  	// RulesParams accessor on Unit
  	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -585,6 +3052,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +3064,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -13966,7 +13978,7 @@ index 2839b72e..f643413e 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +3175,34 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +3187,34 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -14001,7 +14013,7 @@ index 2839b72e..f643413e 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -718,12 +3218,39 @@ bool CInitScript::Init()
+@@ -718,12 +3230,39 @@ bool CInitScript::Init()
  	}
  
  	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
@@ -14041,7 +14053,7 @@ index 2839b72e..f643413e 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +3267,43 @@ void CInitScript::Update()
+@@ -740,9 +3279,43 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -14085,7 +14097,7 @@ index 2839b72e..f643413e 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -768,6 +3329,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
+@@ -768,6 +3341,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -14103,7 +14115,7 @@ index 2839b72e..f643413e 100644
  void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  {
  	if (mainInfo.unitDestroyed == nullptr) {
-@@ -779,6 +3351,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +3363,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -14137,7 +14149,7 @@ index 2839b72e..f643413e 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +3501,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +3513,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});
@@ -28692,7 +28704,7 @@ index 8e35f245..a7b63ab9 100644
  
  std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/TerrainManager.cpp b/src/circuit/terrain/TerrainManager.cpp
-index 78713628..35070367 100644
+index 78713628..cf18caea 100644
 --- a/src/circuit/terrain/TerrainManager.cpp
 +++ b/src/circuit/terrain/TerrainManager.cpp
 @@ -20,6 +20,7 @@
@@ -28753,7 +28765,7 @@ index 78713628..35070367 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
  				if (predicate(probePos)) {																		\
  					return probePos;																			\
-@@ -1369,6 +1377,165 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
+@@ -1369,6 +1377,196 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
  #undef DECLARE_MARKER
  }
  
@@ -28853,6 +28865,34 @@ index 78713628..35070367 100644
 +	return out;
 +}
 +
++// apex: the ground alone could take cdef at pos: every square dry enough (or wet enough) for it and within
++// maxHeightDif of the lowest (rich12: 15 cleared plots with a shore under them, 4 too steep, against a 5x5 sample)
++bool CTerrainManager::GroundTakes(CCircuitDef* cdef, const AIFloat3& pos)
++{
++	if ((cdef == nullptr) || !utils::is_valid(pos)) {
++		return false;
++	}
++	UnitDef* ud = cdef->GetDef();
++	const float hx = ud->GetXSize() * SQUARE_SIZE * 0.5f, hz = ud->GetZSize() * SQUARE_SIZE * 0.5f;
++	const bool wet = cdef->IsFloater() || (ud->GetMinWaterDepth() > 0.f);
++	const float maxDepth = ud->GetMaxWaterDepth();
++	float lo = std::numeric_limits<float>::max(), hi = -lo;
++	for (float x = pos.x - hx; x <= pos.x + hx; x += SQUARE_SIZE) {
++		for (float z = pos.z - hz; z <= pos.z + hz; z += SQUARE_SIZE) {
++			if ((x < 0.f) || (z < 0.f) || (x >= GetTerrainWidth()) || (z >= GetTerrainHeight())) {
++				return false;
++			}
++			const float e = circuit->GetMap()->GetElevationAt(x, z);
++			if (wet ? (e >= -ud->GetMinWaterDepth()) : (e < -maxDepth)) {
++				return false;
++			}
++			lo = std::min(lo, e);
++			hi = std::max(hi, e);
++		}
++	}
++	return wet || (hi - lo <= ud->GetMaxHeightDif());
++}
++
 +// apex: the placement tests FindBuildSite runs, one by one, at exactly this cell (rich8: 26 of 29 cleared plots with
 +// no structure of ours blocking still refused). "map:" carries the struct and blocker masks of the refusing cells.
 +std::string CTerrainManager::PlaceWhy(CCircuitDef* cdef, const AIFloat3& pos, int facing)
@@ -28875,8 +28915,11 @@ index 78713628..35070367 100644
 +				hi = std::max(hi, e);
 +			}
 +		}
-+		char buf[96];
-+		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f", nf, hi - lo, ud->GetMaxHeightDif(), lo);
++		auto friends = circuit->GetCallback()->GetFriendlyUnitsIn(pos, std::max(hx, hz));
++		const int nu = (int)friends.size();
++		utils::free(friends);
++		char buf[128];
++		snprintf(buf, sizeof(buf), "engine:feat=%d,rise=%.0f,mhd=%.0f,low=%.0f,units=%d", nf, hi - lo, ud->GetMaxHeightDif(), lo, nu);
 +		return std::string(buf);
 +	}
 +	if (circuit->GetThreatMap()->GetBuilderThreatAt(pos) > THREAT_MIN) {
@@ -28919,7 +28962,7 @@ index 78713628..35070367 100644
  void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
  {
  	CCircuitDef* cdef = building.cdef;
-@@ -1640,6 +1807,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
+@@ -1640,6 +1838,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
  	return std::make_pair(area, area != nullptr);
  }
  
@@ -28940,7 +28983,7 @@ index 78713628..35070367 100644
  bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  {
  	const int iS = GetSectorIndex(destination);
-@@ -1649,6 +1830,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+@@ -1649,6 +1861,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
  		return true;
  	}
@@ -28950,7 +28993,7 @@ index 78713628..35070367 100644
  	if (area == GetSectorList(area)[iS].area) {
  		return true;
  	}
-@@ -1683,8 +1867,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
+@@ -1683,8 +1898,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
  	AIFloat3 pos = position;
  //	CorrectPosition(pos);
  	const int iS = GetSectorIndex(pos);
@@ -28964,7 +29007,7 @@ index 78713628..35070367 100644
  }
  
  AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
-@@ -1949,6 +2136,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
+@@ -1949,6 +2167,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
  	return true;
  }
  
@@ -29003,7 +29046,7 @@ index 78713628..35070367 100644
  bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)
  {
  	if (circuit->GetThreatMap()->GetBuilderThreatAt(position) > THREAT_MIN) {
-@@ -1957,8 +2176,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
+@@ -1957,8 +2207,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
  	return CanBeBuiltAt(cdef, position);
  }
  
@@ -29083,7 +29126,7 @@ index 78713628..35070367 100644
  	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
  		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
  	}
-@@ -1966,15 +2256,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+@@ -1966,15 +2287,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29107,7 +29150,7 @@ index 78713628..35070367 100644
  	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
  		return false;
  	}
-@@ -1994,11 +2291,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
+@@ -1994,11 +2322,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29126,7 +29169,7 @@ index 78713628..35070367 100644
  
  bool CTerrainManager::CanMobileReachAtSafe(SArea* area, const AIFloat3& destination, const float range, const float threat)
 diff --git a/src/circuit/terrain/TerrainManager.h b/src/circuit/terrain/TerrainManager.h
-index 67097de0..fbfedb83 100644
+index 67097de0..4607e69a 100644
 --- a/src/circuit/terrain/TerrainManager.h
 +++ b/src/circuit/terrain/TerrainManager.h
 @@ -42,6 +42,17 @@ public:
@@ -29147,13 +29190,14 @@ index 67097de0..fbfedb83 100644
  	void InitAnalyzer();
  private:
  	CCircuitAI* circuit;
-@@ -60,12 +71,17 @@ public:
+@@ -60,12 +71,18 @@ public:
  	void Init();
  	void AddBlocker(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing, bool isOffset = false);
  	void DelBlocker(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing, bool isOffset = false);
 +	// apex: which of `near` refuse cdef at pos/facing, by the cell tests FindBuildSiteByMask makes
 +	// apex: which test refuses cdef at exactly pos/facing: "engine", "threat", "area", "zone", "map:<struct mask>", or "ok"
 +	std::string PlaceWhy(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
++	bool GroundTakes(CCircuitDef* cdef, const springai::AIFloat3& pos);
 +	std::vector<CCircuitUnit*> BlockersOf(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing,
 +			const std::vector<CCircuitUnit*>& nearby, int frame);
  	bool IsObstruct(const springai::AIFloat3& pos) const;
@@ -29166,7 +29210,7 @@ index 67097de0..fbfedb83 100644
  	// TODO: Use IsInBounds test and Bound operation only if mask or search offsets (endr) are out of bounds
  	// TODO: Based on map complexity use BFS or circle to calculate build offset
  	// TODO: Consider abstract task position (any area with builder) and task for certain unit-pos-area
-@@ -98,6 +114,7 @@ public:
+@@ -98,6 +115,7 @@ public:
  
  private:
  	int markFrame;
@@ -29174,7 +29218,7 @@ index 67097de0..fbfedb83 100644
  	struct SStructure {
  		ICoreUnit::Id unitId;
  		CCircuitDef* cdef;
-@@ -144,6 +161,9 @@ private:
+@@ -144,6 +162,9 @@ private:
  	std::unordered_map<CCircuitDef::Id, IBlockMask*> blockInfos;  // owner
  	void MarkBlockerByMask(const SStructure& building, bool block, IBlockMask* mask);
  	void MarkBlocker(const SStructure& building, bool block);
@@ -29184,7 +29228,7 @@ index 67097de0..fbfedb83 100644
  	void MarkZoneAlly(const springai::AIFloat3& pos, bool block);
  	void MarkZoneOwn(const springai::AIFloat3& pos, bool block);
  
-@@ -178,6 +198,8 @@ public:
+@@ -178,6 +199,8 @@ public:
  	std::pair<terrain::SArea*, bool> GetCurrentMapArea(CCircuitDef* cdef, const int indexSector);
  	int GetSectorIndex(const springai::AIFloat3& position) const { return terrainData->GetSectorIndex(position); }
  	bool CanMoveToPos(terrain::SArea* area, const springai::AIFloat3& destination);
@@ -29193,7 +29237,7 @@ index 67097de0..fbfedb83 100644
  	springai::AIFloat3 GetBuildPosition(CCircuitDef* cdef, const springai::AIFloat3& position);
  	springai::AIFloat3 GetMovePosition(terrain::SArea* sourceArea, const springai::AIFloat3& position);
  	springai::AIFloat3 ShiftPos(CCircuitDef* cdef, const springai::AIFloat3& position, float range, bool isOrtho = false);
-@@ -192,6 +214,16 @@ private:
+@@ -192,6 +215,16 @@ private:
  	terrain::SSector* GetAlternativeSector(terrain::SArea* destinationArea, const int sourceSIndex, terrain::SImmobileType* destinationIT); // can return 0
  	const terrain::SSector& GetSector(int sIndex) const { return areaData->sector[sIndex]; }
  public:
@@ -29210,7 +29254,7 @@ index 67097de0..fbfedb83 100644
  	const std::vector<terrain::SMobileType>& GetMobileTypes() const {
  		return areaData->mobileType;
  	}
-@@ -221,6 +253,13 @@ public:
+@@ -221,6 +254,13 @@ public:
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position, const float range);  // NOTE: returns false if the area was too small to be recorded
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position);
  	bool CanBeBuiltAtSafe(CCircuitDef* cdef, const springai::AIFloat3& position);
@@ -29224,7 +29268,7 @@ index 67097de0..fbfedb83 100644
  	bool CanReachAt(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
  	bool CanReachAtSafe(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range, const float threat = THREAT_MIN);
  	bool CanReachAtSafe2(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
-@@ -255,6 +294,7 @@ private:
+@@ -255,6 +295,7 @@ private:
  	float minLandPercent;
  
  	std::unordered_set<const terrain::SArea*> enemyAreas;
