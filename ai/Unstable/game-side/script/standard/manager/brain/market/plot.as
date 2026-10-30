@@ -157,12 +157,37 @@ uint PlotLeft()
 	return n;
 }
 
+// What stands on the plot's ground now (a cleared plot that still does not fit names its blocker).
+string PlotStanding()
+{
+	const float hx = float(Catalog::gFootX[gPlotDef]) * 8.f, hz = float(Catalog::gFootZ[gPlotDef]) * 8.f;
+	string s;
+	array<CCircuitUnit@>@ on = ai.GetOwnStructsNear(gPlotAt, sqrt(hx * hx + hz * hz) + 64.f);
+	for (uint i = 0; (on !is null) && (i < on.length()) && (s.length() < 120); ++i) {
+		if ((on[i] !is null) && (on[i].circuitDef !is null) && PlotOverlaps(on[i], gPlotAt, hx, hz))
+			s += " " + on[i].circuitDef.GetName();
+	}
+	return s;
+}
+
 void PlotDrop(const string why)
 {
 	AiLog("apex: plot-drop t=" + ai.teamId + " " + Catalog::Def(gPlotDef).GetName()
-		+ " at=" + int(gPlotAt.x) + "," + int(gPlotAt.z) + " left=" + PlotLeft() + " why=" + why);
+		+ " at=" + int(gPlotAt.x) + "," + int(gPlotAt.z) + " left=" + PlotLeft() + " why=" + why
+		+ " standing=" + PlotStanding());
 	gPlotDef = -1;
 	gPlotOcc.resize(0);
+	ai.ClearZones();
+}
+
+// THE CLEARED GROUND IS HELD FOR IT (rich4: 47 plots emptied by the turrets and still no fit): a zone over the
+// footprint and its apron refuses every other building the C++ placement would put there while the turrets eat.
+void PlotHold(int bd, const AIFloat3& in c)
+{
+	const float apron = IsPlant(bd) ? 48.f : 16.f;
+	const float hx = float(Catalog::gFootX[bd]) * 4.f + apron, hz = float(Catalog::gFootZ[bd]) * 4.f + apron;
+	ai.ClearZones();
+	ai.ReserveZone(c.x - hx, c.z - hz, c.x + hx, c.z + hz, Catalog::Def(bd));
 }
 
 // Once per PLOT_SCAN while a gantry has no room: the cheapest clearable plot.
@@ -178,6 +203,7 @@ void RefreshPlot()
 				AiLog("apex: plot-built t=" + ai.teamId + " " + Catalog::Def(gPlotDef).GetName()
 					+ " at=" + int(gPlotAt.x) + "," + int(gPlotAt.z));
 				gPlotDef = -1;
+				ai.ClearZones();
 				gNoRoomDef = -1;
 				return;
 			}
@@ -299,6 +325,7 @@ void RefreshPlot()
 	gPlotValue = gPlantAskValue[uint(ai0)];
 	++gPlotN;
 	Base::ReserveSite(gPlotAt);
+	PlotHold(bd, gPlotAt);
 	string names;
 	for (uint i = 0; i < gPlotOcc.length(); ++i) {
 		CCircuitUnit@ u = ai.GetTeamUnit(gPlotOcc[i]);
