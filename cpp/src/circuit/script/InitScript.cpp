@@ -1723,6 +1723,16 @@ static int CCircuitAI_PlotShoo(CCircuitAI* circuit, CCircuitDef* def, const AIFl
 	return n;
 }
 
+// apex: a factory's way out by the engine's pathing: the gap between where a unit leaving its door can get and
+// `goal` (TerrainManager::ExitGap); -1 when the factory has no bus path yet
+static float CCircuitAI_FacExitGap(CCircuitAI* circuit, CCircuitUnit* fac, const AIFloat3& goal, AIFloat3& door, AIFloat3& stop)
+{
+	if ((fac == nullptr) || fac->IsDead()) {
+		return -1.f;
+	}
+	return circuit->GetTerrainManager()->ExitGap(fac, goal, door, stop);
+}
+
 static const std::string CCircuitAI_PlaceWhy(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
 {
 	if ((def == nullptr) || !utils::is_valid(pos)) {
@@ -2849,6 +2859,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundTakes(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundTakes), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool PlotReserved(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotReserved), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int PlotShoo(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotShoo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float FacExitGap(CCircuitUnit@, const AIFloat3& in, AIFloat3& out, AIFloat3& out)", asFUNCTION(CCircuitAI_FacExitGap), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

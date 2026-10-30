@@ -102,4 +102,47 @@ def check_room(text, rep):
         rep.add("STRUCTURES", ok, "t%d-room-for-%s" % (team, d), detail)
 
 
-ROOM_CHECKS = [check_obsolete_kept, check_room]
+EXITBLOCK = re.compile(r"apex: exitblock t=(\d+) (\w+) at=(-?\d+),(-?\d+) path-of=t(\d+) cells=(\d+) ignoresTerra=(\d) synced=(\d)")
+EXITSHUT = re.compile(r"\[f=(\d+)\][^\n]*apex: fac-exit-shut t=(\d+) (\w+)#(\d+) door=\S+ goal=\S+ stop=(\S+) gap=(\d+) near=([^\n]*)")
+EXITSTAT = re.compile(r"apex: facexit-stat t=(\d+) plants=\d+ checked=(\d+) shut=(\d+)")
+EXIT_SHUT_CHECKS = 3   # a plant found shut this many times is penned, not a unit passing through its door
+
+
+def check_exits(text, rep):
+    """Factory exits (his 10-30 crowd game: a teammate's anti-air shut a T2 lab's way out).
+    exitblock: a building of ours placed with its body on a factory's exit path (C++ NoteExitHit), whose path
+      (path-of), whether the def ignores exit paths, and whether the path had reached the placer's map (synced).
+    fac-exit-shut: the engine's pathing from a plant's door stops short of its bus end (yard.as FacExitWatch)."""
+    stats = EXITSTAT.findall(text)
+    if not stats:
+        return
+    checked = sum(int(c) for _, c, _ in stats)
+    blocks = defaultdict(Counter)
+    for t, d, _x, _z, owner, _cells, ign, syn in EXITBLOCK.findall(text):
+        why = "ignores-exit-paths" if ign == "1" else ("path-not-synced" if syn == "0" else "placed-through-the-rule")
+        blocks[int(t)][(d, "own" if owner == t else "t" + owner, why)] += 1
+    for team in sorted(blocks):
+        n = sum(blocks[team].values())
+        detail = "%d buildings placed on a factory exit path: %s" % (
+            n, ", ".join("%s on %s path (%s) x%d" % (d, o, w, c) for (d, o, w), c in blocks[team].most_common(6)))
+        rep.add("STRUCTURES", False, "t%d-builds-on-exit-paths" % team, detail)
+    shut = defaultdict(list)
+    for f, t, d, fid, stop, gap, near in EXITSHUT.findall(text):
+        shut[(int(t), d, fid)].append((int(f) // 1800, int(gap), stop, near.strip()))
+    for (team, d, fid), rows in sorted(shut.items()):
+        if len(rows) < EXIT_SHUT_CHECKS:
+            continue
+        near = Counter()
+        for _, _, _, nr in rows:
+            for tok in nr.split():
+                near[tok] += 1
+        rep.add("STRUCTURES", False, "t%d-%s#%s-penned" % (team, d, fid),
+                "its exit shut in %d checks from minute %d to %d, gap up to %d; standing where the path stops: %s"
+                % (len(rows), rows[0][0], rows[-1][0], max(r[1] for r in rows),
+                   ", ".join("%s x%d" % kv for kv in near.most_common(6)) or "nothing named (terrain or units)"))
+    rep.add("STRUCTURES", True, "factory-exit-checks",
+            "%d exit checks, %d plants found shut at least once, %d penned (%d+ checks)"
+            % (checked, len(shut), sum(1 for r in shut.values() if len(r) >= EXIT_SHUT_CHECKS), EXIT_SHUT_CHECKS))
+
+
+ROOM_CHECKS = [check_obsolete_kept, check_room, check_exits]

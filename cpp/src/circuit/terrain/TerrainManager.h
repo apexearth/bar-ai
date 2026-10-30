@@ -179,6 +179,9 @@ private:
 	struct WidePathInfo {
 		std::shared_ptr<CPathInfo> pPath;
 		int howWide;
+		springai::AIFloat3 busStart = -RgtVector;  // apex: the door point and the bus end it was asked for
+		springai::AIFloat3 busEnd = -RgtVector;
+		const CCircuitDef* busDef = nullptr;
 	};
 	std::map<CCircuitUnit*, WidePathInfo> busPath;
 	std::map<CCircuitUnit*, FactoryPathQuery> busQueries;
@@ -188,6 +191,12 @@ private:
 	void BusCells(const CPathInfo* pathInfo, int howWide, std::vector<int2>& out);
 	void PublishBus();
 	void SyncAllyBus();
+	void NoteExitHit(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
+	void NotePathOnStructs(CCircuitUnit* fac, const std::vector<int2>& cells);
+public:
+	// apex: by the engine's own pathing, how far short of `goal` a unit leaving fac's door stops; -1 unknown
+	float ExitGap(CCircuitUnit* fac, const springai::AIFloat3& goal, springai::AIFloat3& outDoor, springai::AIFloat3& outStop);
+private:
 	void MarkBusPath();
 	void FillParentBusNodes(CPathInfo* pathInfo);
 

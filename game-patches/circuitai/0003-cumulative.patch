@@ -11125,7 +11125,7 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..f69e42b3 100644
+index 2839b72e..63bde22e 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,16 +10,30 @@
@@ -11159,7 +11159,7 @@ index 2839b72e..f69e42b3 100644
  #include "angelscript/include/angelscript.h"
  #include "angelscript/add_on/scriptarray/scriptarray.h"
  #include "angelscript/add_on/scriptdictionary/scriptdictionary.h"
-@@ -34,165 +48,2129 @@
+@@ -34,165 +48,2139 @@
  #include "Game.h"
  #include "Team.h"
  #include "Lua.h"
@@ -12840,6 +12840,16 @@ index 2839b72e..f69e42b3 100644
 +	return n;
 +}
 +
++// apex: a factory's way out by the engine's pathing: the gap between where a unit leaving its door can get and
++// `goal` (TerrainManager::ExitGap); -1 when the factory has no bus path yet
++static float CCircuitAI_FacExitGap(CCircuitAI* circuit, CCircuitUnit* fac, const AIFloat3& goal, AIFloat3& door, AIFloat3& stop)
++{
++	if ((fac == nullptr) || fac->IsDead()) {
++		return -1.f;
++	}
++	return circuit->GetTerrainManager()->ExitGap(fac, goal, door, stop);
++}
++
 +static const std::string CCircuitAI_PlaceWhy(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos)
 +{
 +	if ((def == nullptr) || !utils::is_valid(pos)) {
@@ -13364,7 +13374,7 @@ index 2839b72e..f69e42b3 100644
  }
  
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
-@@ -205,6 +2183,33 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
+@@ -205,6 +2193,33 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
  	return circuit->GetLua()->CallUI(data.c_str(), data.size());
  }
  
@@ -13398,7 +13408,7 @@ index 2839b72e..f69e42b3 100644
  static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
  {
  	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
-@@ -240,12 +2245,245 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,12 +2255,245 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -13645,7 +13655,7 @@ index 2839b72e..f69e42b3 100644
  	asUINT i = 0;
  	for (CCircuitUnit* unit : task->GetAssignees()) {
  		arr->SetValue(i++, &unit);
-@@ -472,14 +2710,34 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,14 +2720,34 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13687,7 +13697,7 @@ index 2839b72e..f69e42b3 100644
  
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int frame", asOFFSET(CCircuitAI, lastFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitAI", "const int skirmishAIId", asOFFSET(CCircuitAI, skirmishAIId)); ASSERT(r >= 0);
-@@ -490,21 +2748,145 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,21 +2758,146 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13794,6 +13804,7 @@ index 2839b72e..f69e42b3 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundTakes(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundTakes), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool PlotReserved(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotReserved), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "int PlotShoo(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_PlotShoo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float FacExitGap(CCircuitUnit@, const AIFloat3& in, AIFloat3& out, AIFloat3& out)", asFUNCTION(CCircuitAI_FacExitGap), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -13835,7 +13846,7 @@ index 2839b72e..f69e42b3 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -549,6 +2931,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -549,6 +2942,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectProperty("CCircuitDef", "const float minRange", asOFFSET(CCircuitDef, minRange)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange(Type) const", asMETHODPR(CCircuitDef, GetMaxRange, (CCircuitDef::RangeType) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetMaxRange() const", asMETHODPR(CCircuitDef, GetMaxRange, () const, float), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13845,7 +13856,7 @@ index 2839b72e..f69e42b3 100644
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(Type, float)", asMETHODPR(CCircuitDef, SetRange, (CCircuitDef::RangeType, float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRange(float)", asMETHODPR(CCircuitDef, SetRange, (float), void), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAirThreat() const", asMETHOD(CCircuitDef, GetAirThreat), asCALL_THISCALL); ASSERT(r >= 0);
-@@ -556,6 +2941,75 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +2952,75 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13921,7 +13932,7 @@ index 2839b72e..f69e42b3 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +3018,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +3029,26 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -13948,7 +13959,7 @@ index 2839b72e..f69e42b3 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -572,9 +3046,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -572,9 +3057,70 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void DelAttribute(Type)", asMETHOD(CCircuitUnit, DelAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
@@ -14022,7 +14033,7 @@ index 2839b72e..f69e42b3 100644
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
  	// RulesParams accessor on Unit
  	r = engine->RegisterObjectMethod("CCircuitUnit", "float GetRulesParam(const string& in, float) const", asFUNCTION(CCircuitUnit_GetRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -585,6 +3120,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +3131,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -14034,7 +14045,7 @@ index 2839b72e..f69e42b3 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +3243,34 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +3254,34 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -14069,7 +14080,7 @@ index 2839b72e..f69e42b3 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -718,12 +3286,39 @@ bool CInitScript::Init()
+@@ -718,12 +3297,39 @@ bool CInitScript::Init()
  	}
  
  	asIScriptModule* mod = script->GetEngine()->GetModule(CScriptManager::mainName.c_str());
@@ -14109,7 +14120,7 @@ index 2839b72e..f69e42b3 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +3335,43 @@ void CInitScript::Update()
+@@ -740,9 +3346,43 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -14153,7 +14164,7 @@ index 2839b72e..f69e42b3 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -768,6 +3397,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
+@@ -768,6 +3408,17 @@ void CInitScript::UnitFinished(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -14171,7 +14182,7 @@ index 2839b72e..f69e42b3 100644
  void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  {
  	if (mainInfo.unitDestroyed == nullptr) {
-@@ -779,6 +3419,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +3430,33 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -14205,7 +14216,7 @@ index 2839b72e..f69e42b3 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +3569,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +3580,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});
@@ -28760,10 +28771,20 @@ index 8e35f245..a7b63ab9 100644
  
  std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/TerrainManager.cpp b/src/circuit/terrain/TerrainManager.cpp
-index 78713628..d2745171 100644
+index 78713628..60c03f67 100644
 --- a/src/circuit/terrain/TerrainManager.cpp
 +++ b/src/circuit/terrain/TerrainManager.cpp
-@@ -20,6 +20,7 @@
+@@ -6,6 +6,9 @@
+  */
+ 
+ #include "terrain/TerrainManager.h"
++#include <unordered_set>
++#include <set>
++#include <tuple>
+ #include "terrain/BlockRectangle.h"
+ #include "terrain/BlockCircle.h"
+ #include "terrain/path/PathFinder.h"
+@@ -20,6 +23,7 @@
  #include "setup/SetupManager.h"
  #include "CircuitAI.h"
  #include "util/Utils.h"
@@ -28771,7 +28792,7 @@ index 78713628..d2745171 100644
  #include "util/Profiler.h"
  #include "json/json.h"
  
-@@ -33,6 +34,18 @@
+@@ -33,6 +37,19 @@
  
  namespace circuit {
  
@@ -28779,6 +28800,7 @@ index 78713628..d2745171 100644
 +struct SBusShare {
 +	int version = 0;
 +	std::vector<int2> cells;
++	std::unordered_set<long long> set;  // apex: cells as z*100000+x
 +};
 +static std::map<int, std::map<int, SBusShare>>& TeamBus()
 +{
@@ -28790,7 +28812,7 @@ index 78713628..d2745171 100644
  using namespace springai;
  using namespace terrain;
  
-@@ -69,6 +82,7 @@ CTerrainManager::CTerrainManager(CCircuitAI* circuit, CTerrainData* terrainData)
+@@ -69,6 +86,7 @@ CTerrainManager::CTerrainManager(CCircuitAI* circuit, CTerrainData* terrainData)
  
  CTerrainManager::~CTerrainManager()
  {
@@ -28798,7 +28820,24 @@ index 78713628..d2745171 100644
  	for (auto& kv : blockInfos) {
  		delete kv.second;
  	}
-@@ -579,6 +593,7 @@ void CTerrainManager::DelBusPath(CCircuitUnit* unit)
+@@ -374,6 +392,7 @@ void CTerrainManager::AddBlocker(CCircuitDef* cdef, const AIFloat3& pos, int fac
+ 
+ 	SStructure building = {-1, cdef, newPos, facing};
+ 	MarkBlocker(building, true);
++	NoteExitHit(cdef, newPos, facing);
+ 
+ #ifdef DEBUG_VIS
+ 	UpdateVis();
+@@ -541,7 +560,7 @@ void CTerrainManager::AddBusPath(CCircuitUnit* unit, const AIFloat3& toPos, CCir
+ 	fpq.startPos = startPos;
+ 	fpq.endPos = endPos;
+ 	fpq.targets = std::move(targets);
+-	busPath[unit] = {nullptr, 0};
++	busPath[unit] = {nullptr, 0, startPos, endPos, mobileDef};
+ }
+ 
+ void CTerrainManager::DelBusPath(CCircuitUnit* unit)
+@@ -579,6 +598,7 @@ void CTerrainManager::DelBusPath(CCircuitUnit* unit)
  	}
  	busPath.erase(it);
  	busQueries.erase(unit);
@@ -28806,7 +28845,7 @@ index 78713628..d2745171 100644
  }
  
  AIFloat3 CTerrainManager::GetBusPos(CCircuitDef* facDef, const AIFloat3& pos, int& outFacing)
-@@ -711,7 +726,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
+@@ -711,7 +731,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
  
  		probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
  		probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
@@ -28815,7 +28854,7 @@ index 78713628..d2745171 100644
  			probePos.y = map->GetElevationAt(probePos.x, probePos.z);
  			if (predicate(probePos)) {
  				return probePos;
-@@ -808,14 +823,99 @@ void CTerrainManager::ApplyAuthority()
+@@ -808,14 +828,222 @@ void CTerrainManager::ApplyAuthority()
  	}
  }
  
@@ -28853,8 +28892,15 @@ index 78713628..d2745171 100644
 +{
 +	SBusShare& s = TeamBus()[circuit->GetAllyTeamId()][circuit->GetTeamId()];
 +	s.cells.clear();
++	s.set.clear();
 +	for (const auto& kv : busPath) {
-+		BusCells(kv.second.pPath.get(), kv.second.howWide, s.cells);
++		std::vector<int2> one;
++		BusCells(kv.second.pPath.get(), kv.second.howWide, one);
++		NotePathOnStructs(kv.first, one);
++		s.cells.insert(s.cells.end(), one.begin(), one.end());
++	}
++	for (const int2& p : s.cells) {
++		s.set.insert((long long)p.y * 100000LL + p.x);
 +	}
 +	++s.version;
 +}
@@ -28896,6 +28942,122 @@ index 78713628..d2745171 100644
 +	}
 +}
 +
++// apex: A BUILDING ON A FACTORY'S EXIT PATH, OURS OR A TEAMMATE'S (his 10-30: "do proper diagnostic logging so you can
++// find these issues without guessing"). Its body cells against every bot's published bus cells; logged once per site.
++void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int facing)
++{
++	if ((cdef == nullptr) || cdef->IsMobile() || !utils::is_valid(pos)) {
++		return;
++	}
++	auto it = TeamBus().find(circuit->GetAllyTeamId());
++	if (it == TeamBus().end()) {
++		return;
++	}
++	static std::set<std::tuple<int, int, int, int>> seen;
++	const auto key = std::make_tuple(circuit->GetTeamId(), cdef->GetId(), int(pos.x), int(pos.z));
++	if (seen.count(key) > 0) {
++		return;
++	}
++	std::vector<std::pair<int2, char>> cells;
++	int notIgnore = 0, typeMask = 0;
++	MaskCells(cdef, pos, facing, cells, notIgnore, typeMask);
++	for (const auto& kv : it->second) {
++		int n = 0;
++		for (const auto& c : cells) {
++			if ((c.second == 2) && (kv.second.set.count((long long)c.first.y * 100000LL + c.first.x) > 0)) {
++				++n;
++			}
++		}
++		if (n > 0) {
++			seen.insert(key);
++			const bool ignoresTerra = (notIgnore & STRUCT_BIT(TERRA)) == 0;
++			circuit->LOG("apex: exitblock t=%i %s at=%.0f,%.0f path-of=t%i cells=%i ignoresTerra=%i synced=%i",
++					circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, kv.first, n, ignoresTerra ? 1 : 0,
++					(kv.first == circuit->GetTeamId()) ? 1
++						: ((busApplied.count(kv.first) > 0) && (busApplied[kv.first].first == kv.second.version) ? 1 : 0));
++		}
++	}
++}
++
++// apex: a freshly published exit path that runs over structures already standing (ours or allies' in our map): the
++// wide path query costs structure sectors high but does not refuse them, so the exit may be shut from the start.
++void CTerrainManager::NotePathOnStructs(CCircuitUnit* fac, const std::vector<int2>& cells)
++{
++	if ((fac == nullptr) || cells.empty()) {
++		return;
++	}
++	static std::set<std::pair<int, int>> said;   // (team, factory id) once per path version is enough
++	int n = 0;
++	for (const int2& p : cells) {
++		if (blockingMap.IsInBounds(p.x, p.y) && blockingMap.IsStruct(p.x, p.y)) {
++			++n;
++		}
++	}
++	const auto key = std::make_pair(circuit->GetTeamId(), int(fac->GetId()) * 1000 + int(cells.size() % 1000));
++	if ((n == 0) || (said.count(key) > 0)) {
++		return;
++	}
++	said.insert(key);
++	circuit->LOG("apex: exitpath-on-structs t=%i %s#%i cells=%i structCells=%i", circuit->GetTeamId(),
++			fac->GetCircuitDef()->GetDef()->GetName(), int(fac->GetId()), int(cells.size()), n);
++}
++
++float CTerrainManager::ExitGap(CCircuitUnit* fac, const AIFloat3& goal, AIFloat3& outDoor, AIFloat3& outStop)
++{
++	AIFloat3 outGoal = goal;
++	auto it = busPath.find(fac);
++	if ((it == busPath.end()) || (it->second.busDef == nullptr) || !utils::is_valid(it->second.busStart)
++		|| !utils::is_valid(goal)) {
++		return -1.f;
++	}
++	springai::MoveData* md = it->second.busDef->GetDef()->GetMoveData();
++	if (md == nullptr) {
++		return -1.f;
++	}
++	const int pathType = md->GetPathType();
++	delete md;
++	outDoor = it->second.busStart;
++	outStop = outDoor;
++	springai::Pathing* pathing = circuit->GetPathing();
++	const int pathId = pathing->InitPath(outDoor, outGoal, pathType, 64.f);
++	if (pathId == 0) {
++		return outDoor.distance2D(outGoal);
++	}
++	// The engine appends the goal itself as the last waypoint whether or not the path reaches it, so the stop is the
++	// last waypoint before a jump wider than a few path squares (crowd5: gap read exactly 0 in all 2,981 checks).
++	AIFloat3 prev = -RgtVector, beforeLast = outDoor;
++	int n = 0;
++	float maxStep = 0.f;
++	for (int i = 0; i < 400; ++i) {
++		const AIFloat3 p = pathing->GetNextWaypoint(pathId);
++		if ((p.x < 0.f) || (p.z < 0.f) || (p == prev)) {
++			break;
++		}
++		if (utils::is_valid(prev)) {
++			const float step = p.distance2D(prev);
++			if (step > maxStep) {
++				maxStep = step;
++			}
++			if (step > SQUARE_SIZE * 64.f) {
++				break;   // a jump: what follows is not walked
++			}
++		}
++		beforeLast = outStop;
++		outStop = p;
++		prev = p;
++		++n;
++	}
++	pathing->FreePath(pathId);
++	const float approx = pathing->GetApproximateLength(outDoor, outGoal, pathType, 64.f);
++	static std::map<int, int> dbg;
++	if (dbg[circuit->GetTeamId()]++ < 4) {
++		circuit->LOG("apex: facexit-dbg t=%i %s#%i n=%i door=%.0f,%.0f goal=%.0f,%.0f stop=%.0f,%.0f before=%.0f,%.0f maxStep=%.0f straight=%.0f approx=%.0f",
++				circuit->GetTeamId(), fac->GetCircuitDef()->GetDef()->GetName(), int(fac->GetId()), n, outDoor.x, outDoor.z,
++				outGoal.x, outGoal.z, outStop.x, outStop.z, beforeLast.x, beforeLast.z, maxStep, outDoor.distance2D(outGoal), approx);
++	}
++	return outStop.distance2D(outGoal);
++}
++
  void CTerrainManager::MarkAllyBuildings()
  {
 +	SyncAllyBus();
@@ -28915,7 +29077,7 @@ index 78713628..d2745171 100644
  	const CAllyTeam::AllyUnits& friendlies = circuit->GetFriendlyUnits();
  	const int teamId = circuit->GetTeamId();
  	const int frame = circuit->GetLastFrame();
-@@ -1019,7 +1119,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
+@@ -1019,7 +1247,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
  
  			probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
  			probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
@@ -28924,7 +29086,7 @@ index 78713628..d2745171 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);
  				if (predicate(probePos)) {
  					return probePos;
-@@ -1117,7 +1217,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
+@@ -1117,7 +1345,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
  			continue;																					\
  		}																								\
  																										\
@@ -28933,7 +29095,7 @@ index 78713628..d2745171 100644
  			probePos.y = map->GetElevationAt(probePos.x, probePos.z);									\
  			if (predicate(probePos)) {																	\
  				return probePos;																		\
-@@ -1255,7 +1355,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloa
+@@ -1255,7 +1483,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloa
  				continue;																						\
  			}																									\
  																												\
@@ -28942,7 +29104,7 @@ index 78713628..d2745171 100644
  				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
  				if (predicate(probePos)) {																		\
  					return probePos;																			\
-@@ -1369,6 +1469,242 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
+@@ -1369,6 +1597,242 @@ void CTerrainManager::MarkBlockerByMask(const SStructure& building, bool block,
  #undef DECLARE_MARKER
  }
  
@@ -29185,7 +29347,7 @@ index 78713628..d2745171 100644
  void CTerrainManager::MarkBlocker(const SStructure& building, bool block)
  {
  	CCircuitDef* cdef = building.cdef;
-@@ -1513,6 +1849,7 @@ void CTerrainManager::MarkBusPath()
+@@ -1513,6 +1977,7 @@ void CTerrainManager::MarkBusPath()
  			it->second.pPath = q->GetPathInfo();
  			it->second.howWide = q->GetHowWide();
  			busQueries.erase(query->GetUnit());
@@ -29193,7 +29355,7 @@ index 78713628..d2745171 100644
  		});
  
  		/*
-@@ -1640,6 +1977,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
+@@ -1640,6 +2105,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
  	return std::make_pair(area, area != nullptr);
  }
  
@@ -29214,7 +29376,7 @@ index 78713628..d2745171 100644
  bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  {
  	const int iS = GetSectorIndex(destination);
-@@ -1649,6 +2000,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+@@ -1649,6 +2128,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
  	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
  		return true;
  	}
@@ -29224,7 +29386,7 @@ index 78713628..d2745171 100644
  	if (area == GetSectorList(area)[iS].area) {
  		return true;
  	}
-@@ -1683,8 +2037,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
+@@ -1683,8 +2165,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
  	AIFloat3 pos = position;
  //	CorrectPosition(pos);
  	const int iS = GetSectorIndex(pos);
@@ -29238,7 +29400,7 @@ index 78713628..d2745171 100644
  }
  
  AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
-@@ -1949,6 +2306,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
+@@ -1949,6 +2434,38 @@ bool CTerrainManager::CanBeBuiltAt(CCircuitDef* cdef, const AIFloat3& position)
  	return true;
  }
  
@@ -29277,7 +29439,7 @@ index 78713628..d2745171 100644
  bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& position)
  {
  	if (circuit->GetThreatMap()->GetBuilderThreatAt(position) > THREAT_MIN) {
-@@ -1957,8 +2346,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
+@@ -1957,8 +2474,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
  	return CanBeBuiltAt(cdef, position);
  }
  
@@ -29357,7 +29519,7 @@ index 78713628..d2745171 100644
  	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
  		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
  	}
-@@ -1966,15 +2426,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+@@ -1966,15 +2554,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29381,7 +29543,7 @@ index 78713628..d2745171 100644
  	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
  		return false;
  	}
-@@ -1994,11 +2461,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
+@@ -1994,11 +2589,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
  	if (area == nullptr) {  // A flying unit
  		return true;
  	}
@@ -29400,7 +29562,7 @@ index 78713628..d2745171 100644
  
  bool CTerrainManager::CanMobileReachAtSafe(SArea* area, const AIFloat3& destination, const float range, const float threat)
 diff --git a/src/circuit/terrain/TerrainManager.h b/src/circuit/terrain/TerrainManager.h
-index 67097de0..64b2db87 100644
+index 67097de0..c33fc14d 100644
 --- a/src/circuit/terrain/TerrainManager.h
 +++ b/src/circuit/terrain/TerrainManager.h
 @@ -42,6 +42,17 @@ public:
@@ -29460,7 +29622,13 @@ index 67097de0..64b2db87 100644
  	void MarkZoneAlly(const springai::AIFloat3& pos, bool block);
  	void MarkZoneOwn(const springai::AIFloat3& pos, bool block);
  
-@@ -160,6 +182,12 @@ private:
+@@ -157,9 +179,24 @@ private:
+ 	struct WidePathInfo {
+ 		std::shared_ptr<CPathInfo> pPath;
+ 		int howWide;
++		springai::AIFloat3 busStart = -RgtVector;  // apex: the door point and the bus end it was asked for
++		springai::AIFloat3 busEnd = -RgtVector;
++		const CCircuitDef* busDef = nullptr;
  	};
  	std::map<CCircuitUnit*, WidePathInfo> busPath;
  	std::map<CCircuitUnit*, FactoryPathQuery> busQueries;
@@ -29470,10 +29638,16 @@ index 67097de0..64b2db87 100644
 +	void BusCells(const CPathInfo* pathInfo, int howWide, std::vector<int2>& out);
 +	void PublishBus();
 +	void SyncAllyBus();
++	void NoteExitHit(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing);
++	void NotePathOnStructs(CCircuitUnit* fac, const std::vector<int2>& cells);
++public:
++	// apex: by the engine's own pathing, how far short of `goal` a unit leaving fac's door stops; -1 unknown
++	float ExitGap(CCircuitUnit* fac, const springai::AIFloat3& goal, springai::AIFloat3& outDoor, springai::AIFloat3& outStop);
++private:
  	void MarkBusPath();
  	void FillParentBusNodes(CPathInfo* pathInfo);
  
-@@ -178,6 +206,8 @@ public:
+@@ -178,6 +215,8 @@ public:
  	std::pair<terrain::SArea*, bool> GetCurrentMapArea(CCircuitDef* cdef, const int indexSector);
  	int GetSectorIndex(const springai::AIFloat3& position) const { return terrainData->GetSectorIndex(position); }
  	bool CanMoveToPos(terrain::SArea* area, const springai::AIFloat3& destination);
@@ -29482,7 +29656,7 @@ index 67097de0..64b2db87 100644
  	springai::AIFloat3 GetBuildPosition(CCircuitDef* cdef, const springai::AIFloat3& position);
  	springai::AIFloat3 GetMovePosition(terrain::SArea* sourceArea, const springai::AIFloat3& position);
  	springai::AIFloat3 ShiftPos(CCircuitDef* cdef, const springai::AIFloat3& position, float range, bool isOrtho = false);
-@@ -192,6 +222,16 @@ private:
+@@ -192,6 +231,16 @@ private:
  	terrain::SSector* GetAlternativeSector(terrain::SArea* destinationArea, const int sourceSIndex, terrain::SImmobileType* destinationIT); // can return 0
  	const terrain::SSector& GetSector(int sIndex) const { return areaData->sector[sIndex]; }
  public:
@@ -29499,7 +29673,7 @@ index 67097de0..64b2db87 100644
  	const std::vector<terrain::SMobileType>& GetMobileTypes() const {
  		return areaData->mobileType;
  	}
-@@ -221,6 +261,13 @@ public:
+@@ -221,6 +270,13 @@ public:
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position, const float range);  // NOTE: returns false if the area was too small to be recorded
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position);
  	bool CanBeBuiltAtSafe(CCircuitDef* cdef, const springai::AIFloat3& position);
@@ -29513,7 +29687,7 @@ index 67097de0..64b2db87 100644
  	bool CanReachAt(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
  	bool CanReachAtSafe(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range, const float threat = THREAT_MIN);
  	bool CanReachAtSafe2(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
-@@ -255,6 +302,7 @@ private:
+@@ -255,6 +311,7 @@ private:
  	float minLandPercent;
  
  	std::unordered_set<const terrain::SArea*> enemyAreas;

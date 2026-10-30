@@ -6,6 +6,9 @@
  */
 
 #include "terrain/TerrainManager.h"
+#include <unordered_set>
+#include <set>
+#include <tuple>
 #include "terrain/BlockRectangle.h"
 #include "terrain/BlockCircle.h"
 #include "terrain/path/PathFinder.h"
@@ -38,6 +41,7 @@ namespace circuit {
 struct SBusShare {
 	int version = 0;
 	std::vector<int2> cells;
+	std::unordered_set<long long> set;  // apex: cells as z*100000+x
 };
 static std::map<int, std::map<int, SBusShare>>& TeamBus()
 {
@@ -388,6 +392,7 @@ void CTerrainManager::AddBlocker(CCircuitDef* cdef, const AIFloat3& pos, int fac
 
 	SStructure building = {-1, cdef, newPos, facing};
 	MarkBlocker(building, true);
+	NoteExitHit(cdef, newPos, facing);
 
 #ifdef DEBUG_VIS
 	UpdateVis();
@@ -555,7 +560,7 @@ void CTerrainManager::AddBusPath(CCircuitUnit* unit, const AIFloat3& toPos, CCir
 	fpq.startPos = startPos;
 	fpq.endPos = endPos;
 	fpq.targets = std::move(targets);
-	busPath[unit] = {nullptr, 0};
+	busPath[unit] = {nullptr, 0, startPos, endPos, mobileDef};
 }
 
 void CTerrainManager::DelBusPath(CCircuitUnit* unit)
@@ -857,8 +862,15 @@ void CTerrainManager::PublishBus()
 {
 	SBusShare& s = TeamBus()[circuit->GetAllyTeamId()][circuit->GetTeamId()];
 	s.cells.clear();
+	s.set.clear();
 	for (const auto& kv : busPath) {
-		BusCells(kv.second.pPath.get(), kv.second.howWide, s.cells);
+		std::vector<int2> one;
+		BusCells(kv.second.pPath.get(), kv.second.howWide, one);
+		NotePathOnStructs(kv.first, one);
+		s.cells.insert(s.cells.end(), one.begin(), one.end());
+	}
+	for (const int2& p : s.cells) {
+		s.set.insert((long long)p.y * 100000LL + p.x);
 	}
 	++s.version;
 }
@@ -898,6 +910,122 @@ void CTerrainManager::SyncAllyBus()
 		applied.first = kv.second.version;
 		applied.second = kv.second.cells;
 	}
+}
+
+// apex: A BUILDING ON A FACTORY'S EXIT PATH, OURS OR A TEAMMATE'S (his 10-30: "do proper diagnostic logging so you can
+// find these issues without guessing"). Its body cells against every bot's published bus cells; logged once per site.
+void CTerrainManager::NoteExitHit(CCircuitDef* cdef, const AIFloat3& pos, int facing)
+{
+	if ((cdef == nullptr) || cdef->IsMobile() || !utils::is_valid(pos)) {
+		return;
+	}
+	auto it = TeamBus().find(circuit->GetAllyTeamId());
+	if (it == TeamBus().end()) {
+		return;
+	}
+	static std::set<std::tuple<int, int, int, int>> seen;
+	const auto key = std::make_tuple(circuit->GetTeamId(), cdef->GetId(), int(pos.x), int(pos.z));
+	if (seen.count(key) > 0) {
+		return;
+	}
+	std::vector<std::pair<int2, char>> cells;
+	int notIgnore = 0, typeMask = 0;
+	MaskCells(cdef, pos, facing, cells, notIgnore, typeMask);
+	for (const auto& kv : it->second) {
+		int n = 0;
+		for (const auto& c : cells) {
+			if ((c.second == 2) && (kv.second.set.count((long long)c.first.y * 100000LL + c.first.x) > 0)) {
+				++n;
+			}
+		}
+		if (n > 0) {
+			seen.insert(key);
+			const bool ignoresTerra = (notIgnore & STRUCT_BIT(TERRA)) == 0;
+			circuit->LOG("apex: exitblock t=%i %s at=%.0f,%.0f path-of=t%i cells=%i ignoresTerra=%i synced=%i",
+					circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, kv.first, n, ignoresTerra ? 1 : 0,
+					(kv.first == circuit->GetTeamId()) ? 1
+						: ((busApplied.count(kv.first) > 0) && (busApplied[kv.first].first == kv.second.version) ? 1 : 0));
+		}
+	}
+}
+
+// apex: a freshly published exit path that runs over structures already standing (ours or allies' in our map): the
+// wide path query costs structure sectors high but does not refuse them, so the exit may be shut from the start.
+void CTerrainManager::NotePathOnStructs(CCircuitUnit* fac, const std::vector<int2>& cells)
+{
+	if ((fac == nullptr) || cells.empty()) {
+		return;
+	}
+	static std::set<std::pair<int, int>> said;   // (team, factory id) once per path version is enough
+	int n = 0;
+	for (const int2& p : cells) {
+		if (blockingMap.IsInBounds(p.x, p.y) && blockingMap.IsStruct(p.x, p.y)) {
+			++n;
+		}
+	}
+	const auto key = std::make_pair(circuit->GetTeamId(), int(fac->GetId()) * 1000 + int(cells.size() % 1000));
+	if ((n == 0) || (said.count(key) > 0)) {
+		return;
+	}
+	said.insert(key);
+	circuit->LOG("apex: exitpath-on-structs t=%i %s#%i cells=%i structCells=%i", circuit->GetTeamId(),
+			fac->GetCircuitDef()->GetDef()->GetName(), int(fac->GetId()), int(cells.size()), n);
+}
+
+float CTerrainManager::ExitGap(CCircuitUnit* fac, const AIFloat3& goal, AIFloat3& outDoor, AIFloat3& outStop)
+{
+	AIFloat3 outGoal = goal;
+	auto it = busPath.find(fac);
+	if ((it == busPath.end()) || (it->second.busDef == nullptr) || !utils::is_valid(it->second.busStart)
+		|| !utils::is_valid(goal)) {
+		return -1.f;
+	}
+	springai::MoveData* md = it->second.busDef->GetDef()->GetMoveData();
+	if (md == nullptr) {
+		return -1.f;
+	}
+	const int pathType = md->GetPathType();
+	delete md;
+	outDoor = it->second.busStart;
+	outStop = outDoor;
+	springai::Pathing* pathing = circuit->GetPathing();
+	const int pathId = pathing->InitPath(outDoor, outGoal, pathType, 64.f);
+	if (pathId == 0) {
+		return outDoor.distance2D(outGoal);
+	}
+	// The engine appends the goal itself as the last waypoint whether or not the path reaches it, so the stop is the
+	// last waypoint before a jump wider than a few path squares (crowd5: gap read exactly 0 in all 2,981 checks).
+	AIFloat3 prev = -RgtVector, beforeLast = outDoor;
+	int n = 0;
+	float maxStep = 0.f;
+	for (int i = 0; i < 400; ++i) {
+		const AIFloat3 p = pathing->GetNextWaypoint(pathId);
+		if ((p.x < 0.f) || (p.z < 0.f) || (p == prev)) {
+			break;
+		}
+		if (utils::is_valid(prev)) {
+			const float step = p.distance2D(prev);
+			if (step > maxStep) {
+				maxStep = step;
+			}
+			if (step > SQUARE_SIZE * 64.f) {
+				break;   // a jump: what follows is not walked
+			}
+		}
+		beforeLast = outStop;
+		outStop = p;
+		prev = p;
+		++n;
+	}
+	pathing->FreePath(pathId);
+	const float approx = pathing->GetApproximateLength(outDoor, outGoal, pathType, 64.f);
+	static std::map<int, int> dbg;
+	if (dbg[circuit->GetTeamId()]++ < 4) {
+		circuit->LOG("apex: facexit-dbg t=%i %s#%i n=%i door=%.0f,%.0f goal=%.0f,%.0f stop=%.0f,%.0f before=%.0f,%.0f maxStep=%.0f straight=%.0f approx=%.0f",
+				circuit->GetTeamId(), fac->GetCircuitDef()->GetDef()->GetName(), int(fac->GetId()), n, outDoor.x, outDoor.z,
+				outGoal.x, outGoal.z, outStop.x, outStop.z, beforeLast.x, beforeLast.z, maxStep, outDoor.distance2D(outGoal), approx);
+	}
+	return outStop.distance2D(outGoal);
 }
 
 void CTerrainManager::MarkAllyBuildings()

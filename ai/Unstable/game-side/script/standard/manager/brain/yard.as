@@ -394,4 +394,75 @@ void YardCensusLog(uint np)
 	gYdWorstS = 0;
 }
 
+//------------------------------------------------------------------------------
+// CAN A UNIT LEAVING THIS PLANT'S DOOR GET OUT? (his 10-30 crowd game: a teammate's anti-air shut a T2 lab's way out,
+// and the yard watch above, which sees only units standing ON a plant, counted no jam all game.) The engine's own
+// pathing, which sees every building, from the door toward the enemy (C++ FacExitGap): `gap` is how far short
+// the path stops. One plant per FX_STEP, so each is checked about every FX_STEP x plants; a shut one is logged with
+// what stands where the path stops, ours and allies'.
+//------------------------------------------------------------------------------
+
+const int FX_STEP = 3 * SECOND;
+const float FX_SHUT = 256.f;   // a stop this far from the bus end is reported (the end is a sector point, ~one sector)
+int gFxNextAt = 0;
+uint gFxCursor = 0;
+int gFxChecked = 0, gFxShut = 0, gFxNoPath = 0;
+float gFxWorst = 0.f;
+int gFxLogAt = 0;
+
+void FacExitWatch()
+{
+	if (ai.frame < gFxNextAt)
+		return;
+	gFxNextAt = ai.frame + FX_STEP;
+	const uint n = Factory::gFacUnits.length();
+	if (ai.frame >= gFxLogAt) {
+		gFxLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: facexit-stat t=" + ai.teamId + " plants=" + n + " checked=" + gFxChecked + " shut=" + gFxShut
+			+ " nopath=" + gFxNoPath + " worstGap=" + int(gFxWorst));
+		gFxChecked = 0;
+		gFxShut = 0;
+		gFxNoPath = 0;
+		gFxWorst = 0.f;
+	}
+	if (n == 0)
+		return;
+	gFxCursor = (gFxCursor + 1) % n;
+	CCircuitUnit@ f = Factory::gFacUnits[gFxCursor];
+	if ((f is null) || (f.circuitDef is null) || Market::AirPlant(int(f.circuitDef.id)))
+		return;
+	// toward the enemy, not to the bus end: that end is one sector out of the door (crowd6: 383 from it), so a pocket
+	// wider than a sector read open
+	AIFloat3 goal = Front::FoeAnchor();
+	if (!OnMap(goal))
+		goal = AIFloat3(0.5f * float(AiTerrainWidth()), 0.f, 0.5f * float(AiTerrainHeight()));
+	AIFloat3 door, stop;
+	const float gap = ai.FacExitGap(f, goal, door, stop);
+	if (gap < 0.f) {
+		++gFxNoPath;
+		return;
+	}
+	++gFxChecked;
+	if (gap > gFxWorst)
+		gFxWorst = gap;
+	if (gap <= FX_SHUT)
+		return;
+	++gFxShut;
+	string near;
+	array<CCircuitUnit@>@ own = ai.GetOwnStructsNear(stop, 160.f);
+	for (uint i = 0; (own !is null) && (i < own.length()) && (near.length() < 140); ++i) {
+		if ((own[i] !is null) && (own[i].circuitDef !is null))
+			near += " " + own[i].circuitDef.GetName() + "@t" + ai.teamId;
+	}
+	array<float>@ al = ai.GetAllyStructsNear(stop, 160.f);
+	for (uint i = 0; (al !is null) && (i + 4 < al.length()) && (near.length() < 240); i += 5) {
+		const int bd = int(al[i + 2]);
+		if (Catalog::ValidId(bd))
+			near += " " + Catalog::Def(bd).GetName() + "@t" + int(al[i + 4]);
+	}
+	AiLog("apex: fac-exit-shut t=" + ai.teamId + " " + f.circuitDef.GetName() + "#" + f.id
+		+ " door=" + int(door.x) + "," + int(door.z) + " goal=" + int(goal.x) + "," + int(goal.z)
+		+ " stop=" + int(stop.x) + "," + int(stop.z) + " gap=" + int(gap) + " near=" + near);
+}
+
 }  // namespace Brain
