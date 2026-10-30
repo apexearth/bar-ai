@@ -362,6 +362,23 @@ bool PlotSite(int d, AIFloat3& out site)
 	}
 	++gPlotBadN;
 	gPlotBad.insertLast(gPlotAt);
+	// which part of the placement test refused the empty ground (rich5: 80 of 95 drops with nothing of ours on it)
+	{
+		const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
+		float lo = 1e9f, hi = -1e9f;
+		for (int ix = -1; ix <= 1; ++ix)
+			for (int iz = -1; iz <= 1; ++iz) {
+				const float e = ai.GetElevationAt(AIFloat3(gPlotAt.x + float(ix) * hx, 0.f, gPlotAt.z + float(iz) * hz));
+				lo = (e < lo) ? e : lo;
+				hi = (e > hi) ? e : hi;
+			}
+		const AIFloat3 nb = ai.FindBuildSiteNear(Catalog::Def(d), gPlotAt, 600.f);
+		AiLog("apex: plot-nofit t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(gPlotAt.x) + ","
+			+ int(gPlotAt.z) + " cell=" + int(cell.x) + "," + int(cell.z) + " cellMoved=" + int(cell.distance2D(gPlotAt))
+			+ " lane=" + (ai.InAnyBaseLane(gPlotAt) ? 1 : 0) + " rise=" + int(hi - lo)
+			+ " wreck=" + int(ai.GetWreckValueAt(gPlotAt, hx + hz))
+			+ " near600=" + (OnMap(nb) ? int(nb.distance2D(gPlotAt)) : -1));
+	}
 	PlotDrop("cleared-no-fit");
 	return false;
 }
