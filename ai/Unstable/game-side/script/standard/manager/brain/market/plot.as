@@ -291,6 +291,7 @@ void RefreshPlot()
 		return;
 	}
 	int nTier = 0, nYoung = 0, nBad = 0, nForeign = 0, nUncovered = 0;
+	int nCand = 0, nGround = 0, nLeash = 0, nFront = 0, nDepth = 0;
 	string foreign;
 	const int bd = gNoRoomDef;
 	const int tier = PlantTier(bd);
@@ -352,11 +353,25 @@ void RefreshPlot()
 	}
 	for (uint ci = 0; ci < cand.length(); ++ci) {
 		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), cand[ci]);
-		if (!OnMap(c) || !PlotGround(bd, c))
+		++nCand;
+		if (!OnMap(c) || !PlotGround(bd, c)) {
+			++nGround;
 			continue;
-		if (Base::gAnchorSet && ((c.distance2D(Base::gAnchor) > leash) || Builder::PastFront(c)
-				|| !LatheDepthOk(bd, doorPlant, c)))
-			continue;
+		}
+		if (Base::gAnchorSet) {
+			if (c.distance2D(Base::gAnchor) > leash) {
+				++nLeash;
+				continue;
+			}
+			if (Builder::PastFront(c)) {
+				++nFront;
+				continue;
+			}
+			if (!LatheDepthOk(bd, doorPlant, c)) {
+				++nDepth;
+				continue;
+			}
+		}
 		bool bad = false;
 		for (uint b = 0; (b < gPlotBad.length()) && !bad; ++b)
 			bad = gPlotBad[b].distance2D(c) < hx;
@@ -405,7 +420,8 @@ void RefreshPlot()
 			gPlotWhyAt = gNoRoomAt;
 			AiLog("apex: plot-none t=" + ai.teamId + " " + Catalog::Def(bd).GetName()
 				+ " plants=" + Factory::gFacUnits.length() + " tier=" + nTier + " young=" + nYoung
-				+ " bad=" + nBad + " foreign=" + nForeign + " uncovered=" + nUncovered + " by=" + foreign);
+				+ " bad=" + nBad + " foreign=" + nForeign + " uncovered=" + nUncovered + " cand=" + nCand + " ground=" + nGround
+				+ " leash=" + nLeash + " front=" + nFront + " depth=" + nDepth + " by=" + foreign);
 		}
 		return;
 	}
