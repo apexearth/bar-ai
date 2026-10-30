@@ -240,8 +240,40 @@ void NanoReclaimAssist()
 		sent += k;
 		penSent += k;
 	}
+	// OBSOLETE CONVERTERS NEED NO MOBILE BUILDER EITHER (his 10-29: "500 metal per second, yet we still had a lot of
+	// basic converters ... we probably only dedicate like one guy to do it"): idle turrets in reach eat every dwarfed
+	// converter whose load idle converter capacity carries, wherever freeing its ground is priced above nothing. In
+	// his rich games 52 of 54 such converters were out of a walker's reach inside the nano block, with ~100 turrets
+	// around them.
+	int obsSent = 0, obsTgt = 0;
+	if (sent < NANO_SEND_MAX) {
+		float idle = ConvCapE() - ConvUseE() - ClaimedConvE();
+		const float ePM = EPrice();
+		const float hzR = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+		const float hz = (hzR > 1.f) ? hzR : 300.f;
+		for (uint i = 0; (i < gOwnConv.length()) && (sent < NANO_SEND_MAX); ++i) {
+			CCircuitUnit@ cv = gOwnConv[i];
+			if ((cv is null) || (cv.circuitDef is null) || ReclaimClaimed(cv.id, cv.id))
+				continue;
+			const int d = int(cv.circuitDef.id);
+			const float capD = Catalog::gConvCapacity[d];
+			if ((capD <= 0.f) || (capD > idle) || !ConvObsoleteOnArrival(d) || BuiltYoung(cv))
+				continue;
+			if (RetireGain(cv, d, ePM, hz, 0.f) <= 0.f)
+				continue;
+			const AIFloat3 vp = cv.GetPos(ai.frame);
+			const int k = NanoSendReclaim(cv, vp, reach, NANO_SEND_MAX - sent);
+			if (k == 0)
+				continue;
+			ai.MarkReclaim(cv, int((30.f + Catalog::gBuildTime[d] / 200.f) * float(SECOND)));
+			idle -= capD;
+			sent += k;
+			obsSent += k;
+			++obsTgt;
+		}
+	}
 	if (sent > 0)
-		AiLog("apex: nano-assist reclaim x" + sent + " pen=" + penSent);
+		AiLog("apex: nano-assist reclaim x" + sent + " pen=" + penSent + " obsolete=" + obsTgt + "/" + obsSent);
 }
 
 // TURRETS HELP THE MEX UPGRADE (his 10-19: "nano turrets still prefer helping make another T2 con or army unit
@@ -1446,16 +1478,18 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// The build side refuses the basic on the same number (DenserHandsCover).
 		float lostM = 0.f;
 		const float capD = Catalog::gConvCapacity[d];
-		if (DenserConvStandingE(d) < ConvUseE() + capD) {
+		// Idle converter capacity picks its load up: nothing waits on a replacement (his 10-29 rich games: 3,500 E/s
+		// of idle capacity and the 60 obsolete basics all waited on a 287 s swap).
+		float idle = ConvCapE() - ConvUseE();
+		if (idle < 0.f)
+			idle = 0.f;
+		if ((idle < capD) && (DenserConvStandingE(d) < ConvUseE() + capD)) {
 			const float swapS = DenserHandsSecs(d, ClaimedConvE() + capD);
 			logSwapS = swapS;
 			if ((swapS < 0.f) || (swapS > DenserHandsWindow()))
 				continue;
 			// Its output is gone until the replacement stands, except what idle
 			// converter capacity already picks up.
-			float idle = ConvCapE() - ConvUseE();
-			if (idle < 0.f)
-				idle = 0.f;
 			const float uncovered = (capD > idle) ? (capD - idle) : 0.f;
 			lostM = uncovered * Catalog::gConvRatio[d] * swapS;
 			++nConvSwap;
