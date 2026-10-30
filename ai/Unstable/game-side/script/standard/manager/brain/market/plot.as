@@ -1,35 +1,40 @@
 namespace Market {
 
-// ROOM FOR A GANTRY THE BASE HAS NO ROOM FOR (his 2026-10-13: on a tight map the
-// base fills with T1 and T2 labs and the gantry never goes up -- reclaim the
-// worst labs and put it there). A gantry LatheSite fits nowhere marks itself;
-// the plot is a lesser plant's ground widened to the gantry's footprint, whose
-// every occupant is a spare plant (what it makes, a plant outside the plot
-// still makes) or a nano turret. Each reclaim is priced at the gantry's own
-// value; the cleared ground is reserved for it and LatheSite answers it first.
+// ROOM FOR AN IMPORTANT BUILDING THE BASE HAS NO ROOM FOR (his 2026-10-13 for the gantry; 10-29 "the lack of location
+// for gantry should immediately trigger mass reclaim so it can get space ... same goes for any important building").
+// A LatheSite that fits nowhere marks its def; a plot is the cheapest ground whose occupants may all be cleared, held
+// for that def with a C++ zone while every turret in reach and the constructors eat it, and LatheSite answers it first.
+// SEVERAL AT ONCE (his 10-30: "let multiple plots run at once per seat"): one plot per waiting def, each with its own
+// ground, occupants and rounds; no two on the same ground.
 
 const int PLOT_MEMORY = 120 * SECOND;   // a no-room mark older than this is stale
 const int PLOT_SCAN = 5 * SECOND;
+const int PLOT_ROUNDS = 3;
+const int PLOT_UNIT_WAITS = 6;   // scans (5 s) a cleared plot waits for units standing on it
+const int PLOT_GRID_MAX = 48;   // flat grid cells a scan may test
 
-int gNoRoomDef = -1;
-int gNoRoomAt = -999999;
+final class Plot {
+	int def = -1;
+	AIFloat3 at;
+	float gain = 0.f;
+	float value = 0.f;
+	array<Id> occ;
+	int round = 0;
+	int unitWaits = 0;
+}
+array<Plot@> gPlots;
+
+// no-room marks, one per waiting def
+array<int> gNoRoomDefs;
+array<int> gNoRoomAts;
+array<int> gNoRoomLogAts;
+
 array<int> gPlantAskDef;
 array<float> gPlantAskGain;
 array<float> gPlantAskValue;
 
-int gPlotDef = -1;
-AIFloat3 gPlotAt;
-float gPlotGain = 0.f;
-float gPlotValue = 0.f;
-array<Id> gPlotOcc;
 int gPlotNextAt = 0;
 int gPlotN = 0, gPlotClearedN = 0, gPlotBadN = 0;
-int gPlotRound = 0;
-const int PLOT_ROUNDS = 3;
-int gPlotUnitWaits = 0;
-const int PLOT_UNIT_WAITS = 6;   // scans (5 s) a cleared plot waits for units standing on it
-const int PLOT_GRID_MAX = 48;   // flat grid cells a scan may test
-int gPlotWhyAt = -1;
 array<AIFloat3> gPlotBad;
 
 void NotePlantAsk(int d, float gain, float value)
@@ -55,29 +60,41 @@ int PlantAskIdx(int d)
 	return -1;
 }
 
-// The site is probed before the ask is priced, so the mark waits for the ask.
-// ANY IMPORTANT BUILDING, NOT ONLY THE GANTRY (his 10-29: "the lack of location for gantry should immediately trigger
-// mass reclaim so it can get space ... same goes for any important building"): an advanced plant, the gantry, a big
-// reactor or converter.
+// An advanced plant, the gantry, a big reactor or converter.
 bool PlotImportant(int d)
 {
 	return Catalog::ValidId(d) && ((IsPlant(d) && (PlantTier(d) >= 2)) || BigEcoDef(d));
 }
 
+// The site is probed before the ask is priced, so the mark waits for the ask.
 void NoteNoRoom(int d)
 {
 	if (!PlotImportant(d))
 		return;
-	gNoRoomDef = d;
-	gNoRoomAt = ai.frame;
+	const int k = gNoRoomDefs.find(d);
+	if (k >= 0) {
+		gNoRoomAts[uint(k)] = ai.frame;
+		return;
+	}
+	gNoRoomDefs.insertLast(d);
+	gNoRoomAts.insertLast(ai.frame);
+	gNoRoomLogAts.insertLast(-1);
 }
 
-bool PlotOverlaps(CCircuitUnit@ u, const AIFloat3& in c, float hx, float hz)
+int NoRoomAt(int d)
 {
-	const int ud = int(u.circuitDef.id);
-	const AIFloat3 p = u.GetPos(ai.frame);
-	const float ux = float(Catalog::gFootX[ud]) * 8.f, uz = float(Catalog::gFootZ[ud]) * 8.f;
-	return (abs(p.x - c.x) < hx + ux) && (abs(p.z - c.z) < hz + uz);
+	const int k = gNoRoomDefs.find(d);
+	return (k >= 0) ? gNoRoomAts[uint(k)] : -999999;
+}
+
+void ForgetNoRoom(int d)
+{
+	const int k = gNoRoomDefs.find(d);
+	if (k < 0)
+		return;
+	gNoRoomDefs.removeAt(uint(k));
+	gNoRoomAts.removeAt(uint(k));
+	gNoRoomLogAts.removeAt(uint(k));
 }
 
 bool IsPlant(int d)
@@ -85,10 +102,13 @@ bool IsPlant(int d)
 	return !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0) && (Catalog::gBuildPower[d] > 0.f);
 }
 
-// THE DOORWAY'S APRON (block_map.json, rich6: 32 cleared plots with nothing on the footprint still refused, the site
-// search finding nothing within 600 in half): a ground plant's blocker runs offset + yard/2 squares out of its door --
-// a land lab 7 + 10, the gantry 12 + 10, 16 elmos each -- and only nanos may stand in the gantry's. An air plant's
-// ignores eco and nanos.
+bool IsNanoTurret(int d)
+{
+	return !Catalog::gMobile[d] && (Catalog::gBuildPower[d] > 0.f) && (Catalog::gBuildsList[d].length() == 0);
+}
+
+// THE DOORWAY'S APRON (block_map.json): a ground plant's blocker runs offset + yard/2 squares out of its door -- a land
+// lab 7 + 10, the gantry 12 + 10, 16 elmos each. An air plant's ignores eco and nanos.
 float PlotApronFront(int bd)
 {
 	if (!IsPlant(bd) || AirPlant(bd))
@@ -109,26 +129,7 @@ AIFloat3 PlotExitDir()
 	return e;
 }
 
-// u stands in bd's apron at c: within the footprint's width, out of the door by up to PlotApronFront.
-bool PlotInApron(CCircuitUnit@ u, int bd, const AIFloat3& in c)
-{
-	const float front = PlotApronFront(bd);
-	if (front <= 0.f)
-		return false;
-	const int ud = int(u.circuitDef.id);
-	if (IsNanoTurret(ud) && (PlantTier(bd) >= 3))
-		return false;
-	const AIFloat3 e = PlotExitDir();
-	const AIFloat3 p = u.GetPos(ai.frame);
-	const float dx = p.x - c.x, dz = p.z - c.z;
-	const float along = dx * e.x + dz * e.z;
-	const float across = abs(dx * e.z - dz * e.x);
-	const float us = float((Catalog::gFootX[ud] > Catalog::gFootZ[ud]) ? Catalog::gFootX[ud] : Catalog::gFootZ[ud]) * 4.f;
-	const float half = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 4.f;
-	return (along > -us) && (along < half + front + us) && (across < half + 64.f + us);
-}
-
-// What may be cleared for an important building: anything that is not an extractor or geo, a gun, a plant (those go by
+// What may be cleared for an important building: anything that is not an extractor or geo, a plant (those go by
 // PlotCovered), a big reactor or converter, or a building worth half the one waiting for the ground.
 bool PlotClearable(int ud, int bd)
 {
@@ -141,13 +142,10 @@ bool PlotClearable(int ud, int bd)
 	return Catalog::gCostM[ud] < 0.5f * Catalog::gCostM[bd];
 }
 
-// The ground under the footprint could take the building once cleared: dry for a land building, wet for a
-// floating or underwater one, and no steeper than the land plants stand on (rich3: an underwater fusion plotted on
-// a land converter field, cleared, and never fit).
+// Every square of the footprint by the engine's water and maxHeightDif rules (C++ GroundTakes; rich12: 15 cleared plots
+// had a shore under them and 4 were too steep against a 5x5 sample).
 bool PlotGround(int d, const AIFloat3& in c)
 {
-	// every square, by the engine's water and maxHeightDif rules (C++ GroundTakes; rich12: 15 cleared plots had a shore
-	// under them and 4 were too steep against the 5x5 sample below)
 	return ai.GroundTakes(Catalog::Def(d), c);
 }
 
@@ -161,30 +159,6 @@ bool PlotUnfreeable(int d, const AIFloat3& in c)
 			if (ai.InAnyBaseLane(AIFloat3(c.x + float(ix) * hx, 0.f, c.z + float(iz) * hz)))
 				return true;
 	return NearSpotR(c, ((hx > hz) ? hx : hz) + 48.f);
-}
-
-bool PlotGroundSampled(int d, const AIFloat3& in c)
-{
-	const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
-	const bool wet = Catalog::gFloater[d] || Catalog::gSub[d] || (Catalog::Def(d).GetMinWaterDepth() > 0.f);
-	float lo = 1e9f, hi = -1e9f;
-	for (int ix = -2; ix <= 2; ++ix) {
-		for (int iz = -2; iz <= 2; ++iz) {
-			const float e = ai.GetElevationAt(AIFloat3(c.x + float(ix) * hx * 0.5f, 0.f, c.z + float(iz) * hz * 0.5f));
-			if (wet ? (e >= 0.f) : (e < 0.f))
-				return false;
-			lo = (e < lo) ? e : lo;
-			hi = (e > hi) ? e : hi;
-		}
-	}
-	// the engine's flatness test: each square within maxHeightDif of the build height, about the middle of the
-	// range (rich9: 37 of 43 cleared plots refused by the engine, on 5-28 of rise against a gantry's maxslope 10)
-	return wet || (hi - lo <= 2.f * Catalog::Def(d).GetMaxHeightDif());
-}
-
-bool IsNanoTurret(int d)
-{
-	return !Catalog::gMobile[d] && (Catalog::gBuildPower[d] > 0.f) && (Catalog::gBuildsList[d].length() == 0);
 }
 
 bool HasUnit(const array<CCircuitUnit@>& in a, CCircuitUnit@ u)
@@ -218,23 +192,39 @@ bool PlotCovered(const array<CCircuitUnit@>& in gone)
 	return true;
 }
 
+Plot@ PlotOf(int d)
+{
+	for (uint i = 0; i < gPlots.length(); ++i) {
+		if (gPlots[i].def == d)
+			return gPlots[i];
+	}
+	return null;
+}
+
 // The plot's occupants still standing.
-uint PlotLeft()
+uint PlotLeft(Plot@ p)
 {
 	uint n = 0;
-	for (uint i = 0; i < gPlotOcc.length(); ++i) {
-		if (ai.GetTeamUnit(gPlotOcc[i]) !is null)
+	for (uint i = 0; i < p.occ.length(); ++i) {
+		if (ai.GetTeamUnit(p.occ[i]) !is null)
 			++n;
 	}
 	return n;
 }
 
-// What stands on the plot's ground now (a cleared plot that still does not fit names its blocker).
-string PlotStanding()
+// Some important building's ground is still being cleared for def d.
+bool PlotClearing(int d)
 {
-	const float hx = float(Catalog::gFootX[gPlotDef]) * 8.f, hz = float(Catalog::gFootZ[gPlotDef]) * 8.f;
+	Plot@ p = PlotOf(d);
+	return (p !is null) && (PlotLeft(p) > 0);
+}
+
+// What stands on the plot's ground now (a cleared plot that still does not fit names its blocker).
+string PlotStanding(Plot@ p)
+{
+	const float hx = float(Catalog::gFootX[p.def]) * 8.f, hz = float(Catalog::gFootZ[p.def]) * 8.f;
 	string s;
-	array<CCircuitUnit@>@ on = ai.PlotBlockers(Catalog::Def(gPlotDef), gPlotAt, sqrt(hx * hx + hz * hz) + 480.f);
+	array<CCircuitUnit@>@ on = ai.PlotBlockers(Catalog::Def(p.def), p.at, sqrt(hx * hx + hz * hz) + 480.f);
 	for (uint i = 0; (on !is null) && (i < on.length()) && (s.length() < 120); ++i) {
 		if ((on[i] !is null) && (on[i].circuitDef !is null))
 			s += " " + on[i].circuitDef.GetName();
@@ -242,80 +232,120 @@ string PlotStanding()
 	return s;
 }
 
-void PlotDrop(const string why)
+// THE CLEARED GROUND IS HELD (rich4: 47 plots emptied by the turrets and still no fit): a zone over each plot's
+// footprint and apron refuses every other building the C++ placement would put there. Zones are one set for all plots.
+void PlotZones()
 {
-	AiLog("apex: plot-drop t=" + ai.teamId + " " + Catalog::Def(gPlotDef).GetName()
-		+ " at=" + int(gPlotAt.x) + "," + int(gPlotAt.z) + " left=" + PlotLeft() + " why=" + why
-		+ " standing=" + PlotStanding());
-	gPlotDef = -1;
-	gPlotOcc.resize(0);
 	ai.ClearZones();
-}
-
-// THE CLEARED GROUND IS HELD FOR IT (rich4: 47 plots emptied by the turrets and still no fit): a zone over the
-// footprint and its apron refuses every other building the C++ placement would put there while the turrets eat.
-void PlotHold(int bd, const AIFloat3& in c)
-{
-	const float apron = IsPlant(bd) ? 48.f : 16.f;
-	const float hx = float(Catalog::gFootX[bd]) * 4.f + apron, hz = float(Catalog::gFootZ[bd]) * 4.f + apron;
-	ai.ClearZones();
-	ai.ReserveZone(c.x - hx, c.z - hz, c.x + hx, c.z + hz, Catalog::Def(bd));
-	const float front = PlotApronFront(bd);
-	if (front > 0.f) {
-		const AIFloat3 e = PlotExitDir();
-		const float half = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 4.f;
-		const AIFloat3 far = c + e * (half + front);
-		const float w = half + 64.f;
-		const float wx = abs(e.z) * w, wz = abs(e.x) * w;
-		ai.ReserveZone(((c.x < far.x) ? c.x : far.x) - wx, ((c.z < far.z) ? c.z : far.z) - wz,
-				((c.x > far.x) ? c.x : far.x) + wx, ((c.z > far.z) ? c.z : far.z) + wz, Catalog::Def(bd));
+	for (uint i = 0; i < gPlots.length(); ++i) {
+		const int bd = gPlots[i].def;
+		const AIFloat3 c = gPlots[i].at;
+		const float apron = IsPlant(bd) ? 48.f : 16.f;
+		const float hx = float(Catalog::gFootX[bd]) * 4.f + apron, hz = float(Catalog::gFootZ[bd]) * 4.f + apron;
+		ai.ReserveZone(c.x - hx, c.z - hz, c.x + hx, c.z + hz, Catalog::Def(bd));
+		const float front = PlotApronFront(bd);
+		if (front > 0.f) {
+			const AIFloat3 e = PlotExitDir();
+			const float half = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 4.f;
+			const AIFloat3 far = c + e * (half + front);
+			const float w = half + 64.f;
+			const float wx = abs(e.z) * w, wz = abs(e.x) * w;
+			ai.ReserveZone(((c.x < far.x) ? c.x : far.x) - wx, ((c.z < far.z) ? c.z : far.z) - wz,
+					((c.x > far.x) ? c.x : far.x) + wx, ((c.z > far.z) ? c.z : far.z) + wz, Catalog::Def(bd));
+		}
 	}
 }
 
-// Once per PLOT_SCAN while a gantry has no room: the cheapest clearable plot.
+void PlotDrop(Plot@ p, const string why)
+{
+	AiLog("apex: plot-drop t=" + ai.teamId + " " + Catalog::Def(p.def).GetName()
+		+ " at=" + int(p.at.x) + "," + int(p.at.z) + " left=" + PlotLeft(p) + " why=" + why
+		+ " standing=" + PlotStanding(p) + " plots=" + (gPlots.length() - 1));
+	for (uint i = 0; i < gPlots.length(); ++i) {
+		if (gPlots[i] is p) {
+			gPlots.removeAt(i);
+			break;
+		}
+	}
+	PlotZones();
+}
+
+// Ground another plot holds.
+bool PlotTaken(int bd, const AIFloat3& in c)
+{
+	const float mine = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 8.f;
+	for (uint i = 0; i < gPlots.length(); ++i) {
+		const int od = gPlots[i].def;
+		const float theirs = float((Catalog::gFootX[od] > Catalog::gFootZ[od]) ? Catalog::gFootX[od] : Catalog::gFootZ[od]) * 8.f;
+		if (gPlots[i].at.distance2D(c) < mine + theirs + PlotApronFront(od) * 0.5f)
+			return true;
+	}
+	return false;
+}
+
+// Once per PLOT_SCAN: retire built and stale plots, then one new plot for the oldest waiting def without one.
 void RefreshPlot()
 {
 	if (ai.frame < gPlotNextAt)
 		return;
 	gPlotNextAt = ai.frame + PLOT_SCAN;
-	if (gPlotDef >= 0) {
-		array<CCircuitUnit@>@ on = ai.GetOwnStructsNear(gPlotAt, 64.f);
-		for (uint i = 0; (on !is null) && (i < on.length()); ++i) {
-			if ((on[i] !is null) && (on[i].circuitDef !is null) && (int(on[i].circuitDef.id) == gPlotDef)) {
-				AiLog("apex: plot-built t=" + ai.teamId + " " + Catalog::Def(gPlotDef).GetName()
-					+ " at=" + int(gPlotAt.x) + "," + int(gPlotAt.z));
-				gPlotDef = -1;
-				ai.ClearZones();
-				gNoRoomDef = -1;
-				return;
-			}
+	for (uint i = 0; i < gPlots.length(); ) {
+		Plot@ p = gPlots[i];
+		bool built = false;
+		array<CCircuitUnit@>@ on = ai.GetOwnStructsNear(p.at, 64.f);
+		for (uint k = 0; (on !is null) && (k < on.length()) && !built; ++k)
+			built = (on[k] !is null) && (on[k].circuitDef !is null) && (int(on[k].circuitDef.id) == p.def);
+		if (built) {
+			AiLog("apex: plot-built t=" + ai.teamId + " " + Catalog::Def(p.def).GetName()
+				+ " at=" + int(p.at.x) + "," + int(p.at.z) + " plots=" + (gPlots.length() - 1));
+			ForgetNoRoom(p.def);
+			gPlots.removeAt(i);
+			PlotZones();
+			continue;
 		}
-		Base::ReserveSite(gPlotAt);
-		return;
+		if (ai.frame - NoRoomAt(p.def) > 3 * PLOT_MEMORY) {
+			PlotDrop(p, "stale");
+			continue;
+		}
+		Base::ReserveSite(p.at);
+		++i;
 	}
-	if ((gNoRoomDef < 0) || (ai.frame - gNoRoomAt > PLOT_MEMORY) || (PlantAskIdx(gNoRoomDef) < 0))
+	int pick = -1;
+	for (uint k = 0; k < gNoRoomDefs.length(); ++k) {
+		const int d = gNoRoomDefs[k];
+		if ((ai.frame - gNoRoomAts[k] > PLOT_MEMORY) || (PlotOf(d) !is null) || (PlantAskIdx(d) < 0))
+			continue;
+		if ((pick < 0) || (gNoRoomAts[k] < gNoRoomAts[uint(pick)]))
+			pick = int(k);
+	}
+	if (pick < 0)
 		return;
 	if (EcoDangerNear()) {
-		if (gPlotWhyAt != gNoRoomAt) {
-			gPlotWhyAt = gNoRoomAt;
+		if (gNoRoomLogAts[uint(pick)] != gNoRoomAts[uint(pick)]) {
+			gNoRoomLogAts[uint(pick)] = gNoRoomAts[uint(pick)];
 			AiLog("apex: plot-none t=" + ai.teamId + " why=danger");
 		}
 		return;
 	}
+	PlotSearch(uint(pick));
+}
+
+// The cheapest clearable ground for the waiting def gNoRoomDefs[k].
+void PlotSearch(uint k)
+{
 	int nTier = 0, nYoung = 0, nBad = 0, nForeign = 0, nUncovered = 0;
-	int nCand = 0, nGround = 0, nLeash = 0, nFront = 0, nDepth = 0;
+	int nCand = 0, nGround = 0, nLeash = 0, nFront = 0, nDepth = 0, nTaken = 0;
 	string foreign;
-	const int bd = gNoRoomDef;
+	const int bd = gNoRoomDefs[k];
 	const int tier = PlantTier(bd);
-	// a plant's doorway and apron are part of what must be clear (rich3: 115 plots emptied, then no fit)
 	const float apron = IsPlant(bd) ? 48.f : 16.f;
 	const float hx = float(Catalog::gFootX[bd]) * 8.f + apron, hz = float(Catalog::gFootZ[bd]) * 8.f + apron;
 	const float r = sqrt(hx * hx + hz * hz) + 120.f + PlotApronFront(bd);
 	float bestCost = 1e30f;
 	AIFloat3 bestAt;
 	array<Id> bestOcc;
-	// The ground to clear: a lesser plant's, the turret blocks (where the lathe is), and the converter fields --
-	// his 10-29 bases had no plant to swap, only T1 nanos and converters on every spot.
+	// The ground to clear: a lesser plant's, the turret blocks (where the lathe is), the converter fields, and every
+	// flat cell of the eco leash the depth rule admits (his 10-30: factories stay in the front half).
 	array<AIFloat3> cand;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
@@ -342,20 +372,17 @@ void RefreshPlot()
 	}
 	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const bool doorPlant = !AirPlant(bd) && (Catalog::gBuildsList[bd].length() > 0);
-	// ...and every FLAT cell of the eco leash, nearest the anchor first (rich10: with the engine's flatness held, the
-	// plants' and blocks' own ground was flat nowhere in 117 of 225 searches)
 	if (Base::gAnchorSet) {
 		const float step = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 8.f;
 		int flat = 0;
 		for (int ring = 1; (flat < PLOT_GRID_MAX) && (float(ring) * step <= leash); ++ring) {
-			for (int k = -ring; (k <= ring) && (flat < PLOT_GRID_MAX); ++k) {
+			for (int kk = -ring; (kk <= ring) && (flat < PLOT_GRID_MAX); ++kk) {
 				for (int side = 0; (side < 4) && (flat < PLOT_GRID_MAX); ++side) {
-					const float ox = (side < 2) ? float(k) : float((side == 2) ? -ring : ring);
-					const float oz = (side < 2) ? float((side == 0) ? -ring : ring) : float(k);
-					if ((side >= 2) && ((k == -ring) || (k == ring)))
+					const float ox = (side < 2) ? float(kk) : float((side == 2) ? -ring : ring);
+					const float oz = (side < 2) ? float((side == 0) ? -ring : ring) : float(kk);
+					if ((side >= 2) && ((kk == -ring) || (kk == ring)))
 						continue;
 					const AIFloat3 g(Base::gAnchor.x + ox * step, 0.f, Base::gAnchor.z + oz * step);
-					// his 10-30: factories stay in the front half, so the budget is spent only on ground the depth rule admits
 					if (OnMap(g) && LatheDepthOk(bd, doorPlant, g) && PlotGround(bd, g)) {
 						cand.insertLast(g);
 						++flat;
@@ -385,6 +412,10 @@ void RefreshPlot()
 				continue;
 			}
 		}
+		if (PlotTaken(bd, c)) {
+			++nTaken;
+			continue;
+		}
 		bool bad = false;
 		for (uint b = 0; (b < gPlotBad.length()) && !bad; ++b)
 			bad = gPlotBad[b].distance2D(c) < hx;
@@ -400,8 +431,8 @@ void RefreshPlot()
 		array<Id> occ;
 		float cost = 0.f;
 		bool ok = true;
-		for (uint k = 0; ok && (k < near.length()); ++k) {
-			CCircuitUnit@ u = near[k];
+		for (uint q = 0; ok && (q < near.length()); ++q) {
+			CCircuitUnit@ u = near[q];
 			if ((u is null) || (u.circuitDef is null))
 				continue;
 			const int ud = int(u.circuitDef.id);
@@ -429,149 +460,143 @@ void RefreshPlot()
 		bestOcc = occ;
 	}
 	if (bestOcc.length() == 0) {
-		if (gPlotWhyAt != gNoRoomAt) {
-			gPlotWhyAt = gNoRoomAt;
+		if (gNoRoomLogAts[k] != gNoRoomAts[k]) {
+			gNoRoomLogAts[k] = gNoRoomAts[k];
 			AiLog("apex: plot-none t=" + ai.teamId + " " + Catalog::Def(bd).GetName()
 				+ " plants=" + Factory::gFacUnits.length() + " tier=" + nTier + " young=" + nYoung
 				+ " bad=" + nBad + " foreign=" + nForeign + " uncovered=" + nUncovered + " cand=" + nCand + " ground=" + nGround
-				+ " leash=" + nLeash + " front=" + nFront + " depth=" + nDepth + " by=" + foreign);
+				+ " leash=" + nLeash + " front=" + nFront + " depth=" + nDepth + " taken=" + nTaken + " by=" + foreign);
 		}
 		return;
 	}
 	const int ai0 = PlantAskIdx(bd);
-	gPlotDef = bd;
-	gPlotAt = bestAt;
-	gPlotOcc = bestOcc;
-	gPlotRound = 0;
-	gPlotUnitWaits = 0;
-	gPlotGain = gPlantAskGain[uint(ai0)];
-	gPlotValue = gPlantAskValue[uint(ai0)];
+	Plot p;
+	p.def = bd;
+	p.at = bestAt;
+	p.occ = bestOcc;
+	p.gain = gPlantAskGain[uint(ai0)];
+	p.value = gPlantAskValue[uint(ai0)];
+	gPlots.insertLast(p);
 	++gPlotN;
-	Base::ReserveSite(gPlotAt);
-	PlotHold(bd, gPlotAt);
+	Base::ReserveSite(p.at);
+	PlotZones();
 	string names;
-	for (uint i = 0; i < gPlotOcc.length(); ++i) {
-		CCircuitUnit@ u = ai.GetTeamUnit(gPlotOcc[i]);
+	for (uint i = 0; i < p.occ.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(p.occ[i]);
 		if (u !is null)
 			names += " " + u.circuitDef.GetName();
 	}
 	AiLog("apex: plot t=" + ai.teamId + " " + Catalog::Def(bd).GetName()
-		+ " at=" + int(gPlotAt.x) + "," + int(gPlotAt.z) + " cost=" + int(bestCost)
-		+ " v=" + formatFloat(gPlotValue, "", 0, 3) + " clear=" + names);
+		+ " at=" + int(p.at.x) + "," + int(p.at.z) + " cost=" + int(bestCost)
+		+ " v=" + formatFloat(p.value, "", 0, 3) + " plots=" + gPlots.length() + " clear=" + names);
 }
 
-// LatheSite's first answer for the plot's def: the cleared ground, once clear.
+// LatheSite's first answer for a plotted def: the cleared ground, once clear.
 bool PlotSite(int d, AIFloat3& out site)
 {
-	if ((gPlotDef < 0) || (d != gPlotDef) || (PlotLeft() > 0))
+	Plot@ p = PlotOf(d);
+	if ((p is null) || (PlotLeft(p) > 0))
 		return false;
 	AIFloat3 cell;
-	bool fit = ai.CanPlaceCell(Catalog::Def(d), gPlotAt, cell);
+	bool fit = ai.CanPlaceCell(Catalog::Def(d), p.at, cell);
 	if (!fit) {
 		// the cleared ground, a footprint either way: the lattice cell itself can still sit on a lane or a lip
-		const AIFloat3 near = ai.FindBuildSiteNear(Catalog::Def(d), gPlotAt, float(Catalog::gFootX[d]) * 8.f);
-		fit = OnMap(near) && (near.distance2D(gPlotAt) <= float(Catalog::gFootX[d]) * 8.f)
+		const AIFloat3 near = ai.FindBuildSiteNear(Catalog::Def(d), p.at, float(Catalog::gFootX[d]) * 8.f);
+		fit = OnMap(near) && (near.distance2D(p.at) <= float(Catalog::gFootX[d]) * 8.f)
 				&& ai.CanPlaceCell(Catalog::Def(d), near, cell);
 	}
 	if (fit) {
-		if (gPlotOcc.length() > 0) {
+		if (p.occ.length() > 0) {
 			++gPlotClearedN;
 			AiLog("apex: plot-clear t=" + ai.teamId + " " + Catalog::Def(d).GetName()
 				+ " at=" + int(cell.x) + "," + int(cell.z));
 		}
-		gPlotOcc.resize(0);
+		p.occ.resize(0);
 		site = cell;
 		return true;
 	}
 	// UNITS ON THE CLEARED GROUND MOVE ON (rich13: 14 of 24 engine refusals had 1-9 of them standing on it, the
 	// reclaimers among them): the plot holds, up to PLOT_UNIT_WAITS scans, rather than dropping ground that is clear.
 	{
-		const string why = ai.PlaceWhy(Catalog::Def(d), gPlotAt);
-		if ((why.findFirst("engine:") == 0) && (why.findFirst("units=0") < 0) && (gPlotUnitWaits < PLOT_UNIT_WAITS)) {
-			++gPlotUnitWaits;
+		const string why = ai.PlaceWhy(Catalog::Def(d), p.at);
+		if ((why.findFirst("engine:") == 0) && (why.findFirst("units=0") < 0) && (p.unitWaits < PLOT_UNIT_WAITS)) {
+			++p.unitWaits;
 			return false;
 		}
 	}
 	// WHAT STANDS THERE NOW IS THE NEXT ROUND (plotsmoke: a turret whose frame was rising when the plot was drawn --
 	// frames are not our structures yet -- finished on the cleared ground): the blocking map's own blockers, if every
 	// one may be cleared, become the plot's occupants again, up to PLOT_ROUNDS times.
-	if (gPlotRound < PLOT_ROUNDS) {
+	if (p.round < PLOT_ROUNDS) {
 		const float fx = float(Catalog::gFootX[d]) * 8.f, fz = float(Catalog::gFootZ[d]) * 8.f;
-		array<CCircuitUnit@>@ now = ai.PlotBlockers(Catalog::Def(d), gPlotAt, sqrt(fx * fx + fz * fz) + 480.f);
+		array<CCircuitUnit@>@ now = ai.PlotBlockers(Catalog::Def(d), p.at, sqrt(fx * fx + fz * fz) + 480.f);
 		bool clearable = (now !is null) && (now.length() > 0);
 		for (uint i = 0; clearable && (i < now.length()); ++i) {
 			const int ud = (now[i].circuitDef !is null) ? int(now[i].circuitDef.id) : -1;
 			clearable = (ud >= 0) && (IsNanoTurret(ud) || PlotClearable(ud, d));
 		}
 		if (clearable) {
-			++gPlotRound;
-			gPlotOcc.resize(0);
+			++p.round;
+			p.occ.resize(0);
 			string names;
 			for (uint i = 0; i < now.length(); ++i) {
-				gPlotOcc.insertLast(now[i].id);
+				p.occ.insertLast(now[i].id);
 				names += " " + now[i].circuitDef.GetName();
 			}
-			AiLog("apex: plot-reclear t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(gPlotAt.x) + ","
-				+ int(gPlotAt.z) + " round=" + gPlotRound + " clear=" + names);
+			AiLog("apex: plot-reclear t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(p.at.x) + ","
+				+ int(p.at.z) + " round=" + p.round + " clear=" + names);
 			return false;
 		}
 	}
 	++gPlotBadN;
-	gPlotBad.insertLast(gPlotAt);
-	// which part of the placement test refused the empty ground (rich5: 80 of 95 drops with nothing of ours on it)
-	{
-		const float hx = float(Catalog::gFootX[d]) * 4.f, hz = float(Catalog::gFootZ[d]) * 4.f;
-		float lo = 1e9f, hi = -1e9f;
-		for (int ix = -1; ix <= 1; ++ix)
-			for (int iz = -1; iz <= 1; ++iz) {
-				const float e = ai.GetElevationAt(AIFloat3(gPlotAt.x + float(ix) * hx, 0.f, gPlotAt.z + float(iz) * hz));
-				lo = (e < lo) ? e : lo;
-				hi = (e > hi) ? e : hi;
-			}
-		const AIFloat3 nb = ai.FindBuildSiteNear(Catalog::Def(d), gPlotAt, 600.f);
-		AiLog("apex: plot-nofit t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(gPlotAt.x) + ","
-			+ int(gPlotAt.z) + " cell=" + int(cell.x) + "," + int(cell.z) + " cellMoved=" + int(cell.distance2D(gPlotAt))
-			+ " lane=" + (ai.InAnyBaseLane(gPlotAt) ? 1 : 0) + " rise=" + int(hi - lo)
-			+ " wreck=" + int(ai.GetWreckValueAt(gPlotAt, hx + hz))
-			+ " near600=" + (OnMap(nb) ? int(nb.distance2D(gPlotAt)) : -1)
-			+ " why=" + ai.PlaceWhy(Catalog::Def(d), gPlotAt));
-	}
-	PlotDrop("cleared-no-fit");
+	gPlotBad.insertLast(p.at);
+	AiLog("apex: plot-nofit t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " at=" + int(p.at.x) + ","
+		+ int(p.at.z) + " cell=" + int(cell.x) + "," + int(cell.z) + " cellMoved=" + int(cell.distance2D(p.at))
+		+ " lane=" + (ai.InAnyBaseLane(p.at) ? 1 : 0) + " why=" + ai.PlaceWhy(Catalog::Def(d), p.at));
+	PlotDrop(p, "cleared-no-fit");
 	return false;
 }
 
-// The reclaim of the plot's next occupant, priced at the gantry's own value.
+// The reclaim of a plot's next occupant, the nearest standing one over all plots, priced at its building's own value.
 CCircuitUnit@ PlotVictim(CCircuitUnit@ unit, float& out value, float& out gain)
 {
 	value = 0.f;
 	gain = 0.f;
-	if (gPlotDef < 0)
-		return null;
-	if (ai.frame - gNoRoomAt > 3 * PLOT_MEMORY) {
-		PlotDrop("stale");
-		return null;
-	}
-	const uint left = PlotLeft();
-	if (left == 0)
-		return null;
 	CCircuitUnit@ best = null;
 	float bestD = 1e30f;
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	for (uint i = 0; i < gPlotOcc.length(); ++i) {
-		CCircuitUnit@ u = ai.GetTeamUnit(gPlotOcc[i]);
-		if ((u is null) || ReclaimClaimed(u.id, unit.id))
+	for (uint pi = 0; pi < gPlots.length(); ++pi) {
+		Plot@ p = gPlots[pi];
+		const uint left = PlotLeft(p);
+		if (left == 0)
 			continue;
-		const float dd = here.distance2D(u.GetPos(ai.frame));
-		if (dd < bestD) {
-			bestD = dd;
-			@best = u;
+		for (uint i = 0; i < p.occ.length(); ++i) {
+			CCircuitUnit@ u = ai.GetTeamUnit(p.occ[i]);
+			if ((u is null) || ReclaimClaimed(u.id, unit.id))
+				continue;
+			const float dd = here.distance2D(u.GetPos(ai.frame));
+			if (dd < bestD) {
+				bestD = dd;
+				@best = u;
+				value = p.value;
+				gain = p.gain / float(left);
+			}
 		}
 	}
-	if (best !is null) {
-		value = gPlotValue;
-		gain = gPlotGain / float(left);
-	}
 	return best;
+}
+
+// Every plot's standing occupants, for the turrets (NanoReclaimAssist).
+void PlotOccupants(array<CCircuitUnit@>& out units)
+{
+	units.resize(0);
+	for (uint pi = 0; pi < gPlots.length(); ++pi) {
+		for (uint i = 0; i < gPlots[pi].occ.length(); ++i) {
+			CCircuitUnit@ u = ai.GetTeamUnit(gPlots[pi].occ[i]);
+			if ((u !is null) && (u.circuitDef !is null))
+				units.insertLast(u);
+		}
+	}
 }
 
 }  // namespace Market

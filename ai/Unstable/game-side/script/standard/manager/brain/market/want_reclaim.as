@@ -250,15 +250,12 @@ void NanoReclaimAssist()
 	// building with no room waits on this ground, so the turrets leave their assists for it (TurretsReclaim takes the
 	// working ones too, split over what still stands), and the constructors take PlotVictim on top.
 	int plotSent = 0;
-	if (gPlotDef >= 0) {
-		const uint left = PlotLeft();
-		for (uint i = 0; (i < gPlotOcc.length()) && (left > 0); ++i) {
-			CCircuitUnit@ u = ai.GetTeamUnit(gPlotOcc[i]);
-			if ((u is null) || (u.circuitDef is null))
-				continue;
-			plotSent += ai.TurretsReclaim(u, int((30.f + Catalog::gBuildTime[int(u.circuitDef.id)] / 200.f)
-					* float(SECOND)), int(left));
-		}
+	{
+		array<CCircuitUnit@> po;
+		PlotOccupants(po);
+		for (uint i = 0; i < po.length(); ++i)
+			plotSent += ai.TurretsReclaim(po[i], int((30.f + Catalog::gBuildTime[int(po[i].circuitDef.id)] / 200.f)
+					* float(SECOND)), int(po.length()));
 	}
 	int obsSent = 0, obsTgt = 0;
 	if (sent < NANO_SEND_MAX) {

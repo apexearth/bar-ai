@@ -1039,7 +1039,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				{ GantryWhy(sc, "adv-in-flight"); continue; }
 			}
 			// its ground is still being cleared: the hands that would die on no-site reclaim it
-			if ((gPlotDef == d) && (PlotLeft() > 0))
+			if (PlotClearing(d))
 				{ GantryWhy(sc, "plot"); continue; }
 			{
 				AIFloat3 agAt;
