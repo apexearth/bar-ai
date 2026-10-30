@@ -51,9 +51,17 @@ int PlantAskIdx(int d)
 }
 
 // The site is probed before the ask is priced, so the mark waits for the ask.
+// ANY IMPORTANT BUILDING, NOT ONLY THE GANTRY (his 10-29: "the lack of location for gantry should immediately trigger
+// mass reclaim so it can get space ... same goes for any important building"): an advanced plant, the gantry, a big
+// reactor or converter.
+bool PlotImportant(int d)
+{
+	return Catalog::ValidId(d) && ((IsPlant(d) && (PlantTier(d) >= 2)) || BigEcoDef(d));
+}
+
 void NoteNoRoom(int d)
 {
-	if (PlantTier(d) < 3)
+	if (!PlotImportant(d))
 		return;
 	gNoRoomDef = d;
 	gNoRoomAt = ai.frame;
@@ -70,6 +78,16 @@ bool PlotOverlaps(CCircuitUnit@ u, const AIFloat3& in c, float hx, float hz)
 bool IsPlant(int d)
 {
 	return !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0) && (Catalog::gBuildPower[d] > 0.f);
+}
+
+// What may be cleared for an important building: anything that is not an extractor or geo, a gun, a plant (those go by
+// PlotCovered), a big reactor or converter, or a building worth half the one waiting for the ground.
+bool PlotClearable(int ud, int bd)
+{
+	if ((Catalog::gExtractsM[ud] > 0.f) || Catalog::gNeedGeo[ud] || (Catalog::gMaxRange[ud] > 0.f) || IsPlant(ud)
+			|| BigEcoDef(ud) || Catalog::gMobile[ud])
+		return false;
+	return Catalog::gCostM[ud] < 0.5f * Catalog::gCostM[bd];
 }
 
 bool IsNanoTurret(int d)
@@ -165,6 +183,9 @@ void RefreshPlot()
 	float bestCost = 1e30f;
 	AIFloat3 bestAt;
 	array<Id> bestOcc;
+	// The ground to clear: a lesser plant's, the turret blocks (where the lathe is), and the converter fields --
+	// his 10-29 bases had no plant to swap, only T1 nanos and converters on every spot.
+	array<AIFloat3> cand;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f is null) || (f.circuitDef is null))
@@ -178,8 +199,24 @@ void RefreshPlot()
 			++nYoung;
 			continue;
 		}
-		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), f.GetPos(ai.frame));
+		cand.insertLast(f.GetPos(ai.frame));
+	}
+	const uint nStep = (gOwnNanoPos.length() > 12) ? (gOwnNanoPos.length() / 12) : 1;
+	for (uint i = 0; i < gOwnNanoPos.length(); i += nStep)
+		cand.insertLast(gOwnNanoPos[i]);
+	const uint cStep = (gOwnConv.length() > 12) ? (gOwnConv.length() / 12) : 1;
+	for (uint i = 0; i < gOwnConv.length(); i += cStep) {
+		if (gOwnConv[i] !is null)
+			cand.insertLast(gOwnConv[i].GetPos(ai.frame));
+	}
+	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	const bool doorPlant = !AirPlant(bd) && (Catalog::gBuildsList[bd].length() > 0);
+	for (uint ci = 0; ci < cand.length(); ++ci) {
+		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), cand[ci]);
 		if (!OnMap(c))
+			continue;
+		if (Base::gAnchorSet && ((c.distance2D(Base::gAnchor) > leash) || Builder::PastFront(c)
+				|| !LatheDepthOk(bd, doorPlant, c)))
 			continue;
 		bool bad = false;
 		for (uint b = 0; (b < gPlotBad.length()) && !bad; ++b)
@@ -202,7 +239,7 @@ void RefreshPlot()
 			const int ud = int(u.circuitDef.id);
 			if (IsPlant(ud) && (PlantTier(ud) < tier) && HasUnit(Factory::gFacUnits, u))
 				plants.insertLast(u);
-			else if (!IsNanoTurret(ud)) {
+			else if (!IsNanoTurret(ud) && !PlotClearable(ud, bd)) {
 				ok = false;
 				++nForeign;
 				if (foreign.length() < 80)
@@ -211,7 +248,7 @@ void RefreshPlot()
 			occ.insertLast(u.id);
 			cost += Catalog::gCostM[ud];
 		}
-		if (!ok || (plants.length() == 0))
+		if (!ok || (occ.length() == 0))
 			continue;
 		if (!PlotCovered(plants)) {
 			++nUncovered;

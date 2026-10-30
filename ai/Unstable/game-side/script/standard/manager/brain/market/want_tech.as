@@ -1141,6 +1141,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			w.kind = WK_TECH;
 			@w.def = Catalog::Def(d);
 			w.pos = at;
+			NotePlantAsk(d, w.gain, w.value);
 			// WHERE THE LAB ACTUALLY LANDS, and how deep that is toward the
 			// enemy. Reported twice as wrong from a watched game, so it is
 			// measured rather than reasoned about.

@@ -490,6 +490,8 @@ bool PlantCopyRefusable(int d)
 int gRezSiteRefused = 0;
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
+	if ((w.def !is null) && (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST) && PlotImportant(int(w.def.id)))
+		NotePlantAsk(int(w.def.id), w.gain, w.value);
 	// Never on a wreck our rez bots are raising: the engine's builder reclaims
 	// a wreck in its way, and a rebuild ate a fusion five rez bots had at 60%.
 	if ((w.def !is null) && !w.def.IsMobile() && (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST)
