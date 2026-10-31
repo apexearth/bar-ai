@@ -1746,13 +1746,27 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// at 0-6 m/s of its own priced a basic at 41-87 m/s, and the charge taken after them changed nothing: crowd3,
 		// 537 basic against 171 advanced).
 		float cYield = chew * Catalog::gConvRatio[d];
+		// ...BY THE SHARE OF OUR CONVERSION THE DENSER ONE ALREADY DOES. The full charge from the first T2 hand cost the
+		// economy against v0.4.09 (ng1, 8 1v1s: with it off 5-0-3 and 1.86x the metal earned, against the code-only
+		// arm's 3-1-4 and 0.77x): one hand at 20-40 m/s raises advanced converters far slower than the energy comes,
+		// and a basic's ground is nobody's then. It is the advanced fleet's ground once that fleet does the converting
+		// -- the 500 m/s seats of his crowd games -- so the charge scales with the denser converters' share of our
+		// conversion capacity, and is whole while an eco building waits for room.
 		DenserHandsSecs(d, 0.f);
-		if (EcoRoomShort() || (gDhBest >= 0)) {
+		float groundW = 0.f;
+		if (EcoRoomShort()) {
+			groundW = 1.f;
+		} else if (gDhBest >= 0) {
+			const float denserE = DenserConvStandingE(d);
+			const float allE = ConvCapE();
+			groundW = (allE > denserE) ? (denserE / allE) : ((denserE > 0.f) ? 1.f : 0.f);
+		}
+		if (groundW > 0.f) {
 			RefreshBestCells();
 			const float cellsR = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 			const float mineE = Catalog::gConvCapacity[d] / cellsR;
 			if (gBestMcell > mineE)
-				cYield -= cellsR * (gBestMcell - mineE) * BestConvRatio();
+				cYield -= groundW * cellsR * (gBestMcell - mineE) * BestConvRatio();
 		}
 		if (cYield <= 0.f) {
 			++gCwGround;
