@@ -1639,8 +1639,14 @@ static int CCircuitAI_TurretsReclaim(CCircuitAI* circuit, CCircuitUnit* target, 
 // as TurretsReclaim is; returns how many were sent
 static int CCircuitAI_TurretsReclaimAlly(CCircuitAI* circuit, int allyId, int frames, int share)
 {
+	circuit->UpdateFriendlyUnits();
 	CAllyUnit* target = circuit->GetFriendlyUnit(allyId);
 	if ((target == nullptr) || (target->GetUnit() == nullptr) || (circuit->GetTeamUnit(allyId) != nullptr)) {
+		static std::map<int, int> nNo;
+		if (nNo[circuit->GetTeamId()]++ < 5) {
+			circuit->LOG("apex: allyeat-none t=%i id=%i why=%s", circuit->GetTeamId(), allyId,
+					(target == nullptr) ? "no-friendly" : ((target->GetUnit() == nullptr) ? "no-unit" : "ours"));
+		}
 		return 0;
 	}
 	const int frame = circuit->GetLastFrame();
@@ -1677,6 +1683,31 @@ static int CCircuitAI_TurretsReclaimAlly(CCircuitAI* circuit, int allyId, int fr
 			continue;
 		}
 		hands.push_back(u);
+	}
+	if (hands.empty()) {
+		// why no hand: the nearest of our turrets, its reach, and what it was doing (crowd12: 1 eat against 42 asks)
+		static std::map<int, int> nEmpty;
+		if (nEmpty[circuit->GetTeamId()]++ < 8) {
+			float best = 1e9f, reach = 0.f;
+			int tasked = -1;
+			for (auto& kv : circuit->GetTeamUnits()) {
+				CCircuitUnit* u = kv.second;
+				if ((u == nullptr) || u->IsDead() || u->GetCircuitDef()->IsMobile() || u->GetCircuitDef()->IsBuilder()
+					|| !u->GetCircuitDef()->IsAbleToReclaim() || (u->GetCircuitDef()->GetBuildDistance() <= 0.f)) {
+					continue;
+				}
+				const float dd = u->GetPos(frame).distance2D(tp);
+				if (dd < best) {
+					best = dd;
+					reach = u->GetCircuitDef()->GetBuildDistance() + tr;
+					IUnitTask* cur = u->GetTask();
+					tasked = (cur == nullptr) ? 0 : ((cur->GetManager() != factoryMgr) ? 1 : 2);
+				}
+			}
+			circuit->LOG("apex: allyeat-none t=%i id=%i %s why=no-hand nearestTurret=%.0f reach=%.0f task=%i",
+					circuit->GetTeamId(), allyId, target->GetCircuitDef()->GetDef()->GetName(), best, reach, tasked);
+		}
+		return 0;
 	}
 	std::sort(hands.begin(), hands.end(), [frame, &tp](CCircuitUnit* a, CCircuitUnit* b) {
 		return a->GetPos(frame).SqDistance2D(tp) < b->GetPos(frame).SqDistance2D(tp);

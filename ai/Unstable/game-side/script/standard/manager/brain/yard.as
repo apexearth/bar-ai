@@ -404,6 +404,7 @@ void YardCensusLog(uint np)
 
 const int FX_STEP = 3 * SECOND;
 const float FX_SHUT = 256.f;   // a stop this far from the bus end is reported (the end is a sector point, ~one sector)
+const float FX_REACH = 2000.f;  // how far toward the enemy a unit must get to have left home
 int gFxNextAt = 0;
 uint gFxCursor = 0;
 int gFxChecked = 0, gFxShut = 0, gFxNoPath = 0;
@@ -438,6 +439,14 @@ void FacExitWatch()
 	AIFloat3 goal = Front::FoeAnchor();
 	if (!OnMap(goal))
 		goal = AIFloat3(0.5f * float(AiTerrainWidth()), 0.f, 0.5f * float(AiTerrainHeight()));
+	// ...but no further than leaving home takes: the whole map's path cost up to 40 ms in one frame (crowd10 up.facexit
+	// maxMs 37.8-40.3), and a pen is a pocket at home, so the goal is cut to FX_REACH along the same bearing
+	{
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		const float dg = fp.distance2D(goal);
+		if (dg > FX_REACH)
+			goal = fp + (goal - fp) * (FX_REACH / dg);
+	}
 	AIFloat3 door, stop;
 	const float gap = ai.FacExitGap(f, goal, door, stop);
 	if (gap < 0.f) {
