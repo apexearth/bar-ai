@@ -503,6 +503,12 @@ const int XP_STEP = 5 * SECOND;   // one ask per teammate per pass bounds how fa
 int gXpNextAt = 0;
 int gXpOwn = 0, gXpAsked = 0, gXpSkipped = 0, gXpAllyEat = 0;
 
+bool XpEatable(int bd, float plantCost)
+{
+	return Catalog::ValidId(bd) && (Catalog::gBuildsList[bd].length() == 0) && (Catalog::gExtractsM[bd] <= 0.f)
+		&& !Catalog::gNeedGeo[bd] && (Catalog::gCostM[bd] <= plantCost);
+}
+
 void ExitPathClear()
 {
 	if (ai.frame < gXpNextAt)
@@ -527,19 +533,27 @@ void ExitPathClear()
 	string ate;
 	array<int> askedTeams;   // one ask per teammate per pass: its board holds one
 	int own = 0, ally = 0, skip = 0;
+	// EVERY BLOCKER AT ONCE, the turrets split over them (his 10-30: "you usually want to use more than 1 nano to
+	// reclaim to get it done right away"): each takes its share of the turrets in its reach -- the first of N a 1/N
+	// share, the next 1/(N-1) of what is left -- instead of the whole ring on the first and the rest waiting a pass.
+	int left = 0;
+	for (uint i = 0; i + 4 < b.length(); i += 5)
+		if (XpEatable(int(b[i + 2]), plantCost))
+			++left;
 	for (uint i = 0; i + 4 < b.length(); i += 5) {
 		const int bd = int(b[i + 2]);
 		const int team = int(b[i + 4]);
-		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f)
-			|| Catalog::gNeedGeo[bd] || (Catalog::gCostM[bd] > plantCost)) {
+		if (!XpEatable(bd, plantCost)) {
 			++skip;
 			continue;
 		}
+		const int share = (left > 1) ? left : 1;
+		--left;
 		if (team == ai.teamId) {
 			CCircuitUnit@ u = ai.GetTeamUnit(Id(int(b[i + 3])));
 			if ((u is null) || (u.circuitDef is null))
 				continue;
-			const int n = NanosEat(u, 1);
+			const int n = NanosEat(u, share);
 			if (n == 0)
 				Military::NotePenVerdict(plantId, u.id, u.GetPos(ai.frame), AIFloat3(0.f, 0.f, 1.f), flow);
 			++own;
@@ -548,7 +562,8 @@ void ExitPathClear()
 		} else {
 			// OUR TURRETS EAT IT (his 10-30: "why ask a teammate to reclaim when we can do it ourselves?"): our turrets
 			// stand in our lanes; the teammate is asked only when none of ours reaches it
-			const int n = ai.TurretsReclaimAlly(int(b[i + 3]), int((60.f + Catalog::gCostM[bd] / 90.f) * float(SECOND)), 1);
+			const int n = ai.TurretsReclaimAlly(int(b[i + 3]), int((60.f + Catalog::gCostM[bd] / 90.f) * float(SECOND)),
+					share);
 			if (n > 0) {
 				++gXpAllyEat;
 				if (ate.length() < 160)
@@ -592,18 +607,32 @@ float FacFlowM(CCircuitUnit@ fac)
 // The buildings where a penned plant's path stops: ours eaten by the turrets in reach, or offered to the reclaim market
 // at the plant's flow; a teammate's asked of its owner (one of our bots), as the yard watch asks for a door strip. No
 // plant is eaten here: a plant against a plant is the plot's and the yard's call.
+bool CureEatable(int bd)
+{
+	return Catalog::ValidId(bd) && (Catalog::gBuildsList[bd].length() == 0) && (Catalog::gExtractsM[bd] <= 0.f);
+}
+
 void FacExitCure(CCircuitUnit@ f, const AIFloat3& in stop, const AIFloat3& in door)
 {
 	const float flow = FacFlowM(f);
 	const AIFloat3 dir = (stop.distance2D(door) > 1.f) ? (stop - door) / stop.distance2D(door) : AIFloat3(0.f, 0.f, 1.f);
 	string ate;
 	array<CCircuitUnit@>@ own = ai.GetOwnStructsNear(stop, 160.f);
+	array<float>@ al = ai.GetAllyStructsNear(stop, 160.f);
+	// the turrets split over every blocker at the stop, ours and a teammate's (see ExitPathClear)
+	int left = 0;
+	for (uint i = 0; (own !is null) && (i < own.length()); ++i)
+		if ((own[i] !is null) && (own[i].circuitDef !is null) && !(own[i] is f) && CureEatable(int(own[i].circuitDef.id)))
+			++left;
+	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5)
+		if (CureEatable(int(al[i + 2])))
+			++left;
 	for (uint i = 0; (own !is null) && (i < own.length()); ++i) {
 		CCircuitUnit@ b = own[i];
-		if ((b is null) || (b.circuitDef is null) || (b is f) || (Catalog::gBuildsList[int(b.circuitDef.id)].length() > 0)
-			|| (Catalog::gExtractsM[int(b.circuitDef.id)] > 0.f))
+		if ((b is null) || (b.circuitDef is null) || (b is f) || !CureEatable(int(b.circuitDef.id)))
 			continue;
-		const int n = NanosEat(b, 1);
+		const int n = NanosEat(b, (left > 1) ? left : 1);
+		--left;
 		if (n == 0) {
 			Military::NotePenVerdict(f.id, b.id, b.GetPos(ai.frame), dir, flow);
 			++gFxOffered;
@@ -613,14 +642,15 @@ void FacExitCure(CCircuitUnit@ f, const AIFloat3& in stop, const AIFloat3& in do
 	}
 	// one ask per teammate per cure (each teammate's board holds one): crowd10, a gantry waited 8 minutes at a stop held
 	// by two teammates' buildings while the cure asked one teammate in all every 30 s
-	array<float>@ al = ai.GetAllyStructsNear(stop, 160.f);
 	array<int> askedTeams;
 	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
 		const int bd = int(al[i + 2]);
 		const int team = int(al[i + 4]);
-		if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0) || (Catalog::gExtractsM[bd] > 0.f))
+		if (!CureEatable(bd))
 			continue;
-		const int n = ai.TurretsReclaimAlly(int(al[i + 3]), int((60.f + Catalog::gCostM[bd] / 90.f) * float(SECOND)), 1);
+		const int n = ai.TurretsReclaimAlly(int(al[i + 3]), int((60.f + Catalog::gCostM[bd] / 90.f) * float(SECOND)),
+				(left > 1) ? left : 1);
+		--left;
 		if (n > 0) {
 			++gFxAllyEat;
 			ate += " " + Catalog::Def(bd).GetName() + "@t" + team + "x" + n;

@@ -7,6 +7,7 @@
 
 #include "terrain/TerrainManager.h"
 #include <unordered_set>
+#include <chrono>
 #include <set>
 #include <tuple>
 #include "terrain/BlockRectangle.h"
@@ -995,8 +996,26 @@ float CTerrainManager::ExitGap(CCircuitUnit* fac, const AIFloat3& goal, AIFloat3
 	outDoor = it->second.busStart;
 	outStop = outDoor;
 	springai::Pathing* pathing = circuit->GetPathing();
+	// apex: what the engine path costs, worst per seat per minute (crowd14: up.facexit maxMs 37-44 after the goal was cut
+	// to 2,000 elmos -- so not the length)
+	const auto t0 = std::chrono::steady_clock::now();
+	struct Cost { int at = 0; double initUs = 0, walkUs = 0; int n = 0; };
+	static std::map<int, Cost> cost;
+	Cost& cc = cost[circuit->GetTeamId()];
+	auto flushCost = [&]() {
+		if (circuit->GetLastFrame() - cc.at >= FRAMES_PER_SEC * 60) {
+			circuit->LOG("apex: facexit-cost t=%i calls=%i worstInitUs=%.0f worstWalkUs=%.0f", circuit->GetTeamId(), cc.n,
+					cc.initUs, cc.walkUs);
+			cc = Cost();
+			cc.at = circuit->GetLastFrame();
+		}
+	};
 	const int pathId = pathing->InitPath(outDoor, outGoal, pathType, 64.f);
+	const auto t1 = std::chrono::steady_clock::now();
+	cc.initUs = std::max(cc.initUs, std::chrono::duration<double, std::micro>(t1 - t0).count());
+	++cc.n;
 	if (pathId == 0) {
+		flushCost();
 		return outDoor.distance2D(outGoal);
 	}
 	// The engine appends the goal itself as the last waypoint whether or not the path reaches it, so the stop is the
@@ -1024,9 +1043,11 @@ float CTerrainManager::ExitGap(CCircuitUnit* fac, const AIFloat3& goal, AIFloat3
 		++n;
 	}
 	pathing->FreePath(pathId);
-	const float approx = pathing->GetApproximateLength(outDoor, outGoal, pathType, 64.f);
+	cc.walkUs = std::max(cc.walkUs, std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t1).count());
+	flushCost();
 	static std::map<int, int> dbg;
 	if (dbg[circuit->GetTeamId()]++ < 4) {
+		const float approx = pathing->GetApproximateLength(outDoor, outGoal, pathType, 64.f);
 		circuit->LOG("apex: facexit-dbg t=%i %s#%i n=%i door=%.0f,%.0f goal=%.0f,%.0f stop=%.0f,%.0f before=%.0f,%.0f maxStep=%.0f straight=%.0f approx=%.0f",
 				circuit->GetTeamId(), fac->GetCircuitDef()->GetDef()->GetName(), int(fac->GetId()), n, outDoor.x, outDoor.z,
 				outGoal.x, outGoal.z, outStop.x, outStop.z, beforeLast.x, beforeLast.z, maxStep, outDoor.distance2D(outGoal), approx);
