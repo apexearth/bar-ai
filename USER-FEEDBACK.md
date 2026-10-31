@@ -14,6 +14,9 @@ plays in `TODO.md`; the full older text is in git (`git log -p USER-FEEDBACK.md`
 - **Beat BARb stable hard reliably in his 2v2** (Glacier Pass, Armada both, +100% both, 0.2 lr boxes). Open; the 16-24 minute window is where it is lost.
 - **Fusions start soon, alongside the moho walk** (09-22): *"we also do need to get started on making fusions. Pretty soon."* (`TUNE_T2_FUSION_PULL` waits on this.) Open.
 
+- **Self-destructing our own buildings hurts what stands around them** (10-31): never self-destruct a building if its blast will badly hurt nearby things. The wall unstick (`UnstickSelfD`, unstick.as) weighs only the wall's own metal; a self-destruct is its own, bigger weapon (solar/radar 1,000 dmg r240 vs 89 on death; adv converter 2,650 r480). In progress: C++ reads the self-destruct weapon (`GetSelfDRadius/Damage/Edge`, lane nnlog, not built), catalog fields added; next: turrets reclaim the wall first, self-destruct only past its blast collateral. Open.
+- **Fast bombers, or a lagging game, turn around between orders** (10-31): give move orders further ahead. `CMoveAction` queues a fixed number of path steps ahead (`increment * LEAN_AHEAD`), not scaled by the unit's speed or by the order lag (`stuck.as gOrderLagMax`), so a fast plane reaches its last ordered point before the next order lands. Open.
+
 ## Economy and builders
 
 - Upgrade the extractors first, ours and allies' (09-30): one T2 con stays on the fusion with T1 help, the rest upgrade every extractor, one hand each, each priced on its own walk and danger; give a T2 con to an ally with none. Built, unmeasured (`UpgradeHandsWant`, `UpgradesFirst`, `UpdateConGift`).
