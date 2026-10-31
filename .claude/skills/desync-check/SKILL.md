@@ -103,6 +103,11 @@ Verified 2026-08-09 by reading each implementation.
   entities in the same global `entt` registry as the synced paths. QTPFS's own
   `ExecuteQueuedSearches` warns "Do NOT impact this group while the background
   tasks are running". **This caused the 2026-08-09 desync.**
+  **And the 2026-10-30 one**, from C++ this time: `circuit->GetPathing()->InitPath` in a factory site check
+  (`DoorEscapes`) and the exit watch. Reproduced in `run_netmatch.py` (36 sync errors from frame 14468), clean after
+  replacing it with `CTerrainManager::FloodStop`, a flood of the blocking map. **Any `Pathing::InitPath` /
+  `GetApproximateLength` in our C++ is the same bug** -- check with
+  `grep -rn -- '->InitPath(\|->GetApproximateLength(' cpp/src` (only MetalManager's load-time clustering is stock).
 - `ai.CallRules` → `luaRules->RecvSkirmishAIMessage`, a direct call into
   **synced Lua** with no net message. Currently unused by any apex script and no
   gadget implements the receiver. Never use it.

@@ -148,10 +148,15 @@ def _report(out: Path) -> int:
 
     hits = SYNC_RE.findall(text)
     ai_err = len(re.findall(r"\.as \(\d+, \d+\) : ERR", text))
-    crashed = "problem with a skirmish AI" in text
+    # A trace at frame -1 is the load-time hang watchdog (scripts compiling past its 30 s on a busy machine), not a
+    # crash: net-fix-11 (10-30) had two and the AI then played all 21,600 frames.
+    traces = re.findall(r"\[f=(-?\d+)\][^\n]*problem with a skirmish AI", text)
+    crashed = any(int(f) >= 0 for f in traces)
+    load_traces = sum(1 for f in traces if int(f) < 0)
 
     print(f"AngelScript errors : {ai_err}")
-    print(f"AI crash           : {'YES' if crashed else 'no'}")
+    print(f"AI crash           : {'YES' if crashed else 'no'}"
+          + (f"  ({load_traces} load-time watchdog trace(s), not a crash)" if load_traces else ""))
     if not hits:
         print("sync errors        : none -- the two processes agreed all game")
         return 0
