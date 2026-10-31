@@ -802,6 +802,13 @@ void CBombTask::FindTarget()
 					raw *= std::max(0.f, 1.f - ageS / staleS);
 				}
 			}
+			// apex: A MOVING TARGET UNDER THE ORDER LAG (his 10-31): by the time the order lands and the wing
+			// arrives it may have walked speed x (lag + flight); weighed by the bomb's splash against that walk
+			if (edef->IsMobile() && (circuit->GetTunable("apex_bomb_lag", 1.f) > 0.f)) {
+				const float aoe = std::max(cdef->GetAoe(), 16.f);
+				const float walk = edef->GetSpeed() * (circuit->GetOrderLagSec() + dist / std::max(cdef->GetSpeed(), 1.f));
+				raw *= aoe / (aoe + walk);
+			}
 			// TARGET VARIANCE (apexearth: "our air tends to repeatedly try
 			// bombing the same thing"). A target another squad committed to
 			// within apex_bomb_revisit_s is discounted, fading back to full
