@@ -1,0 +1,312 @@
+namespace Market {
+//------------------------------------------------------------------------------
+// HE GOES DOWN WITH HIS SHIP (his 2026-10-10, docs/doctrine.md): while the base is being
+// destroyed and what defends it cannot win without him, he does not run -- he
+// fights the attackers at the base, the D-gun on the heaviest. If the guns and
+// army there hold on their own, he stays safe.
+//
+// Being destroyed: a structure of ours lost on home ground in the last 45 s
+// (Military::BaseRaided) and an enemy ground army standing on home ground.
+// Holding is the intercept's own test: StrRatio(their ground metal, the guns
+// that reach them + our ground army within apex_threat_r) at his home parity.
+//------------------------------------------------------------------------------
+
+bool gShip = false;
+AIFloat3 gShipAt;
+int gShipG = -1;
+int gShipHome = 0;
+int gShipUnheld = 0;
+float gShipFoeM = 0.f;
+float gShipAtM = 0.f;
+float gShipGuns = 0.f;
+float gShipArmyM = 0.f;
+float gShipAllyM = 0.f;
+float gShipStr = 0.f;
+float gShipStrCom = 0.f;
+float gShipDgStr = 0.f;
+float gShipComM = 0.f;   // his fight in their metal
+bool gShipHopeless = false;
+int gShipOverruled = 0;
+int gShipOverruledLogAt = 0;
+int gShipN = 0;
+int gShipSec = 0;
+int gShipFrom = -1;
+int gShipLogAt = 0;
+int gShipDgAt = 0;
+float gShipRetWas = -1.f;
+CCircuitDef@ gShipDef = null;
+array<float> gCsX, gCsZ, gCsM;
+
+bool ComShip() { return gShip; }
+
+void ComShipCensus()
+{
+	gCsX.resize(0);
+	gCsZ.resize(0);
+	gCsM.resize(0);
+	for (uint i = 0; i < Military::gCombatId.length(); ++i) {
+		CCircuitUnit@ c = ai.GetTeamUnit(Id(Military::gCombatId[i]));
+		if ((c is null) || (c.circuitDef is null) || c.circuitDef.IsAbleToFly())
+			continue;
+		const AIFloat3 p = c.GetPos(ai.frame);
+		gCsX.insertLast(p.x);
+		gCsZ.insertLast(p.z);
+		gCsM.insertLast(c.circuitDef.costM);
+	}
+}
+
+// A group of nothing but raiders and scouts outruns him; the guns answer those.
+bool ShipAllRaiders(int g)
+{
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < nU; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d] || Catalog::gBuilder[d]
+			|| (Catalog::gPower[d] <= 1.f))
+			continue;
+		if (!Catalog::Def(d).IsRoleAny(Unit::Role::RAIDER.mask | Unit::Role::SCOUT.mask))
+			return false;
+	}
+	return true;
+}
+
+// The heaviest member of the group he is fighting, for the line.
+string ShipHeavy()
+{
+	if ((gShipG < 0) || (gShipG >= aiEnemyMgr.GetEnemyGroupCount()))
+		return "-";
+	int best = -1, n = 0;
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gShipG);
+	for (int k = 0; k < nU; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gShipG, k);
+		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d])
+			continue;
+		++n;
+		if ((best < 0) || (Catalog::gPower[d] > Catalog::gPower[best]))
+			best = d;
+	}
+	if (best < 0)
+		return "-";
+	return Catalog::Def(best).GetName() + "/" + n;
+}
+
+// What his D-gun takes out of group g before they could kill him alone: the
+// shots his bank and income allow (ComDGunKills), spent on the strongest
+// members first, as the D-gun picks. Commanders take no D-gun damage.
+float ShipDGunStr(CCircuitUnit@ u, int g)
+{
+	if ((g < 0) || (g >= aiEnemyMgr.GetEnemyGroupCount()))
+		return 0.f;
+	array<float> s;
+	array<float> walk;   // seconds to close from its range to the D-gun's, under fire (0 when it cannot outrange it)
+	const float dgR = u.DGunRange();
+	const float cSpd = Catalog::gSpeed[int(u.circuitDef.id)];
+	float dps = 0.f, rad = 0.f, vmax = 0.f;
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < nU; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		dps += Catalog::gSurfDps[d];
+		if (Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		s.insertLast(UnitStrength(d));
+		const float over = Catalog::gLandRange[d] - dgR;
+		walk.insertLast(((over > 0.f) && (cSpd > 1.f)) ? over / cSpd : 0.f);
+		rad += 4.f * float((Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d]);
+		if (Catalog::gSpeed[d] > vmax)
+			vmax = Catalog::gSpeed[d];
+	}
+	if ((s.length() == 0) || (dps <= 0.f))
+		return 0.f;
+	const float tFight = u.GetHealthPercent() * Catalog::gHealth[int(u.circuitDef.id)] / dps;
+	float k = ComDGunKills(u, tFight, vmax, rad / float(s.length()), int(s.length()));
+	// ONE AT A TIME, EACH WALKED TO: the heaviest first; a target that outranges the D-gun costs the walk from its
+	// range to his, under the group's fire, out of the seconds he lives -- and after a kill the next is walked to
+	// again (cloak would make the first walk free, but the script cannot read it: the walk is always counted)
+	const float rl = u.DGunReload();
+	float t = tFight;
+	float dgOut = 0.f;
+	array<bool> used(s.length(), false);
+	while (k > 0.f) {
+		int best = -1;
+		for (uint i = 0; i < s.length(); ++i)
+			if (!used[i] && ((best < 0) || (s[i] > s[uint(best)])))
+				best = int(i);
+		if (best < 0)
+			break;
+		used[uint(best)] = true;
+		t -= walk[uint(best)];
+		if (t <= 0.f)
+			break;
+		dgOut += s[uint(best)] * ((k >= 1.f) ? 1.f : k);
+		k -= 1.f;
+		t -= (rl > 0.f) ? rl : 0.f;
+	}
+	return dgOut;
+}
+
+// Metal per strength in group g: m over the summed strength of its fighters (0 when none).
+float ShipMetalPerStr(int g, float m)
+{
+	if ((g < 0) || (g >= aiEnemyMgr.GetEnemyGroupCount()))
+		return 0.f;
+	float s = 0.f;
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < nU; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if (Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d] && (Catalog::gPower[d] > 1.f))
+			s += UnitStrength(d);
+	}
+	return (s > 0.f) ? m / s : 0.f;
+}
+
+void ShipRetreatLine(CCircuitUnit@ u, bool on)
+{
+	if (on) {
+		if (gShipDef !is null)
+			return;
+		@gShipDef = ai.GetCircuitDef(u.circuitDef.id);
+		if (gShipDef is null)
+			return;
+		gShipRetWas = gShipDef.GetRetreat();
+		gShipDef.SetRetreat(0.f);
+	} else if (gShipDef !is null) {
+		gShipDef.SetRetreat(gShipRetWas);
+		@gShipDef = null;
+	}
+}
+
+// Once a second from ComDecideTick; nothing to do unless the base is raided.
+void ComShipAssess(CCircuitUnit@ u)
+{
+	const bool was = gShip;
+	gShip = false;
+	gShipHome = 0;
+	gShipUnheld = 0;
+	gShipFoeM = 0.f;
+	gShipAtM = 0.f;
+	gShipGuns = 0.f;
+	gShipArmyM = 0.f;
+	gShipAllyM = 0.f;
+	gShipStr = 0.f;
+	gShipG = -1;
+	if (Builder::gHomeSet && Military::BaseRaided()) {
+		const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+		const float r2 = r * r;
+		bool census = false;
+		const int nG = aiEnemyMgr.GetEnemyGroupCount();
+		for (int g = 0; g < nG; ++g) {
+			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
+			// the base itself, not our end of the map: FWD_HOME reached outlying mexes 3,000+ away
+			// and he walked out to them with his retreat line at 0 (his 10-10: dying a lot more)
+			if (!OnMap(gp) || (Military::ForwardFraction(gp) > Military::FWD_HOME)
+				|| (gp.distance2D(Builder::gHomePos) > Builder::BASE_DANGER_DIST))
+				continue;
+			float sl = 0.f;
+			const float comM = ComHomeComM(g);
+			const float m = Military::GroundArmyOf(g, sl) + comM;
+			if (m <= 0.f)
+				continue;
+			++gShipHome;
+			gShipFoeM += m;
+			if ((comM <= 0.f) && ShipAllRaiders(g))
+				continue;
+			if (!census) {
+				census = true;
+				ComShipCensus();
+			}
+			float army = 0.f;
+			for (uint i = 0; i < gCsX.length(); ++i) {
+				const float dx = gCsX[i] - gp.x, dz = gCsZ[i] - gp.z;
+				if (dx * dx + dz * dz <= r2)
+					army += gCsM[i];
+			}
+			// an ally's army standing at our base defends it too (team games: the side, not the seat)
+			const float allyM = ai.GetAllyArmyMAt(gp, r);
+			army += allyM;
+			float guns = Military::GunsAt(gp);
+			if (guns < 0.f)
+				guns = 0.f;
+			const float str = StrRatio(m, guns + army);
+			const bool held = str * Military::ANSWER_PARITY <= 1.f;
+			if (!held)
+				++gShipUnheld;
+			// his target is the heaviest group not held; the line shows the
+			// heaviest held one when none is
+			const bool better = held ? ((gShipUnheld == 0) && (m > gShipAtM))
+				: ((gShipUnheld == 1) || (m > gShipAtM));
+			if (!better)
+				continue;
+			gShipAtM = m;
+			gShipAt = gp;
+			gShipG = g;
+			gShipGuns = guns;
+			gShipArmyM = army;
+			gShipAllyM = allyM;
+			gShipStr = str;
+		}
+	}
+	gShip = gShipUnheld > 0;
+	gShipStrCom = 0.f;
+	gShipDgStr = 0.f;
+	if (gShipAtM > 0.f) {
+		// His fight in THEIR metal (his 10-13: "our commander makes bad decisions to join very
+		// risky fights"): his price, 2,700, read as fighting strength, and he stepped into 2,700 of
+		// tanks beside 43 of army. Strength (and the D-gun's kills, in strength) is converted at
+		// the metal per strength of the group he would fight.
+		const float perS = ShipMetalPerStr(gShipG, gShipAtM);
+		const float comM = UnitStrength(int(u.circuitDef.id)) * u.GetHealthPercent() * perS;
+		gShipComM = comM;
+		const float ours = (gShipGuns + gShipArmyM + comM) * OurQualityM();
+		gShipDgStr = ShipDGunStr(u, gShipG) * perS;
+		float theirs = (gShipAtM - gShipDgStr) * FoeQualityM();   // the kills leave before quality scales what stays
+		if (theirs < 0.f)
+			theirs = 0.f;
+		gShipStrCom = (ours > 0.f) ? theirs / ours : 1e6f;
+	}
+	// even with him the base loses: he runs (his 10-10: "if it looks too hopeless -- run"). In a 1v1 too:
+	// there his death ends the game (his 10-12: he fought straight into armies he could not beat).
+	gShipHopeless = gShip && (gShipStrCom * Military::ANSWER_PARITY > 1.f);
+	if (gShipHopeless)
+		gShip = false;
+	ComHomeShip(u);
+	if (gShip) {
+		++gShipSec;
+		ai.PublishTeamValue("comship", float(ai.frame));
+		ShipRetreatLine(u, true);
+	} else {
+		ShipRetreatLine(u, false);
+	}
+	if (gShip && !was) {
+		++gShipN;
+		gShipFrom = ai.frame;
+	}
+	const bool edge = gShip != was;
+	if ((gShipHome > 0 || edge) && (edge || (ai.frame >= gShipLogAt))) {
+		gShipLogAt = ai.frame + 10 * SECOND;
+		const int dgo = u.DGunOrders();
+		AiLog(Factory::T() + "apex: com-ship t=" + ai.teamId
+			+ " dying=" + (Military::BaseRaided() ? ("yes raidM=" + int(Military::gRaidM)) : "no")
+			+ " decision=" + (gShip ? "STEP-IN" : (gShipHopeless ? "RUN-hopeless" : ((gShipHome > 0) ? "SAFE-held" : "SAFE-gone")))
+			+ " foeM=" + int(gShipFoeM) + " homeGroups=" + gShipHome + " unheld=" + gShipUnheld
+			+ " tgtM=" + int(gShipAtM) + " heavy=" + ShipHeavy()
+			+ " defM=" + int(gShipGuns + gShipArmyM) + " (guns=" + int(gShipGuns) + " army=" + int(gShipArmyM) + " ally=" + int(gShipAllyM) + ")"
+			+ " str=" + formatFloat(gShipStr, "", 0, 2) + " strCom=" + formatFloat(gShipStrCom, "", 0, 2) + " comM=" + int(gShipComM)
+			+ " dgStr=" + formatFloat(gShipDgStr, "", 0, 2)
+			+ " parity=" + formatFloat(Military::ANSWER_PARITY, "", 0, 1)
+			+ " flips=" + ((gShip && (gShipStrCom * Military::ANSWER_PARITY <= 1.f)) ? 1 : 0)
+			+ " dec=" + ComOptName(gComDec) + " hp=" + int(u.GetHealthPercent() * 100.f)
+			+ " dgReady=" + (u.DGunReady(ai.frame, Eco::ECur()) ? 1 : 0)
+			+ " dgOrders=" + (dgo - gShipDgAt) + " e=" + int(Eco::ECur()) + "/" + int(Eco::EInc() - Eco::EPull())
+			+ " cloakAsk=" + (gShip ? 1 : 0)
+			+ " homeD=" + int(u.GetPos(ai.frame).distance2D(Builder::gHomePos))
+			+ ((gShip && OnMap(gShipAt)) ? (" tgtD=" + int(u.GetPos(ai.frame).distance2D(gShipAt))) : "")
+			+ " retreat=" + formatFloat(u.circuitDef.GetRetreat(), "", 0, 2)
+			+ ((!gShip && was) ? (" secs=" + ((ai.frame - gShipFrom) / SECOND)) : "")
+			+ " n=" + gShipN);
+		gShipDgAt = dgo;
+	}
+}
+
+}  // namespace Market

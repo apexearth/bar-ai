@@ -192,7 +192,7 @@ const float TUNE_TEAM_AIRLOSS = 1.f;
 // [toggle 0/1] -- A policy network's output 0 plays each continuous head at the
 //   rule's value (policy.as PnValueRule), not the log-middle of its range (aa
 //   0.63x, gunp 0.45x, mass 1.22x). His 10-14; A/B before default.
-const float TUNE_PN_RULE_CENTRE = 1.f;
+const float TUNE_PN_RULE_CENTRE = 0.f;
 const float TUNE_PN_EXPLORE = 0.f;   // policy.as: the training push on every network output, N(0, sigma); 0 off (releases, tests)
 const float TUNE_PN_EXPLORE_TILT = 0.05f;   // policy.as: the push on a choice or list option's output under exploration (a tilt exp(8 x o): 0.05 is about x1.5)
 const float TUNE_PN_LOG_RATE = 0.02f;   // policy.as: share of auction/production option calls logged under exploration
