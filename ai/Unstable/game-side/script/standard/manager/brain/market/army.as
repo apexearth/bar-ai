@@ -263,6 +263,10 @@ float NavyShare()
 	if (cut > 0.f)
 		return cut;
 	if (MapHasWater() && NavalLead()) {
+		// NO YARD, NO NAVY SHARE: the plant market can price the yard out (Supreme Isthmus 8v8, 10-31: four leads held
+		// 75% of their army target for ships, no yard was ever built, their land labs read the other 25% as full)
+		if ((ai.GetTunable("apex_navy_needs_yard", TUNE_NAVY_NEEDS_YARD) > 0.f) && (OwnedWaterPlants() == 0))
+			return 0.f;
 		// Once we hold the water the fleet is kept, not grown: the budget
 		// is what already floats.
 		if (WaterControlled()) {
@@ -1649,6 +1653,7 @@ bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
 int gEcoLatch = -1;   // the team elected eco seat, kept while its heartbeat lives
 int gEcoLatch2 = -1;  // the second, while apex_eco_seats >= 2
+bool gEcoSecond = false;  // this AI holds the second eco seat
 bool gEcoLean = false;   // this seat holds the small-team eco lean (strict, a share of the phase)
 int gEcoLeanLatch = -1;  // the team's lean seat, elected once
 bool gEcoWalkLogged = false;
@@ -1804,6 +1809,7 @@ bool EcoRoleActive()
 	const bool seatable = (sh[seat] > 0.f) && (dmed > 1.f)
 		&& ((mates.length() >= 8) || (seatD >= dmed * margin * margin));
 	gEcoRole = seatable && ((ht[seat] == ai.teamId) || (two && (ht[uint(seat2)] == ai.teamId)));
+	gEcoSecond = gEcoRole && (ht[seat] != ai.teamId);
 	// ONE ECO FOR THE GAME (his 10-15): a neighbour's death moved the role mid-game and the eco seat
 	// went back to towers while another started from nothing. Elected once; moves only when the
 	// seat's heartbeat stops.
@@ -1831,6 +1837,7 @@ bool EcoRoleActive()
 		}
 		gEcoRole = ((gEcoLatch >= 0) && (gEcoLatch == ai.teamId))
 			|| (two && (gEcoLatch2 >= 0) && (gEcoLatch2 == ai.teamId));
+		gEcoSecond = gEcoRole && (gEcoLatch != ai.teamId);
 	}
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
@@ -1933,7 +1940,10 @@ float EcoRoleTargetM()
 	// separate clock.
 	const float force = EcoForce();
 	const float lean = gEcoLean ? ai.GetTunable("apex_eco_lean", TUNE_ECO_LEAN) : 1.f;
-	return base * IncomeMult() * ((force > 0.f) ? force : 1.f) * ((lean > 0.f) ? lean : 1.f);
+	// THE SECOND SEAT IS A HALF ECO (his 10-31): the 08-31 rule was made for one eco seat
+	const float half = gEcoSecond ? ai.GetTunable("apex_eco_seat2_share", TUNE_ECO_SEAT2_SHARE) : 1.f;
+	return base * IncomeMult() * ((force > 0.f) ? force : 1.f) * ((lean > 0.f) ? lean : 1.f)
+		* ((half > 0.f) ? half : 1.f);
 }
 
 // TRUE while the rear specialist is still building the economy it named --

@@ -675,6 +675,8 @@ local NAMES = {
 	"apex_threat_mul", -- coverage.as: threat perception multiplier, 0 in the eco test (1)
 	"apex_eco_seat_t3", -- ecoseat.as: past half its growth target the eco seat builds the team gantry and its T3 (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
+	"apex_eco_seat2_share", -- army.as: the second eco seat's growth target as a share of the first's (1)
+	"apex_navy_needs_yard", -- army.as NavyShare: no water plant, no navy share of the army target (0)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)
 	"apex_team_tech",         -- teamtech.as + gift.as: one seat techs and hands out advanced cons; the others price their own first lab down (0)
 	"apex_team_pay",          -- teamtech.as: the other seats pay the tech seat's shortfall for its advanced lab and team constructors (1)
