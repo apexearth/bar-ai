@@ -204,8 +204,10 @@ public:
 	// apex: from the door a factory facDef would have at pos, a unit it makes gets nearer `goal` than the door
 	bool DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, const springai::AIFloat3& pos, int facing,
 			const springai::AIFloat3& goal);
-	// apex: the engine path's last walked waypoint from start toward goal (the engine appends the goal itself)
-	springai::AIFloat3 PathStop(int pathType, const springai::AIFloat3& start, const springai::AIFloat3& goal);
+	// apex: from start, how near goal a unit of mobileDef can get over ground no structure body stands on, by a flood
+	// of the blocking map (host-local memory only: the engine path this replaced ran on the host alone and desynced)
+	springai::AIFloat3 FloodStop(CCircuitDef* mobileDef, const springai::AIFloat3& start, const springai::AIFloat3& goal,
+			int* outCells = nullptr);
 private:
 	void MarkBusPath();
 	void FillParentBusNodes(CPathInfo* pathInfo);

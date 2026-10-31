@@ -981,78 +981,29 @@ void CTerrainManager::NotePathOnStructs(CCircuitUnit* fac, const std::vector<int
 
 float CTerrainManager::ExitGap(CCircuitUnit* fac, const AIFloat3& goal, AIFloat3& outDoor, AIFloat3& outStop)
 {
-	AIFloat3 outGoal = goal;
 	auto it = busPath.find(fac);
 	if ((it == busPath.end()) || (it->second.busDef == nullptr) || !utils::is_valid(it->second.busStart)
 		|| !utils::is_valid(goal)) {
 		return -1.f;
 	}
-	springai::MoveData* md = it->second.busDef->GetDef()->GetMoveData();
-	if (md == nullptr) {
-		return -1.f;
-	}
-	const int pathType = md->GetPathType();
-	delete md;
 	outDoor = it->second.busStart;
-	outStop = outDoor;
-	springai::Pathing* pathing = circuit->GetPathing();
-	// apex: what the engine path costs, worst per seat per minute (crowd14: up.facexit maxMs 37-44 after the goal was cut
-	// to 2,000 elmos -- so not the length)
+	// the flood, not the engine path (see FloodStop); its cost, worst per seat per minute
 	const auto t0 = std::chrono::steady_clock::now();
-	struct Cost { int at = 0; double initUs = 0, walkUs = 0; int n = 0; };
+	int cells = 0;
+	outStop = FloodStop(const_cast<CCircuitDef*>(it->second.busDef), outDoor, goal, &cells);
+	struct Cost { int at = 0; double us = 0; int n = 0, cells = 0; };
 	static std::map<int, Cost> cost;
 	Cost& cc = cost[circuit->GetTeamId()];
-	auto flushCost = [&]() {
-		if (circuit->GetLastFrame() - cc.at >= FRAMES_PER_SEC * 60) {
-			circuit->LOG("apex: facexit-cost t=%i calls=%i worstInitUs=%.0f worstWalkUs=%.0f", circuit->GetTeamId(), cc.n,
-					cc.initUs, cc.walkUs);
-			cc = Cost();
-			cc.at = circuit->GetLastFrame();
-		}
-	};
-	const int pathId = pathing->InitPath(outDoor, outGoal, pathType, 64.f);
-	const auto t1 = std::chrono::steady_clock::now();
-	cc.initUs = std::max(cc.initUs, std::chrono::duration<double, std::micro>(t1 - t0).count());
+	cc.us = std::max(cc.us, std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count());
+	cc.cells = std::max(cc.cells, cells);
 	++cc.n;
-	if (pathId == 0) {
-		flushCost();
-		return outDoor.distance2D(outGoal);
+	if (circuit->GetLastFrame() - cc.at >= FRAMES_PER_SEC * 60) {
+		circuit->LOG("apex: facexit-cost t=%i calls=%i worstFloodUs=%.0f worstCells=%i", circuit->GetTeamId(), cc.n, cc.us,
+				cc.cells);
+		cc = Cost();
+		cc.at = circuit->GetLastFrame();
 	}
-	// The engine appends the goal itself as the last waypoint whether or not the path reaches it, so the stop is the
-	// last waypoint before a jump wider than a few path squares (crowd5: gap read exactly 0 in all 2,981 checks).
-	AIFloat3 prev = -RgtVector, beforeLast = outDoor;
-	int n = 0;
-	float maxStep = 0.f;
-	for (int i = 0; i < 400; ++i) {
-		const AIFloat3 p = pathing->GetNextWaypoint(pathId);
-		if ((p.x < 0.f) || (p.z < 0.f) || (p == prev)) {
-			break;
-		}
-		if (utils::is_valid(prev)) {
-			const float step = p.distance2D(prev);
-			if (step > maxStep) {
-				maxStep = step;
-			}
-			if (step > SQUARE_SIZE * 64.f) {
-				break;   // a jump: what follows is not walked
-			}
-		}
-		beforeLast = outStop;
-		outStop = p;
-		prev = p;
-		++n;
-	}
-	pathing->FreePath(pathId);
-	cc.walkUs = std::max(cc.walkUs, std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t1).count());
-	flushCost();
-	static std::map<int, int> dbg;
-	if (dbg[circuit->GetTeamId()]++ < 4) {
-		const float approx = pathing->GetApproximateLength(outDoor, outGoal, pathType, 64.f);
-		circuit->LOG("apex: facexit-dbg t=%i %s#%i n=%i door=%.0f,%.0f goal=%.0f,%.0f stop=%.0f,%.0f before=%.0f,%.0f maxStep=%.0f straight=%.0f approx=%.0f",
-				circuit->GetTeamId(), fac->GetCircuitDef()->GetDef()->GetName(), int(fac->GetId()), n, outDoor.x, outDoor.z,
-				outGoal.x, outGoal.z, outStop.x, outStop.z, beforeLast.x, beforeLast.z, maxStep, outDoor.distance2D(outGoal), approx);
-	}
-	return outStop.distance2D(outGoal);
+	return outStop.distance2D(goal);
 }
 
 // apex: THE EXIT PATH IS CLEARED, NOT ONLY RESERVED (crowd8: 5 plants penned per game for ~10 minutes, mostly gantries
@@ -1131,27 +1082,92 @@ bool CTerrainManager::OnTeamExitPath(CCircuitDef* cdef, const AIFloat3& pos, int
 	return false;
 }
 
-AIFloat3 CTerrainManager::PathStop(int pathType, const AIFloat3& start, const AIFloat3& goal)
+// apex: NO ENGINE PATH IN PLAY (his 10-30 online game, lane c9: sync errors from frame 6345, after the factory site
+// check ran Pathing::InitPath at frames 1146, 5089 and 6838 -- the call the 2026-08-09 desync was traced to: a QTPFS
+// search on the host alone, in the same registry as the synced paths). A breadth-first flood over the blocking map,
+// which holds our and our allies' structures: a cell is open when no structure body lies under a unit-sized window
+// around it and the mobile def's map area reaches it. The stop is the reached cell nearest the goal.
+AIFloat3 CTerrainManager::FloodStop(CCircuitDef* mobileDef, const AIFloat3& start, const AIFloat3& goal, int* outCells)
 {
-	springai::Pathing* pathing = circuit->GetPathing();
-	const int pathId = pathing->InitPath(start, goal, pathType, 64.f);
-	if (pathId == 0) {
+	if (outCells != nullptr) {
+		*outCells = 0;
+	}
+	if ((mobileDef == nullptr) || !utils::is_valid(start) || !utils::is_valid(goal)) {
 		return start;
 	}
-	AIFloat3 stop = start, prev = -RgtVector;
-	for (int i = 0; i < 400; ++i) {
-		const AIFloat3 p = pathing->GetNextWaypoint(pathId);
-		if ((p.x < 0.f) || (p.z < 0.f) || (p == prev)) {
-			break;
-		}
-		if (utils::is_valid(prev) && (p.distance2D(prev) > SQUARE_SIZE * 64.f)) {
-			break;   // a jump: what follows is not walked
-		}
-		stop = p;
-		prev = p;
+	terrain::SArea* area;
+	bool isOK;
+	std::tie(area, isOK) = GetCurrentMapArea(mobileDef, start);
+	if (!isOK) {
+		return start;
 	}
-	pathing->FreePath(pathId);
-	return stop;
+	const float cs = SQUARE_SIZE * 2;   // one blocking-map cell
+	const int cols = blockingMap.columns, rows = blockingMap.rows;
+	const int sx = int(start.x / cs), sz = int(start.z / cs);
+	const int gx = int(goal.x / cs), gz = int(goal.z / cs);
+	if ((sx < 0) || (sz < 0) || (sx >= cols) || (sz >= rows)) {
+		return start;
+	}
+	// a window as wide as the unit's footprint, in cells
+	const int foot = std::max(mobileDef->GetDef()->GetXSize(), mobileDef->GetDef()->GetZSize());
+	const int half = std::max(0, (foot / 2) / 2);
+	const int span = std::max(std::abs(gx - sx), std::abs(gz - sz)) + 2;
+	const int x1 = std::max(0, sx - span), x2 = std::min(cols - 1, sx + span);
+	const int z1 = std::max(0, sz - span), z2 = std::min(rows - 1, sz + span);
+	const int w = x2 - x1 + 1, hgt = z2 - z1 + 1;
+	std::vector<char> seen(size_t(w) * size_t(hgt), 0);
+	auto open = [&](int x, int z) {
+		for (int dz = -half; dz <= half; ++dz) {
+			for (int dx = -half; dx <= half; ++dx) {
+				const int xx = x + dx, zz = z + dz;
+				if ((xx < 0) || (zz < 0) || (xx >= cols) || (zz >= rows)) {
+					return false;
+				}
+				if (blockingMap.IsStruct(xx, zz)) {
+					return false;
+				}
+			}
+		}
+		return CanMoveToPos(area, AIFloat3(x * cs + cs * 0.5f, 0.f, z * cs + cs * 0.5f));
+	};
+	std::vector<int> queue;
+	queue.reserve(4096);
+	queue.push_back((sz - z1) * w + (sx - x1));
+	seen[(sz - z1) * w + (sx - x1)] = 1;
+	int best = queue[0];
+	long long bestD = (long long)(sx - gx) * (sx - gx) + (long long)(sz - gz) * (sz - gz);
+	size_t head = 0;
+	static const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+	while (head < queue.size()) {
+		const int cur = queue[head++];
+		const int cx = cur % w + x1, cz = cur / w + z1;
+		const long long d = (long long)(cx - gx) * (cx - gx) + (long long)(cz - gz) * (cz - gz);
+		if (d < bestD) {
+			bestD = d;
+			best = cur;
+			if (d <= 2) {
+				break;
+			}
+		}
+		for (const auto& dd : dirs) {
+			const int nx = cx + dd[0], nz = cz + dd[1];
+			if ((nx < x1) || (nx > x2) || (nz < z1) || (nz > z2)) {
+				continue;
+			}
+			const int k = (nz - z1) * w + (nx - x1);
+			if (seen[k]) {
+				continue;
+			}
+			seen[k] = 1;
+			if (open(nx, nz)) {
+				queue.push_back(k);
+			}
+		}
+	}
+	if (outCells != nullptr) {
+		*outCells = int(queue.size());
+	}
+	return AIFloat3((best % w + x1) * cs + cs * 0.5f, start.y, (best / w + z1) * cs + cs * 0.5f);
 }
 
 // apex: A FACTORY IS NOT PLACED FACING A DEAD END (crowd8: 5 plants per game penned ~10 minutes, gantries placed into
@@ -1163,12 +1179,6 @@ bool CTerrainManager::DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, c
 	if ((facDef == nullptr) || (mobileDef == nullptr) || !utils::is_valid(goal)) {
 		return true;
 	}
-	springai::MoveData* md = mobileDef->GetDef()->GetMoveData();
-	if (md == nullptr) {
-		return true;
-	}
-	const int pathType = md->GetPathType();
-	delete md;
 	const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
 	const float depth = (turned ? facDef->GetDef()->GetXSize() : facDef->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f
 			+ SQUARE_SIZE * 6;
@@ -1181,8 +1191,14 @@ bool CTerrainManager::DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, c
 		case UNIT_FACING_WEST:  door.x -= depth; break;
 	}
 	CorrectPosition(door);
-	const AIFloat3 stop = PathStop(pathType, door, goal);
-	return stop.distance2D(door) >= stop.distance2D(goal);
+	// toward the goal, no further than leaving home takes (as FacExitWatch)
+	AIFloat3 g = goal;
+	const float dg = door.distance2D(g);
+	if (dg > 2000.f) {
+		g = door + (g - door) * (2000.f / dg);
+	}
+	const AIFloat3 stop = FloodStop(mobileDef, door, g);
+	return stop.distance2D(door) >= stop.distance2D(g);
 }
 
 void CTerrainManager::MarkAllyBuildings()
