@@ -413,6 +413,12 @@ int gFxLogAt = 0;
 
 void FacExitWatch()
 {
+	// A MEASUREMENT, RUN WHERE WE MEASURE (apex_perf, on in every run_match game, off in releases): the engine path it
+	// asks for cost up to 22-24 ms in one call (crowd15 facexit-cost worstInitUs; the waypoint walk under 0.05 ms), a
+	// hitch in his hosted games. The clearing that keeps exits open, ExitPathClear, reads the reserved cells and asks
+	// for no path, so it runs everywhere.
+	if (!Perf::On())
+		return;
 	if (ai.frame < gFxNextAt)
 		return;
 	gFxNextAt = ai.frame + FX_STEP;
