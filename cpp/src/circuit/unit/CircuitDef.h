@@ -464,6 +464,10 @@ public:
 	float GetBlastRadius()  const { return blastRadius; }
 	float GetBlastDamage()  const { return blastDamage; }
 	float GetBlastEdge()    const { return blastEdge; }
+	// The self-destruct explosion: a separate weapon, often several times the death blast (a solar 89 -> 1000)
+	float GetSelfDRadius()  const { return selfDRadius; }
+	float GetSelfDDamage()  const { return selfDDamage; }
+	float GetSelfDEdge()    const { return selfDEdge; }
 	// The base lattice this def tiles on, in elmos per axis. Set from script,
 	// which owns the chain-risk policy that widens a stride past the footprint;
 	// 0 means "use the footprint", which is the only pitch on which two of these
@@ -655,6 +659,9 @@ private:
 	float blastRadius = .0f;
 	float blastDamage = .0f;
 	float blastEdge = .0f;
+	float selfDRadius = .0f;
+	float selfDDamage = .0f;
+	float selfDEdge = .0f;
 	float latStrideX = .0f;
 	float latStrideZ = .0f;
 	bool isAntiNukeW = false;

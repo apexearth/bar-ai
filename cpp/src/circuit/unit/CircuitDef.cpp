@@ -292,6 +292,20 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		}
 		delete deathWD;
 	}
+	springai::WeaponDef* selfDWD = def->GetSelfDExplosion();
+	if (selfDWD != nullptr) {
+		selfDRadius = selfDWD->GetAreaOfEffect();
+		selfDEdge = selfDWD->GetEdgeEffectiveness();
+		springai::Damage* selfDDmg = selfDWD->GetDamage();
+		if (selfDDmg != nullptr) {
+			const std::vector<float> dmgTypes = selfDDmg->GetTypes();
+			if (!dmgTypes.empty()) {
+				selfDDamage = dmgTypes[0];
+			}
+			delete selfDDmg;
+		}
+		delete selfDWD;
+	}
 	storeM = def->GetStorage(resM);
 	storeE = def->GetStorage(resE);
 	convCapacityE = .0f;

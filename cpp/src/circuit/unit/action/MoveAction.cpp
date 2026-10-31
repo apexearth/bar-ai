@@ -15,6 +15,7 @@
 #include "spring/SpringCallback.h"
 
 #include "AISCommands.h"
+#include "Command.h"
 
 namespace circuit {
 
@@ -76,6 +77,28 @@ void CMoveAction::Update(CCircuitAI* circuit)
 		return;
 	}
 	lastFrame = circuit->GetLastFrame();
+	// apex: HOW LATE OUR ORDERS LAND (his 10-31: ~8 s online). A sent waypoint is looked for in the unit's queue
+	// each update; the frames until it appears are one sample of the order lag.
+	if (lagProbeAt >= 0) {
+		if (lastFrame - lagProbeAt > FRAMES_PER_SEC * 60) {
+			lagProbeAt = -1;
+		} else {
+			bool seen = false;
+			auto commands = unit->GetUnit()->GetCurrentCommands();
+			for (springai::Command* c : commands) {
+				const std::vector<float> p = c->GetParams();
+				if ((p.size() >= 3) && (SQUARE(p[0] - lagProbePos.x) + SQUARE(p[2] - lagProbePos.z) < SQUARE(16.f))) {
+					seen = true;
+					break;
+				}
+			}
+			utils::free_clear(commands);
+			if (seen) {
+				circuit->NoteOrderLag(lastFrame - lagProbeAt);
+				lagProbeAt = -1;
+			}
+		}
+	}
 
 	float stepSpeed;
 	int pathMaxIndex = CalcSpeedStep(circuit, stepSpeed);
@@ -98,8 +121,12 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
 	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
 	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
+	const AIFloat3& up = unit->GetPos(lastFrame);
+	// ...and far enough ahead that the next order lands before the unit gets there: its speed over the order lag
+	// and the update period (his 10-31: fast bombers turned around between orders in a lagging game)
+	const float leadD = (circuit->GetTunable("apex_travel_lag", 1.f) > 0.f)
+			? unit->GetCircuitDef()->GetSpeed() * (circuit->GetOrderLagSec() + 2.f) : 0.f;
 	if (lean) {
-		const AIFloat3& up = unit->GetPos(lastFrame);
 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
 		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
 		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;
@@ -108,14 +135,18 @@ void CMoveAction::Update(CCircuitAI* circuit)
 			lastLeanPos.x = -1.f;
 		}
 	}
-	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)) {
+	if (lean && (lastQueued >= 0) && (pathIterator + increment < lastQueued)
+		&& ((leadD <= 0.f) || (lastLeanPos.x < 0.f) || (up.distance2D(lastLeanPos) > leadD))) {
 		return;
 	}
 	// ONE order, to the waypoint LEAN_AHEAD steps on; the engine paths the ground between. A replaced path
 	// that still points at the same ground sends nothing: queuing the lookahead on every replacement sent
 	// 2.4x the orders (smoke, travel 4,188 -> 10,048).
 	if (lean && !(unit->IsAllowedToJump() && unit->IsJumpReady())) {
-		const int t = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+		int t = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+		while ((leadD > 0.f) && (t < pathMaxIndex) && (up.distance2D(pPath->posPath[t]) < 2.f * leadD)) {
+			t = std::min(t + increment, pathMaxIndex);
+		}
 		const AIFloat3& pos = pPath->posPath[t];
 		lastQueued = t;
 		const bool same = (lastLeanPos.x >= 0.f) && (pos.SqDistance2D(lastLeanPos) < float(minSqDist))
@@ -125,6 +156,10 @@ void CMoveAction::Update(CCircuitAI* circuit)
 				FaceStep(t);
 				TravelTo(circuit, unit, pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
 				lastLeanPos = pos;
+				if ((lagProbeAt < 0) && (unit->GetMoveSentAt() == lastFrame)) {
+					lagProbeAt = lastFrame;
+					lagProbePos = unit->GetMoveSentPos();
+				}
 			}
 			if (stepSpeed != lastWanted) {
 				unit->CmdWantedSpeed(stepSpeed);

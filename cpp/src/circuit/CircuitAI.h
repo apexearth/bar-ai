@@ -198,6 +198,10 @@ public:
 	}
 	// apex_stock_army: every combat unit runs stock BARb's fight code (docs/how-it-works.md, Army control layers)
 	bool IsStockArmy() const;
+	// apex: how late our orders land, sampled by CMoveAction (sent -> in the unit's queue), smoothed; 0 until measured
+	void NoteOrderLag(int frames);
+	float GetOrderLagSec() const { return orderLagF / FRAMES_PER_SEC; }
+	int GetOrderLagN() const { return orderLagN; }
 	// the script's TUNE_X constants, as the default of apex_x for every C++ read (tunables.as is the one config)
 	void SetScriptDefaults(std::unordered_map<std::string, float>&& defs);
 	// apex_surf_dps: a def's damage against a domain is that domain's own rate, not the max over all three
@@ -503,6 +507,9 @@ public:
 
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
+	float orderLagF = 0.f;
+	int orderLagN = 0;
+	int orderLagLogAt = 0;
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
 	std::unordered_map<std::string, float> scriptDefaults;  // see SetScriptDefaults
 	mutable int stockArmy = -1;

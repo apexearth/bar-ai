@@ -636,6 +636,8 @@ void CCircuitUnit::CmdMoveTo(const AIFloat3& p0, short options, int timeout, Ord
 	NoteAct("mov", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::MOVE);
+	moveSentPos = pos;
+	moveSentAt = (manager != nullptr) ? manager->GetCircuit()->GetLastFrame() : -1;
 	(CountCmd(4), unit)->MoveTo(pos, options, timeout);
 //	(CountCmd(9), unit)->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
 }

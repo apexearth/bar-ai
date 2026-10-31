@@ -45,6 +45,7 @@ array<int> gFootZ;
 array<float> gBlastR;   // area of effect, elmos (0 = does not explode)
 array<float> gBlastD;   // damage at the centre
 array<float> gBlastE;   // edgeEffectiveness, as the engine's falloff uses it
+array<float> gSelfDR, gSelfDD, gSelfDE;   // the self-destruct explosion, a separate and often far bigger weapon
 array<float> gBuildDist; // build/assist reach, elmos
 array<bool> gRadar;
 array<bool> gJammer;
@@ -125,6 +126,7 @@ void Init()
 	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gHitsLand.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
 	gFootX.resize(n); gFootZ.resize(n);
 	gBlastR.resize(n); gBlastD.resize(n); gBlastE.resize(n);
+	gSelfDR.resize(n); gSelfDD.resize(n); gSelfDE.resize(n);
 	gBuildDist.resize(n);
 	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
 	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
@@ -176,6 +178,9 @@ void Init()
 		gBlastR[i]       = cdef.GetBlastRadius();
 		gBlastD[i]       = cdef.GetBlastDamage();
 		gBlastE[i]       = cdef.GetBlastEdge();
+		gSelfDR[i]       = cdef.GetSelfDRadius();
+		gSelfDD[i]       = cdef.GetSelfDDamage();
+		gSelfDE[i]       = cdef.GetSelfDEdge();
 		gBuildDist[i]    = cdef.GetBuildDistance();
 		gRadarR[i]       = cdef.GetRadarRadius();
 		gJamR[i]         = cdef.GetJammerRadius();

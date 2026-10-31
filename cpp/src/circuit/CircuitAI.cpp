@@ -2270,6 +2270,20 @@ std::string CCircuitAI::TakeStockLeaks()
 	return "leak=" + utils::int_to_string(n) + s;
 }
 
+void CCircuitAI::NoteOrderLag(int frames)
+{
+	if (frames < 0) {
+		return;
+	}
+	orderLagF = (orderLagN == 0) ? float(frames) : (0.9f * orderLagF + 0.1f * float(frames));
+	++orderLagN;
+	if (lastFrame >= orderLagLogAt) {
+		orderLagLogAt = lastFrame + FRAMES_PER_SEC * 60;
+		LOG("apex: order-lag t=%i lagS=%.1f samples=%i last=%.1f", teamId, GetOrderLagSec(), orderLagN,
+				float(frames) / FRAMES_PER_SEC);
+	}
+}
+
 float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 {
 	if ((stockArmy != 0) && (name != "apex_stock_army") && IsStockArmy()) {

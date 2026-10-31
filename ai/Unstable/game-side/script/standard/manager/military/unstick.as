@@ -43,6 +43,9 @@ int gUsBFreed = 0;
 int gUsSelfD = 0;
 float gUsSelfDM = 0.f;
 float gUsTrappedM = 0.f;
+int gUsEaten = 0;      // walls handed to turrets to reclaim instead
+int gUsSpared = 0;     // walls kept because their self-destruct would cost more than the wait
+float gUsSparedM = 0.f;
 int gUsSiteDoor = 0;  // nano/converter cells refused for a ground plant's door lane past the old depth
 int gUsSiteCut = 0;   // ...for splitting the open ground around them
 array<Id> gUsSelfDAsked;
@@ -309,6 +312,62 @@ void UpdateUnstick()
 		UsNudgeOne();
 }
 
+float UsCap1(float v)
+{
+	return (v < 1.f) ? v : 1.f;
+}
+
+// The engine's explosion falloff, (R - d) / (R - d * edge), at the centre the full damage.
+float SelfDDamageAt(int d, float dist)
+{
+	const float R = Catalog::gSelfDR[d];
+	if ((R <= 0.f) || (dist >= R))
+		return 0.f;
+	const float den = R - dist * Catalog::gSelfDE[d];
+	return (den > 0.f) ? Catalog::gSelfDD[d] * (R - dist) / den : Catalog::gSelfDD[d];
+}
+
+// Metal the wall's self-destruct would take: ours and our allies' structures and the units it traps, each its cost
+// times the share of its health the blast removes.
+float SelfDHurtM(CCircuitUnit@ wall, const AIFloat3& in wp)
+{
+	const int d = int(wall.circuitDef.id);
+	const float R = Catalog::gSelfDR[d];
+	if (R <= 0.f)
+		return 0.f;
+	float m = 0.f;
+	array<CCircuitUnit@>@ own = ai.GetOwnStructsNear(wp, R);
+	for (uint i = 0; (own !is null) && (i < own.length()); ++i) {
+		CCircuitUnit@ u = own[i];
+		if ((u is null) || (u.circuitDef is null) || (u.id == wall.id))
+			continue;
+		const int n = int(u.circuitDef.id);
+		const float hp = Catalog::gHealth[n] * u.GetHealthPercent();
+		if (hp > 0.f)
+			m += Catalog::gCostM[n] * UsCap1(SelfDDamageAt(d, u.GetPos(ai.frame).distance2D(wp)) / hp);
+	}
+	array<float>@ al = ai.GetAllyStructsNear(wp, R);
+	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
+		const int n = int(al[i + 2]);
+		if (!Catalog::ValidId(n) || (Catalog::gHealth[n] <= 0.f))
+			continue;
+		const float dist = AIFloat3(al[i], 0.f, al[i + 1]).distance2D(wp);
+		m += Catalog::gCostM[n] * UsCap1(SelfDDamageAt(d, dist) / Catalog::gHealth[n]);
+	}
+	for (uint k = 0; k < gPenVictim.length(); ++k) {
+		if (gPenWall[k] != wall.id)
+			continue;
+		CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[k]);
+		if ((v is null) || (v.circuitDef is null))
+			continue;
+		const int n = int(v.circuitDef.id);
+		const float hp = Catalog::gHealth[n] * v.GetHealthPercent();
+		if (hp > 0.f)
+			m += Catalog::gCostM[n] * UsCap1(SelfDDamageAt(d, v.GetPos(ai.frame).distance2D(wp)) / hp);
+	}
+	return m;
+}
+
 // THE WALL THAT STAYS. The market eats a pen's wall when a builder gets to it;
 // meanwhile what it traps is out of service. Once the service lost so far --
 // the trapped metal amortized over apex_reclaim_amort, as every reclaim here is
@@ -346,13 +405,32 @@ void UnstickSelfD(uint i)
 	gUsSelfDAsked.insertLast(wall.id);
 	if (gUsSelfDAsked.length() > 64)
 		gUsSelfDAsked.removeAt(0);
+	// EAT IT, DO NOT BLOW IT (his 10-31): turrets in reach take the wall with no blast and the metal back
+	const AIFloat3 wp = wall.GetPos(ai.frame);
+	const int eaters = Brain::NanosEat(wall, 1);
+	if (eaters > 0) {
+		++gUsEaten;
+		AiLog(Factory::T() + "apex: unstick-eat " + wd.GetName() + " #" + wall.id + " turrets=" + eaters
+			+ " cost=" + int(wd.costM) + " trapped=" + int(trapped) + " at=" + int(wp.x) + "," + int(wp.z));
+		return;
+	}
+	// ...and its self-destruct is its own weapon, often far bigger than its death (a solar 89 -> 1000 in 240):
+	// what it would wreck of ours and our allies' is part of the wall's price
+	const float hurt = SelfDHurtM(wall, wp);
+	if (trapped * ageS / hz <= wd.costM + hurt) {
+		++gUsSpared;
+		gUsSparedM += hurt;
+		AiLog(Factory::T() + "apex: unstick-spared " + wd.GetName() + " #" + wall.id + " cost=" + int(wd.costM)
+			+ " hurt=" + int(hurt) + " trapped=" + int(trapped) + " waited=" + int(ageS) + "s at=" + int(wp.x)
+			+ "," + int(wp.z));
+		return;
+	}
 	wall.SelfDestruct(true);
 	++gUsSelfD;
 	gUsSelfDM += wd.costM;
 	gUsTrappedM += trapped;
-	const AIFloat3 wp = wall.GetPos(ai.frame);
 	AiLog(Factory::T() + "apex: unstick-selfd " + wd.GetName() + " #" + wall.id
-		+ " cost=" + int(wd.costM) + " trapped=" + int(trapped) + " victims=" + victims
+		+ " cost=" + int(wd.costM) + " hurt=" + int(hurt) + " trapped=" + int(trapped) + " victims=" + victims
 		+ " waited=" + int(ageS) + "s at=" + int(wp.x) + "," + int(wp.z));
 }
 
@@ -366,6 +444,7 @@ void UnstickStat()
 		+ " noGround=" + gUsNoGround + " again=" + gUsAgain + " penned=" + gUsPenned
 		+ " bNudged=" + gUsBNudged + " bFreed=" + gUsBFreed
 		+ " selfd=" + gUsSelfD + " selfdM=" + int(gUsSelfDM) + " trappedM=" + int(gUsTrappedM)
+		+ " eaten=" + gUsEaten + " spared=" + gUsSpared + " sparedHurtM=" + int(gUsSparedM)
 		+ " ateWall=" + gUnblockOrders
 		+ " siteDoor=" + gUsSiteDoor + " siteCut=" + gUsSiteCut
 		+ " queue=" + gUsQueue.length() + " watched=" + gPenId.length());

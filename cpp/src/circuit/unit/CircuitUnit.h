@@ -257,6 +257,9 @@ public:
 	void CmdRemove(std::vector<float>&& params, short options = 0);
 	void CmdMoveTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX,
 			OrdSrc src = OrdSrc::OTHER);
+	// apex: the move actually sent (after formation and reach) and its frame, for the order-lag probe
+	const springai::AIFloat3& GetMoveSentPos() const { return moveSentPos; }
+	int GetMoveSentAt() const { return moveSentAt; }
 	void CmdRepeat(bool repeat, short options = 0, int timeout = INT_MAX);
 	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
 	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX,
@@ -378,6 +381,8 @@ public:
 	// apex: a unit the script commands itself under the stock army (spam sent at their base, SpamSend).
 	bool scriptFree = false;
 private:
+	springai::AIFloat3 moveSentPos = springai::AIFloat3(-1.f, 0.f, -1.f);
+	int moveSentAt = -1;
 	float goalDistStart = -1.f;
 	float goalDistMin = -1.f;
 	ETaskState taskState;
