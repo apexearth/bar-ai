@@ -108,6 +108,21 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 86 | Rich games (big bonus, 1.5x income): not boxed in by basic converters; room for a gantry (10-29 online: 1,002 basics kept, no seat ordered a gantry, 47-58 gantry site searches per seat found no room) | d54c3e4b: idle converter capacity skips the swap wait; idle turrets eat dwarfed converters directly | `apex: reclobs conv=`; `apex: nano-assist ... obsolete=`; gantry `lathe-site ... room=`; richfix.py (rich-* vs rich2-*) | UNTESTED |
 | 87 | One advanced lab for the team, funded and staffed, not one per seat (10-29) | b3909712 team pay (neutral alone: 12 pairs); build power at the shared lab and re-election next | `teamtech-stat ... pay`; paywhy.py | FIRES -- payments 3,500/game, no change in labs or timing |
 
+## 8v8 VS BARB: OUR RICHEST SEATS FIELD NO ARMY UNTIL MINUTE ~28 (2026-10-31)
+
+His 10-30 watch (Supreme Isthmus 8v8 vs BARb hard, +50 both): "70% more economy ... never as much army". Nine 40-min
+games there (seeds 771-773; v0.5.0, v0.5.0 with the team lab off, v0.4.09): BARb ends with the bigger standing army in
+8 of 9, usually 2-5x, while we out-earn it. Not a v0.5.0 regression: the versions do not separate at 3 seeds (army at
+minute 40, mean 90k / 238k / 198k, each arm spanning a collapse to a 2x lead).
+
+The cause is the two eco seats (t6, t7; `ecoseat-stat growing=1 P=../750`). At minute 24 of sup-v0.5.0-771 they earn
+381 and 238 m/s of the team's ~1,050 and put 0 and 9 m/s into army; t6 has 68k in eco and 45k in build power (127
+nano turrets) against 8k army. The six fighting seats earn 6-126 m/s and carry the whole `ArmyFloor` (the enemy army
+split by seat COUNT, x1.2), which their income cannot fill. Growth ends near minute 27-28 in both versions (P crosses
+`TUNE_ECO_TARGET_BASE_8` x IncomeMult = 750), after which t6 alone fields 380-460 m/s of army. Between minutes 16 and 28
+BARb's standing army grows 52k -> 264k against our 25k -> -6k. Not the target: a seat's target ~12.8k vs 1.8k standing.
+Matches sup-*-771, sup2-*-772/773. Waiting on his ruling (eco seat and the team gap).
+
 ## TURRET PILES: THE KNOT RULE, LEFT FOR NOW (2026-10-24)
 
 His must-fix "large concentrations of defenses all in one tiny area" had two causes in the 8v8 Starwatcher +65 runs.
