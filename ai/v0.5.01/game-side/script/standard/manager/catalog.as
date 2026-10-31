@@ -1,0 +1,683 @@
+namespace Catalog {
+
+//------------------------------------------------------------------------------
+// THE CATALOG (docs/how-it-works.md). Every def's economics and the
+// who-builds-what graph, read ONCE at init from the engine's own def table.
+// Data + accessors only: nothing here decides, spends, or enqueues. The Want
+// market prices choices by arithmetic over these arrays plus live income.
+// Index = def id (1..gDefCount); slot 0 unused.
+//------------------------------------------------------------------------------
+
+int gDefCount = 0;
+int gEdges = 0;          // who-builds-what edges (builder -> buildable def)
+
+array<float> gCostM;
+array<float> gCostE;
+array<float> gBuildTime;     // engine build-effort units; seconds = this / buildpower
+array<float> gBuildPower;    // engine workertime -- real BP; GetBuildSpeed is overridden by behaviour.json build_speed
+array<float> gSpeed;         // elmos/s
+array<float> gLosR;          // sight radius, elmos
+array<float> gHealth;
+array<float> gExtractsM;     // mex extraction fraction
+array<float> gUpkeepM;
+array<float> gUpkeepE;       // NOTE: includes converter capacity (CircuitDef.cpp adds it)
+array<float> gMakeM;         // net metal generation (excl. extraction, excl. conversion)
+array<float> gMakeE;         // net energy generation; wind map-averaged, tidal map-scaled
+array<float> gStoreM;
+array<float> gStoreE;
+array<float> gConvCapacity;  // energyconv_capacity, E/s consumed at full load
+array<float> gConvRatio;     // energyconv_efficiency, M produced per E consumed
+array<bool> gMobile;
+array<bool> gFlyer;
+array<bool> gBuilder;
+array<bool> gWind;
+array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
+array<bool> gFloater;   // stands on water
+array<bool> gAmphib;    // moves through water and land both
+array<bool> gSub;       // submerged (underwater structures dodge the floater test)
+array<bool> gHitsLand;  // a weapon that can hit a target on land
+array<int>  gLimit;     // the def's own cap (behaviour.json "limit"), the DLL's maxThisUnit
+array<int> gAreaCells;  // footprint in 16-elmo build cells
+array<int> gFootX;      // footprint per axis, in 16-elmo build cells
+array<int> gFootZ;
+// The death explosion, straight off the def. gBlastD is the "default" armour
+// entry, which is what a structure of ours standing nearby takes.
+array<float> gBlastR;   // area of effect, elmos (0 = does not explode)
+array<float> gBlastD;   // damage at the centre
+array<float> gBlastE;   // edgeEffectiveness, as the engine's falloff uses it
+array<float> gBuildDist; // build/assist reach, elmos
+array<bool> gRadar;
+array<bool> gJammer;
+array<float> gRadarR;
+array<float> gJamR;
+array<bool> gAntiNuke;   // carries a nuke interceptor
+array<bool> gStock;      // stockpile weapon (silos, anti-nukes)
+array<bool> gTargFac;    // targeting facility (pinpointer)
+array<float> gMaxRange;  // longest weapon reach (0 = unarmed)
+array<float> gPower;     // CircuitAI threat value -- combat worth
+// COMBAT WORTH AS dps * (hp + shield) (apexearth 2026-08-23: "idk why we
+// did that sqrt on the HP but it was a terrible idea ... it should be
+// dps * (hp + shield) / some_divisor"). The DLL builds
+//   power = sqrt(dps) * dmg^0.25 * sqrt(hp + shield * SHIELD_MOD) / 128
+// so power SQUARED is dps * (hp + shield * SHIELD_MOD) * sqrt(dmg) / 128^2
+// -- his formula, exactly, apart from a sqrt of per-shot damage. Squaring
+// needs nothing and recovers the shield term too.
+// The scale is arbitrary: every consumer divides by cost and normalizes
+// against the best on the line.
+// gPower itself is left alone -- it is also the threat-map number, and the
+// defence-turret quality terms are calibrated against its scale.
+array<float> gCombat;    // dps * (hp + shield) * sqrt(dmg), i.e. power^2
+// The three terms power fuses, now bound separately, so a score can weigh
+// them independently instead of only in the DLL's fixed combination.
+array<float> gDps;       // sustained damage/s
+array<float> gAlpha;     // per-shot damage
+array<float> gAoe;       // weapon splash radius (NOT gBlastR, the death blast)
+// apex_surf_dps: the rate and shot against one domain. gDps is the max over surface, air and water, so an
+// amphibious bot's anti-air missile read as ground fire. Off, both equal gDps/gAlpha.
+bool gSurfDpsOn = false;
+array<float> gSurfDps;
+array<float> gAirDps;
+array<float> gSurfAlpha;
+array<float> gAirAlpha;
+array<float> gLandRange;  // and the reach, likewise: armamph's VTOL missile reaches 600, its laser 275
+array<float> gAirRange;
+// Can this weapon actually hit something that is MOVING: instant-hit beams and
+// rifles, cannons whose shell is fast for their range, and TRACKING missiles.
+// A slow un-tracked rocket fails it -- reach it cannot land on a mover is reach
+// against buildings only (apexearth: "those reach units were probably the
+// terribly inaccurate rocket launcher dudes... only good vs structures").
+array<bool> gAimTrue;
+// Its longest land weapon is an UNGUIDED rocket -- the precise property; the
+// flag above answers "can hit an aircraft", which is a stricter, different bar.
+array<bool> gDumbFire;
+array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
+array<bool> gKamikaze;   // suicide unit: ammunition, not army
+array<bool> gShield;     // projectile shield structure
+array<float> gShieldR;   // ...and the radius its dome covers
+array<bool> gRezzer;     // can resurrect wrecks
+array<float> gSurfT;     // threat vs surface targets
+array<float> gAirT;      // threat vs air
+array<float> gWaterT;    // threat vs targets IN the water (torpedoes, depth charges)
+array<bool> gAvailable;
+
+array<array<int>> gBuildsList;  // builder def id -> def ids it can build
+array<array<int>> gBuiltBy;     // def id -> builder def ids able to build it
+array<bool> gT1Hand;            // def is the commander or a builder its factories produce
+array<bool> gT1Line;            // gT1Hand MINUS the commander: what the T1 line alone fields
+array<bool> gAdvHand;    // a mobile builder that can raise economy no T1 hand can (fusion, T2 extractor)
+
+bool gInited = false;
+
+void Init()
+{
+	if (gInited)
+		return;
+	gInited = true;
+
+	gDefCount = ai.GetDefCount();
+	const int n = gDefCount + 1;
+	gCostM.resize(n); gCostE.resize(n); gBuildTime.resize(n); gBuildPower.resize(n);
+	gSpeed.resize(n); gHealth.resize(n); gExtractsM.resize(n);
+	gLosR.resize(n);
+	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
+	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
+	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gHitsLand.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
+	gFootX.resize(n); gFootZ.resize(n);
+	gBlastR.resize(n); gBlastD.resize(n); gBlastE.resize(n);
+	gBuildDist.resize(n);
+	gRadar.resize(n); gJammer.resize(n); gRadarR.resize(n); gJamR.resize(n);
+	gAntiNuke.resize(n); gTargFac.resize(n); gMaxRange.resize(n); gPower.resize(n);
+	gStock.resize(n);
+	gCombat.resize(n);
+	gDps.resize(n); gAlpha.resize(n); gAoe.resize(n);
+	gSurfDps.resize(n); gAirDps.resize(n); gSurfAlpha.resize(n); gAirAlpha.resize(n);
+	gLandRange.resize(n); gAirRange.resize(n);
+	gSurfDpsOn = ai.GetTunable("apex_surf_dps", TUNE_SURF_DPS) > 0.f;
+	gAimTrue.resize(n); gDumbFire.resize(n);
+	gSurfT.resize(n); gAirT.resize(n); gWaterT.resize(n); gRole.resize(n); gKamikaze.resize(n);
+	gShield.resize(n); gShieldR.resize(n); gRezzer.resize(n);
+	gAvailable.resize(n);
+	gBuildsList.resize(n); gBuiltBy.resize(n);
+
+	for (Id defId = 1; defId <= gDefCount; ++defId) {
+		CCircuitDef@ cdef = ai.GetCircuitDef(defId);
+		if (cdef is null)
+			continue;
+		const int i = int(defId);
+		gCostM[i]        = cdef.costM;
+		gCostE[i]        = cdef.costE;
+		gBuildTime[i]    = cdef.GetBuildTime();
+		gBuildPower[i]   = cdef.GetWorkerTime();
+		gSpeed[i]        = cdef.speed;
+		gLosR[i]         = cdef.losRadius;
+		gHealth[i]       = cdef.health;
+		gExtractsM[i]    = cdef.GetExtractsM();
+		gUpkeepM[i]      = cdef.GetUpkeepM();
+		gUpkeepE[i]      = cdef.GetUpkeepE();
+		gMakeM[i]        = cdef.GetMakeM();
+		gMakeE[i]        = cdef.GetMakeE();
+		gStoreM[i]       = cdef.GetStoreM();
+		gStoreE[i]       = cdef.GetStoreE();
+		gConvCapacity[i] = cdef.GetConvertCapacity();
+		gConvRatio[i]    = cdef.GetConvertRatio();
+		gMobile[i]       = cdef.IsMobile();
+		gFlyer[i]        = cdef.IsAbleToFly();
+		gBuilder[i]      = cdef.IsBuilder();
+		gWind[i]         = cdef.IsWind();
+		gNeedGeo[i]      = cdef.IsNeedGeo();
+		gFloater[i]      = cdef.IsFloater();
+		gAmphib[i]       = cdef.IsAmphibious();
+		gSub[i]          = cdef.IsSubmarine();
+		gHitsLand[i]     = cdef.HasSurfToLand();
+		gAreaCells[i]    = cdef.GetAreaCells();
+		gFootX[i]        = cdef.GetFootX();
+		gFootZ[i]        = cdef.GetFootZ();
+		gBlastR[i]       = cdef.GetBlastRadius();
+		gBlastD[i]       = cdef.GetBlastDamage();
+		gBlastE[i]       = cdef.GetBlastEdge();
+		gBuildDist[i]    = cdef.GetBuildDistance();
+		gRadarR[i]       = cdef.GetRadarRadius();
+		gJamR[i]         = cdef.GetJammerRadius();
+		// From the RADII, not IsRadarDef/IsJammerDef: the DLL sets those
+		// flags only in the immobile branch of its def loop, so every
+		// mobile radar and jammer reads false there forever (the reason
+		// no Compass was ever produced). A real radar's radius dwarfs any
+		// unit's incidental sensor suite.
+		// ...but A DEF WITH A GUN IS AN EYE FOR ITSELF, NOT A SENSOR. Pulsar
+		// carries a 1500-range dish and Bulwark 1200, so both read as radar
+		// towers, went to the radar branch instead of the turret auction, and
+		// could never be bought as guns at all -- which is exactly the two
+		// heavy defences we were asked why we never build. Same threshold also
+		// filed Commandos, Phantoms and battleships as squad escorts.
+		const bool armedI = (cdef.GetSurfThreat() + cdef.GetAirThreat()) > 0.01f;
+		gRadar[i]        = !armedI && (cdef.IsRadarDef() || (gRadarR[i] > 900.f));
+		gJammer[i]       = !armedI && (cdef.IsJammerDef() || (gJamR[i] > 100.f));
+		gAntiNuke[i]     = cdef.IsAntiNukeW();
+		gStock[i]        = cdef.IsAttrAny(Unit::Attr::STOCK.mask);
+		gTargFac[i]      = cdef.IsTargFac();
+		gMaxRange[i]     = cdef.GetMaxRange();
+		gPower[i]        = cdef.power;
+		gCombat[i]       = cdef.power * cdef.power;
+		gDps[i]          = cdef.GetRawDps();
+		gAlpha[i]        = cdef.GetRawDmg();
+		gSurfDps[i]      = gSurfDpsOn ? cdef.GetRawSurfDps() : gDps[i];
+		gAirDps[i]       = gSurfDpsOn ? cdef.GetRawAirDps() : gDps[i];
+		gSurfAlpha[i]    = gSurfDpsOn ? cdef.GetRawSurfDmg() : gAlpha[i];
+		gAirAlpha[i]     = gSurfDpsOn ? cdef.GetRawAirDmg() : gAlpha[i];
+		gLandRange[i]    = gSurfDpsOn ? cdef.GetLandRange() : gMaxRange[i];
+		gAirRange[i]     = gSurfDpsOn ? cdef.GetAirRange() : gMaxRange[i];
+		gAoe[i]          = cdef.GetAoe();
+		gAimTrue[i]      = cdef.IsAlwaysHitDef();
+		gDumbFire[i]     = cdef.IsDumbFireDef();
+		gRole[i]         = int(cdef.GetMainRole());
+		gKamikaze[i]     = cdef.IsKamikazeDef();
+		gShield[i]       = cdef.IsShieldDef();
+		gShieldR[i]      = cdef.GetShieldRadius();
+		gRezzer[i]       = cdef.IsRezAble();
+		gSurfT[i]        = cdef.GetSurfThreat();
+		gAirT[i]         = cdef.GetAirThreat();
+		gWaterT[i]       = cdef.GetWaterThreat();
+		// AN ARMED UNIT IS ARMY, however weak: power <= 1 is "unarmed" to
+		// every army test in the market, and a scout's config zeroes its
+		// power, so the Tick never reached the screen axis written for it
+		// (apexearth 2026-09-18: "we never make them but their speed is
+		// good for getting enemy scouts and for being annoying").
+		if (gMobile[i] && !gBuilder[i] && (gPower[i] <= 1.f)
+			&& (gSurfT[i] + gAirT[i] > 0.01f))
+			gPower[i] = 1.01f;
+		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
+		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
+		// AiMain anyway. Available = the game ships it and no zero limit.
+		gAvailable[i]    = (cdef.maxThisUnit > 0) && !BlockedDef(cdef.GetName());
+		// BAR's build menu takes wind away from players where the map's average wind is under 5
+		// (common/wind_functions.lua isWindDisabled); a wind def's makeE is that average below its cap.
+		// Comet Catcher (1-4): small e-stalls kept buying 2.5 E windmills over solars.
+		if (gWind[i] && (gMakeE[i] < 5.f))
+			gAvailable[i] = false;
+		gLimit[i]        = cdef.maxThisUnit;
+		// A screen unit (the Tick and its kin) is a handful, not a line: the
+		// screen axis prices it 100x the line's best and it dies at the post
+		// it was bought to watch, so the game's own limit never bites (67
+		// fleas from one lab in 13 min, 2 standing). His number for Ticks.
+		if ((gPower[i] <= 1.01f) && gMobile[i] && !gBuilder[i]
+			&& (gSurfT[i] + gAirT[i] > 0.01f) && (gLimit[i] > int(TUNE_SCREEN_MAX)))
+			gLimit[i] = int(TUNE_SCREEN_MAX);
+	}
+
+	// Who-builds-what, both directions. Outer loop is builders only, so this
+	// is (builders x defs) CanBuild lookups, once.
+	for (Id b = 1; b <= gDefCount; ++b) {
+		if (!gBuilder[int(b)])
+			continue;
+		CCircuitDef@ bdef = ai.GetCircuitDef(b);
+		if (bdef is null)
+			continue;
+		for (Id d = 1; d <= gDefCount; ++d) {
+			CCircuitDef@ ddef = ai.GetCircuitDef(d);
+			if (ddef is null)
+				continue;
+			if (bdef.CanBuild(ddef)) {
+				gBuildsList[int(b)].insertLast(int(d));
+				gBuiltBy[int(d)].insertLast(int(b));
+				++gEdges;
+			}
+		}
+	}
+
+	// RETREAT SCALES WITH VALUE (deaths.py over the 40-game anchor: 93% of
+	// mobile-combat metal died RETREATING -- the stock 0.6 threshold makes
+	// every unit flee at 60% hp and die shot in the back). A cheap unit's
+	// last half-life is worth more spent shooting than fleeing; an expensive
+	// unit preserves. One derived curve, commander and builders untouched.
+	const bool airOnly = Military::StockQuiet("retreat");
+	const bool curve = !airOnly || Military::OurAir();
+	for (Id rd = 1; curve && (rd <= gDefCount); ++rd) {
+		const int ri = int(rd);
+		if (!gMobile[ri] || gBuilder[ri] || (gPower[ri] <= 1.f) || gKamikaze[ri])
+			continue;
+		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
+		if ((rdef is null) || (airOnly && !rdef.IsAbleToFly()))
+			continue;
+		// a config that says never (retreat 0: the units that detonate on arrival) is not overwritten -- the
+		// curve set the Juggernaut to 0.5 and it walked home at half health (his 10-12)
+		if (rdef.GetRetreat() <= 0.f)
+			continue;
+		float rt = ai.GetTunable("apex_retreat_floor", TUNE_RETREAT_FLOOR)
+				+ gCostM[ri]
+				/ ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);
+		if (rt > 0.5f)
+			rt = 0.5f;
+		rdef.SetRetreat(rt);
+	}
+
+	// T1 HANDS, derived rather than listed: the commander, plus every mobile
+	// builder produced by a factory the commander can place. Tier taxonomy
+	// without a tier table -- what the opening's own production line can
+	// field is the whole meaning of "T1" here.
+	gT1Hand.resize(uint(gDefCount + 1));
+	gT1Line.resize(uint(gDefCount + 1));
+	for (int i = 0; i <= gDefCount; ++i) {
+		gT1Hand[i] = false;
+		gT1Line[i] = false;
+	}
+	for (int i = 1; i <= gDefCount; ++i) {
+		const CCircuitDef@ cd = Def(i);
+		if ((cd is null) || !cd.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		gT1Hand[i] = true;
+		const array<int>@ facs = gBuildsList[i];
+		for (uint f = 0; f < facs.length(); ++f) {
+			if (gMobile[facs[f]])
+				continue;
+			const array<int>@ made = gBuildsList[facs[f]];
+			for (uint u2 = 0; u2 < made.length(); ++u2) {
+				if (gMobile[made[u2]] && (gBuildsList[made[u2]].length() > 0)) {
+					gT1Hand[made[u2]] = true;
+					gT1Line[made[u2]] = true;
+				}
+			}
+		}
+	}
+
+	// ADVANCED HANDS BY WHAT THEY BUILD, not by the plant they came from: an economy a T1 hand cannot
+	// raise (a generator or extractor above any T1-buildable one). The Proteus combat engineer leaves the
+	// T2 lab but builds T1 economy; counted as an advanced hand, 25 idle ones held the lab's advanced
+	// constructor off for 13 minutes and no fusion stood until 29.5 m (his 10-12 watch, Legion).
+	gAdvHand.resize(uint(gDefCount + 1));
+	{
+		float t1E = 0.f, t1M = 0.f;
+		for (int i = 1; i <= gDefCount; ++i) {
+			if (!gT1Line[i])
+				continue;
+			const array<int>@ bl = gBuildsList[i];
+			for (uint k = 0; k < bl.length(); ++k) {
+				if (gMakeE[bl[k]] > t1E)
+					t1E = gMakeE[bl[k]];
+				if (gExtractsM[bl[k]] > t1M)
+					t1M = gExtractsM[bl[k]];
+			}
+		}
+		for (int i = 0; i <= gDefCount; ++i) {
+			gAdvHand[i] = false;
+			if ((i == 0) || !gMobile[i] || gT1Line[i])
+				continue;
+			const array<int>@ bl = gBuildsList[i];
+			for (uint k = 0; k < bl.length(); ++k) {
+				if ((gMakeE[bl[k]] > t1E) || (gExtractsM[bl[k]] > t1M)) {
+					gAdvHand[i] = true;
+					break;
+				}
+			}
+		}
+		string adv = "";
+		for (int i = 1; i <= gDefCount; ++i) {
+			if (gAdvHand[i] && gAvailable[i])
+				adv += " " + Def(i).GetName();
+		}
+		AiLog("apex: advhand t1E=" + int(t1E) + " t1M=" + formatFloat(t1M, "", 0, 4) + " |" + adv);
+	}
+
+	int nAvail = 0;
+	for (int i = 1; i <= gDefCount; ++i) {
+		if (gAvailable[i])
+			++nAvail;
+	}
+	// What each water-going combat hull is: the water-map pricing reads these.
+	for (int i = 1; i <= gDefCount; ++i) {
+		if (gBuilder[i] || gFlyer[i] || !(gAmphib[i] || gFloater[i] || gSub[i])
+			|| ((gSurfT[i] + gWaterT[i]) <= 0.01f))
+			continue;
+		AiLog("apex: waterdef " + Def(i).GetName() + " amph=" + (gAmphib[i] ? 1 : 0)
+			+ " float=" + (gFloater[i] ? 1 : 0) + " sub=" + (gSub[i] ? 1 : 0)
+			+ " surfT=" + formatFloat(gSurfT[i], "", 0, 1)
+			+ " waterT=" + formatFloat(gWaterT[i], "", 0, 1)
+			+ " cost=" + int(gCostM[i]));
+	}
+	string waterGuns = "";
+	for (int i = 1; i <= gDefCount; ++i) {
+		if (!gMobile[i] && gAvailable[i] && !gHitsLand[i] && (gAirT[i] <= 0.01f)
+			&& ((gSurfT[i] > 0.01f) || (gWaterT[i] > 0.f)))
+			waterGuns += " " + Def(i).GetName();
+	}
+	AiLog("apex: water-only guns:" + waterGuns);
+	{
+		const array<string> probe = {"armamph", "coramph", "armpincer", "corgarp", "armjeth", "corcrash"};
+		string sd = "";
+		for (uint k = 0; k < probe.length(); ++k) {
+			CCircuitDef@ pd = ai.GetCircuitDef(probe[k]);
+			if (pd is null)
+				continue;
+			const int pIdx = int(pd.id);
+			sd += " " + probe[k] + " dps=" + formatFloat(gDps[pIdx], "", 0, 1)
+				+ "/surf=" + formatFloat(pd.GetRawSurfDps(), "", 0, 1)
+				+ "/air=" + formatFloat(pd.GetRawAirDps(), "", 0, 1)
+				+ " alpha=" + formatFloat(gAlpha[pIdx], "", 0, 0)
+				+ "/surf=" + formatFloat(pd.GetRawSurfDmg(), "", 0, 0)
+				+ "/air=" + formatFloat(pd.GetRawAirDmg(), "", 0, 0)
+				+ " range=" + int(gMaxRange[pIdx]) + "/land=" + int(pd.GetLandRange()) + "/air=" + int(pd.GetAirRange());
+		}
+		AiLog("apex: surfdps on=" + (gSurfDpsOn ? 1 : 0) + sd);
+	}
+	const float dump = ai.GetTunable("apex_catalog_dump", TUNE_CATALOG_DUMP);
+	AiLog("apex: catalog init defs=" + gDefCount + " edges=" + gEdges
+		+ " avail=" + nAvail + " frame=" + ai.frame
+		+ " dump=" + formatFloat(dump, "", 0, 1));
+
+	if (dump > 0.5f)
+		Dump();
+}
+
+//------------------------------------------------------------------------------
+// Accessors and derived helpers -- pure reads.
+//------------------------------------------------------------------------------
+
+bool ValidId(int defId)
+{
+	return (defId >= 1) && (defId <= gDefCount);
+}
+
+// The faction's wall piece, derived rather than named: an unarmed immobile
+// def whose health per metal is an order of magnitude past any building
+// (armdrag 3200hp/12m; a solar is ~2 hp/m), buildable by a T1 hand. Lazy,
+// and NEVER caches a miss -- availability is frame-dependent.
+int gWallDef = -1;
+// The wall piece THIS builder can raise: WallDef answers across every faction, and a Cortex
+// hand handed armdrag was refused at the take every time (no tooth ever stood, 10-13).
+array<int> gWallFor;
+int WallDefFor(int builder)
+{
+	if (!ValidId(builder))
+		return -1;
+	if (gWallFor.length() <= uint(builder))
+		gWallFor.resize(uint(builder) + 1);
+	const int c = gWallFor[builder];
+	if ((c > 0) && gAvailable[c])
+		return c;
+	int pick = -1;
+	float best = 0.f;
+	const array<int>@ b = gBuildsList[builder];
+	for (uint i = 0; i < b.length(); ++i) {
+		const int d = b[i];
+		if (!gAvailable[d] || gMobile[d] || (gSurfT[d] > 0.f) || (gAirT[d] > 0.f) || (gCostM[d] <= 0.f)
+			|| (gBuildsList[d].length() > 0) || (gMakeE[d] > 0.f) || (gExtractsM[d] > 0.f))
+			continue;
+		const float hpm = gHealth[d] / gCostM[d];
+		if ((hpm >= 50.f) && (hpm > best)) {
+			best = hpm;
+			pick = d;
+		}
+	}
+	gWallFor[builder] = (pick > 0) ? pick : 0;   // a miss re-reads: availability is frame-dependent
+	return pick;
+}
+
+// A sight post: an unarmed static that does nothing but see (the perimeter
+// camera), by its stats. The wall piece and every economy, sensor or support
+// building are out; among the rest, the most ground seen per metal.
+bool IsSightPost(int d)
+{
+	if (!ValidId(d) || !gAvailable[d] || gMobile[d] || gBuilder[d] || (gCostM[d] <= 0.f) || (gLosR[d] <= 1.f))
+		return false;
+	if ((gSurfT[d] > 0.f) || (gAirT[d] > 0.f) || (gWaterT[d] > 0.f) || (gMaxRange[d] > 1.f))
+		return false;
+	if ((gBuildsList[d].length() > 0) || (gMakeE[d] > 0.f) || (gMakeM[d] > 0.f) || (gExtractsM[d] > 0.f)
+		|| (gConvCapacity[d] > 0.f) || (gStoreM[d] > 0.f) || (gStoreE[d] > 0.f))
+		return false;
+	if (gRadar[d] || gJammer[d] || gShield[d] || gTargFac[d] || gAntiNuke[d] || gNeedGeo[d] || gFloater[d] || gSub[d])
+		return false;
+	return gHealth[d] / gCostM[d] < 50.f;
+}
+
+array<int> gSightFor;
+int SightPostFor(int builder)
+{
+	if (!ValidId(builder))
+		return -1;
+	if (gSightFor.length() <= uint(builder))
+		gSightFor.resize(uint(builder) + 1);
+	const int c = gSightFor[builder];
+	if ((c > 0) && gAvailable[c])
+		return c;
+	int pick = -1;
+	float best = 0.f;
+	const array<int>@ b = gBuildsList[builder];
+	for (uint i = 0; i < b.length(); ++i) {
+		const int d = b[i];
+		if (!IsSightPost(d))
+			continue;
+		const float a = gLosR[d] * gLosR[d] / gCostM[d];
+		if (a > best) {
+			best = a;
+			pick = d;
+		}
+	}
+	gSightFor[builder] = (pick > 0) ? pick : 0;
+	if (pick > 0)
+		AiLog("apex: sightpost " + Def(builder).GetName() + " -> " + Def(pick).GetName()
+			+ " los=" + int(gLosR[pick]) + " m=" + int(gCostM[pick]));
+	return pick;
+}
+
+array<int> gSightPosts;
+const array<int>@ SightPosts()
+{
+	if (gSightPosts.length() == 0) {
+		for (int d = 1; d <= gDefCount; ++d) {
+			if (IsSightPost(d))
+				gSightPosts.insertLast(d);
+		}
+	}
+	return gSightPosts;
+}
+
+int WallDef()
+{
+	if ((gWallDef > 0) && gAvailable[gWallDef])
+		return gWallDef;
+	gWallDef = -1;
+	float best = 0.f;
+	for (int d = 1; d <= gDefCount; ++d) {
+		if (!gAvailable[d] || gMobile[d] || (gSurfT[d] > 0.f)
+			|| (gAirT[d] > 0.f) || (gCostM[d] <= 0.f)
+			|| (gBuildsList[d].length() > 0)
+			|| (gMakeE[d] > 0.f) || (gExtractsM[d] > 0.f))
+		{
+			continue;
+		}
+		const float hpm = gHealth[d] / gCostM[d];
+		if (hpm < 50.f)
+			continue;
+		bool t1 = false;
+		const array<int>@ bb = gBuiltBy[d];
+		for (uint q = 0; q < bb.length() && !t1; ++q) {
+			if ((bb[q] < int(gT1Hand.length())) && gT1Hand[bb[q]])
+				t1 = true;
+		}
+		if (t1 && (hpm > best)) {
+			best = hpm;
+			gWallDef = d;
+		}
+	}
+	return gWallDef;
+}
+
+CCircuitDef@ Def(int defId)
+{
+	if (!ValidId(defId))
+		return null;
+	return ai.GetCircuitDef(Id(defId));
+}
+
+// Def ids the given builder def can build (empty for non-builders).
+const array<int>@ BuildsOf(int builderId)
+{
+	if (!ValidId(builderId))
+		return array<int>();
+	return gBuildsList[builderId];
+}
+
+// Builder def ids able to build the given def.
+const array<int>@ BuildersOf(int defId)
+{
+	if (!ValidId(defId))
+		return array<int>();
+	return gBuiltBy[defId];
+}
+
+// The cheapest (metal) builder def able to build this def; -1 if none.
+int CheapestBuilderOf(int defId)
+{
+	if (!ValidId(defId))
+		return -1;
+	int best = -1;
+	float bestCost = 0.f;
+	const array<int>@ bs = gBuiltBy[defId];
+	for (uint i = 0; i < bs.length(); ++i) {
+		const int b = bs[i];
+		if ((best < 0) || (gCostM[b] < bestCost)) {
+			best = b;
+			bestCost = gCostM[b];
+		}
+	}
+	return best;
+}
+
+bool BlockedDef(const string& in name)
+{
+	return false;
+}
+
+// OPERATOR-AIMED LAUNCHERS, by name: the Juno's kill is a gadget, not its
+// weapon stats, and a tactical silo's reach reads like a turret's. CSuperTask
+// aims both (C++ AimLauncher).
+const int LK_NONE = 0;
+const int LK_TACTICAL = 1;
+const int LK_JUNO = 2;
+array<int> gLauncherKind;
+int LauncherKind(int d)
+{
+	if ((d < 1) || (d > gDefCount))
+		return LK_NONE;
+	if (int(gLauncherKind.length()) <= gDefCount) {
+		gLauncherKind.resize(gDefCount + 1);
+		for (uint k = 0; k < gLauncherKind.length(); ++k)
+			gLauncherKind[k] = -1;
+	}
+	if (gLauncherKind[d] >= 0)
+		return gLauncherKind[d];
+	const string name = Def(d).GetName();
+	int r = LK_NONE;
+	if ((name.findFirst("armjuno") == 0) || (name.findFirst("corjuno") == 0)
+			|| (name.findFirst("legjuno") == 0))
+		r = LK_JUNO;
+	else if ((name.findFirst("cortron") == 0) || (name.findFirst("armemp") == 0)
+			|| (name.findFirst("legperdition") == 0))
+		r = LK_TACTICAL;
+	gLauncherKind[d] = r;
+	return r;
+}
+
+// Seconds to build the def at the given total buildpower (workertime sum).
+float BuildSecondsAt(int defId, float buildPower)
+{
+	if (!ValidId(defId) || (buildPower <= 0.f))
+		return 1e9f;
+	return gBuildTime[defId] / buildPower;
+}
+
+// Net energy of a converter running at full load: consumes capacity E/s,
+// yields capacity*ratio M/s. Zero for non-converters.
+float ConvertMakeM(int defId)
+{
+	return ValidId(defId) ? gConvCapacity[defId] * gConvRatio[defId] : 0.f;
+}
+
+//------------------------------------------------------------------------------
+// Guarded dump: one line per AVAILABLE def, for tools/check_catalog.py.
+//------------------------------------------------------------------------------
+
+void Dump()
+{
+	for (int i = 1; i <= gDefCount; ++i) {
+		if (!gAvailable[i])
+			continue;
+		CCircuitDef@ cdef = ai.GetCircuitDef(Id(i));
+		if (cdef is null)
+			continue;
+		AiLog("apex: catalog " + cdef.GetName()
+			+ " mCost=" + formatFloat(gCostM[i], "", 0, 1)
+			+ " eCost=" + formatFloat(gCostE[i], "", 0, 1)
+			+ " bt=" + formatFloat(gBuildTime[i], "", 0, 1)
+			+ " bp=" + formatFloat(gBuildPower[i], "", 0, 1)
+			+ " makeM=" + formatFloat(gMakeM[i], "", 0, 2)
+			+ " makeE=" + formatFloat(gMakeE[i], "", 0, 2)
+			+ " upkeepE=" + formatFloat(gUpkeepE[i], "", 0, 2)
+			+ " storeM=" + formatFloat(gStoreM[i], "", 0, 1)
+			+ " storeE=" + formatFloat(gStoreE[i], "", 0, 1)
+			+ " convCap=" + formatFloat(gConvCapacity[i], "", 0, 1)
+			+ " convRatio=" + formatFloat(gConvRatio[i], "", 0, 5)
+			+ " extractsM=" + formatFloat(gExtractsM[i], "", 0, 4)
+			+ " mob=" + (gMobile[i] ? 1 : 0)
+			+ " fly=" + (gFlyer[i] ? 1 : 0)
+			+ " wind=" + (gWind[i] ? 1 : 0)
+			+ " amph=" + (gAmphib[i] ? 1 : 0)
+			+ " sub=" + (gSub[i] ? 1 : 0)
+			+ " float=" + (gFloater[i] ? 1 : 0)
+			+ " power=" + formatFloat(gPower[i], "", 0, 1)
+			+ " surfT=" + formatFloat(gSurfT[i], "", 0, 1)
+			+ " airT=" + formatFloat(gAirT[i], "", 0, 1)
+			+ " combat=" + formatFloat(gCombat[i], "", 0, 1)
+			+ " dps=" + formatFloat(gDps[i], "", 0, 2)
+			+ " alpha=" + formatFloat(gAlpha[i], "", 0, 1)
+			+ " aoe=" + formatFloat(gAoe[i], "", 0, 1)
+			+ " aim=" + (gAimTrue[i] ? 1 : 0)
+			+ " dumb=" + (gDumbFire[i] ? 1 : 0)
+			+ " rng=" + formatFloat(gMaxRange[i], "", 0, 0)
+			+ " hp=" + formatFloat(gHealth[i], "", 0, 0)
+			+ " role=" + gRole[i]
+			+ " builds=" + gBuildsList[i].length());
+	}
+}
+
+}  // namespace Catalog

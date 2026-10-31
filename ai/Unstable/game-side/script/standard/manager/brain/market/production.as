@@ -3103,13 +3103,16 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			consNeedA = ConsNeedAny(walker);
 		// TUNE_CON_USE: the floors honour "no new constructor while one of ours stands idle" as the priced path does.
 		const bool idleHeld = ConUseOn() && ConStandsIdle(Catalog::gFlyer[d], Catalog::gAdvHand[d] ? 2 : 1);
+		// FIGHTERS OWED COME BEFORE THE FLOORS (his 10-31): the army share cannot see the air answer, so at its share
+		// with no fighters the con floor took the air plant (32 T2 air cons to 2 fighters, 60k of fighters wanted)
+		const bool ftrOwed = !walker && Air::AnswerFighterOwed(prods);
 		// THE T1 AIR CON FLOOR (his ruling 2026-09-15): once an air lab
 		// stands, keep making basic air cons until ten fly -- they are the
 		// hands that raise nano turrets -- but never the whole lab: one in
 		// the queue at a time, so the other air keeps coming.
 		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
 		// the moment the last one flew, and the lab made nothing else.
-		if (!idleHeld && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
+		if (!idleHeld && !ftrOwed && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
 			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_AIRCON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
 		{
@@ -3146,7 +3149,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		const bool cpOn = ConPricedOn();
 		const float yieldMul = cpOn ? 1.f : ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f);
 		const float yieldCons = cpOn ? 1.f : ((gConFloorMul > 1.f) ? gConFloorMul : 1.f);
-		const bool armyBehind = foeOutguns || ((Brain::gSpentTotal > 1.f)
+		const bool armyBehind = foeOutguns || ftrOwed || ((Brain::gSpentTotal > 1.f)
 			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= yieldCons)
 			&& (Brain::ShareOf(Brain::ARMY) * yieldMul < Brain::TargetShare(Brain::ARMY)));
 		const bool floorOn = !armyBehind;
@@ -3175,7 +3178,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			return Catalog::Def(d);
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
-		if (!idleHeld && (ceilNeed > 0) && !foeOutguns && ReachesCeiling(d) && !(walker && FlyingConLab(true))
+		if (!idleHeld && (ceilNeed > 0) && !foeOutguns && !ftrOwed && ReachesCeiling(d) && !(walker && FlyingConLab(true))
 			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_T2CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
