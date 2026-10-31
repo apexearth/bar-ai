@@ -544,7 +544,13 @@ float ERealizeShare(float addE, float buildSec)
 		if ((bankRoom > 0.f) && (look > 1.f))
 			fill = bankRoom / look;
 	}
-	float target = demand * gPrEHeadroom
+	// NO HEADROOM WHILE THE BANK SPILLS, as on the metal side since 10-18 (his 10-30 crowd games: "short on 3k of
+	// energy conversion yet we still were making" generators -- ediag-603: a seat at 30,639 e/s income and 23,210 pull
+	// with its bank 96% full read real=1.00 for every fusion, the 1.75x lead on pull putting the target over income,
+	// and t10 built 85 reactors from minute 15 against 44 advanced converters while it spilled 12,000 e/s). The lead
+	// is for growth not yet asked; energy already thrown away says it is not being asked.
+	const bool spilling = EnergyPinned() && (Eco::EInc() > Eco::EPull());
+	float target = demand * (spilling ? 1.f : gPrEHeadroom)
 			+ ConvCapE() + fill;
 	// SPENDING IS DEMAND (eco-only): the metal now spilling is spent only by lathe that does not stand yet, and
 	// that lathe draws energy. Without it the share read the standing fleet's ask alone, so spending mode bought less
