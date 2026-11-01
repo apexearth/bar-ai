@@ -94,8 +94,13 @@ void CMoveAction::Update(CCircuitAI* circuit)
 			}
 			utils::free_clear(commands);
 			if (seen) {
-				circuit->NoteOrderLag(lastFrame - lagProbeAt);
+				// a paused travel (a bomber's pass, a wait) skips checks; past a 2 s gap the arrival is unknown
+				if (lastFrame - lagProbeLast <= FRAMES_PER_SEC * 2) {
+					circuit->NoteOrderLag(lastFrame - lagProbeAt);
+				}
 				lagProbeAt = -1;
+			} else {
+				lagProbeLast = lastFrame;
 			}
 		}
 	}
@@ -158,6 +163,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
 				lastLeanPos = pos;
 				if ((lagProbeAt < 0) && (unit->GetMoveSentAt() == lastFrame)) {
 					lagProbeAt = lastFrame;
+					lagProbeLast = lastFrame;
 					lagProbePos = unit->GetMoveSentPos();
 				}
 			}

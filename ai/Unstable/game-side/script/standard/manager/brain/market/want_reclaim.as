@@ -2504,5 +2504,50 @@ Want@ ProposeReclaimMetal(CCircuitUnit@ unit)
 	return w;
 }
 
+// GARBAGE COLLECTION WHILE BEHIND (his 10-31: "what are my least valuable buildings? What should I just
+// self-destruct?"). Every unit the engine runs is a share of the lag, and a reclaim waits on a builder walking in a
+// game that is already late. While the host is behind the server (Perf::BehindS), the idle turrets the reclaim
+// market already counts as worth nothing (idle past hz / (1 + lag severity)) go at once -- the ones whose own
+// self-destruct hurts nothing of ours, our allies' or a trapped unit. TUNE_LAG_GC.
+int gLagGcAt = 0;
+int gLagGcN = 0;
+float gLagGcM = 0.f;
+void LagCleanup()
+{
+	if (ai.frame < gLagGcAt)
+		return;
+	gLagGcAt = ai.frame + 10 * SECOND;
+	if (ai.GetTunable("apex_lag_gc", TUNE_LAG_GC) <= 0.f)
+		return;
+	const float behind = Perf::BehindS();
+	if ((behind <= 0.f) || EcoDangerNear())
+		return;
+	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float idleS = ((hz > 1.f) ? hz : 300.f) / (1.f + Perf::gLagSev);
+	int n = 0, kept = 0;
+	float m = 0.f;
+	for (uint ni = 0; (ni < gOwnNano.length()) && (ni < gOwnNanoWorkAt.length()); ++ni) {
+		CCircuitUnit@ nu = gOwnNano[ni];
+		if ((nu is null) || (nu.circuitDef is null))
+			continue;
+		if (float(ai.frame - gOwnNanoWorkAt[ni]) < idleS * float(SECOND))
+			continue;
+		if (InLiftJob(nu) || ReclaimClaimed(nu.id, 0))
+			continue;
+		if (Military::SelfDHurtM(nu, nu.GetPos(ai.frame)) >= 1.f) {
+			++kept;
+			continue;
+		}
+		nu.SelfDestruct(true);
+		++n;
+		m += Catalog::gCostM[int(nu.circuitDef.id)];
+	}
+	gLagGcN += n;
+	gLagGcM += m;
+	if ((n > 0) || (kept > 0))
+		AiLog(Factory::T() + "apex: lag-gc t=" + ai.teamId + " behind=" + formatFloat(behind, "", 0, 1)
+			+ " sev=" + formatFloat(Perf::gLagSev, "", 0, 1) + " idleS=" + int(idleS) + " selfd=" + n + " m=" + int(m)
+			+ " keptForBlast=" + kept + " total=" + gLagGcN + "/" + int(gLagGcM));
+}
 
 }  // namespace Market

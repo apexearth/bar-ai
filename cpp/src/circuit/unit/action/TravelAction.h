@@ -46,6 +46,7 @@ protected:
 	float lastWanted = -1.f; // apex: the wanted speed last sent
 	springai::AIFloat3 lastLeanPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the waypoint last ordered, kept across a path replacement
 	int lagProbeAt = -1;  // apex: the frame a lean waypoint was sent, until it shows in the unit's queue
+	int lagProbeLast = -1;  // apex: the last check that did not see it (a sample counts only after a recent miss)
 	springai::AIFloat3 lagProbePos = springai::AIFloat3(-1.f, 0.f, -1.f);
 	springai::AIFloat3 lastStepPos = springai::AIFloat3(-1.f, 0.f, -1.f);  // apex: the first waypoint last ordered off the lean path (apex_travel_samestep)
 	int lastFrame;

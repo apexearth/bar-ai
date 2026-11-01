@@ -81,6 +81,24 @@ double gSpeedWall = 0.0;
 int gSpeedFrame = -1;
 float gSimSpeed = 1.f;
 
+// BEHIND THE SERVER (his 10-31: "we might be 10 seconds behind, and then, at 1x, we'll never catch up"). A host
+// that only manages 1x reads as recovered on sim speed; how late our orders land says how far behind it is. Behind
+// is the measured order lag past the lowest this game has read (its local floor, the probe's own ~1 s cadence)
+// by more than that floor and a second. TUNE_LAG_BEHIND.
+float gLagFloor = -1.f;
+float BehindS()
+{
+	if (ai.GetTunable("apex_lag_behind", TUNE_LAG_BEHIND) <= 0.f)
+		return 0.f;
+	const float lag = ai.GetOrderLagSec();
+	if (lag <= 0.f)
+		return 0.f;
+	if ((gLagFloor < 0.f) || (lag < gLagFloor))
+		gLagFloor = lag;
+	const float over = lag - gLagFloor;
+	return (over > gLagFloor + 1.f) ? over : 0.f;
+}
+
 void TickSpeed()
 {
 	if (gSpeedFrame < 0) {
@@ -108,7 +126,9 @@ void TickSpeed()
 	// 10-10): a 10x watch game at 97% of its set speed read as lag and cut every lower-tier
 	// army line once T3 stood.
 	const float bar = (SetSpeed() > 0.f) ? 1.f : 0.f;
-	if (gSimSpeed < bar * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) {
+	// ...and the cuts hold, and deepen, while we are behind the server, not only while the sim is under 1x
+	const float behind = BehindS();
+	if ((gSimSpeed < bar * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) || (behind > 0.f)) {
 		gLagSev += ai.GetTunable("apex_lag_step", TUNE_LAG_STEP);
 		if (gLagSev > 3.f)
 			gLagSev = 3.f;
@@ -130,7 +150,8 @@ void TickSpeed()
 	if ((gLagSev > 0.f) && (ai.frame >= gNextLagLog)) {
 		gNextLagLog = ai.frame + 30 * SECOND;
 		AiLog("apex: LAG speed=" + formatFloat(gSimSpeed, "", 0, 2) + " set=" + formatFloat(SetSpeed(), "", 0, 1)
-			+ " severity=" + formatFloat(gLagSev, "", 0, 1));
+			+ " severity=" + formatFloat(gLagSev, "", 0, 1) + " behind=" + formatFloat(behind, "", 0, 1)
+			+ " orderLag=" + formatFloat(ai.GetOrderLagSec(), "", 0, 1) + " floor=" + formatFloat(gLagFloor, "", 0, 1));
 	}
 }
 

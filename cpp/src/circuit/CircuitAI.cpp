@@ -2275,8 +2275,15 @@ void CCircuitAI::NoteOrderLag(int frames)
 	if (frames < 0) {
 		return;
 	}
-	orderLagF = (orderLagN == 0) ? float(frames) : (0.9f * orderLagF + 0.1f * float(frames));
+	// the median of the last samples: a real lag shifts every one of them, an order another module replaced before
+	// it landed reads as a long one now and then (a 6.5 s spike in a local game drove the lag ladder to 3)
+	orderLagRing[orderLagN % ORDER_LAG_RING] = frames;
 	++orderLagN;
+	const int n = std::min(orderLagN, ORDER_LAG_RING);
+	std::array<int, ORDER_LAG_RING> s;
+	std::copy(orderLagRing.begin(), orderLagRing.begin() + n, s.begin());
+	std::nth_element(s.begin(), s.begin() + n / 2, s.begin() + n);
+	orderLagF = float(s[n / 2]);
 	if (lastFrame >= orderLagLogAt) {
 		orderLagLogAt = lastFrame + FRAMES_PER_SEC * 60;
 		LOG("apex: order-lag t=%i lagS=%.1f samples=%i last=%.1f", teamId, GetOrderLagSec(), orderLagN,

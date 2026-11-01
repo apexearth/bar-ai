@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <map>
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <set>
 #include <vector>
@@ -507,6 +508,8 @@ public:
 
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
+	static constexpr int ORDER_LAG_RING = 31;
+	std::array<int, ORDER_LAG_RING> orderLagRing{};
 	float orderLagF = 0.f;
 	int orderLagN = 0;
 	int orderLagLogAt = 0;
