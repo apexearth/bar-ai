@@ -158,36 +158,6 @@ float EvFighterHaveM()
 	return have;
 }
 
-int gFtrUrgentOn = -1;
-bool FtrUrgentOn()
-{
-	if (gFtrUrgentOn < 0)
-		gFtrUrgentOn = (ai.GetTunable("apex_ftr_urgent", TUNE_FTR_URGENT) > 0.f) ? 1 : 0;
-	return gFtrUrgentOn > 0;
-}
-
-// our fighter output of def d, metal/s: every plant of ours that makes it, at its own build power (assisting nanos
-// left out, the conservative side)
-float FtrMakeRateM(int d)
-{
-	if ((d <= 0) || (d > Catalog::gDefCount) || (Catalog::gBuildTime[d] <= 0.f))
-		return 0.f;
-	float r = 0.f;
-	const array<int>@ own = Market::OwnedDefs();
-	for (uint i = 0; i < own.length(); ++i) {
-		const int p = own[i];
-		if ((Market::gOwnCount[p] <= 0) || Catalog::gMobile[p])
-			continue;
-		const array<int>@ bl = Catalog::gBuildsList[p];
-		bool makes = false;
-		for (uint q = 0; (q < bl.length()) && !makes; ++q)
-			makes = (bl[q] == d);
-		if (makes)
-			r += float(Market::gOwnCount[p]) * Catalog::gBuildPower[p] * Catalog::gCostM[d] / Catalog::gBuildTime[d];
-	}
-	return r;
-}
-
 int gFtrTeamOn = -1;
 bool FtrTeamOn()
 {
@@ -235,22 +205,7 @@ float EveryFighterGainFor(int d, float fillSec)
 	}
 	if (owed <= 0.f)
 		return 0.f;
-	float fill = (fillSec > 1.f) ? fillSec : 180.f;
-	// ...WEIGHED BY ITS DEADLINE (his 11-01: fighters should usually win while owed; the plants still made two other
-	// planes per fighter): the shortfall is due when their strike arrives, but cannot fill faster than our plants
-	// make fighters, so its window is the later of the two, never longer than before. TUNE_FTR_URGENT.
-	if (FtrUrgentOn()) {
-		const float rate = FtrMakeRateM(d);
-		if (rate > 0.f) {
-			float due = owed / rate;
-			const float fl = EvFoeFlightS();
-			if (fl > due)
-				due = fl;
-			if (due < fill)
-				fill = (due > 1.f) ? due : 1.f;
-		}
-	}
-	return owed / fill;
+	return owed / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
 // An escort is sized to the threat: the fighters that beat the fighters of theirs we know of, none while they have none.
