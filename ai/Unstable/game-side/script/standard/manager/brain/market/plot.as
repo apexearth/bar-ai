@@ -298,6 +298,12 @@ bool PlotTaken(int bd, const AIFloat3& in c)
 // Once per PLOT_SCAN: retire built and stale plots, then one new plot for the oldest waiting def without one.
 void RefreshPlot()
 {
+	if (gPlsDef >= 0) {
+		const double _tPs = Perf::T0();
+		PlotSearchStep();
+		Perf::Add("plot.search", _tPs);
+		return;
+	}
 	if (ai.frame < gPlotNextAt)
 		return;
 	gPlotNextAt = ai.frame + PLOT_SCAN;
@@ -339,100 +345,151 @@ void RefreshPlot()
 		}
 		return;
 	}
-	PlotSearch(uint(pick));
+	const double _tPs = Perf::T0();
+	PlotSearchBegin(gNoRoomDefs[uint(pick)]);
+	PlotSearchStep();
+	Perf::Add("plot.search", _tPs);
 }
 
-// The cheapest clearable ground for the waiting def gNoRoomDefs[k].
-void PlotSearch(uint k)
+// The cheapest clearable ground for a waiting def, a slice at a time: the grid walk and the candidate tests stop at
+// PLOT_SLICE_US and resume on the next ask (one search took up to 35 ms in one frame, perfrev1031-shadow).
+const double PLOT_SLICE_US = 1000.0;
+int gPlsDef = -1;
+int gPlsPhase = 0;
+array<AIFloat3> gPlsCand;
+uint gPlsCi = 0;
+int gPlsRing = 1, gPlsKk = -1, gPlsSide = 0, gPlsFlat = 0;
+bool gPlsGrid = false;
+int gPlsTier = 0, gPlsYoung = 0, gPlsBad = 0, gPlsForeignN = 0, gPlsUncovered = 0;
+int gPlsCandN = 0, gPlsGround = 0, gPlsLeash = 0, gPlsFront = 0, gPlsDepth = 0, gPlsTaken = 0;
+string gPlsForeign;
+float gPlsBestCost = 1e30f;
+AIFloat3 gPlsBestAt;
+array<Id> gPlsBestOcc;
+
+void PlotSearchBegin(int bd)
 {
-	int nTier = 0, nYoung = 0, nBad = 0, nForeign = 0, nUncovered = 0;
-	int nCand = 0, nGround = 0, nLeash = 0, nFront = 0, nDepth = 0, nTaken = 0;
-	string foreign;
-	const int bd = gNoRoomDefs[k];
+	gPlsDef = bd;
+	gPlsPhase = 1;
+	gPlsCi = 0;
+	gPlsRing = 1;
+	gPlsKk = -1;
+	gPlsSide = 0;
+	gPlsFlat = 0;
+	gPlsTier = 0; gPlsYoung = 0; gPlsBad = 0; gPlsForeignN = 0; gPlsUncovered = 0;
+	gPlsCandN = 0; gPlsGround = 0; gPlsLeash = 0; gPlsFront = 0; gPlsDepth = 0; gPlsTaken = 0;
+	gPlsForeign = "";
+	gPlsBestCost = 1e30f;
+	gPlsBestAt = AIFloat3();
+	gPlsBestOcc.resize(0);
+	gPlsCand.resize(0);
+	gPlsGrid = Base::gAnchorSet;
 	const int tier = PlantTier(bd);
-	const float apron = IsPlant(bd) ? 48.f : 16.f;
-	const float hx = float(Catalog::gFootX[bd]) * 8.f + apron, hz = float(Catalog::gFootZ[bd]) * 8.f + apron;
-	const float r = sqrt(hx * hx + hz * hz) + 120.f + PlotApronFront(bd);
-	float bestCost = 1e30f;
-	AIFloat3 bestAt;
-	array<Id> bestOcc;
 	// The ground to clear: a lesser plant's, the turret blocks (where the lathe is), the converter fields, and every
 	// flat cell of the eco leash the depth rule admits (his 10-30: factories stay in the front half).
-	array<AIFloat3> cand;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f is null) || (f.circuitDef is null))
 			continue;
 		const int fd = int(f.circuitDef.id);
 		if ((fd == bd) || (PlantTier(fd) >= tier)) {
-			++nTier;
+			++gPlsTier;
 			continue;
 		}
 		if (BuiltYoung(f)) {
-			++nYoung;
+			++gPlsYoung;
 			continue;
 		}
-		cand.insertLast(f.GetPos(ai.frame));
+		gPlsCand.insertLast(f.GetPos(ai.frame));
 	}
 	const uint nStep = (gOwnNanoPos.length() > 12) ? (gOwnNanoPos.length() / 12) : 1;
 	for (uint i = 0; i < gOwnNanoPos.length(); i += nStep)
-		cand.insertLast(gOwnNanoPos[i]);
+		gPlsCand.insertLast(gOwnNanoPos[i]);
 	const uint cStep = (gOwnConv.length() > 12) ? (gOwnConv.length() / 12) : 1;
 	for (uint i = 0; i < gOwnConv.length(); i += cStep) {
 		if (gOwnConv[i] !is null)
-			cand.insertLast(gOwnConv[i].GetPos(ai.frame));
+			gPlsCand.insertLast(gOwnConv[i].GetPos(ai.frame));
 	}
+}
+
+void PlotSearchStep()
+{
+	const double t0 = ai.ClockUs();
+	const int bd = gPlsDef;
+	const int tier = PlantTier(bd);
+	const float apron = IsPlant(bd) ? 48.f : 16.f;
+	const float hx = float(Catalog::gFootX[bd]) * 8.f + apron, hz = float(Catalog::gFootZ[bd]) * 8.f + apron;
+	const float r = sqrt(hx * hx + hz * hz) + 120.f + PlotApronFront(bd);
 	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const bool doorPlant = !AirPlant(bd) && (Catalog::gBuildsList[bd].length() > 0);
-	if (Base::gAnchorSet) {
+	if (gPlsPhase == 1) {
+		if (!gPlsGrid)
+			gPlsPhase = 2;
 		const float step = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 8.f;
-		int flat = 0;
-		for (int ring = 1; (flat < PLOT_GRID_MAX) && (float(ring) * step <= leash); ++ring) {
-			for (int kk = -ring; (kk <= ring) && (flat < PLOT_GRID_MAX); ++kk) {
-				for (int side = 0; (side < 4) && (flat < PLOT_GRID_MAX); ++side) {
-					const float ox = (side < 2) ? float(kk) : float((side == 2) ? -ring : ring);
-					const float oz = (side < 2) ? float((side == 0) ? -ring : ring) : float(kk);
-					if ((side >= 2) && ((kk == -ring) || (kk == ring)))
-						continue;
-					const AIFloat3 g(Base::gAnchor.x + ox * step, 0.f, Base::gAnchor.z + oz * step);
-					if (OnMap(g) && LatheDepthOk(bd, doorPlant, g) && PlotGround(bd, g)) {
-						cand.insertLast(g);
-						++flat;
-					}
-				}
+		while (gPlsPhase == 1) {
+			if ((gPlsFlat >= PLOT_GRID_MAX) || (float(gPlsRing) * step > leash)) {
+				gPlsPhase = 2;
+				break;
 			}
+			if (gPlsSide > 3) {
+				gPlsSide = 0;
+				++gPlsKk;
+				continue;
+			}
+			if (gPlsKk > gPlsRing) {
+				++gPlsRing;
+				gPlsKk = -gPlsRing;
+				gPlsSide = 0;
+				continue;
+			}
+			const int ring = gPlsRing, kk = gPlsKk, side = gPlsSide;
+			++gPlsSide;
+			if ((side >= 2) && ((kk == -ring) || (kk == ring)))
+				continue;
+			const float ox = (side < 2) ? float(kk) : float((side == 2) ? -ring : ring);
+			const float oz = (side < 2) ? float((side == 0) ? -ring : ring) : float(kk);
+			const AIFloat3 g(Base::gAnchor.x + ox * step, 0.f, Base::gAnchor.z + oz * step);
+			if (OnMap(g) && LatheDepthOk(bd, doorPlant, g) && PlotGround(bd, g)) {
+				gPlsCand.insertLast(g);
+				++gPlsFlat;
+			}
+			if (ai.ClockUs() - t0 >= PLOT_SLICE_US)
+				return;
 		}
 	}
-	for (uint ci = 0; ci < cand.length(); ++ci) {
-		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), cand[ci]);
-		++nCand;
+	while (gPlsCi < gPlsCand.length()) {
+		if (ai.ClockUs() - t0 >= PLOT_SLICE_US)
+			return;
+		const AIFloat3 c = ai.SnapToLattice(Catalog::Def(bd), gPlsCand[gPlsCi]);
+		++gPlsCi;
+		++gPlsCandN;
 		if (!OnMap(c) || !PlotGround(bd, c) || PlotUnfreeable(bd, c)) {
-			++nGround;
+			++gPlsGround;
 			continue;
 		}
-		if (Base::gAnchorSet) {
+		if (gPlsGrid) {
 			if (c.distance2D(Base::gAnchor) > leash) {
-				++nLeash;
+				++gPlsLeash;
 				continue;
 			}
 			if (Builder::PastFront(c)) {
-				++nFront;
+				++gPlsFront;
 				continue;
 			}
 			if (!LatheDepthOk(bd, doorPlant, c)) {
-				++nDepth;
+				++gPlsDepth;
 				continue;
 			}
 		}
 		if (PlotTaken(bd, c)) {
-			++nTaken;
+			++gPlsTaken;
 			continue;
 		}
 		bool bad = false;
 		for (uint b = 0; (b < gPlotBad.length()) && !bad; ++b)
 			bad = gPlotBad[b].distance2D(c) < hx;
 		if (bad) {
-			++nBad;
+			++gPlsBad;
 			continue;
 		}
 		// exactly what refuses the building here, by the C++ blocking map's rules (yards, ignores, the doorway apron)
@@ -452,9 +509,9 @@ void PlotSearch(uint k)
 				plants.insertLast(u);
 			else if (!IsNanoTurret(ud) && !PlotClearable(ud, bd)) {
 				ok = false;
-				++nForeign;
-				if (foreign.length() < 80)
-					foreign += " " + u.circuitDef.GetName();
+				++gPlsForeignN;
+				if (gPlsForeign.length() < 80)
+					gPlsForeign += " " + u.circuitDef.GetName();
 			}
 			occ.insertLast(u.id);
 			cost += Catalog::gCostM[ud];
@@ -462,30 +519,40 @@ void PlotSearch(uint k)
 		if (!ok || (occ.length() == 0))
 			continue;
 		if (!PlotCovered(plants)) {
-			++nUncovered;
+			++gPlsUncovered;
 			continue;
 		}
-		if (cost >= bestCost)
+		if (cost >= gPlsBestCost)
 			continue;
-		bestCost = cost;
-		bestAt = c;
-		bestOcc = occ;
+		gPlsBestCost = cost;
+		gPlsBestAt = c;
+		gPlsBestOcc = occ;
 	}
-	if (bestOcc.length() == 0) {
-		if (gNoRoomLogAts[k] != gNoRoomAts[k]) {
-			gNoRoomLogAts[k] = gNoRoomAts[k];
+	gPlsDef = -1;
+	PlotSearchFinish(bd);
+}
+
+void PlotSearchFinish(int bd)
+{
+	const int k = gNoRoomDefs.find(bd);
+	const int ai0 = PlantAskIdx(bd);
+	if ((k < 0) || (ai0 < 0) || (PlotOf(bd) !is null))
+		return;
+	if (gPlsBestOcc.length() == 0) {
+		if (gNoRoomLogAts[uint(k)] != gNoRoomAts[uint(k)]) {
+			gNoRoomLogAts[uint(k)] = gNoRoomAts[uint(k)];
 			AiLog("apex: plot-none t=" + ai.teamId + " " + Catalog::Def(bd).GetName()
-				+ " plants=" + Factory::gFacUnits.length() + " tier=" + nTier + " young=" + nYoung
-				+ " bad=" + nBad + " foreign=" + nForeign + " uncovered=" + nUncovered + " cand=" + nCand + " ground=" + nGround
-				+ " leash=" + nLeash + " front=" + nFront + " depth=" + nDepth + " taken=" + nTaken + " by=" + foreign);
+				+ " plants=" + Factory::gFacUnits.length() + " tier=" + gPlsTier + " young=" + gPlsYoung
+				+ " bad=" + gPlsBad + " foreign=" + gPlsForeignN + " uncovered=" + gPlsUncovered + " cand=" + gPlsCandN
+				+ " ground=" + gPlsGround + " leash=" + gPlsLeash + " front=" + gPlsFront + " depth=" + gPlsDepth
+				+ " taken=" + gPlsTaken + " by=" + gPlsForeign);
 		}
 		return;
 	}
-	const int ai0 = PlantAskIdx(bd);
 	Plot p;
 	p.def = bd;
-	p.at = bestAt;
-	p.occ = bestOcc;
+	p.at = gPlsBestAt;
+	p.occ = gPlsBestOcc;
 	p.gain = gPlantAskGain[uint(ai0)];
 	p.value = gPlantAskValue[uint(ai0)];
 	gPlots.insertLast(p);
@@ -499,7 +566,7 @@ void PlotSearch(uint k)
 			names += " " + u.circuitDef.GetName();
 	}
 	AiLog("apex: plot t=" + ai.teamId + " " + Catalog::Def(bd).GetName()
-		+ " at=" + int(p.at.x) + "," + int(p.at.z) + " cost=" + int(bestCost)
+		+ " at=" + int(p.at.x) + "," + int(p.at.z) + " cost=" + int(gPlsBestCost)
 		+ " v=" + formatFloat(p.value, "", 0, 3) + " plots=" + gPlots.length() + " clear=" + names);
 }
 

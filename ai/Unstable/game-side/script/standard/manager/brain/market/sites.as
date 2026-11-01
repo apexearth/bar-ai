@@ -828,6 +828,8 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			break;
 		}
 	}
+	const double _tLs = Perf::T0();
+	double _lsFind = 0.0, _lsRoom = 0.0;
 	// One probe per BLOCK: the richest squares all sit inside one block,
 	// and a big footprint fits nowhere near a block's middle.
 	array<float> ringBP;
@@ -896,7 +898,10 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			break;
 		if (!OnMap(ask0))
 			continue;
+		const double _tF0 = Perf::T0();
 		AIFloat3 s0 = ai.FindBuildSiteNear(def, ask0, NanoRange() * 2.f);
+		if (_tF0 > 0.0)
+			_lsFind += ai.ClockUs() - _tF0;
 		if (OnMap(s0))
 			s0 = LatticeFit(def, ClearOfSpots(s0, 180.f));
 		if (doorway && OnMap(s0))
@@ -932,6 +937,7 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			ask = (Military::ForwardFraction(ask - exitDir * off) <= Military::ForwardFraction(ask + exitDir * off))
 				? ask - exitDir * off : ask + exitDir * off;   // a generator takes the block's back edge
 		}
+		const double _tF = Perf::T0();
 		AIFloat3 raw = ai.FindBuildSiteNear(def, ask, r * 2.f);
 		// The front edge can be a cliff or the map's edge; the block itself
 		// is asked next, and the exit lane backs the site out of it.
@@ -940,6 +946,8 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			raw = ai.FindBuildSiteNear(def, gOwnNanoPos[i], r * 2.f);
 			fromBlock = OnMap(raw);
 		}
+		if (_tF > 0.0)
+			_lsFind += ai.ClockUs() - _tF;
 		AIFloat3 s = OnMap(raw) ? LatticeFit(def, ClearOfSpots(raw, 180.f)) : raw;
 		if (doorway && OnMap(s))
 			s = LatticeFit(def, ClearExitLane(s));
@@ -964,8 +972,11 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		// groups, one build beside each -- or, concentrated (TUNE_LATHE_CONCENTRATE, his 10-18: build what is
 		// important, not many things at once; we waste a lot of room), the richest lathe whatever rises there.
 		++fits;
+		const double _tR = Perf::T0();
 		const float stand = RingBPAt(s);
 		float room = RoomBPAt(did, nanoDef, due, s);
+		if (_tR > 0.0)
+			_lsRoom += ai.ClockUs() - _tR;
 		// room is worth only the turrets the site is still short of: ground beside standing turrets is not worth less
 		// than empty ground with space for them (apex_big_near)
 		if (BigNearOn() && Catalog::ValidId(nanoDef)) {
@@ -986,6 +997,9 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			best = s;
 		}
 	}
+	Perf::AddUs("ls.find", _lsFind);
+	Perf::AddUs("ls.room", _lsRoom);
+	Perf::Add("ls.raw", _tLs);
 	AiLog("apex: lathe-site t=" + ai.teamId + " " + def.GetName()
 		+ " interior=" + int(interior.x) + "," + int(interior.z)
 		+ " bp=" + int(interiorBP)

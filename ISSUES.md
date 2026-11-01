@@ -524,6 +524,22 @@ Viper 2.8, Pit Bull 1.8, Toaster 1.9, Ambusher 1.7. Wins 12.0 T2 guns, losses
 
 ## PERFORMANCE
 
+### v0.5.01 FAILS THE 16-AI BUDGET; HIS ONLINE SEATS COST 2-3.5 ms A FRAME (2026-10-31)
+
+Skill benchmark (Greenest Fields, 8 Apex v0.5.01 vs 8 BARb hard, +100, seed 1, uncapped): 0.718 ms/AI/frame
+(min 25, 1.7x, Apex won at 33 min). The same code re-run on the same seed: 0.386 PASS (Apex lost at 30), 0.581,
+0.874 (won at 43, 3,474 units). One run cannot carry the verdict: the outcome and the unit curve change run to run.
+His 10-31 hosted game (3 seats on his machine, apex_perf off): 2.6 / 3.5 / 3.1 ms per seat per frame at the worst
+minute, bldIdle 2-4 s a minute per seat; lag ladder up 19-20 of 33 minutes, up to 65-110 builder sets queued,
+election wait median 1.3-9.6 s, worst 200-320 s. Builder AiMakeTask calls run 1,000-2,500 a minute a seat
+there against ~170 in the benchmark: the benchmark does not load the AI the way his games do.
+- Spikes: LatheSiteRaw is 99% of the >=30 ms AI frames in a won benchmark (gantry, T3 plants, converters, fusions
+  in a packed base; ls.raw up to 37.7 ms, ls.find 13 ms, ls.room 21 ms) and the top tag of his spikes.
+  PlotSearch did the same (up to 35 ms) and is sliced now. In C++, a failed FindBuildSite (apex: site-fail,
+  r=1600) is searched twice (BuilderTask.cpp FindBuildSite, selfClear then 0) and coincides with a third of his
+  >=40 ms frames.
+- The benchmark runs work releases do not: up.facexit (apex_perf only, 4.7 s a game) and dec.nnrec (apex_nn_record).
+
 ### WHERE PERFORMANCE STANDS, AND WHAT IS LEFT (2026-10-18)
 
 16-Apex 8v8 (Delta Siege Dry, 40 min, seed 1): 0.404 ms/AI/frame at the worst minute with
