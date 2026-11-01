@@ -1535,8 +1535,7 @@ const float TUNE_BARE_MEX_HZ = 1.f;   // [toggle 0/1] protect_measured.as: an un
 const float TUNE_LADDER_YIELDS = 1.f;   // [toggle 0/1] decide.as CategoryDraw: the ladder's spot claim no longer jumps a constructor's tower priced above it (the commander was always exempt)
 const float TUNE_GANTRY_GAP_EST = 0.f;   // [toggle 0/1] want_super.as: the gantry's army gap on the one army count (FoeArmyM vs OurArmyM), not EnemyArmyCost (a third of their army)
 const float TUNE_ECO_SEAT_T3 = 0.f;   // [toggle 0/1] ecoseat.as EcoSeatT3: past half its growth target the eco seat builds the team's gantry and its T3 (his 10-26)
-const float TUNE_NAVY_NEEDS_YARD = 0.f;   // [toggle 0/1] army.as NavyShare: a naval lead with no water plant holds no navy share of its army target
-const float TUNE_ECO_SEAT2_SHARE = 1.f;   // [0.33/0.5/1] army.as EcoRoleTargetM: the second eco seat grows to this share of the first's target (his 10-31: a half eco)
+const float TUNE_ECO_SEAT2_SHARE = 0.33f;   // [0.33/0.5/1] army.as EcoRoleTargetM: the second eco seat grows to this share of the first's target (his 10-31: a half eco)
 const float TUNE_ECO_SEATS = 2.f;   // [1/2] how many of the most sheltered seats play eco (his 10-25: 2 on bigger maps, 1 on smaller)
 const float TUNE_ECO_SEAT_STRICT = 1.f;  // the growing eco seat's hands and labs take only economy (+AA while air kills us); see docs/tunables.md
 

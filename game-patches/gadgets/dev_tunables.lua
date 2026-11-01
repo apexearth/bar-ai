@@ -676,7 +676,6 @@ local NAMES = {
 	"apex_eco_seat_t3", -- ecoseat.as: past half its growth target the eco seat builds the team gantry and its T3 (0)
 	"apex_eco_seats", -- army.as: the N most sheltered seats play eco, the second on 8-player teams (2)
 	"apex_eco_seat2_share", -- army.as: the second eco seat's growth target as a share of the first's (1)
-	"apex_navy_needs_yard", -- army.as NavyShare: no water plant, no navy share of the army target (0)
 	"apex_travel_lag", -- MoveAction.cpp: lean waypoints far enough ahead for speed x measured order lag (1)
 	"apex_bomb_lag", -- BombTask.cpp FindTarget: a moving target weighed by splash over its walk in lag + flight (1)
 	"apex_lag_behind", -- perf.as BehindS: the lag ladder holds while the order lag says we are behind the server (1)

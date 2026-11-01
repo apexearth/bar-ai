@@ -263,10 +263,6 @@ float NavyShare()
 	if (cut > 0.f)
 		return cut;
 	if (MapHasWater() && NavalLead()) {
-		// NO YARD, NO NAVY SHARE: the plant market can price the yard out (Supreme Isthmus 8v8, 10-31: four leads held
-		// 75% of their army target for ships, no yard was ever built, their land labs read the other 25% as full)
-		if ((ai.GetTunable("apex_navy_needs_yard", TUNE_NAVY_NEEDS_YARD) > 0.f) && (OwnedWaterPlants() == 0))
-			return 0.f;
 		// Once we hold the water the fleet is kept, not grown: the budget
 		// is what already floats.
 		if (WaterControlled()) {
