@@ -683,6 +683,7 @@ local NAMES = {
 	"apex_team_gantry", -- teamgant.as: a middle seat hosts the team's first gantry, the others pay (1)
 	"apex_foe_air_mem", -- foemem.as: their planes remembered until seen dying; the fighter answer sizes on it (1)
 	"apex_ftr_team", -- every.as: fighters priced on the team's whole shortfall (1)
+	"apex_ftr_urgent", -- every.as: a fighter shortfall priced over its deadline (1)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)
 	"apex_team_tech",         -- teamtech.as + gift.as: one seat techs and hands out advanced cons; the others price their own first lab down (0)
 	"apex_team_pay",          -- teamtech.as: the other seats pay the tech seat's shortfall for its advanced lab and team constructors (1)

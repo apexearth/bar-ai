@@ -1987,6 +1987,7 @@ const float TUNE_INTERCEPT_R = 1400.f;
 // THE SEVERITY LADDER (apexearth: "keep cutting back until we've caught up"):
 //   every window still under the bar climbs it, every...
 const float TUNE_LAG_SPEED = 0.98f;
+const float TUNE_FTR_URGENT = 1.f;   // [toggle 0/1] every.as EveryFighterGainFor: a fighter shortfall priced over the later of their strike's flight and our plants' time to make it, never longer than the fill window (his 11-01)
 const float TUNE_FTR_TEAM = 1.f;   // [toggle 0/1] every.as EveryFighterGainFor: fighters (and an air plant for them) priced on the team's whole shortfall against the team's fighters, not this seat's army share (his 11-01)
 const float TUNE_FOE_AIR_MEM = 1.f;   // [toggle 0/1] foemem.as: their armed planes counted once by id and kept until seen dying; the fighter answer sizes on that memory, not on what is in sight (11-01 mirror 4v4s)
 const float TUNE_LAG_BEHIND = 1.f;   // [toggle 0/1] perf.as BehindS: the lag ladder holds and deepens while the measured order lag says we are behind the server, not only while the sim is under 1x (his 10-31)
