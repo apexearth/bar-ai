@@ -20,6 +20,7 @@ void EvSnapFoeAir()
 	if ((gEvSnapAt >= 0) && (ai.frame - gEvSnapAt < 5 * SECOND))
 		return;
 	gEvSnapAt = ai.frame;
+	ai.PublishTeamValue("ftrhave", EvFighterHaveM());
 	gEvFoeAirM = 0.f; gEvFoeFtrM = 0.f; gEvFoeStrM = 0.f;
 	gEvFoeFtrHp = 0.f; gEvFoeFtrDps = 0.f; gEvFoeStrHp = 0.f;
 	float spd = 0.f;
@@ -157,6 +158,25 @@ float EvFighterHaveM()
 	return have;
 }
 
+int gFtrTeamOn = -1;
+bool FtrTeamOn()
+{
+	if (gFtrTeamOn < 0)
+		gFtrTeamOn = (ai.GetTunable("apex_ftr_team", TUNE_FTR_TEAM) > 0.f) ? 1 : 0;
+	return gFtrTeamOn > 0;
+}
+
+// the team's fighters, held and ordered: every seat publishes its own (EvSnapFoeAir), ours read live
+float TeamFighterHaveM()
+{
+	float all = EvFighterHaveM();
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i)
+		if (int(mates[i]) != ai.teamId)
+			all += ai.ReadTeamValue(int(mates[i]), "ftrhave", 0.f);
+	return all;
+}
+
 float EvFighterShare()
 {
 	const float team = Military::TeamArmyCost();
@@ -169,14 +189,23 @@ float EveryFighterGainFor(int d, float fillSec)
 {
 	if (!IsFighterDef(d))
 		return 0.f;
-	float want = EvFighterWantM(d) * EvFighterShare();
-	const float mem = EvFighterMemM(d);
-	if (mem > want)
-		want = mem;
 	const float have = EvFighterHaveM();
-	if (want <= have)
+	const float mem = EvFighterMemM(d);
+	float owed = mem - have;
+	// THE TEAM'S SHORTFALL (his 11-01): each seat answered only its army share, so no seat bought the air plant a
+	// whole team's need called for (mirror 4v4s: plant value 12-20 against 326-841, no plant, the side lost to air)
+	if (FtrTeamOn()) {
+		const float teamOwed = EvFighterWantM(d) - TeamFighterHaveM();
+		if (teamOwed > owed)
+			owed = teamOwed;
+	} else {
+		const float shareOwed = EvFighterWantM(d) * EvFighterShare() - have;
+		if (shareOwed > owed)
+			owed = shareOwed;
+	}
+	if (owed <= 0.f)
 		return 0.f;
-	return (want - have) / ((fillSec > 1.f) ? fillSec : 180.f);
+	return owed / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
 // An escort is sized to the threat: the fighters that beat the fighters of theirs we know of, none while they have none.
