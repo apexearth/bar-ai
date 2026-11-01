@@ -39,6 +39,22 @@ function FindBar {
         (Join-Path $env:ProgramFiles "Beyond-All-Reason")
     )
     if (${env:ProgramFiles(x86)}) { $roots += (Join-Path ${env:ProgramFiles(x86)} "Beyond-All-Reason") }
+    # BAR from Steam lives in a Steam library: the main one and every one libraryfolders.vdf names
+    $steam = (Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath
+    if ($steam) {
+        $libs = @($steam)
+        $vdf = Join-Path $steam "steamapps\libraryfolders.vdf"
+        if (Test-Path -LiteralPath $vdf) {
+            foreach ($m in [regex]::Matches([IO.File]::ReadAllText($vdf), '"path"\s+"([^"]+)"')) {
+                $libs += ($m.Groups[1].Value -replace '\\\\', '\')
+            }
+        }
+        foreach ($lib in $libs) {
+            foreach ($n in @("Beyond All Reason", "Beyond-All-Reason", "BeyondAllReason")) {
+                $roots += (Join-Path $lib "steamapps\common\$n")
+            }
+        }
+    }
     foreach ($hive in @("HKCU:", "HKLM:", "HKLM:\SOFTWARE\WOW6432Node")) {
         $key = "$hive\Software\Microsoft\Windows\CurrentVersion\Uninstall"
         if ($hive -like "*WOW6432Node") { $key = "$hive\Microsoft\Windows\CurrentVersion\Uninstall" }
@@ -55,8 +71,12 @@ function FindBar {
 }
 
 function BarProcesses($root) {
+    # a lobby or game running from anywhere, not only from the install found: it saves its settings on close
     @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        try { $_.Path -and $_.Path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
+        try {
+            ($_.Path -and $_.Path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) -or
+            ($_.ProcessName -match '^(spring|spring-headless|spring-dedicated|Beyond-All-Reason)$')
+        } catch { $false }
     })
 }
 
@@ -85,6 +105,12 @@ function ShowFullAiList($data) {
         $text = "return {`n`t[`"Chili lobby`"] = {`n`t`tsimpleAiList = false,`n`t},`n}`n"
     }
     [IO.File]::WriteAllText($igl, $text, (New-Object Text.UTF8Encoding($false)))
+    # read it back: a lobby that renamed the setting would leave Apex hidden while this reported success
+    $back = [IO.File]::ReadAllText($igl)
+    if (-not ($back -match 'simpleAiList\s*=\s*false') -or ($back -match 'simpleAiList\s*=\s*true')) {
+        throw "the setting did not stick in $igl"
+    }
+    if (-not (Test-Path -LiteralPath $devmode)) { throw "could not create $devmode" }
 }
 
 function PickFolder {
@@ -181,10 +207,10 @@ Write-Host "  Done. $Short $Variant is installed." -ForegroundColor Green
 if ($listed) {
     Say "The lobby will show the full AI list (devmode.txt made, 'Simple AI list' off)."
 } else {
-    Say "The lobby setting was NOT changed. To see $Short in the AI list, run Install.bat"
-    Say "again with BAR closed, or make an empty file named devmode.txt in"
-    Say "$data"
-    Say "and untick 'Simple AI list' under Settings > Developer in the lobby."
+    Write-Host "  The lobby setting was NOT changed, so $Short will be hidden in the AI list." -ForegroundColor Yellow
+    Say "Either run Install.bat again with BAR fully closed, or do it by hand:"
+    Say "  1. make an empty file named devmode.txt in $data"
+    Say "  2. start BAR, open Settings > Developer and untick 'Simple AI list'"
 }
 Write-Host ""
 Say "Start BAR. In a lobby, Add AI and pick $Short $Variant."

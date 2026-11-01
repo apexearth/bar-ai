@@ -97,8 +97,9 @@ results per release, including the changes that made it worse.
 
 You need Windows and BAR, started at least once so it has downloaded its engine.
 
-1. Download the latest `Apex-v*.zip` from
-   [Releases](https://github.com/apexearth/bar-ai/releases/latest).
+1. Open the [latest release](https://github.com/apexearth/bar-ai/releases/latest) and download the
+   file named **`Apex-AI-<version>-INSTALL.zip`** (a few MB). Not "Source code (zip)" or "(tar.gz)":
+   GitHub adds those to every release, they are this whole repository, very large, and have no installer.
 2. Close BAR.
 3. Right-click the zip, **Extract All**, and double-click `Install.bat` in the extracted folder.
    It finds your BAR install, copies the AI into the engine folder, and turns off the lobby's
