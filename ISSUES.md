@@ -124,7 +124,12 @@ nano turrets) against 8k army. The six fighting seats earn 6-126 m/s and carry t
 split by seat COUNT, x1.2), which their income cannot fill. Growth ends near minute 27-28 in both versions (P crosses
 `TUNE_ECO_TARGET_BASE_8` x IncomeMult = 750), after which t6 alone fields 380-460 m/s of army. Between minutes 16 and 28
 BARb's standing army grows 52k -> 264k against our 25k -> -6k. Not the target: a seat's target ~12.8k vs 1.8k standing.
-Matches sup-*-771, sup2-*-772/773. Waiting on his ruling (eco seat and the team gap).
+Matches sup-*-771, sup2-*-772/773. His 10-31: the eco rule was meant for one seat; make the second a half eco.
+Done (20a22f26, TUNE_ECO_SEAT2_SHARE 0.33): over 3 seeds our army at minute 40 led BARb's in 2 (v0.5.0: 0 of 3).
+Still open: the first T3 lab at 22-26 min against BARb's 14-18. The eco seats report gantry-why `eco-role` until
+their growth ends (the second at 23.5-24 min), the front seats `afford` (the gantry's bill over 100 s of a 50-100
+m/s seat's own income, TUNE_GANTRY_AFFORD_S, and a (own/150)^2 host scale). Waiting on his ruling: who hosts the
+team's first gantry and who pays for it.
 
 ## TURRET PILES: THE KNOT RULE, LEFT FOR NOW (2026-10-24)
 
