@@ -1511,6 +1511,7 @@ const float TUNE_ECO_LATCH = 1.f;
 //   uncovered upgrade hands; the others price their own first advanced lab down by the share
 //   of those hands the handouts cover. His 10-15. See docs/tunables.md.
 const float TUNE_TEAM_TECH = 1.f;
+const float TUNE_TEAM_GANTRY = 1.f;   // [toggle 0/1] teamgant.as: a middle seat hosts the team's first gantry on the team's purse and the others pay what it is short (his 10-31)
 const float TUNE_TEAM_PAY = 1.f;   // [toggle 0/1] teamtech.as: the other seats pay the tech seat's shortfall while its advanced lab or its constructors for the team wait on metal (his 10-29); A/B gate, deleted with the result
 
 // [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves

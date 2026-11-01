@@ -1055,17 +1055,20 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// Below the host anchor the gain scales by (own/anchor)^2, as the
 			// tunable says: a hard skip left most of an 8v8 at 60-130 m/s
 			// with no gantry at 38 minutes (apexearth 2026-09-27).
-			{
-				const float own = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
-				const float anchor = ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC);
-				if ((anchor > 0.f) && (own < anchor))
-					hostMul = (own * own) / (anchor * anchor);
-			}
 			// OUR OWN PURSE, not the team's: since every player keeps a gantry
 			// (09-27) each pays for its own, and the team sum licensed one at
 			// 50 m/s in an 8v8 (his 2026-09-28: "some of them started a gantry
 			// at like 50 metal income. It's just not enough").
-			teamInc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
+			// ...EXCEPT THE TEAM'S FIRST GANTRY'S HOST (his 10-31, teamgant.as): the others send what it is short
+			float purse = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
+			if (TeamGantIsHost() && (SuperHave(SC_GANTRY) == 0))
+				purse += TgPayersInc();
+			{
+				const float anchor = ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC);
+				if ((anchor > 0.f) && (purse < anchor))
+					hostMul = (purse * purse) / (anchor * anchor);
+			}
+			teamInc = purse;
 			const float gsec = ai.GetTunable("apex_gantry_afford_s",
 					TUNE_GANTRY_AFFORD_S);
 			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f) * PlanMul(sc);

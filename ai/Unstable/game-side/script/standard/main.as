@@ -224,6 +224,7 @@ void UpdateChunk(int c)
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::CounterMixUpdate(); Perf::Add("up.countermix", _t); }
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
 		{ double _t = Perf::T0(); Market::TeamTechTick(); Market::TeamTechStat(); Perf::Add("up.teamtech", _t); }
+		{ double _t = Perf::T0(); Market::TeamGantTick(); Market::TeamGantStat(); Perf::Add("up.teamgant", _t); }
 	} else if (c == 5) {
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
 		if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }

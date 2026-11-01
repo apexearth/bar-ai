@@ -680,6 +680,7 @@ local NAMES = {
 	"apex_bomb_lag", -- BombTask.cpp FindTarget: a moving target weighed by splash over its walk in lag + flight (1)
 	"apex_lag_behind", -- perf.as BehindS: the lag ladder holds while the order lag says we are behind the server (1)
 	"apex_lag_gc", -- want_reclaim.as LagCleanup: while behind, idle worthless turrets with a harmless blast self-destruct (1)
+	"apex_team_gantry", -- teamgant.as: a middle seat hosts the team's first gantry, the others pay (1)
 	"apex_eco_seat_strict",   -- ecoseat.as: 1 = the growing eco seat's hands and labs take only economy (1)
 	"apex_team_tech",         -- teamtech.as + gift.as: one seat techs and hands out advanced cons; the others price their own first lab down (0)
 	"apex_team_pay",          -- teamtech.as: the other seats pay the tech seat's shortfall for its advanced lab and team constructors (1)
