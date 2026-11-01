@@ -1253,7 +1253,10 @@ bool ConPoolFull(int d)
 }
 int ScoutFleetCap()
 {
-	return int(ceil(float(RezFleetCap()) * gScoutCapMul));
+	float cap = float(RezFleetCap()) * gScoutCapMul;
+	if (PersOn())
+		cap *= PersScoutCapMul();
+	return int(ceil(cap));
 }
 
 // A patrol must beat the raider it finds (his 10-13: 98-235 Rovers bought on
@@ -3593,6 +3596,8 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			sumV += candV[ci];
 		}
 	}
+	if (PersOn())
+		sumV = PersProdApply(candDef, candV, sumV);
 	array<float> facMult;
 	sumV = NnFacScore(fac, candDef, candV, candGain, facMult);
 	// The share a dominated unit loses stays in sumV as the better line's
@@ -3659,6 +3664,8 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		return null;
 	}
 	best = candDef[pick];
+	if (PersOn())
+		PersNotePick(best);
 	bestV = candV[pick];
 	bestGain = candGain[pick];
 	gRedrawDef = candDef;

@@ -3478,6 +3478,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	ComHomeNoteElection(unit, top);
 	ValMixNote(ranked, top);
+	if (PersOn())
+		PersNoteTop(top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.
 	const double _tLog = Perf::T0();

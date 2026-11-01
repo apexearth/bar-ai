@@ -45,7 +45,8 @@
 #include "market/strike.as"         // the RUSH plan as build-up, strike together, tech during the strike
 #include "market/joinnet.as"        // join a same-def site already rising, or open a new one
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
-#include "market/persona.as"        // per-seat personality dials: air, tech, aggression, unit class (apex_persona)
+#include "market/persona.as"        // per-seat personality dials inside the team style (apex_persona)
+#include "market/persona_style.as"  // the team's style: drawn hidden from what the game allows, fades when it trades badly
 #include "market/calib.as"          // calibration: the risk each finished structure was priced at (apex: calib-born)
 #include "market/land.as"           // land value: rent from the neighbours' metal per cell (apex_land_value)
 #include "market/yield.as"          // line yield: enemy metal destroyed per metal spent, per type and lab (apex_line_yield)

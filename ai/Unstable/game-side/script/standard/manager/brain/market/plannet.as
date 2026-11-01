@@ -232,6 +232,8 @@ void PlanNetDecide()
 	const float flat = leads ? ((trust > 0.f) ? NG_EX_FLAT : 1.f) : 0.f;
 	array<float> p(NG_N);
 	gPlan = EcoDraw(ruleO, trust, w, p, flat);
+	if (PersOn() && (gStyle >= 0) && (ST_PLAN[gStyle] >= 0))
+		gPlan = ST_PLAN[gStyle];
 	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));
 	const bool forced = (force >= 0) && (force < NG_N);
 	if (forced) {

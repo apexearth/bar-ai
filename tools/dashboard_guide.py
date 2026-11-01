@@ -1647,6 +1647,15 @@ GROUPS = [
                   "3 long-range artillery, 4 mass and push together, 5 mass air, "
                   "6 rush, 7 greed, 8 turtle, 9 deep greed. -1 = the "
                   "plan net chooses (normal play)"),
+                 ("TUNE_PERSONA", "personalities: the team plays one hidden "
+                  "style (artillery, snipers, air, fast raiders, T3, nukes, "
+                  "shields, scouting or balanced) and each AI its own flavour "
+                  "inside it; a style that keeps trading badly fades and the "
+                  "team switches. 0 = off"),
+                 ("TUNE_PERSONA_FORCE", "with personalities on, every team "
+                  "plays this style all game -- 0 balanced, 1 artillery, "
+                  "2 snipers, 3 air, 4 fast, 5 T3, 6 nukes, 7 shields, "
+                  "8 scouting. -1 = hidden random draw. Also a lobby option"),
                  ("TUNE_PLAN_EXPLORE", "try strategies: this AI picks its team's "
                   "strategy at random, keeps it until its tech level rises, and "
                   "plays everything else normally, so the "

@@ -1272,6 +1272,10 @@ void LineTargetRefresh()
 		if (fs + fm > 1.f)
 			reach *= 1.f + adapt * (fs / (fs + fm));
 	}
+	if (PersOn()) {
+		tank *= PersLineMul(LC_TANK);
+		reach *= PersLineMul(LC_REACH);
+	}
 	const float tot = tank + mid + reach + dps;
 	if (tot > 0.f) {
 		gLtOut[LC_TANK] = tank / tot;
