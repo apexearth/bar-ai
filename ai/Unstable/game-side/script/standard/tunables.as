@@ -1987,6 +1987,7 @@ const float TUNE_INTERCEPT_R = 1400.f;
 // THE SEVERITY LADDER (apexearth: "keep cutting back until we've caught up"):
 //   every window still under the bar climbs it, every...
 const float TUNE_LAG_SPEED = 0.98f;
+const float TUNE_FOE_AIR_MEM = 1.f;   // [toggle 0/1] foemem.as: their armed planes counted once by id and kept until seen dying; the fighter answer sizes on that memory, not on what is in sight (11-01 mirror 4v4s)
 const float TUNE_LAG_BEHIND = 1.f;   // [toggle 0/1] perf.as BehindS: the lag ladder holds and deepens while the measured order lag says we are behind the server, not only while the sim is under 1x (his 10-31)
 const float TUNE_LAG_GC = 1.f;   // [toggle 0/1] want_reclaim.as LagCleanup: while behind, idle turrets worth nothing whose self-destruct hurts nothing go at once (his 10-31)
 

@@ -107,8 +107,52 @@ bool FmArmedGround(int d)
 		&& (Catalog::gPower[d] > 1.f) && !Catalog::gFlyer[d];
 }
 
+// THEIR AIR, REMEMBERED (11-01 mirror 4v4s: a side saw 2.4-7.1k of the 24-50k of strike air its enemy had built, and
+// sized its fighters on that): planes fly home out of sight and the registry forgets them in ~90 s. Every armed
+// plane the registry has identified is counted once by its id, and a death of its type takes one off. TUNE_FOE_AIR_MEM.
+array<int> gFaKnown;   // unit id -> 1 once counted
+array<int> gFaCnt;     // def -> remembered alive
+array<int> gFaDefs;    // defs with a count
+int gFaOn = -1;
+
+bool FaOn()
+{
+	if (gFaOn < 0)
+		gFaOn = (ai.GetTunable("apex_foe_air_mem", TUNE_FOE_AIR_MEM) > 0.f) ? 1 : 0;
+	return gFaOn > 0;
+}
+
+bool FmArmedAir(int d)
+{
+	return (d > 0) && (d <= Catalog::gDefCount) && Catalog::gMobile[d] && Catalog::gFlyer[d]
+		&& !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f);
+}
+
+void FaNote(int id, int d)
+{
+	if ((id < 0) || !FmArmedAir(d))
+		return;
+	if (id >= int(gFaKnown.length()))
+		gFaKnown.resize(id + 1);
+	if (gFaKnown[id] != 0)
+		return;
+	gFaKnown[id] = 1;
+	if (gFaCnt.length() == 0)
+		gFaCnt.resize(Catalog::gDefCount + 1);
+	if (gFaCnt[d] == 0)
+		gFaDefs.insertLast(d);
+	++gFaCnt[d];
+}
+
+// the remembered air, def by def (count 0 rows stay listed and are skipped)
+uint FoeAirDefN() { return gFaDefs.length(); }
+int FoeAirDefAt(uint i) { return gFaDefs[i]; }
+int FoeAirCountOf(int d) { return ((d > 0) && (d < int(gFaCnt.length()))) ? gFaCnt[d] : 0; }
+
 void FoeMemNoteDeath(int d, const AIFloat3& in pos)
 {
+	if (FmArmedAir(d) && (d < int(gFaCnt.length())) && (gFaCnt[d] > 0))
+		--gFaCnt[d];
 	if (!FmArmedGround(d))
 		return;
 	gFmDeadM += Catalog::gCostM[d];
@@ -155,6 +199,9 @@ void FoeMemStep()
 		if ((d > 0) && !FmArmedGround(d)) {
 			if (Catalog::ValidId(d) && Catalog::gJammer[d])
 				JsNoteJammer(i, d);
+			const int losA = int(sl[b + 2]);
+			if (FaOn() && (losA >= 0) && ((losA & (8 | 32 | 64)) == 0))
+				FaNote(int(sl[b]), d);
 			continue;
 		}
 		const int los = int(sl[b + 2]);

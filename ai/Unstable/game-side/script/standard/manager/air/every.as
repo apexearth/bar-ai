@@ -24,17 +24,26 @@ void EvSnapFoeAir()
 	gEvFoeFtrHp = 0.f; gEvFoeFtrDps = 0.f; gEvFoeStrHp = 0.f;
 	float spd = 0.f;
 	int n = 0;
-	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	// remembered air (foemem.as, TUNE_FOE_AIR_MEM) when on: every plane identified and not seen dying
+	const bool mem = Military::FaOn();
+	const int total = mem ? int(Military::FoeAirDefN()) : aiEnemyMgr.GetEnemyUnitTotal();
 	for (int i = 0; i < total; ++i) {
-		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		const int d = mem ? Military::FoeAirDefAt(uint(i)) : aiEnemyMgr.GetEnemyUnitDefAt(i);
 		if ((d <= 0) || (d > Catalog::gDefCount))
 			continue;
 		if (!Catalog::gFlyer[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
 			continue;
-		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
-		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
-			continue;
-		const float m = Catalog::gCostM[d];
+		int cnt = 1;
+		if (mem) {
+			cnt = Military::FoeAirCountOf(d);
+			if (cnt <= 0)
+				continue;
+		} else {
+			const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+			if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+				continue;
+		}
+		const float m = Catalog::gCostM[d] * float(cnt);
 		gEvFoeAirM += m;
 		// A plane is what it can hit: a gunship with one AA launcher (legfort) hits our ground AND our fighters,
 		// and read as a fighter alone it hid 57,000 m of strike air (his 10-17 SD-129 game).
@@ -42,15 +51,15 @@ void EvSnapFoeAir()
 		const bool hitsGround = Catalog::gSurfDpsOn ? (Catalog::gSurfDps[d] > 0.f) : (Catalog::gSurfT[d] > 0.01f);
 		if (a > 0.f) {
 			gEvFoeFtrM += m;
-			gEvFoeFtrHp += Catalog::gHealth[d];
-			gEvFoeFtrDps += a;
+			gEvFoeFtrHp += Catalog::gHealth[d] * float(cnt);
+			gEvFoeFtrDps += a * float(cnt);
 		}
 		if (hitsGround || (a <= 0.f)) {
 			gEvFoeStrM += m;
-			gEvFoeStrHp += Catalog::gHealth[d];
+			gEvFoeStrHp += Catalog::gHealth[d] * float(cnt);
 		}
-		spd += Catalog::gSpeed[d];
-		++n;
+		spd += Catalog::gSpeed[d] * float(cnt);
+		n += cnt;
 	}
 	gEvFoeSpd = (n > 0) ? spd / float(n) : 0.f;
 }
