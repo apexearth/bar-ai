@@ -199,6 +199,8 @@ public:
 	}
 	// apex_stock_army: every combat unit runs stock BARb's fight code (docs/how-it-works.md, Army control layers)
 	bool IsStockArmy() const;
+	// apex: past this the order lag is a network's, not the probe's own ~1 s cadence (local games read 0.8-1.9 s)
+	static constexpr float ORDER_LAG_REAL_S = 2.f;
 	// apex: how late our orders land, sampled by CMoveAction (sent -> in the unit's queue), smoothed; 0 until measured
 	void NoteOrderLag(int frames);
 	float GetOrderLagSec() const { return orderLagF / FRAMES_PER_SEC; }

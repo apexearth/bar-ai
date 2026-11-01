@@ -804,7 +804,8 @@ void CBombTask::FindTarget()
 			}
 			// apex: A MOVING TARGET UNDER THE ORDER LAG (his 10-31): by the time the order lands and the wing
 			// arrives it may have walked speed x (lag + flight); weighed by the bomb's splash against that walk
-			if (edef->IsMobile() && (circuit->GetTunable("apex_bomb_lag", 1.f) > 0.f)) {
+			if (edef->IsMobile() && (circuit->GetTunable("apex_bomb_lag", 1.f) > 0.f)
+				&& (circuit->GetOrderLagSec() > CCircuitAI::ORDER_LAG_REAL_S)) {
 				const float aoe = std::max(cdef->GetAoe(), 16.f);
 				const float walk = edef->GetSpeed() * (circuit->GetOrderLagSec() + dist / std::max(cdef->GetSpeed(), 1.f));
 				raw *= aoe / (aoe + walk);

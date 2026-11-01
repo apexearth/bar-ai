@@ -129,8 +129,10 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	const AIFloat3& up = unit->GetPos(lastFrame);
 	// ...and far enough ahead that the next order lands before the unit gets there: its speed over the order lag
 	// and the update period (his 10-31: fast bombers turned around between orders in a lagging game)
-	const float leadD = (circuit->GetTunable("apex_travel_lag", 1.f) > 0.f)
-			? unit->GetCircuitDef()->GetSpeed() * (circuit->GetOrderLagSec() + 2.f) : 0.f;
+	// ...only while the lag is real: a local game reads ~1-2 s (the probe's own cadence) and must travel as before
+	const float lagS = circuit->GetOrderLagSec();
+	const float leadD = ((circuit->GetTunable("apex_travel_lag", 1.f) > 0.f) && (lagS > CCircuitAI::ORDER_LAG_REAL_S))
+			? unit->GetCircuitDef()->GetSpeed() * (lagS + 2.f) : 0.f;
 	if (lean) {
 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
 		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
