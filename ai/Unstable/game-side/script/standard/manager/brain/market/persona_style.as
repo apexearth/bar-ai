@@ -174,8 +174,13 @@ bool PsFitsReady()
 			gPsFit[ST_T3 * n + u] = 1.f;
 		if ((sc == SC_SILO) || (sc == SC_TACTICAL) || (sc == SC_JUNO))
 			gPsFit[ST_NUKE * n + u] = 1.f;
-		if (Catalog::gMobile[d] && Catalog::gShield[d] && !Catalog::gFlyer[d] && !Catalog::gBuilder[d])
+		// SHIELDS ARE AN AFFINITY FOR SHIELD GENERATORS AND A STRONG DEFENSIVE LAYER (his 11-01; no faction has a
+		// mobile shield, so the style was never drawn): the domes fully, armed static defence and tanks half
+		if (Catalog::gShield[d] && !Catalog::gFlyer[d] && !Catalog::gBuilder[d])
 			gPsFit[ST_SHIELD * n + u] = 1.f;
+		else if (!Catalog::gMobile[d] && (Catalog::gMaxRange[d] > 1.f) && (Catalog::gBuildsList[d].length() == 0)
+				&& (Catalog::gPower[d] > 1.f))
+			gPsFit[ST_SHIELD * n + u] = 0.5f;
 		else if (ground && (LineClassOf(d) == LC_TANK))
 			gPsFit[ST_SHIELD * n + u] = 0.5f;
 		if (PsIsScout(d) || (!Catalog::gMobile[d] && Catalog::gRadar[d] && (Catalog::gBuildsList[d].length() == 0)

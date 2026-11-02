@@ -75,6 +75,9 @@ float PersWantMul(Want@ w)
 		return (IsGantryDef(d) ? PersMul(PD_TECH) : 1.f) * PsSuperLean(d);
 	if (w.kind == WK_SENSE)
 		return PsSenseLean(d) * (Catalog::gRadar[d] ? PersMul(PD_SCOUT) : 1.f);
+	// shield domes and the defensive layer (the shield style's fits; every other style fits none of them)
+	if ((w.kind == WK_PROTECT) || (w.kind == WK_AIRDEF))
+		return PsUnitLean(d);
 	return 1.f;
 }
 
