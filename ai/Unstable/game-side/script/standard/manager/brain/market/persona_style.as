@@ -18,6 +18,9 @@ const float STYLE_AMP = 3.5f;
 const float PERS_PRESSURE = 1.5f;
 const int PB_STYLE = 9200, PB_GEN = 9201, PB_C = 9202, PB_USED = 9203, PB_AT = 9204, PB_R = 9205, PB_RT = 9206, PB_RA = 9207, PB_RA0 = 9208;
 const int PB_AVAIL = 9300, PB_FORCE = 9400, PB_SEEN = 9500, PB_KILL = 9600, PB_LOSS = 9700, PB_INC = 9800, PB_AIRM = 9900;
+const int PB_BAD = 9209;   // bad minutes in a row for the current style
+const int PS_HOLD = 10 * MINUTE;
+const int PS_BAD_RUN = 3;
 const int PS_DRAW_AT = 3 * SECOND;
 const int PS_FRESH = 90 * SECOND;
 
@@ -359,6 +362,7 @@ void PsSetStyle(int s, int used, float ra0, const string &in why)
 	ai.SetTeamBoard(PB_RA0, ra0);
 	ai.SetTeamBoard(PB_USED, float(used | (1 << s)));
 	ai.SetTeamBoard(PB_AT, float(ai.frame));
+	ai.SetTeamBoard(PB_BAD, 0.f);
 	AiLog("apex: persona-team t=" + ai.teamId + " ally=" + ai.allyTeamId + " style=" + StName(s) + " gen=" + gen
 		+ " why=" + why + " used=" + (used | (1 << s)));
 	const int plan = ST_PLAN[s];
@@ -442,7 +446,15 @@ void PsLead()
 	const float ra0 = ai.GetTeamBoard(PB_RA0, 1.f);
 	const float rr = ra / ((ra0 > 0.f) ? ra0 : 1.f);
 	const float r = (rr < rt) ? rr : rt;
-	float c = ai.GetTeamBoard(PB_C, 1.f) * r;
+	// A STYLE GETS A REAL CHANCE (his 11-01: "hold longer"; teams went through 4-5 styles in 30 min against BARb +50):
+	// no fading in its first PS_HOLD, and after that only on the PS_BAD_RUN-th bad minute in a row; recovery any time
+	int bad = int(ai.GetTeamBoard(PB_BAD, 0.f));
+	bad = (r < 1.f) ? (bad + 1) : 0;
+	ai.SetTeamBoard(PB_BAD, float(bad));
+	const bool held = float(ai.frame) - ai.GetTeamBoard(PB_AT, 0.f) >= float(PS_HOLD);
+	float c = ai.GetTeamBoard(PB_C, 1.f);
+	if ((r >= 1.f) || (held && (bad >= PS_BAD_RUN)))
+		c *= r;
 	if (c > 1.f)
 		c = 1.f;
 	ai.SetTeamBoard(PB_C, c);
