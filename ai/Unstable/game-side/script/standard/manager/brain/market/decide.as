@@ -3129,7 +3129,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			|| (Brain::BudgetMult(Brain::BUILDPOWER) > 1.f);
 	// TUNE_NANO_PRICED (his 10-18): a nano justifies itself by the build power it adds to what is in its reach, at
 	// what the economy can feed -- the priced want; the 2/4/9-per-plant count stands down.
-	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && bpShort && !NanoPricedOn()) {
+	// Not while energy is the bottleneck (his 11-02 watch game: the first constructor started a nano at 1:17 in an
+	// energy stall and every hand slowed with it); the priced draw buys the generator, and the floor returns after.
+	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && bpShort && !NanoPricedOn() && !HardEStall()) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
 				continue;

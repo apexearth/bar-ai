@@ -160,7 +160,18 @@ local cmdWindow = {}      -- team -> commands issued since the previous sample
 -- and UnitIdle fires on transitions that a re-order immediately cancels. Idle
 -- here means the engine holds zero commands for it at the sample instant.
 -- Counted for both AIs, so stock is the control.
+-- EVERY EMPTY-QUEUE GAP, FRAME-EXACT (his 11-02: "the commander does nothing for two or three seconds, then makes his
+-- first building"): per team, the gaps a commander's queue sat empty -- count, frames, longest, and how many ran >= 1 s.
+local commGapN, commGapF, commGapMax, commGap1s = {}, {}, {}, {}
+local commUid = {}        -- uid -> team, filled by the sampler
+local commEmptyAt = {}    -- uid -> frame its queue went empty
 local commIdle = {}       -- team -> samples where a live commander had no orders
+-- one upvalue for the row writer, which sits at Lua's 60-upvalue limit
+local function commIdleFields(teamID)
+	return string.format("commGapN=%d commGapF=%d commGapMax=%d commGap1s=%d commIdle=%d",
+		commGapN[teamID] or 0, commGapF[teamID] or 0, commGapMax[teamID] or 0, commGap1s[teamID] or 0,
+		commIdle[teamID] or 0)
+end
 local commSamp = {}       -- team -> samples taken over a live commander
 local COMM_SAMPLE = 15    -- frames between samples (2/second)
 local nextCommSample = 0
@@ -631,6 +642,7 @@ local function sampleCommIdle()
 					end
 				end
 				if ud ~= nil and (ud.customParams or {}).iscommander then
+					commUid[uid] = teamID
 					bump(commSamp, teamID, 1)
 					local cloaked = Spring.GetUnitIsCloaked(uid) and true or false
 					if commPrevCloak[uid] ~= nil and commPrevCloak[uid] ~= cloaked then
@@ -770,7 +782,7 @@ local function dump(reason, onlyTeam, atFrame)
 			parts[#parts + 1] = string.format("ownBuilders=%d", snap.builders)
 			parts[#parts + 1] = string.format("passive=%d", snap.passive)
 			parts[#parts + 1] = string.format("passiveBusy=%d", snap.passiveBusy)
-			parts[#parts + 1] = string.format("commIdle=%d", commIdle[teamID] or 0)
+			parts[#parts + 1] = commIdleFields(teamID)
 			parts[#parts + 1] = string.format("commSamp=%d", commSamp[teamID] or 0)
 			parts[#parts + 1] = string.format("commBuild=%d", commBuild[teamID] or 0)
 			parts[#parts + 1] = string.format("commMove=%d", commMove[teamID] or 0)
@@ -1049,7 +1061,28 @@ end
 
 local dumpQ, dumpQI, dumpQAt = {}, 1, 0
 
+local function trackCommGaps(frame)
+	for uid, teamID in pairs(commUid) do
+		if not Spring.ValidUnitID(uid) or Spring.GetUnitIsDead(uid) then
+			commUid[uid], commEmptyAt[uid] = nil, nil
+		else
+			local n = Spring.GetUnitCommands(uid, 0)
+			if n == 0 then
+				commEmptyAt[uid] = commEmptyAt[uid] or frame
+			elseif commEmptyAt[uid] then
+				local g = frame - commEmptyAt[uid]
+				commEmptyAt[uid] = nil
+				bump(commGapN, teamID, 1)
+				bump(commGapF, teamID, g)
+				if g > (commGapMax[teamID] or 0) then commGapMax[teamID] = g end
+				if g >= 30 then bump(commGap1s, teamID, 1) end
+			end
+		end
+	end
+end
+
 function gadget:GameFrame(frame)
+	trackCommGaps(frame)
 	if frame >= nextEFrame then
 		nextEFrame = frame + EFRAME_SAMPLE
 		sampleEFrames(frame)

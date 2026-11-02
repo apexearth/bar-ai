@@ -35,6 +35,14 @@ preferred unit type, raid appetite) that pick each seat's part in the plan and d
 Order: (1) price every plan and LOG it, acting on nothing; (2) air strike + the ground follow-up (team air exists,
 off); (3) vehicle and bot rushes; (4) nuke rush, T3, long-range T2, greed, stealth; (5) personalities.
 
+## The T3 style, played properly (his 11-01)
+
+Less T2 army and a more defensive early game, everything working toward the gantry; once it stands, a LOT of T3 --
+the point is to arrive on their doorstep long before they expect any T3. A T3 unit is easily D-gunned by a
+commander, so it walks behind a screen: a crowd of scout units lined up moving in front of it, and no commander gets
+close. Today the T3 style (persona_style.as) only leans prices toward the gantry and its units, and the gantry still
+loses the builder election on price (forced, seed 831: no gantry in 25 min), so none of this happens yet.
+
 # Army control redo (his 10-16: "the bane of this AI")
 
 Too many separate systems order the same units. Replace them with one simple layer he can reason

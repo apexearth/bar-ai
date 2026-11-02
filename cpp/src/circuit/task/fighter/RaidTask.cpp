@@ -380,6 +380,14 @@ bool CRaidTask::AllowRetreat(CCircuitUnit* unit)
 	return ISquadTask::AllowRetreat(unit);
 }
 
+float CRaidTask::FightSideAt(const AIFloat3& ePos, const AIFloat3& pos, float reach) const
+{
+	if (pos.SqDistance2D(ePos) > SQUARE(RAID_SIDE_R)) {
+		return 0.f;
+	}
+	return manager->GetCircuit()->GetMilitaryManager()->GetRaidSidePowerAt(ePos, reach, this);
+}
+
 bool CRaidTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
@@ -392,9 +400,16 @@ bool CRaidTask::FindTarget()
 	SArea* area = leader->GetArea();
 	CCircuitDef* cdef = leader->GetCircuitDef();
 	const bool isAntiStatic = cdef->IsAttrAntiStat();
-	const bool hadTarget = GetTarget() != nullptr;
+	CEnemyInfo* hadE = GetTarget();
+	const bool hadTarget = hadE != nullptr;
 	const float maxSpeed = SQUARE(highestSpeed * 0.8f / FRAMES_PER_SEC);
-	const float maxPower = attackPower * powerMod * (hadTarget ? 1.f / 0.75f : 1.f);
+	// THE ARMY ALREADY IN THAT FIGHT FIGHTS WITH US (his 11-01: "if they just committed to that attack, they would
+	// have taken everything out"): each group weighed a target against its own power alone, so groups in one fight
+	// each read "too strong for me" and walked off together while the enemy rebuilt. Counting everyone within 2,200
+	// instead (11-01, 12 pairs) held on 2.4x as often and lost 8 to 6: help that is near is not help that comes.
+	const bool sideOn = !flies && (circuit->GetFightTunable("apex_raid_side", 0.f, IsStockTask()) > 0.f);
+	const float hyst = hadTarget ? 1.f / 0.75f : 1.f;
+	const float maxPower = attackPower * powerMod * hyst;
 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
@@ -438,7 +453,11 @@ bool CRaidTask::FindTarget()
 			checkSpeed *= 2.f;
 		}
 		const float power = threatMap->GetThreatAt(ePos);
-		if (!(committed && !flies) && (checkPower <= power)) {
+		float fightPow = 0.f;
+		if (sideOn && (checkPower <= power)) {
+			fightPow = FightSideAt(ePos, pos, range) * powerMod * hyst;
+		}
+		if (!(committed && !flies) && (checkPower + fightPow <= power)) {
 			continue;
 		}
 		const AIFloat3& eVel = enemy->GetVel();
@@ -500,7 +519,7 @@ bool CRaidTask::FindTarget()
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);
-		if (((committed && !flies) || (minPower > power)) && (minSqDist > sqDist)) {
+		if (((committed && !flies) || (minPower + fightPow > power)) && (minSqDist > sqDist)) {
 			if (enemy->IsInRadarOrLOS()) {
 				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
 					if (committed) {
@@ -536,6 +555,20 @@ bool CRaidTask::FindTarget()
 	}
 	if (bestTarget == nullptr) {
 		bestTarget = worstTarget;
+	}
+
+	// apex: a live target let go -- is it the group alone that could not win there, or the side too?
+	const int frame = circuit->GetLastFrame();
+	if (hadTarget && (bestTarget == nullptr) && !hadE->IsHidden() && hadE->IsInRadarOrLOS() && (frame >= dropLogAt)) {
+		dropLogAt = frame + FRAMES_PER_SEC * 5;
+		const float thr = threatMap->GetThreatAt(hadE->GetPos());
+		const float sidePow = FightSideAt(hadE->GetPos(), pos, range);
+		circuit->LOG("apex: raid-drop t=%i %s x%i pow=%.0f side=%.0f threat=%.0f alone=%s together=%s on=%i d=%.0f",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(), static_cast<int>(units.size()),
+				attackPower * powerMod, sidePow * powerMod, thr,
+				(attackPower * powerMod / 0.75f > thr) ? "win" : "lose",
+				((attackPower + sidePow) * powerMod / 0.75f > thr) ? "win" : "lose", sideOn ? 1 : 0,
+				pos.distance2D(hadE->GetPos()));
 	}
 
 	if (bestTarget != nullptr) {
@@ -605,7 +638,12 @@ void CRaidTask::FallbackRaid()
 	const AIFloat3& threatPos = ((leader->GetTravelAct() != nullptr) && leader->GetTravelAct()->IsActive()) ? position : pos;
 	if (hasGoal) {
 		position = terrainMgr->GetMovePosition(leader->GetArea(), goalPos);
-	} else if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
+	} else if ((attackPower + ((!leader->GetCircuitDef()->IsAbleToFly()
+			&& (circuit->GetFightTunable("apex_raid_side", 0.f, IsStockTask()) > 0.f))
+				? FightSideAt(threatPos, pos,
+						std::max(leader->GetUnit()->GetMaxRange(), leader->GetCircuitDef()->GetLosRadius()) + 200.f)
+				: 0.f)) * powerMod
+			<= threatMap->GetThreatAt(leader, threatPos)) {
 		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
 		if (utils::is_equal_pos(nextPos, pos)) {
 			return;

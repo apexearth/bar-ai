@@ -139,6 +139,25 @@ def _restore_weights(kept: dict, stub: Path) -> None:
         f.write_bytes(data)
     if kept:
         print(f"  weights      kept the deployed nnweights.as ({len(kept)} file(s))")
+        _warn_net_vs_release(kept)
+
+
+def _warn_net_vs_release(kept: dict) -> None:
+    # 11-02: a lane kept a training run's net for days while every test compared it against a release playing the
+    # trained one -- "our economy is half of theirs" was the net, not the code. Say so on every deploy.
+    repo = Path(__file__).resolve().parent.parent
+    rels = sorted((p for p in (repo / "ai").glob("v*") if (p / "game-side").is_dir()),
+                  key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r"[.v]", p.name) if x])
+    if not rels:
+        return
+    ref = rels[-1] / "game-side/script/standard/manager/brain/market/nnweights.as"
+    if not ref.is_file():
+        return
+    want = ref.read_bytes()
+    for f, data in kept.items():
+        if f.name == "nnweights.as" and "standard" in f.parts and data != want:
+            print(f"  WARNING      the deployed net differs from {rels[-1].name}'s: this lane does NOT play the "
+                  f"release net (copy {ref.relative_to(repo)} over {f} to compare fairly)")
 
 
 # Anything that holds an open handle on engine/<ver>/AI/Skirmish/**/SkirmishAI.dll.

@@ -282,6 +282,8 @@ public:
 	}
 	float GetAttackPowerNear(const springai::AIFloat3& pos, float radius) const;
 	float GetSquadPowerNear(const springai::AIFloat3& pos, float radius) const;  // attack + defend squads
+	// raid, attack and defend groups but one, plus every allied armed mobile: the army that fights beside a raid
+	float GetRaidSidePowerAt(const springai::AIFloat3& pos, float radius, const IFighterTask* skip);
 	float GetSidePowerAt(const springai::AIFloat3& pos, float radius);  // ours + allies', memoised a second
 	float GetGatheredPower() const;
 	// apex: the attack threat modifier at runtime (quota.thr_mod.attack), so a plan can raise aggression for a strike

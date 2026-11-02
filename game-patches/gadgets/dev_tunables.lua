@@ -347,6 +347,7 @@ local NAMES = {
 	"apex_prefer_target",
 	"apex_siege_fight",
 	"apex_raid_commit",
+	"apex_raid_side",
 	"apex_bomb_enroute",
 	"apex_mstall_prem",
 	"apex_fight_travel",

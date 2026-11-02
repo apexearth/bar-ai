@@ -54,13 +54,15 @@ void CIdleTask::Update()
 	if (updateUnits.empty()) {
 		updateUnits = units;  // copy units
 	}
+	// apex: A FREED BUILDER IS ASKED AT ONCE (his 11-02: within 4-5 frames, as a human who queues the next job). A 20-frame
+	// settle plus a 15-frame ask cadence left it 30-47 frames on an empty queue -- twice BARb, every job, all game.
 	// apex: a pass spans TEAM_SLOWUPDATE_RATE x 8 frames for a large idle set,
 	// and a small one is asked at most every IDLE_ASK_FRAMES per unit: the old
 	// `+ 1` re-asked five idle builders every five frames, nearly all of them
 	// bounced by the script's own 2 s gate.
 	if (askFrames <= 0.f) {
-		askFrames = std::max(1.f, manager->GetCircuit()->GetTunable("apex_idle_ask_f", 15.f));
-		settleFrames = (int)manager->GetCircuit()->GetTunable("apex_idle_settle_f", 20.f);
+		askFrames = std::max(1.f, manager->GetCircuit()->GetTunable("apex_idle_ask_f", 1.f));
+		settleFrames = (int)manager->GetCircuit()->GetTunable("apex_idle_settle_f", 2.f);
 	}
 	const float IDLE_ASK_FRAMES = askFrames;
 	const float sz = float(units.size());

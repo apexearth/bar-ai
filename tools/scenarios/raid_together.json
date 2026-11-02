@@ -1,0 +1,16 @@
+{
+  "about": "two raid groups that cannot merge (12 Pawns, 7 Flashes) side by side vs a defended mex field: 2 LLTs and 6 Pawns guard 4 mexes; too strong for either group, easy for both",
+  "passes": "commits together and takes the field: at least 3 of 4 mexes and 1 LLT die and at least half the raiders live",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "units": [
+    {"side": 0, "def": "armpw", "n": 12, "at": ["c", -900, -60], "order": "ai"},
+    {"side": 0, "def": "armflash", "n": 7, "at": ["c", -900, 120], "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 4, "at": ["c", 600, 0], "spacing": 160, "order": "ai"},
+    {"side": 1, "def": "armllt", "n": 2, "at": ["c", 520, 0], "spacing": 240, "order": "ai"},
+    {"side": 1, "def": "armpw", "n": 6, "at": ["c", 700, 0], "order": "guard"}
+  ],
+  "expect": [
+    {"killed:armmex": [">=", 3], "killed:armllt": [">=", 1], "alive_frac0": [">=", 0.5]}
+  ]
+}

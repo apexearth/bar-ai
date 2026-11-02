@@ -1316,6 +1316,26 @@ float CMilitaryManager::GetSquadPowerNear(const AIFloat3& pos, float radius) con
 	return p;
 }
 
+float CMilitaryManager::GetRaidSidePowerAt(const AIFloat3& pos, float radius, const IFighterTask* skip)
+{
+	const int frame = circuit->GetLastFrame();
+	float p = 0.f;
+	for (IFighterTask::FightType ft : {IFighterTask::FightType::RAID, IFighterTask::FightType::ATTACK, IFighterTask::FightType::DEFEND}) {
+		for (IFighterTask* t : GetTasks(ft)) {
+			if (t == skip) {
+				continue;
+			}
+			CCircuitUnit* lead = static_cast<ISquadTask*>(t)->GetLeader();
+			if ((lead != nullptr) && !lead->GetCircuitDef()->IsAbleToFly()
+				&& (lead->GetPos(frame).SqDistance2D(pos) < SQUARE(radius)))
+			{
+				p += t->GetAttackPower();
+			}
+		}
+	}
+	return p + circuit->GetAllySquadPowerAt(pos, radius);
+}
+
 // Every squad weighing the same enemy group asks the same question within a few
 // frames; the ally walk behind it is over every allied armed mobile.
 float CMilitaryManager::GetSidePowerAt(const AIFloat3& pos, float radius)

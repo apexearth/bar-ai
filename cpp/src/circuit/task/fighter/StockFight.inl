@@ -829,9 +829,13 @@ bool CRaidTask::StockFindTarget()
 	SArea* area = leader->GetArea();
 	CCircuitDef* cdef = leader->GetCircuitDef();
 	const bool isAntiStatic = cdef->IsAttrAntiStat();
-	const bool hadTarget = GetTarget() != nullptr;
+	CEnemyInfo* hadE = GetTarget();
+	const bool hadTarget = hadE != nullptr;
 	const float maxSpeed = SQUARE(highestSpeed * 0.8f / FRAMES_PER_SEC);
-	const float maxPower = attackPower * powerMod * (hadTarget ? 1.f / 0.75f : 1.f);
+	// apex: the army already in that fight fights with us (apex_raid_side; the same rule as FindTarget)
+	const bool sideOn = !cdef->IsAbleToFly() && (circuit->GetFightTunable("apex_raid_side", 0.f, IsStockTask()) > 0.f);
+	const float hyst = hadTarget ? 1.f / 0.75f : 1.f;
+	const float maxPower = attackPower * powerMod * hyst;
 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
@@ -851,6 +855,7 @@ bool CRaidTask::StockFindTarget()
 	urgentPositions.clear();
 	enemyPositions.clear();
 	threatMap->SetThreatType(leader);
+	float minSeenThr = std::numeric_limits<float>::max();
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
@@ -874,7 +879,12 @@ bool CRaidTask::StockFindTarget()
 			checkSpeed *= 2.f;
 		}
 		const float power = threatMap->GetThreatAt(ePos);
-		if (checkPower <= power) {
+		minSeenThr = std::min(minSeenThr, power);
+		float fightPow = 0.f;
+		if (sideOn && (checkPower <= power)) {
+			fightPow = FightSideAt(ePos, pos, range) * powerMod * hyst;
+		}
+		if (checkPower + fightPow <= power) {
 			continue;
 		}
 		const AIFloat3& eVel = enemy->GetVel();
@@ -921,7 +931,7 @@ bool CRaidTask::StockFindTarget()
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);
-		if ((minPower > power) && (minSqDist > sqDist)) {
+		if ((minPower + fightPow > power) && (minSqDist > sqDist)) {
 			if (enemy->IsInRadarOrLOS()) {
 				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
 					if (isBuilder) {
@@ -949,6 +959,25 @@ bool CRaidTask::StockFindTarget()
 	}
 	if (bestTarget == nullptr) {
 		bestTarget = worstTarget;
+	}
+
+	const int frame = circuit->GetLastFrame();
+	if ((bestTarget == nullptr) && (minSeenThr < std::numeric_limits<float>::max()) && (frame >= lookLogAt)) {
+		lookLogAt = frame + FRAMES_PER_SEC * 20;
+		circuit->LOG("apex: raid-look t=%i %s x%i pow=%.0f minThreat=%.0f on=%i",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(), static_cast<int>(units.size()),
+				attackPower * powerMod, minSeenThr, sideOn ? 1 : 0);
+	}
+	if (hadTarget && (bestTarget == nullptr) && !hadE->IsHidden() && hadE->IsInRadarOrLOS() && (frame >= dropLogAt)) {
+		dropLogAt = frame + FRAMES_PER_SEC * 5;
+		const float thr = threatMap->GetThreatAt(hadE->GetPos());
+		const float sidePow = FightSideAt(hadE->GetPos(), pos, range);
+		circuit->LOG("apex: raid-drop t=%i %s x%i pow=%.0f side=%.0f threat=%.0f alone=%s together=%s on=%i d=%.0f",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(), static_cast<int>(units.size()),
+				attackPower * powerMod, sidePow * powerMod, thr,
+				(attackPower * powerMod / 0.75f > thr) ? "win" : "lose",
+				((attackPower + sidePow) * powerMod / 0.75f > thr) ? "win" : "lose", sideOn ? 1 : 0,
+				pos.distance2D(hadE->GetPos()));
 	}
 
 	if (bestTarget != nullptr) {
@@ -979,7 +1008,11 @@ void CRaidTask::StockFallbackRaid()
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& threatPos = ((leader->GetTravelAct() != nullptr) && leader->GetTravelAct()->IsActive()) ? position : pos;
-	if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
+	const float side = (!leader->GetCircuitDef()->IsAbleToFly()
+			&& (circuit->GetFightTunable("apex_raid_side", 0.f, IsStockTask()) > 0.f))
+				? FightSideAt(threatPos, pos, std::max(leader->GetUnit()->GetMaxRange(), leader->GetCircuitDef()->GetLosRadius()) + 200.f)
+				: 0.f;
+	if ((attackPower + side) * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
 		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
 		if (utils::is_equal_pos(nextPos, pos)) {
 			return;

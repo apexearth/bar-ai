@@ -35,6 +35,8 @@ public:
 
 private:
 	bool IsCommitted() const;
+	// apex_raid_side: the friendly army already in the fight at ePos (within reach of it), 0 when off or out of reach
+	float FightSideAt(const springai::AIFloat3& ePos, const springai::AIFloat3& pos, float reach) const;
 	bool FindTarget();
 	void ApplyTargetPath(const CQueryPathMulti* query);
 	void FallbackRaid();
@@ -59,6 +61,9 @@ private:
 	int nextAaPick = 0;      // a committed gunship wing re-aims at the nearest AA once a second
 	int aaSetN = 0;          // AA set-targets issued (raid-commit log)
 	mutable int commitAt = -1;   // IsCommitted is asked per damage event: once a frame
+	int dropLogAt = -1;
+	int lookLogAt = -1;
+	static constexpr float RAID_SIDE_R = 2200.f;  // = CAttackTask::SIDE_R, the army beside us
 	mutable bool commitVal = false;
 };
 
