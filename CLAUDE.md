@@ -32,7 +32,7 @@ his core tenet is: always be making economy. The nets decide; balances are their
 - **Price the cost before writing code an election calls**, and spread work across frames.
 - **Write far fewer comments than feels natural**; findings go in the commit message or `ISSUES.md`.
 - **Never author Python in a Bash heredoc**: `Write` a script, then run it.
-- **Work directly**; an agent only when he asks or for a broad search.
+- **Work directly**; an agent only when he asks or for a broad search (his 11-03: a fresh agent re-reads everything at full price; the cached main context is ~10x cheaper).
 - **Claim a lane** (`python tools/lane.py init <name>`) before building, deploying or running; `Apex:Unstable` is his slot.
 - **Count every running engine** before launching one; his game sets the limit (`working.md`).
 - Load the owning skill instead of reading the source tree; exclude `vendor/`, `matches/`, `changes/`, `reference/` from repo-wide searches.
@@ -67,12 +67,12 @@ his core tenet is: always be making economy. The nets decide; balances are their
 | investigate a desync | `desync-check` skill |
 | commit a change that touched comments | `python tools/comment_audit.py` |
 | judge whether a rule does anything | `python tools/deadcheck.py <run>` |
-| hear he played multiplayer games, or start a session | `python tools/trial_report.py`: the trials running in releases (ISSUES.md validation list, TRIAL RUNNING) |
+| hear he played multiplayer games, or start a session | `python tools/trial_report.py`: the trials running in releases (`issues/validation.md`, trials section) |
 
 ## The four lists
 
 - **Commit message**: what changed and what was measured.
-- **`ISSUES.md`**: what is wrong now, with evidence. Its validation list on top is live.
+- **`ISSUES.md`**: index of what is wrong now, one line per `issues/<name>.md`; the live validation list is `issues/validation.md`.
 - **`USER-FEEDBACK.md`**: his open asks. Read before starting work.
 - **`TODO.md`**: his named plays and unbuilt behaviours, in his words.
 

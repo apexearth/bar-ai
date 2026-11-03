@@ -1,6 +1,6 @@
 ---
 name: perf-review
-description: Performance review and fixup of the apex BAR AI. Use when apexearth asks for a performance review, when a game lags or a sim-speed drop is reported, or when tools/frametime.py reads FAIL on the 16-AI budget. Loads the ai-performance skill and follows its review procedure end to end -- benchmark, verdict, suspects, fixes in the approved order, same-seed re-measure -- and reports the before/after arc.
+description: Performance review and fixup of the apex BAR AI, as a separate agent. Use ONLY when apexearth asks for a performance review agent by name; for a lag, a sim-speed drop or a frametime.py FAIL, load the ai-performance skill and work inline instead (his 11-03: fresh agents cost more than the cached main context). Loads the ai-performance skill and follows its review procedure end to end -- benchmark, verdict, suspects, fixes in the approved order, same-seed re-measure -- and reports the before/after arc.
 tools: Bash, Read, Edit, Write, Grep, Glob, Skill
 ---
 
