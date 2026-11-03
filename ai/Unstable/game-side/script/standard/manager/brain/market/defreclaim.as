@@ -14,28 +14,28 @@ namespace Market {
 const float DR_UNIT_EFF = 1.f;   // BAR modrules reclaim.unitEfficiency: the share of a reclaimed unit's metal we get
 
 // One query disc per occupied cell of the turret census; the cell is a turret's reach.
-array<float> gDrCellX;
-array<float> gDrCellZ;
-array<int> gDrStamp;
-int gDrStampEra = 0;
-int gDrCoverEra = -1;
-float gDrCell = 0.f;
-float gDrQueryR = 0.f;
+array<float> gDrcCellX;
+array<float> gDrcCellZ;
+array<int> gDrcStamp;
+int gDrcStampEra = 0;
+int gDrcCoverEra = -1;
+float gDrcCell = 0.f;
+float gDrcQueryR = 0.f;
 
 // A round is one sweep of every cell, spread over the update chunks.
-uint gDrScanI = 0;
-int gDrRound = 1;   // the stamp arrays start at 0, which must never read as this round
-array<int> gDrSeen;      // enemy id -> round it was priced
-array<int> gDrSentAt;    // turret id -> round it was sent
-array<int> gDrRateAt;    // turret id -> round its job was read
-array<float> gDrRate;    // turret id -> metal-equivalent/s its job returns (-1 held)
-array<float> gDrFlow;    // turret id -> metal/s it was moving into a frame
-float gDrAbsorb = 0.f;   // metal/s of starved pull left this round to take up the flow a turret drops
+uint gDrcScanI = 0;
+int gDrcRound = 1;   // the stamp arrays start at 0, which must never read as this round
+array<int> gDrcSeen;      // enemy id -> round it was priced
+array<int> gDrcSentAt;    // turret id -> round it was sent
+array<int> gDrcRateAt;    // turret id -> round its job was read
+array<float> gDrcRate;    // turret id -> metal-equivalent/s its job returns (-1 held)
+array<float> gDrcFlow;    // turret id -> metal/s it was moving into a frame
+float gDrcAbsorb = 0.f;   // metal/s of starved pull left this round to take up the flow a turret drops
 
-int gDrTargets = 0, gDrHands = 0;
-int gDrLogAt = 0;
-int gDrLogTargets = 0, gDrLogHands = 0;
-int gDrLoggedKills = 0;
+int gDrcTargets = 0, gDrcHands = 0;
+int gDrcLogAt = 0;
+int gDrcLogTargets = 0, gDrcLogHands = 0;
+int gDrcLoggedKills = 0;
 
 void DrGrowI(array<int>& a, int id)
 {
@@ -52,32 +52,32 @@ void DrGrowF(array<float>& a, int id)
 void DrCover()
 {
 	NanoGridBuild();
-	if (gDrCoverEra == gNanoGridEra)
+	if (gDrcCoverEra == gNanoGridEra)
 		return;
-	gDrCoverEra = gNanoGridEra;
-	gDrCellX.resize(0);
-	gDrCellZ.resize(0);
-	gDrCell = (gNanoGridMaxReach > 64.f) ? gNanoGridMaxReach : 64.f;
-	gDrQueryR = gDrCell * 0.7072f + gNanoGridMaxReach;
-	const int nx = int(float(AiTerrainWidth()) / gDrCell) + 1;
-	const int nz = int(float(AiTerrainHeight()) / gDrCell) + 1;
-	if (int(gDrStamp.length()) < nx * nz)
-		gDrStamp.resize(nx * nz);
-	++gDrStampEra;
+	gDrcCoverEra = gNanoGridEra;
+	gDrcCellX.resize(0);
+	gDrcCellZ.resize(0);
+	gDrcCell = (gNanoGridMaxReach > 64.f) ? gNanoGridMaxReach : 64.f;
+	gDrcQueryR = gDrcCell * 0.7072f + gNanoGridMaxReach;
+	const int nx = int(float(AiTerrainWidth()) / gDrcCell) + 1;
+	const int nz = int(float(AiTerrainHeight()) / gDrcCell) + 1;
+	if (int(gDrcStamp.length()) < nx * nz)
+		gDrcStamp.resize(nx * nz);
+	++gDrcStampEra;
 	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
-		int bx = int(gOwnNanoPos[i].x / gDrCell);
-		int bz = int(gOwnNanoPos[i].z / gDrCell);
+		int bx = int(gOwnNanoPos[i].x / gDrcCell);
+		int bz = int(gOwnNanoPos[i].z / gDrcCell);
 		bx = (bx < 0) ? 0 : ((bx >= nx) ? nx - 1 : bx);
 		bz = (bz < 0) ? 0 : ((bz >= nz) ? nz - 1 : bz);
 		const int k = bz * nx + bx;
-		if (gDrStamp[k] == gDrStampEra)
+		if (gDrcStamp[k] == gDrcStampEra)
 			continue;
-		gDrStamp[k] = gDrStampEra;
-		gDrCellX.insertLast((float(bx) + 0.5f) * gDrCell);
-		gDrCellZ.insertLast((float(bz) + 0.5f) * gDrCell);
+		gDrcStamp[k] = gDrcStampEra;
+		gDrcCellX.insertLast((float(bx) + 0.5f) * gDrcCell);
+		gDrcCellZ.insertLast((float(bz) + 0.5f) * gDrcCell);
 	}
-	if (gDrScanI > gDrCellX.length())
-		gDrScanI = 0;
+	if (gDrcScanI > gDrcCellX.length())
+		gDrcScanI = 0;
 }
 
 // What turret `id` gives up, metal-equivalent per second: the metal it is moving into a frame, less what starved
@@ -85,18 +85,18 @@ void DrCover()
 // return. -1: held on a reclaim it must finish.
 float DrOpp(CCircuitUnit@ u, int id)
 {
-	DrGrowI(gDrRateAt, id);
-	DrGrowF(gDrRate, id);
-	DrGrowF(gDrFlow, id);
-	if (gDrRateAt[id] != gDrRound) {
-		gDrRateAt[id] = gDrRound;
-		gDrRate[id] = ai.LatheJobRate(u);
-		gDrFlow[id] = (gDrRate[id] >= 0.f) ? ai.GetResUse(u, false) : 0.f;
+	DrGrowI(gDrcRateAt, id);
+	DrGrowF(gDrcRate, id);
+	DrGrowF(gDrcFlow, id);
+	if (gDrcRateAt[id] != gDrcRound) {
+		gDrcRateAt[id] = gDrcRound;
+		gDrcRate[id] = ai.LatheJobRate(u);
+		gDrcFlow[id] = (gDrcRate[id] >= 0.f) ? ai.GetResUse(u, false) : 0.f;
 	}
-	if (gDrRate[id] < 0.f)
+	if (gDrcRate[id] < 0.f)
 		return -1.f;
-	const float flow = gDrFlow[id];
-	return gDrRate[id] + flow - ((flow < gDrAbsorb) ? flow : gDrAbsorb);
+	const float flow = gDrcFlow[id];
+	return gDrcRate[id] + flow - ((flow < gDrcAbsorb) ? flow : gDrcAbsorb);
 }
 
 class DrFoe {
@@ -159,8 +159,8 @@ void DrSend(DrFoe@ e)
 	float bpGo = 0.f, oMax = 0.f, flowGo = 0.f;
 	for (uint h = 0; h < e.hands.length(); ++h) {
 		const int hid = e.hands[h];
-		DrGrowI(gDrSentAt, hid);
-		if (gDrSentAt[hid] == gDrRound)
+		DrGrowI(gDrcSentAt, hid);
+		if (gDrcSentAt[hid] == gDrcRound)
 			continue;
 		CCircuitUnit@ u = ai.GetTeamUnit(hid);
 		if (u is null)
@@ -171,7 +171,7 @@ void DrSend(DrFoe@ e)
 		go.insertLast(u);
 		goId.insertLast(hid);
 		bpGo += e.handBP[h];
-		flowGo += gDrFlow[hid];
+		flowGo += gDrcFlow[hid];
 		const float o = opp / e.handBP[h];
 		if (o > oMax)
 			oMax = o;
@@ -184,73 +184,73 @@ void DrSend(DrFoe@ e)
 	if (sent <= 0)
 		return;
 	for (uint h = 0; h < goId.length(); ++h)
-		gDrSentAt[goId[h]] = gDrRound;
-	gDrAbsorb -= (flowGo < gDrAbsorb) ? flowGo : gDrAbsorb;
-	++gDrTargets;
-	gDrHands += sent;
-	++gDrLogTargets;
-	gDrLogHands += sent;
-	if (ai.frame < gDrLogAt)
+		gDrcSentAt[goId[h]] = gDrcRound;
+	gDrcAbsorb -= (flowGo < gDrcAbsorb) ? flowGo : gDrcAbsorb;
+	++gDrcTargets;
+	gDrcHands += sent;
+	++gDrcLogTargets;
+	gDrcLogHands += sent;
+	if (ai.frame < gDrcLogAt)
 		return;
-	gDrLogAt = ai.frame + 5 * SECOND;
+	gDrcLogAt = ai.frame + 5 * SECOND;
 	AiLog(Factory::T() + "apex: def-reclaim t=" + ai.teamId + " tgt=" + Catalog::Def(e.def).GetName()
 		+ "#" + e.id + " hands=" + sent + "/" + e.hands.length()
 		+ " g=" + formatFloat(e.g, "", 0, 3) + " oMax=" + formatFloat(oMax, "", 0, 3)
 		+ " gain=" + formatFloat(e.gain, "", 0, 0) + " work=" + formatFloat(e.work, "", 0, 0)
 		+ " kill=" + formatFloat(killS, "", 0, 1) + "s"
-		+ " | since=" + gDrLogTargets + "/" + gDrLogHands
-		+ " total=" + gDrTargets + "/" + gDrHands
+		+ " | since=" + gDrcLogTargets + "/" + gDrcLogHands
+		+ " total=" + gDrcTargets + "/" + gDrcHands
 		+ " eaten=" + ai.DefReclaimedN() + " m=" + formatFloat(ai.DefReclaimedM(), "", 0, 0));
-	gDrLogTargets = 0;
-	gDrLogHands = 0;
-	gDrLoggedKills = ai.DefReclaimedN();
+	gDrcLogTargets = 0;
+	gDrcLogHands = 0;
+	gDrcLoggedKills = ai.DefReclaimedN();
 }
 
 // The kills no send line has reported, once the fight has gone quiet.
 void DrTally()
 {
-	if ((gDrTargets == 0) || (ai.frame < gDrLogAt + 10 * SECOND))
+	if ((gDrcTargets == 0) || (ai.frame < gDrcLogAt + 10 * SECOND))
 		return;
 	const int n = ai.DefReclaimedN();
-	if (n == gDrLoggedKills)
+	if (n == gDrcLoggedKills)
 		return;
-	gDrLoggedKills = n;
-	AiLog(Factory::T() + "apex: def-reclaim tally t=" + ai.teamId + " total=" + gDrTargets + "/" + gDrHands
+	gDrcLoggedKills = n;
+	AiLog(Factory::T() + "apex: def-reclaim tally t=" + ai.teamId + " total=" + gDrcTargets + "/" + gDrcHands
 		+ " eaten=" + n + " m=" + formatFloat(ai.DefReclaimedM(), "", 0, 0));
 }
 
-void DefReclaimStep()
+void DefReclaimStep(int chunks)
 {
 	if (gOwnNano.length() == 0)
 		return;
 	DrCover();
-	const uint k = gDrCellX.length();
+	const uint k = gDrcCellX.length();
 	if (k == 0)
 		return;
-	if (gDrScanI >= k) {
-		gDrScanI = 0;
-		++gDrRound;
-		gDrAbsorb = Eco::MPull() - Eco::MInc() - Eco::MCur() / 60.f - TeamTechInflow();
-		if (gDrAbsorb < 0.f)
-			gDrAbsorb = 0.f;
+	if (gDrcScanI >= k) {
+		gDrcScanI = 0;
+		++gDrcRound;
+		gDrcAbsorb = Eco::MPull() - Eco::MInc() - Eco::MCur() / 60.f - TeamTechInflow();
+		if (gDrcAbsorb < 0.f)
+			gDrcAbsorb = 0.f;
 		DrTally();
 	}
-	const uint per = k / uint(UP_CHUNKS) + 1;
-	const uint end = (gDrScanI + per < k) ? gDrScanI + per : k;
+	const uint per = k / uint((chunks > 0) ? chunks : 1) + 1;
+	const uint end = (gDrcScanI + per < k) ? gDrcScanI + per : k;
 	array<DrFoe@> foes;
-	for (; gDrScanI < end; ++gDrScanI) {
-		const array<float>@ f = ai.EnemiesToReclaimNear(AIFloat3(gDrCellX[gDrScanI], 0.f, gDrCellZ[gDrScanI]),
-				gDrQueryR);
+	for (; gDrcScanI < end; ++gDrcScanI) {
+		const array<float>@ f = ai.EnemiesToReclaimNear(AIFloat3(gDrcCellX[gDrcScanI], 0.f, gDrcCellZ[gDrcScanI]),
+				gDrcQueryR);
 		if (f is null)
 			continue;
 		for (uint at = 0; at + 7 < f.length(); at += 8) {
 			const int id = int(f[at]);
 			if (id < 0)
 				continue;
-			DrGrowI(gDrSeen, id);
-			if (gDrSeen[id] == gDrRound)
+			DrGrowI(gDrcSeen, id);
+			if (gDrcSeen[id] == gDrcRound)
 				continue;
-			gDrSeen[id] = gDrRound;
+			gDrcSeen[id] = gDrcRound;
 			DrFoe@ e = DrPrice(f, at);
 			if (e is null)
 				continue;
