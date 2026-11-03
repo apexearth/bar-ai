@@ -799,9 +799,11 @@ void ComDecideTick(CCircuitUnit@ u)
 	SmallHardComTick(u);
 	const bool shipWas = gShip;
 	ComShipAssess(u);
-	const bool hot = gCsThreat || (gComDec != COM_WORK) || gShip;
+	const bool rushWas = gEfrOn;
+	EffigyRushTick(u);
+	const bool hot = gCsThreat || (gComDec != COM_WORK) || gShip || gEfrOn;
 	if ((gComAssessAt >= 0) && (ai.frame - gComAssessAt < (hot ? SECOND : 5 * SECOND))
-		&& (gShip == shipWas))
+		&& (gShip == shipWas) && (gEfrOn == rushWas))
 		return;
 	gComAssessAt = ai.frame;
 	ComAssess(u);
@@ -817,7 +819,7 @@ void ComDecideTick(CCircuitUnit@ u)
 				+ " strCom=" + formatFloat(gShipStrCom, "", 0, 2) + " " + ComSitText());
 		}
 	}
-	if (gShip)
+	if (gShip || (gEfrOn && (gCaVerdict != COM_RETREAT)))
 		gCsRule = COM_FIGHT;
 	const int dgo = u.DGunOrders();
 	if (gCsThreat && gCsDgReady && (gCsNearD >= 0.f) && (gCsNearD <= u.DGunRange())) {
@@ -890,7 +892,7 @@ void ComEnforce(CCircuitUnit@ u)
 		// time it re-arms on damage left him standing between the two. Not
 		// while the base goes down: his retreat line is 0 then, so it cannot re-arm.
 		const bool ship = gShip && (gComDec == COM_FIGHT);
-		if ((ty == int(Task::Type::RETREAT)) && !ship)
+		if ((ty == int(Task::Type::RETREAT)) && !ship && !(gEfrOn && (gComDec == COM_FIGHT)))
 			return;
 		// a fight lets work within his reach go on; with the base going down, a gun only
 		if ((gComDec == COM_FIGHT) && (bt >= 0) && (bt != int(Task::BuildType::PATROL))
@@ -1012,7 +1014,8 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 		// carrying him off on the last withdrawal becomes a stand.
 		// The base's attackers are on our ground and busy with it: no chase.
 		const bool ship = gShip && OnMap(gShipAt);
-		const bool close = ship || (gCsThreat && OnMap(gCsFoeAt)
+		const bool rush = gEfrOn && !gShip && OnMap(gEfrAt);   // comrush.as: the effigy pays for his death there
+		const bool close = rush || ship || (gCsThreat && OnMap(gCsFoeAt)
 			&& (gCsFoeSpd <= Catalog::gSpeed[int(u.circuitDef.id)]) && !ComFar(gCsFoeAt));
 		const bool leaving = !close && onPatrol && OnMap(gComRetTo)
 			&& (held.GetBuildPos().distance2D(gComRetTo) < 300.f);
@@ -1036,7 +1039,7 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			}
 		}
 		if (close || leaving) {
-			const AIFloat3 at = close ? gCsFoeAt : gCsHere;
+			const AIFloat3 at = rush ? gEfrAt : (close ? gCsFoeAt : gCsHere);
 			if (close && onPatrol && (held.GetBuildPos().distance2D(at) < 300.f))
 				return held;
 			// A move, not a patrol: a patrolling builder repairs whatever is in reach, which

@@ -101,6 +101,7 @@
 #include "market/policy.as"          // the policy net: one evolved network decides every head
 #include "market/comdecide.as"      // the commander's situation and answer, recorded for a commander net
 #include "market/comship.as"        // the base dying with its defence beaten: he steps in, never runs
+#include "market/comrush.as"        // an effigy standing: his death costs it, so he raids where the kill beats that
 #include "market/comhome.as"        // small maps: his time away from the lab priced as army, the base he defends, his walk-ins
 #include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net
 #include "market/t2eco.as"          // apex_t2_eco: the ladder's evidence for the next tier; upgrades before the strategic hoists
