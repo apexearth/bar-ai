@@ -161,6 +161,12 @@ float FreeMetalFlow()
 	return (free > 0.f) ? free : 0.f;
 }
 
+float FreeEnergyFlow()
+{
+	const float free = (Eco::EInc() - Eco::EPull()) + Eco::ECur() / 60.f;
+	return (free > 0.f) ? free : 0.f;
+}
+
 // Where a fusion-tier generator belongs: beside standing or building kin,
 // else the deep rear of the base axis, furthest from the enemy.
 AIFloat3 BigEnergySite()

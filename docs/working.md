@@ -96,6 +96,7 @@ lane with no flags. Your AI is `Apex<name>:lane-<name>` (`lane.py status` prints
 
 - **Every batch passes `--speed`** (`--speed 20` for A/B and tests): uncapped runs stall commanders (S24, S29, S34). Comparable arms need the same worker count or a fixed speed.
 - **Handicap is part of the regime**: `run_match` and `run_tournament` default to +0; his tournaments run +50, `ab.py` and many batteries +100. Never compare economies across handicaps; check `Handicap=` per team in a side-swapped script.
+- **No game plays a wrong net** (his 11-02): every deploy installs the release's net (`ai/vX/.../nnweights.as`; a lane gets the newest release's), and `run_match` refuses an Apex seat whose deployed weights are not its reference. Only the trainer's lanes (`runtime/nn/targets.json`) keep their own net; `--any-net` plays another on purpose.
 - **Give every A/B game its own write dir**: `apex-record.txt` (the unit track record) carries over between games in one dir. Late-game numbers from parallel engines can be the lag ladder starving builders unless `apex_lag_speed=0`.
 - **Tests run his lobby's game version**: when his lobby updates, stop engines, `python tools/sync_game.py`, `deploy_ai.py gadgets`, redeploy, smoke.
 - **Small batches read deeply**: 4-6 games read for mechanism, then decide whether to run more. A genuinely ambiguous result gets one properly powered batch, not pooled small ones. Ten games resolve only a landslide; 60% vs 50% needs 100+ decided games.

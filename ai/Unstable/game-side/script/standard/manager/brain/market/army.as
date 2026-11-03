@@ -2708,6 +2708,52 @@ void StallDebtSettle(CCircuitUnit@ unit)
 int DebtPaid() { return gDebtPaid; }
 int DebtDropped() { return gDebtDropped; }
 
+// Finishing first is the cheaper path only if the frame moves. In a stall it may not: a commander sat
+// on a half-built mex for two minutes, 0.49 -> 0.60, with the bank empty (his 11-02 Glacier Pass).
+// The frame's MEASURED rate against the round trip, the answer's build and the rest at full speed.
+array<float> gCrawlP;
+array<int> gCrawlAt;
+array<int> gCrawlDef;
+int gCrawlTaken = 0;
+bool StallCrawling(CCircuitUnit@ u, IUnitTask@ t, float done, Want@ e)
+{
+	const int uid = int(u.id);
+	if ((uid < 0) || (t.buildDef is null))
+		return false;
+	if (uid >= int(gCrawlP.length())) {
+		const uint n0 = gCrawlP.length();
+		const uint n1 = uint(uid) + 64;
+		gCrawlP.resize(n1); gCrawlAt.resize(n1); gCrawlDef.resize(n1);
+		for (uint i = n0; i < n1; ++i) {
+			gCrawlP[i] = 0.f; gCrawlAt[i] = -1; gCrawlDef[i] = -1;
+		}
+	}
+	const int d = int(t.buildDef.id);
+	if ((gCrawlDef[uid] != d) || (gCrawlAt[uid] < 0) || (done < gCrawlP[uid])) {
+		gCrawlDef[uid] = d; gCrawlAt[uid] = ai.frame; gCrawlP[uid] = done;
+		return false;
+	}
+	const float ageS = float(ai.frame - gCrawlAt[uid]) / 30.f;
+	if (ageS < 3.f)
+		return false;
+	const float rate = (done - gCrawlP[uid]) / ageS;
+	gCrawlAt[uid] = ai.frame; gCrawlP[uid] = done;
+	const int ud = int(u.circuitDef.id);
+	const float bpU = EffBP(Catalog::gBuildPower[ud]);
+	if (bpU <= 0.f)
+		return false;
+	float tripS = 0.f;
+	const float spd = Catalog::gSpeed[ud];
+	const AIFloat3 tp = t.GetBuildPos();
+	if ((spd > 1.f) && OnMap(tp) && OnMap(e.pos))
+		tripS = 2.f * tp.distance2D(e.pos) / spd;
+	const float ansS = (e.def !is null) ? Catalog::BuildSecondsAt(int(e.def.id), bpU) : 0.f;
+	const float fullS = (1.f - done) * Catalog::gBuildTime[d] / bpU;
+	if (rate <= 0.f)
+		return true;
+	return (1.f - done) / rate > tripS + ansS + fullS;
+}
+
 int gStallDiagAt = 0;
 void StallWatch()
 {
@@ -2899,6 +2945,7 @@ void StallWatch()
 				done1 = 0.f;
 			else if (done1 > 1.f)
 				done1 = 1.f;
+			if (!StallCrawling(u, t, done1, e)) {
 			// Raw metal both sides: this is "which order finishes both sooner",
 			// not a market valuation, so the want's priced mCost (displacement,
 			// premiums) is the wrong side of the comparison.
@@ -2927,6 +2974,9 @@ void StallWatch()
 					continue;
 				}
 			}
+			} else {
+				++gCrawlTaken;
+			}
 		}
 		Want@ mx = MemoPropose(8, u);
 		if ((mx !is null) && (mx.value > e.value))
@@ -2954,7 +3004,7 @@ void StallWatch()
 			+ " deficit=" + formatFloat(deficit0, "", 0, 0)
 			+ " rj: task=" + rjTask + " isE=" + rjEnergy + " prog=" + rjProg + " sole=" + rjSole
 			+ " canE=" + rjCanE + " want=" + rjWant + " near=" + rjNear
-			+ " full=" + rjFull);
+			+ " full=" + rjFull + " crawlTaken=" + gCrawlTaken);
 	}
 		AiLog("apex: STALL interrupt -- " + p.circuitDef.GetName() + " #" + p.id
 			+ " progress=" + formatFloat(Requests::Progress(p.task), "", 0, 2)

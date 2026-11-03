@@ -145,9 +145,18 @@ int gTechSkipN = 0;
 string TechName(int o) { return (o == TECH_NOW) ? "NOW" : "WAIT"; }
 
 // the option this decision is about: a plant above every tier we own
+// The first plant is the opening's decision (opennet.as), never the tech head's: with no plant standing
+// OwnTopTier is 0, so WAIT deleted the T1 lab from the commander's list for 1.5 minutes at +0 and he
+// walked 1,850 elmos to a far mex instead (his 11-02 Glacier Pass).
+int TechFloorTier()
+{
+	const int t = OwnTopTier();
+	return (t > 1) ? t : 1;
+}
+
 bool IsT2Lab(Want@ w)
 {
-	return (w !is null) && (w.def !is null) && (TreeTier(int(w.def.id)) > OwnTopTier());
+	return (w !is null) && (w.def !is null) && (TreeTier(int(w.def.id)) > TechFloorTier());
 }
 
 bool T2LabComing()
@@ -155,7 +164,7 @@ bool T2LabComing()
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
 		IUnitTask@ lt = Requests::gLive[li];
 		if ((lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
-			&& (TreeTier(int(lt.buildDef.id)) > OwnTopTier())) {
+			&& (TreeTier(int(lt.buildDef.id)) > TechFloorTier())) {
 			if (Requests::AbandonedAt(li)) {
 				Requests::NoteOrderRelease(lt, Requests::gLiveAt[li], "t2lab", Requests::ORL_GATE);
 				continue;

@@ -73,6 +73,30 @@ jobs:
                 /build/out/AI/Skirmish/BARb/data/SkirmishAI.dll'
           ls -la build/SkirmishAI.dll
 
+      - uses: actions/cache@v4
+        with:
+          path: ccache-linux
+          key: ccache-linux-${{ env.ENGINE_REF }}-${{ env.CIRCUITAI_SHA }}
+          restore-keys: ccache-linux-${{ env.ENGINE_REF }}-
+
+      - name: Build libSkirmishAI.so
+        run: |
+          mkdir -p build-linux ccache-linux
+          docker run --rm \
+            -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD/engine":/build/src:ro \
+            -v "$PWD/ccache-linux":/build/cache \
+            -v "$PWD/build-linux":/build/out \
+            -e CCACHE_DIR=/build/cache \
+            "$BUILD_IMAGE_LINUX" bash -c '
+              set -e
+              /build/src/docker-build-v2/scripts/configure.sh
+              ninja -C /build/out BARb
+              strip -o /build/out/libSkirmishAI.so \
+                /build/out/AI/Skirmish/BARb/data/libSkirmishAI.so'
+          ls -la build-linux/libSkirmishAI.so
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -84,12 +108,15 @@ jobs:
           python tools/package_ai.py "$VARIANT" --out dist \
             --base-dir engine/AI/Skirmish/BARb/data \
             --dll build/SkirmishAI.dll \
+            --so build-linux/libSkirmishAI.so \
             --engine "$ENGINE_NAME" --label "$label"
 
       - uses: actions/upload-artifact@v4
         with:
           name: release-zip
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
 
       - name: Publish release
         if: github.ref_type == 'tag'
@@ -99,6 +126,8 @@ jobs:
           # one obvious file to take: GitHub adds its own "Source code" archives of the whole repository beside it
           zip="dist/Apex-AI-${GITHUB_REF_NAME}-INSTALL.zip"
           mv dist/*.zip "$zip"
+          tgz="dist/Apex-AI-${GITHUB_REF_NAME}-LINUX.tar.gz"
+          mv dist/*-linux.tar.gz "$tgz"
           size=$(du -m "$zip" | cut -f1)
           cat > notes.md <<EOF
           ## To play against it, download **Apex-AI-${GITHUB_REF_NAME}-INSTALL.zip** below (about ${size} MB)
@@ -112,9 +141,13 @@ jobs:
              simple list).
           3. Start BAR. In a skirmish or a lobby you host, **Add AI** and pick **Apex ${GITHUB_REF_NAME}**.
 
+          **Linux:** download **Apex-AI-${GITHUB_REF_NAME}-LINUX.tar.gz** instead, then in a terminal
+          \`tar xzf Apex-AI-${GITHUB_REF_NAME}-LINUX.tar.gz && bash install.sh\` (pass BAR's data folder if it is not found).
+          The Linux build is new and untested by us; please report whether it loads.
+
           Only the player hosting the game needs it. Built for BAR engine \`${ENGINE_NAME}\`; after a BAR engine
           update, run Install.bat again. If Apex still does not show in the AI list, see INSTALL.txt in the zip.
 
           C++: ${CIRCUITAI_SHA}
           EOF
-          gh release create "$GITHUB_REF_NAME" "$zip" --title "Apex AI $GITHUB_REF_NAME" --notes-file notes.md
+          gh release create "$GITHUB_REF_NAME" "$zip" "$tgz" --title "Apex AI $GITHUB_REF_NAME" --notes-file notes.md

@@ -827,7 +827,17 @@ IUnitTask* CBuilderManager::AssignTask(CCircuitUnit* unit)
 	return task;
 }
 
+#ifdef _WIN32
 extern "C" const char __ImageBase;
+static uintptr_t ApexModuleBase() { return (uintptr_t)&__ImageBase; }
+#else
+#include <dlfcn.h>
+static uintptr_t ApexModuleBase()
+{
+	Dl_info info;
+	return dladdr((void*)&ApexModuleBase, &info) ? (uintptr_t)info.dli_fbase : 0;
+}
+#endif
 
 void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 {
@@ -849,7 +859,7 @@ void CBuilderManager::DequeueTask(IUnitTask* task, bool done)
 				const springai::AIFloat3& tp = taskB->GetPosition();
 				// An unnoted death names its caller as an offset into this DLL (addr2line at ImageBase+from).
 				const unsigned long long from = (unsigned long long)(uintptr_t)__builtin_return_address(0)
-						- (unsigned long long)(uintptr_t)&__ImageBase;
+						- (unsigned long long)ApexModuleBase();
 				circuit->LOG("apex: task-die t=%i %s bt=%i at=%.0f,%.0f fails=%i crew=%i framed=%i why=%s id=%p from=%llx",
 						circuit->GetTeamId(), taskB->GetBuildDef()->GetDef()->GetName(),
 						static_cast<int>(taskB->GetBuildType()), tp.x, tp.z,

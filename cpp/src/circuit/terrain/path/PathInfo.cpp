@@ -9,7 +9,6 @@
 #include "terrain/path/PathFinder.h"
 
 #include <new>
-#include <windows.h>
 
 namespace circuit {
 

@@ -60,6 +60,14 @@ INSTALL BY HAND
      empty file named devmode.txt in <BAR install>\\data\\ . Start BAR,
      open Settings > Developer and untick "Simple AI list".
 
+LINUX
+  Use the -linux.tar.gz download:  tar xzf <file>.tar.gz && bash install.sh
+  It looks for BAR's data folder (~/.local/state/Beyond All Reason and the
+  usual Flatpak/Steam places); if yours is elsewhere, pass it:
+  bash install.sh "/path/to/Beyond All Reason"
+  By hand: copy payload/{short} into <data>/engine/{engine}/AI/Skirmish/
+  and do step 3 below.
+
 IMPORTANT
   - The engine version MUST be exactly {engine}. On any other engine the AI
     fails to load with no useful error. Check yours in
@@ -76,6 +84,7 @@ def main() -> int:
     # CI has no BAR install: these three replace what bar_env reads from it.
     ap.add_argument("--base-dir", help="stock BARb data folder (default: the installed BARb/stable)")
     ap.add_argument("--dll", help="SkirmishAI.dll to ship (default: local build, else the repo copy)")
+    ap.add_argument("--so", help="libSkirmishAI.so to ship beside the DLL, for Linux hosts")
     ap.add_argument("--engine", help="engine name the zip is for, e.g. recoil_2026.07.04")
     ap.add_argument("--label", help="replaces <date>-<git> in the zip name, e.g. a release tag")
     args = ap.parse_args()
@@ -135,6 +144,11 @@ def main() -> int:
                 f = built_dll
             if f.exists():
                 shutil.copy2(f, target / name)
+        if args.so:
+            so = Path(args.so)
+            if not so.exists():
+                raise SystemExit(f"--so does not exist: {so}")
+            shutil.copy2(so, target / "libSkirmishAI.so")
         for required in ("AIInfo.lua", "SkirmishAI.dll"):
             if not (target / required).exists():
                 raise SystemExit(f"package incomplete: {required} missing")
@@ -160,16 +174,41 @@ def main() -> int:
                              ("@ENGINE@", engine), ("@NAME@", f"{short} {variant}")):
                 text = text.replace(key, val)
             dst.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode("ascii"))
+        if args.so:
+            text = (INSTALLER / "install.sh").read_text(encoding="utf-8")
+            for key, val in (("@SHORT@", short), ("@VARIANT@", variant), ("@ENGINE@", engine)):
+                text = text.replace(key, val)
+            (Path(tmp) / "install.sh").write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
 
+        lib_so = "payload/%s/%s/libSkirmishAI.so" % (short, variant)
+        lib_dll = "payload/%s/%s/SkirmishAI.dll" % (short, variant)
+        win_only = {"Install.bat", "payload/install.ps1", lib_dll}
+        linux_only = {"install.sh", lib_so}
+        files = [(f, f.relative_to(tmp).as_posix()) for f in sorted(Path(tmp).rglob("*")) if f.is_file()]
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-            for f in sorted(Path(tmp).rglob("*")):
-                if f.is_file():
-                    z.write(f, f.relative_to(tmp))
+            for f, rel in files:
+                if rel not in linux_only:
+                    z.write(f, rel)
+        if args.so:
+            import tarfile
+            tar_path = zip_path.with_name(zip_path.stem + "-linux.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as t:
+                for f, rel in files:
+                    if rel in win_only:
+                        continue
+                    info = t.gettarinfo(str(f), arcname=rel)
+                    info.mode = 0o755 if rel in linux_only else 0o644
+                    info.uid = info.gid = 0
+                    info.uname = info.gname = ""
+                    with open(f, "rb") as fh:
+                        t.addfile(info, fh)
 
     n_files = sum(1 for _ in zipfile.ZipFile(zip_path).namelist())
     mb = zip_path.stat().st_size / 1e6
     print(f"packaged {short}:{variant} for engine {engine}")
     print(f"  {zip_path}  ({mb:.1f} MB, {n_files} files)")
+    if args.so:
+        print(f"  {tar_path}  ({tar_path.stat().st_size / 1e6:.1f} MB, Linux)")
     print(f"  host-only install; engine version must match exactly.")
     return 0
 

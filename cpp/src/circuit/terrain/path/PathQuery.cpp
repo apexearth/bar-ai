@@ -8,7 +8,6 @@
 #include "terrain/path/PathQuery.h"
 
 #include <new>
-#include <windows.h>
 
 namespace circuit {
 

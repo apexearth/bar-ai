@@ -1692,12 +1692,16 @@ AIFloat3 FirstPlantSite(CCircuitDef@ def, CCircuitUnit@ unit, const AIFloat3& in
 {
 	const int d = int(def.id);
 	const int md = int(unit.circuitDef.id);
-	const AIFloat3 from = unit.GetPos(ai.frame);
 	const int fd = (Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d];
 	const int fm = (Catalog::gFootX[md] > Catalog::gFootZ[md]) ? Catalog::gFootX[md] : Catalog::gFootZ[md];
 	const float pitch = Lattice::FootPitch(d);
 	const float half = float(fd) * 8.f;
 	const float reach = Catalog::gBuildDist[md] + half;
+	// Around the site the plant was priced at: around the builder's feet, a commander standing at a far mex
+	// founded the base there, 1,600 elmos from the start, and every solar followed (his 11-02 Glacier Pass).
+	AIFloat3 from = unit.GetPos(ai.frame);
+	if (OnMap(ask) && (from.distance2D(ask) > reach))
+		from = ask;
 	const float selfBar = float(fd + fm) * 8.f;   // CBFactoryTask's SelfClearance
 	const AIFloat3 mirror(float(AiTerrainWidth()) - from.x, 0.f, float(AiTerrainHeight()) - from.z);
 	int k = ConsNeedAny(true);

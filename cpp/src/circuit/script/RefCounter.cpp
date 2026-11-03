@@ -8,7 +8,6 @@
 #include "script/RefCounter.h"
 
 #include <new>
-#include <windows.h>
 
 namespace circuit {
 

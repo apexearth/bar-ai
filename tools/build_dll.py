@@ -79,11 +79,15 @@ def main():
                     help="run deploy_ai.py deploy Unstable, only if the build verified")
     ap.add_argument("--variant", default="Unstable")
     ap.add_argument("--target", default="BARb")
+    ap.add_argument("--linux", action="store_true",
+                    help="build libSkirmishAI.so in BAR's Linux image (BUILD_IMAGE_LINUX in .github/release.env)")
     args = ap.parse_args()
 
     if not ENGINE.is_dir():
         print("no vendor/engine -- nothing to build", file=sys.stderr)
         return 2
+    if args.linux:
+        return build_linux(args.target)
 
     before = ARTIFACT.stat().st_mtime if ARTIFACT.exists() else 0.0
     started = time.time()
@@ -166,6 +170,48 @@ def main():
             r"%LOCALAPPDATA%\Programs\Beyond-All-Reason\data\engine")) )
         print("deployed; verify the live mtime matches %s"
               % time.strftime("%H:%M:%S", time.localtime(st.st_mtime)))
+    return 0
+
+
+def linux_image() -> str:
+    for line in (REPO / ".github" / "release.env").read_text().splitlines():
+        if line.startswith("BUILD_IMAGE_LINUX="):
+            return line.split("=", 1)[1].strip()
+    raise SystemExit("no BUILD_IMAGE_LINUX in .github/release.env")
+
+
+def linux_out() -> pathlib.Path:
+    return ENGINE / (("build-%s-linux" % LANE) if LANE else "build-amd64-linux")
+
+
+def build_linux(target: str) -> int:
+    """The Linux twin of the DLL build, held to the same proof: ninja's exit code and an artifact newer than before."""
+    out = linux_out()
+    out.mkdir(parents=True, exist_ok=True)
+    so = out / "AI" / "Skirmish" / "BARb" / "data" / "libSkirmishAI.so"
+    before = so.stat().st_mtime if so.exists() else 0.0
+    started = time.time()
+    cache = ENGINE / ".cache" / "ccache-amd64-linux"
+    cache.mkdir(parents=True, exist_ok=True)
+    cmd = ["docker", "run", "--rm",
+           "-v", "%s:/build/src:ro" % win(ENGINE),
+           "-v", "%s:/build/cache" % win(cache),
+           "-v", "%s:/build/out" % win(out),
+           "-e", "CCACHE_DIR=/build/cache", linux_image(),
+           "bash", "-c", "set -e; [ -f /build/out/build.ninja ] || /build/src/docker-build-v2/scripts/configure.sh; "
+                         "ninja -C /build/out %s" % target]
+    if LANE:
+        cmd[3:3] = ["-v", "%s:/build/src/AI/Skirmish/BARb:ro" % win(BARB_SRC)]
+        print("lane '%s'  src=%s  out=%s  (linux)" % (LANE, BARB_SRC.name, out.name))
+    proc = subprocess.run(cmd, cwd=str(ENGINE))
+    took = time.time() - started
+    if proc.returncode != 0:
+        print("\nLINUX BUILD FAILED (exit %d) after %.0fs." % (proc.returncode, took))
+        return 1
+    if not so.exists() or so.stat().st_mtime <= before:
+        print("\nLINUX BUILD REPORTED OK but %s did not change." % so)
+        return 1
+    print("\nOK  %.1f MB  %s  (%.0fs)" % (so.stat().st_size / 1e6, so, took))
     return 0
 
 

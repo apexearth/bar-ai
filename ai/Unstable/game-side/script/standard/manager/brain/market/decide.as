@@ -1661,6 +1661,7 @@ int gRefDropped = 0;
 int gNextRefLog = 0;
 const int REFUSAL_MEMO_S = 45;
 
+int gPlantRefLogAt = 0;
 void NoteRefused(CCircuitUnit@ unit, Want@ w)
 {
 	const int did = (w.def is null) ? -1 : int(w.def.id);
@@ -3645,6 +3646,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))
 			++gExecFail[ranked[i].kind];
+		if ((ranked[i].kind == WK_PLANT) && (ai.frame >= gPlantRefLogAt)) {
+			gPlantRefLogAt = ai.frame + 10 * SECOND;
+			AiLog("apex: plant-refused t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " " + ((ranked[i].def is null) ? "-" : ranked[i].def.GetName()) + " depth=" + depth
+				+ " why=" + why + " leashed=" + (refused ? 1 : 0) + " verdict=" + Requests::gLastWhat
+				+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
+		}
 		NoteRefused(unit, ranked[i]);
 		// The stall's answer refused: the interrupt that freed this builder
 		// will fire again on whatever the fallthrough starts (five in 500

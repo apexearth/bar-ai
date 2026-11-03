@@ -106,12 +106,29 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 84 | The gantry far sooner; less air (10-27, "the worth of the units is not converting into the value of the factory") | apex_line_yield (off): labs and units priced by enemy metal destroyed per metal spent; the gantry in the plant market on stats x measured correction, the army metal it carries when ready, exempt from the line-count rule and from nano substitution | `apex: yield`, `gantry-plant priced ... corr= flow= readyS= incT=`; yldread.py | NOT CONFIRMED -- 6 seeds moved it (gantry 5/6 at 20-26 vs 22-34, T3 48% vs 25%, 3-1-2 vs 2-2-2); 10 new seeds did not (gantry median 26.1 vs 27.2, T3 38% vs 40%, air 33% vs 34%, kills per metal 0.47 vs 0.49, 4-3-3 vs 4-1-5): pooled 16, 7-4-5 vs 6-3-7. Off |
 | 85 | Not hundreds of idle nanos far from the front; his game lagged (10-28 T1-only White Fire: 631 on one seat, 383 idle) | apex_nano_payback (on 10-28): the plant payback rule on nanos, gain x the share of turrets working | `apex: nano-payback`; `lift census turrets= idle60=`; nanoread.py | MOVED -- rich 4v4 T1 game, minute 40: 418 / 88 idle vs 692 / 339; idle-share part unconfirmed late |
 | 86 | Rich games (big bonus, 1.5x income): not boxed in by basic converters; room for a gantry (10-29 online: 1,002 basics kept, no seat ordered a gantry, 47-58 gantry site searches per seat found no room) | d54c3e4b: idle converter capacity skips the swap wait; idle turrets eat dwarfed converters directly | `apex: reclobs conv=`; `apex: nano-assist ... obsolete=`; gantry `lathe-site ... room=`; richfix.py (rich-* vs rich2-*) | UNTESTED |
+| 93 | An energy stall gets every hand that can fix it, not one con; few sites at once on a small economy (11-02, Glacier Pass +0) | v0.5.04: stall interrupt reads the frame's measured rate (army.as StallCrawling); new builds pay the energy their sites starve (price.as, floor.as InFlightHoldE) | `stall-scan crawlTaken=`; live sites vs feed cap (request lines `live= cap=`) | FIRES -- crawlTaken 11-16 a game; live sites 6-16 against a feed of 2-4 hands, NOT moved by the energy charge |
 | 92 | While behind the server, hold back until caught up and remove worthless buildings like a garbage collection (10-31) | 72cd7649: the lag ladder holds while the order lag says behind; LagCleanup self-destructs idle turrets the reclaim market prices at nothing, only with a harmless blast | `apex: LAG ... behind= orderLag= floor=`; `apex: lag-gc` | In v0.5.02; never fires offline (checked); unseen online |
 | 91 | The team's first gantry at a middle seat, paid by the team (10-31) | 47e8c08b teamgant.as | `apex: teamgant-elect`, `teamgant-stat ... purse= paid=`; first T3 lab minute | In v0.5.02 -- 8v8 vs BARb: income at 40 ~1.7x, army far ahead; first T3 lab NOT earlier (22-26 vs BARb 14-18): the gantry loses the builder election on price |
 | 90 | Orders given for the measured lag; fast bombers do not turn around between orders (10-31) | 47e7271f: order lag probed per lean waypoint, smoothed (`apex: order-lag`); lean travel re-orders within speed x (lag+2 s) and orders twice that far ahead. Not yet: bomber targets chosen to survive the lag | `apex: order-lag t= lagS= samples=`; a hosted game's reading vs his ~8 s | FIRES -- local 8v8: 1.0-1.3 s over 1-3k samples a seat. In v0.5.02; unseen online (check `apex: order-lag` in his next laggy game) |
 | 89 | No self-destruct that badly hurts nearby buildings (10-31) | 47e7271f: walls go to turrets first; a self-destruct only past its own blast's collateral (the self-destruct weapon, not the death one) | `apex: unstick-eat / unstick-spared / unstick-selfd hurt=`; sdmeas.py | MOVED -- same-seed 8v8: self-destructs 7 -> 0, 7 eaten, 1 radar spared (392 hurt). In v0.5.02 |
 | 88 | Fighters against their air (10-31 online: 22-60k of fighters wanted, none ordered; the T2 air plant made 32 air cons to 2 fighters) | v0.5.01: on a plant that makes fighters the con floors yield while Air::AnswerFighterOwed | `airanswer-stat want=[sq .. share ..] have= pend=`; `decide <air plant> -> produce: (con floor` while owed; ftrowed.py | MOVED -- 8 games vs a forced-AIR v0.5.0: floor orders while owed 96 -> 23, fighter orders 22 -> 31. Not yet seen in his game |
 | 87 | One advanced lab for the team, funded and staffed, not one per seat (10-29) | b3909712 team pay (neutral alone: 12 pairs); build power at the shared lab and re-election next | `teamtech-stat ... pay`; paywhy.py | FIRES -- payments 3,500/game, no change in labs or timing |
+
+## GLACIER PASS AT +0: WHAT v0.5.04 LEFT OPEN (2026-11-03)
+
+His regime: Armada v Armada, 0.25 boxes, +0 (the batch default, Cortex and 0.38 boxes, never shows it).
+The far base and the late lab are fixed in v0.5.04 (see its commit). Open:
+
+- The commander walks 2,000-2,900 elmos out for mexes from ~2 min (the `commetal` hoist in decide.as, his
+  10-05 "out of metal the commander gets more", priced by risk only) and dies forward at 11.5-18 min in
+  5 of 8 games. His call asked: home-only claims, or his death priced as the game.
+- Too many sites at once: 6-16 live against a 2-4-hand feed from minute 2; the energy charge in v0.5.04
+  did not move it. Next: log the charge's size on tower/converter elections in a stall, and the hoists
+  (cover, draw, defpanic) that bypass price.
+- Energy still short after the opening: 27% stalled under 400 E/s and 82% above (BARb 12% / 52%) in
+  his 56-minute win (matches/20261103-075036).
+- Slow to finish: that win led from minute 5 and had 5x their income at 40, yet ran 56 minutes.
+- The east start wins 13 of 16 on this map whoever holds it (h2h-lane-vs-503).
 
 ## 8v8 VS BARB: OUR RICHEST SEATS FIELD NO ARMY UNTIL MINUTE ~28 (2026-10-31)
 

@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import filecmp
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -120,7 +121,7 @@ def _keep_weights(*roots: Path) -> dict:
 _CONST = re.compile(r"^const\s+\S+(?:\s+\S+)?\s+(NN\w+)\s*=", re.M)
 
 
-def _restore_weights(kept: dict, stub: Path) -> None:
+def _restore_weights(kept: dict, stub: Path, quiet: bool = False) -> None:
     # A head new to the scripts has no constants in weights exported before it:
     # its empty stub lines go in, or the script does not compile (S3).
     stub_text = stub.read_text(encoding="utf-8") if stub.is_file() else ""
@@ -137,9 +138,65 @@ def _restore_weights(kept: dict, stub: Path) -> None:
                 print(f"  weights      {f.name}: added {len(missing)} stub constant(s) the export lacked")
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(data)
-    if kept:
+    if kept and not quiet:
         print(f"  weights      kept the deployed nnweights.as ({len(kept)} file(s))")
         _warn_net_vs_release(kept)
+
+
+NET_REL = Path("script/standard/manager/brain/market/nnweights.as")
+
+
+def trainer_targets() -> set:
+    """The deployed copies the trainer writes its nets into (nntrain.py export_targets): they keep their own net."""
+    p = REPO / "runtime" / "nn" / "targets.json"
+    try:
+        return set(json.loads(p.read_text())) if p.is_file() else {"Apexnnlog:lane-nnlog"}
+    except (OSError, ValueError):
+        return {"Apexnnlog:lane-nnlog"}
+
+
+def reference_net(variant: str) -> Path | None:
+    """The net a variant must play: a release its own, anything else the newest release's."""
+    own = REPO / "ai" / variant / "game-side" / NET_REL
+    if re.match(r"^v\d", variant) and own.is_file():
+        return own
+    rels = sorted((p for p in (REPO / "ai").glob("v*") if (p / "game-side" / NET_REL).is_file()),
+                  key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r"[.v]", p.name) if x])
+    return (rels[-1] / "game-side" / NET_REL) if rels else None
+
+
+def net_problem(env: bar_env.BarEnv, short: str, variant: str) -> str | None:
+    """None when every deployed copy of short:variant plays its reference net (or it is a trainer target)."""
+    if f"{short}:{variant}" in trainer_targets():
+        return None
+    ref = reference_net(variant)
+    if ref is None:
+        return None
+    want = [ln for ln in ref.read_text(encoding="utf-8").splitlines() if _CONST.match(ln)]
+    for root in (env.skirmish_dir(short, variant), env.game_config_dir(short, variant)):
+        f = root / NET_REL
+        if not f.is_file():
+            if root.is_dir():
+                return f"{f} is missing"
+            continue
+        have = set(f.read_text(encoding="utf-8").splitlines())
+        bad = sum(1 for ln in want if ln not in have)
+        if bad:
+            return (f"{short}:{variant} plays a net that is not {ref.parents[6].name}'s "
+                    f"({bad} of {len(want)} weight lines differ in {f})")
+    return None
+
+
+def _install_reference_net(variant: str, short: str, paths: list, stub: Path) -> None:
+    if f"{short}:{variant}" in trainer_targets():
+        return
+    ref = reference_net(variant)
+    if ref is None:
+        return
+    data = ref.read_bytes()
+    _restore_weights({p: data for p in paths}, stub, quiet=True)
+    print(f"  net          {ref.relative_to(REPO)} installed (a deploy always plays a release's net; "
+          f"only runtime/nn/targets.json lanes keep the trainer's)")
 
 
 def _warn_net_vs_release(kept: dict) -> None:
@@ -373,7 +430,11 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
         s = src / "game-side" / sub
         if s.is_dir():
             _copy_tree(s, game_target / sub)
-    _restore_weights(kept_weights, src / "game-side" / "script" / "standard" / "manager" / "brain" / "market" / "nnweights.as")
+    stub = src / "game-side" / "script" / "standard" / "manager" / "brain" / "market" / "nnweights.as"
+    if f"{short}:{variant}" in trainer_targets():
+        _restore_weights(kept_weights, stub)
+    else:
+        _install_reference_net(variant, short, [target / NET_REL, game_target / NET_REL], stub)
     stamp = _stamp_scripts(variant, (target / "script", game_target / "script"))
     print(f"  scripts      {stamp}")
     print(f"  game-side    {game_target}")

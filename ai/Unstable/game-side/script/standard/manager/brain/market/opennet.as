@@ -174,6 +174,11 @@ bool OpenHoist(CCircuitUnit@ unit, array<Want@>@ ranked)
 			}
 			++lead;
 		}
+		if (sk == WK_PLANT)
+			AiLog("apex: open-lab t=" + ai.teamId + " step=" + gOpenStep + " plants=" + lead
+				+ " ranked=" + ranked.length() + " top=" + ((ranked.length() > 0) ? KindName(ranked[0].kind) : "-")
+				+ ((lead > 0) ? (" v=" + NnF(ranked[0].value * 1000.f, 2) + " at=" + int(ranked[0].pos.x)
+					+ "," + int(ranked[0].pos.z)) : ""));
 		if (lead > 0)
 			return true;
 		if (sk == WK_PLANT)

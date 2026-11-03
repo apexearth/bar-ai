@@ -675,6 +675,16 @@ def run(args) -> int:
         extras.append((AISpec.parse(spec), int(ally)))
     if len(ais) < 2:
         raise SystemExit("need at least two --a/--b/--ai entries")
+    # No game on a wrong net (his 11-02): every Apex seat plays its release's net, the trainer's lanes theirs.
+    if not getattr(args, "any_net", False):
+        from deploy_ai import net_problem
+        for a in ais + [e[0] for e in extras]:
+            if a.is_lua or not a.short_name.startswith("Apex"):
+                continue
+            why = net_problem(env, a.short_name, a.version)
+            if why:
+                raise SystemExit(f"REFUSED: {why}.\n  Redeploy (python tools/deploy_ai.py deploy) to install the release "
+                                 f"net, or pass --any-net to play this one on purpose.")
 
     # Resolve names through the engine's own scanner rather than guessing.
     from unitsync import UnitSync, resolve_map
@@ -1120,6 +1130,8 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30, help="in-game minute cap")
     ap.add_argument("--timeout", type=int, help="wall-clock seconds before kill")
     ap.add_argument("--seed", type=int, help="RandomSeed for reproducibility")
+    ap.add_argument("--any-net", dest="any_net", action="store_true",
+                    help="play an Apex seat whose deployed net is not its release's (refused by default)")
     ap.add_argument("--boxes", choices=["lr", "tb", "trbl", "tlbr"], default=None,
                     help="start-box axis. Default comes from MAP_BOXES for a known "
                          "map (Supreme Isthmus is trbl, Glitters tb, Comet Catcher "
