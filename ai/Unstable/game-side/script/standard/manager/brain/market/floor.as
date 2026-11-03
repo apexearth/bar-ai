@@ -84,7 +84,7 @@ void PsRebuild()
 		return;
 	gPsAt = ai.frame;
 	gPsStamp = gJobStamp;
-	array<float> c, r, ce;
+	array<float> c, r;
 	for (uint i = 0; i < gJobTask.length(); ++i) {
 		IUnitTask@ t = gJobTask[i];
 		if ((t is null) || t.IsDead() || (t.buildDef is null) || (gJobGain[i] <= 0.f))
@@ -93,7 +93,6 @@ void PsRebuild()
 		if (prog >= 1.f)
 			continue;
 		c.insertLast(Catalog::gCostM[int(t.buildDef.id)] * (1.f - prog));
-		ce.insertLast(Catalog::gCostE[int(t.buildDef.id)] * (1.f - prog));
 		r.insertLast(gJobGain[i]);
 	}
 	if (LabAssistOn()) {
@@ -109,18 +108,9 @@ void PsRebuild()
 			// for the whole of C/income. Its return is the army gap at fill speed -- zero when nothing threatens,
 			// large when their army outgrows ours: the risk of investing while the army is still needed.
 			c.insertLast(1e9f);
-			ce.insertLast(1e9f);
 			r.insertLast(g);
 		}
 	}
-	PsSortInto(c, r, gPsC, gPsRC, gPsR);
-	PsSortInto(ce, r, gPsCE, gPsRCE, gPsRE);
-}
-
-array<float> gPsCE, gPsRCE, gPsRE;   // the same, by remaining ENERGY
-
-void PsSortInto(const array<float>@ c, const array<float>@ r, array<float>@ oc, array<float>@ orc, array<float>@ orr)
-{
 	const uint n = c.length();
 	array<uint> ord(n);
 	for (uint i = 0; i < n; ++i)
@@ -134,33 +124,17 @@ void PsSortInto(const array<float>@ c, const array<float>@ r, array<float>@ oc, 
 		}
 		ord[uint(j + 1)] = k;
 	}
-	oc.resize(n);
-	orc.resize(n + 1);
-	orr.resize(n + 1);
-	orc[0] = 0.f;
+	gPsC.resize(n);
+	gPsRC.resize(n + 1);
+	gPsR.resize(n + 1);
+	gPsRC[0] = 0.f;
 	for (uint i = 0; i < n; ++i) {
-		oc[i] = c[ord[i]];
-		orc[i + 1] = orc[i] + r[ord[i]] * c[ord[i]];
+		gPsC[i] = c[ord[i]];
+		gPsRC[i + 1] = gPsRC[i] + r[ord[i]] * c[ord[i]];
 	}
-	orr[n] = 0.f;
+	gPsR[n] = 0.f;
 	for (int i = int(n) - 1; i >= 0; --i)
-		orr[uint(i)] = orr[uint(i + 1)] + r[ord[uint(i)]];
-}
-
-// The energy twin of InFlightHoldM: return x min(costE, remaining energy) over the jobs in progress.
-float InFlightHoldE(float costE)
-{
-	PsRebuild();
-	const uint n = gPsCE.length();
-	uint lo = 0, hi = n;
-	while (lo < hi) {
-		const uint mid = (lo + hi) / 2;
-		if (gPsCE[mid] < costE)
-			lo = mid + 1;
-		else
-			hi = mid;
-	}
-	return gPsRCE[lo] + costE * gPsRE[lo];
+		gPsR[uint(i)] = gPsR[uint(i + 1)] + r[ord[uint(i)]];
 }
 
 // sum over the jobs in progress of return x min(costX, remaining): metal-seconds of their returns a new build of

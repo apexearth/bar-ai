@@ -873,31 +873,14 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 					if (InFlightHoldOn()) {
 						float paid = FreeMetalFlow() * dur / ((Catalog::gCostM[defId] > 1.f) ? Catalog::gCostM[defId] : 1.f);
 						const float unpaid = 1.f - ((paid < 1.f) ? paid : 1.f);
-						// ...and in energy: a full metal bank in an energy stall read every 680-E tower as free while
-						// it starved the frames already crawling (his 11-02 Glacier Pass: 7-15 sites on a 2-4-hand feed)
-						const float costE = Catalog::gCostE[defId];
-						const float eInc = Eco::EInc();
-						float unpaidE = 0.f;
-						if ((costE > 1.f) && (eInc > 1.f)) {
-							const float paidE = FreeEnergyFlow() * dur / costE;
-							unpaidE = 1.f - ((paidE < 1.f) ? paidE : 1.f);
-						}
 						// TUNE_INFLIGHT_PS: each job waits min(this cost, its own remaining)/income, as metal is shared
 						if (InFlightPsOn()) {
 							float cx = Catalog::gCostM[defId];
 							if (cx > mInc * dur)
 								cx = mInc * dur;
 							holdPsM = InFlightHoldM(cx) / mInc * unpaid;
-							if (unpaidE > 0.f) {
-								float cxE = costE;
-								if (cxE > eInc * dur)
-									cxE = eInc * dur;
-								const float hE = InFlightHoldE(cxE) / eInc * unpaidE;
-								if (hE > holdPsM)
-									holdPsM = hE;
-							}
 						} else {
-							hold = InFlightGainM() * ((unpaidE > unpaid) ? unpaidE : unpaid);
+							hold = InFlightGainM() * unpaid;
 						}
 					}
 					float held = DisplacedStreamM() + hold - ((gain > 0.f) ? gain : 0.f);
