@@ -333,17 +333,66 @@ int PsLeader()
 	return -1;
 }
 
+// A STYLE BUILT ON ONE BIG INVESTMENT IS DRAWN BY WHAT IT COSTS THE TEAM (his 11-02: "one nuke launcher is like
+// building an AFUS -- you could scale your economy a lot more if you just choose to not make any nukes"). The key
+// building (cheapest silo for NUKE, cheapest gantry for T3) is one seat's spend; the share it leaves the team is the
+// better of the seats' (one in n diverted: 0 in a 1v1, 3/4 in a 4v4) and the income's (its cost against the team's
+// metal over the stake horizon), so a rich 1v1 can still go nukes late.
+array<float> gPsKeyM(ST_N, 0.f);
+bool gPsKeyRead = false;
+float PsAfford(int s)
+{
+	if ((s != ST_NUKE) && (s != ST_T3))
+		return 1.f;
+	if (!gPsKeyRead) {
+		gPsKeyRead = true;
+		for (int i = 0; i < ST_N; ++i)
+			gPsKeyM[i] = 0.f;
+		for (uint u = 1; u < PsN(); ++u) {
+			const int d = int(u);
+			if (!Producible(d) || PsBlocked(d))
+				continue;
+			const int k = (SuperClassOf(d) == SC_SILO) ? ST_NUKE : (IsGantryDef(d) ? ST_T3 : -1);
+			if ((k >= 0) && ((gPsKeyM[k] <= 0.f) || (Catalog::gCostM[d] < gPsKeyM[k])))
+				gPsKeyM[k] = Catalog::gCostM[d];
+		}
+	}
+	array<Id>@ mates = ai.GetTeamIds();
+	int seats = 0;
+	float inc = 0.f;
+	if (mates !is null) {
+		for (uint i = 0; i < mates.length(); ++i) {
+			if (!TtAlive(int(mates[i])))
+				continue;
+			++seats;
+			inc += ai.GetTeamMetalIncome(int(mates[i]));
+		}
+	}
+	const float bySeats = (seats > 1) ? 1.f - 1.f / float(seats) : 0.f;
+	if (gPsKeyM[s] <= 0.f)
+		return bySeats;
+	const float pool = inc * ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+	const float part = (pool > 0.f) ? gPsKeyM[s] / pool : 1.f;
+	const float byInc = (part < 1.f) ? 1.f - part : 0.f;
+	return (bySeats > byInc) ? bySeats : byInc;
+}
+
+float PsDrawW(int s)
+{
+	return ST_DRAW_W[s] * PsAfford(s);
+}
+
 int PsDraw(int avoid, int used, int mask)
 {
 	float tot = 0.f;
 	for (int s = 0; s < ST_N; ++s)
 		if (((mask & (1 << s)) != 0) && (s != avoid) && ((used & (1 << s)) == 0))
-			tot += ST_DRAW_W[s];
+			tot += PsDrawW(s);
 	if (tot <= 0.f) {
 		used = 0;
 		for (int s = 0; s < ST_N; ++s)
 			if (((mask & (1 << s)) != 0) && (s != avoid))
-				tot += ST_DRAW_W[s];
+				tot += PsDrawW(s);
 	}
 	if (tot <= 0.f)
 		return ST_BALANCED;
@@ -351,7 +400,10 @@ int PsDraw(int avoid, int used, int mask)
 	for (int s = 0; s < ST_N; ++s) {
 		if (((mask & (1 << s)) == 0) || (s == avoid) || ((used & (1 << s)) != 0))
 			continue;
-		roll -= ST_DRAW_W[s];
+		const float w = PsDrawW(s);
+		if (w <= 0.f)
+			continue;
+		roll -= w;
 		if (roll <= 0.f)
 			return s;
 	}
@@ -438,7 +490,7 @@ void PsLead()
 		if (force >= 0)
 			PsSetStyle(force, 0, 1.f, "force" + (((mask & (1 << force)) == 0) ? "-unavailable" : ""));
 		else
-			PsSetStyle(PsDraw(-1, 0, mask), 0, 1.f, "draw mask=" + mask);
+			PsSetStyle(PsDraw(-1, 0, mask), 0, 1.f, "draw mask=" + mask + " affNuke=" + NnF(PsAfford(ST_NUKE), 2) + " affT3=" + NnF(PsAfford(ST_T3), 2));
 		return;
 	}
 	if (ai.frame < gPsLeadAt + MINUTE)

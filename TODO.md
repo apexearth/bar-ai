@@ -466,3 +466,15 @@ jammer. Priced as time bought, triggered by the enemy field in reach against our
   blacklisted. Measured so far: in the 16-AI benchmark the engine is 75-85% of the late frame (34-51 ms
   a frame at ~3,000 units) and our path queries 98 s of worker CPU (317k); reclaim refused for threat now
   backs off (1dfb106f) and radar sites an ally covers are no longer chosen. Not yet compared across maps.
+
+## Seat play-types by position, inside the team style (his 11-02)
+
+Shield is an affinity, not a core strategy: a player who likes to turtle with tons of shields and defences -- a
+front-seat choice. Back seats lean air, mid seats ground army. So one construct: the team picks its strategy (today's
+plan + style, merged; the same pick on every host, derived from what all hosts see alike), and each seat's play-type
+follows its position (front = shields/defence, mid = army, back = air) with its flavour dials inside that.
+Style draws priced by affordability (his 11-02): one nuke launcher costs about an AFUS, and in a 1v1 skipping nukes
+scales the economy far more -- Nuke there only as a turtle-then-nukes plan, or a light lean on a balanced game. So a
+style's draw weight falls with its key investment's share of the team's economy (silo, gantry...): rare and
+turtle-paired in a 1v1, a live option in a 4v4. A price, not a 1v1 ban. Style lab 11-02 agrees so far: Nuke and T3
+hurt in 1v1/2v2 and helped in 4v4.
