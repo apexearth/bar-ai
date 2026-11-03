@@ -80,6 +80,10 @@ int gNextLagLog = 0;
 double gSpeedWall = 0.0;
 int gSpeedFrame = -1;
 float gSimSpeed = 1.f;
+// What each level of the ladder bought, measured: sim speed while held at it (EMA) and the windows read.
+array<float> gLvlSpeed = {0.f, 0.f, 0.f, 0.f};
+array<int> gLvlN = {0, 0, 0, 0};
+int gLagNoGain = 0;
 
 // BEHIND THE SERVER (his 10-31: "we might be 10 seconds behind, and then, at 1x, we'll never catch up"). A host
 // that only manages 1x reads as recovered on sim speed; how late our orders land says how far behind it is. Behind
@@ -117,6 +121,9 @@ void TickSpeed()
 	}
 	gSpeedFrame = ai.frame;
 	gSpeedWall = now;
+	const int lv = (gLagSev >= 3.f) ? 3 : int(gLagSev);
+	gLvlSpeed[lv] = (gLvlN[lv] == 0) ? gSimSpeed : (gLvlSpeed[lv] * 0.7f + gSimSpeed * 0.3f);
+	++gLvlN[lv];
 	// THE SEVERITY LADDER (apexearth: "keep cutting back until we've caught
 	// up"): every window still under the bar climbs it, every recovered
 	// window walks it back down. 0 = fine; past 1 the deeper cuts unlock
@@ -129,9 +136,24 @@ void TickSpeed()
 	// ...and the cuts hold, and deepen, while we are behind the server, not only while the sim is under 1x
 	const float behind = BehindS();
 	if ((gSimSpeed < bar * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) || (behind > 0.f)) {
-		gLagSev += ai.GetTunable("apex_lag_step", TUNE_LAG_STEP);
-		if (gLagSev > 3.f)
-			gLagSev = 3.f;
+		// A CUT THAT BUYS NO SPEED IS LET GO (his 11-03: 16 seats at 1x sat at 3 for the rest of the game,
+		// elections at 417 us, builders waiting 131 s on full banks, while the sim stayed at 0.88-0.97 and our
+		// own time did not fall). Behind the server the cuts still hold: there they are catching up.
+		bool climb = true;
+		if (behind <= 0.f) {
+			if ((lv > 0) && (gLvlN[lv] >= 3) && (gLvlN[lv - 1] >= 3) && (gLvlSpeed[lv] <= gLvlSpeed[lv - 1])) {
+				gLagSev = float(lv) - 0.01f;
+				climb = false;
+				++gLagNoGain;
+			} else if ((lv < 3) && (gLvlN[lv + 1] >= 3) && (gLvlSpeed[lv + 1] <= gLvlSpeed[lv])) {
+				climb = false;
+			}
+		}
+		if (climb) {
+			gLagSev += ai.GetTunable("apex_lag_step", TUNE_LAG_STEP);
+			if (gLagSev > 3.f)
+				gLagSev = 3.f;
+		}
 	} else if (gSimSpeed >= 0.995f * bar) {
 		gLagSev -= 0.2f;
 		if (gLagSev < 0.f)
@@ -151,7 +173,9 @@ void TickSpeed()
 		gNextLagLog = ai.frame + 30 * SECOND;
 		AiLog("apex: LAG speed=" + formatFloat(gSimSpeed, "", 0, 2) + " set=" + formatFloat(SetSpeed(), "", 0, 1)
 			+ " severity=" + formatFloat(gLagSev, "", 0, 1) + " behind=" + formatFloat(behind, "", 0, 1)
-			+ " orderLag=" + formatFloat(ai.GetOrderLagSec(), "", 0, 1) + " floor=" + formatFloat(gLagFloor, "", 0, 1));
+			+ " orderLag=" + formatFloat(ai.GetOrderLagSec(), "", 0, 1) + " floor=" + formatFloat(gLagFloor, "", 0, 1)
+			+ " bought=" + formatFloat(gLvlSpeed[0], "", 0, 2) + "/" + formatFloat(gLvlSpeed[1], "", 0, 2) + "/"
+			+ formatFloat(gLvlSpeed[2], "", 0, 2) + "/" + formatFloat(gLvlSpeed[3], "", 0, 2) + " noGain=" + gLagNoGain);
 	}
 }
 
