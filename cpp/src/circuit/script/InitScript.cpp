@@ -20,6 +20,7 @@
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
 #include "task/builder/BuilderTask.h"
+#include "task/common/RepairTask.h"
 #include "task/fighter/FighterTask.h"
 #include "task/fighter/RaidTask.h"
 #include "unit/CircuitUnit.h"
@@ -1602,7 +1603,7 @@ static int CCircuitAI_TurretsReclaim(CCircuitAI* circuit, CCircuitUnit* target, 
 			continue;
 		}
 		IUnitTask* cur = u->GetTask();
-		if ((cur == nullptr) || (cur->GetManager() != factoryMgr)) {
+		if ((cur == nullptr) || (cur->GetManager() != factoryMgr) || (dynamic_cast<CSReclaimEnemyTask*>(cur) != nullptr)) {
 			continue;
 		}
 		if ((cur->GetType() == IUnitTask::Type::FACTORY)
@@ -1665,7 +1666,7 @@ static int CCircuitAI_TurretsReclaimAlly(CCircuitAI* circuit, int allyId, int fr
 			continue;
 		}
 		IUnitTask* cur = u->GetTask();
-		if ((cur == nullptr) || (cur->GetManager() != factoryMgr)) {
+		if ((cur == nullptr) || (cur->GetManager() != factoryMgr) || (dynamic_cast<CSReclaimEnemyTask*>(cur) != nullptr)) {
 			continue;
 		}
 		if (dynamic_cast<CSReclaimAllyTask*>(cur) != nullptr) {
@@ -1726,6 +1727,132 @@ static int CCircuitAI_TurretsReclaimAlly(CCircuitAI* circuit, int allyId, int fr
 		++sent;
 	}
 	return sent;
+}
+
+static asITypeInfo* FloatArrayType();
+
+// apex: a turret held on a reclaim the script handed it by hand (an own unit, a teammate's building, an enemy).
+static bool IsHeldEat(CCircuitAI* circuit, IUnitTask* cur)
+{
+	if ((dynamic_cast<CSReclaimEnemyTask*>(cur) != nullptr) || (dynamic_cast<CSReclaimAllyTask*>(cur) != nullptr)) {
+		return true;
+	}
+	CSReclaimTask* rt = dynamic_cast<CSReclaimTask*>(cur);
+	if ((rt == nullptr) || (rt->GetTarget() == nullptr)) {
+		return false;
+	}
+	return circuit->GetTeamUnit(rt->GetTarget()->GetId()) == rt->GetTarget();
+}
+
+// apex: enemies in LOS within radius of pos that a lathe could reclaim -- the def allows it and the unit is not
+// cloaked. Eight floats each: id, def, x, y, z, health / max health, radius, 1 if a nanoframe.
+static CScriptArray* CCircuitAI_EnemiesToReclaimNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
+{
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	std::vector<float> out;
+	const std::vector<int> ids = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, radius, false);
+	for (int id : ids) {
+		CEnemyInfo* e = CSReclaimEnemyTask::Reclaimable(circuit, id);
+		if (e == nullptr) {
+			continue;
+		}
+		CCircuitDef* d = e->GetCircuitDef();
+		const AIFloat3& p = e->GetPos();
+		const float maxHp = d->GetHealth();
+		out.push_back(float(id));
+		out.push_back(float(d->GetId()));
+		out.push_back(p.x);
+		out.push_back(p.y);
+		out.push_back(p.z);
+		out.push_back((maxHp > 0.f) ? std::min(1.f, std::max(0.f, e->GetHealth() / maxHp)) : 1.f);
+		out.push_back(e->GetData()->GetRadius());
+		out.push_back(e->IsBeingBuilt() ? 1.f : 0.f);
+	}
+	CScriptArray* arr = CScriptArray::Create(at, out.size());
+	for (asUINT i = 0; i < out.size(); ++i) {
+		arr->SetValue(i, &out[i]);
+	}
+	return arr;
+}
+
+// apex: what a turret's current job delivers besides the metal it spends (GetResUse reads that), metal-equivalent per
+// second: a repair is the hit points it restores valued at the target's metal per build time, a wreck the metal it
+// makes. -1 for a turret held on a hand-ordered reclaim, which the script must leave on it.
+static float CCircuitAI_LatheJobRate(CCircuitAI* circuit, CCircuitUnit* unit)
+{
+	if ((unit == nullptr) || unit->IsDead()) {
+		return -1.f;
+	}
+	IUnitTask* cur = unit->GetTask();
+	if ((cur != nullptr) && IsHeldEat(circuit, cur)) {
+		return -1.f;
+	}
+	CEconomyManager* eco = circuit->GetEconomyManager();
+	try {
+		IRepairTask* rep = dynamic_cast<IRepairTask*>(cur);
+		if (rep != nullptr) {
+			CAllyUnit* t = circuit->GetFriendlyUnit(rep->GetTargetId());
+			if ((t != nullptr) && (t->GetUnit() != nullptr) && !t->GetUnit()->IsBeingBuilt()) {
+				CCircuitDef* td = t->GetCircuitDef();
+				const bool hurt = t->GetUnit()->GetHealth() < t->GetUnit()->GetMaxHealth();
+				return (hurt && (td != nullptr) && (td->GetBuildTime() > 0.f))
+						? unit->GetCircuitDef()->GetWorkerTime() * td->GetCostM() / td->GetBuildTime()
+						: 0.f;
+			}
+		}
+		return std::max(0.f, unit->GetUnit()->GetResourceMake(eco->GetMetalRes()));
+	} catch (const std::exception&) {
+		return 0.f;
+	}
+}
+
+// apex: the turrets in `hands` that reach enemy `enemyId` are put on one task reclaiming it; a turret held on a
+// hand-ordered reclaim, or outside the factory manager, is left alone. Returns how many were sent.
+static int CCircuitAI_TurretsReclaimEnemy(CCircuitAI* circuit, int enemyId, const CScriptArray* hands, int frames)
+{
+	CEnemyInfo* e = CSReclaimEnemyTask::Reclaimable(circuit, enemyId);
+	if ((e == nullptr) || (hands == nullptr)) {
+		return 0;
+	}
+	const int frame = circuit->GetLastFrame();
+	CFactoryManager* factoryMgr = circuit->GetFactoryManager();
+	IUnitTask* task = nullptr;
+	int sent = 0;
+	for (asUINT i = 0; i < hands->GetSize(); ++i) {
+		CCircuitUnit* u = *static_cast<CCircuitUnit* const*>(hands->At(i));
+		if ((u == nullptr) || u->IsDead() || (circuit->GetTeamUnit(u->GetId()) != u)) {
+			continue;
+		}
+		CCircuitDef* d = u->GetCircuitDef();
+		if (d->IsMobile() || !d->IsAbleToReclaim() || d->IsBuilder() || (d->GetBuildDistance() <= 0.f)) {
+			continue;
+		}
+		IUnitTask* cur = u->GetTask();
+		if ((cur == nullptr) || (cur->GetManager() != factoryMgr) || IsHeldEat(circuit, cur)
+			|| !CSReclaimEnemyTask::Reaches(u, e, frame))
+		{
+			continue;
+		}
+		if (task == nullptr) {
+			task = factoryMgr->Enqueue(TaskS::ReclaimEnemy(IBuilderTask::Priority::HIGH, enemyId, e->GetPos(), frames));
+		}
+		factoryMgr->AssignTask(u, task);
+		++sent;
+	}
+	return sent;
+}
+
+static float CCircuitAI_DefReclaimedM(CCircuitAI* circuit)
+{
+	return CSReclaimEnemyTask::KilledM(circuit->GetTeamId());
+}
+
+static int CCircuitAI_DefReclaimedN(CCircuitAI* circuit)
+{
+	return CSReclaimEnemyTask::KilledN(circuit->GetTeamId());
 }
 
 // apex: our structures that refuse `def` at the cell CanPlaceCell would test there (TerrainManager::BlockersOf): what a
@@ -2983,6 +3110,11 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaimAlly(int, int, int)", asFUNCTION(CCircuitAI_TurretsReclaimAlly), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ EnemiesToReclaimNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_EnemiesToReclaimNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float LatheJobRate(CCircuitUnit@)", asFUNCTION(CCircuitAI_LatheJobRate), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaimEnemy(int, const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_TurretsReclaimEnemy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float DefReclaimedM()", asFUNCTION(CCircuitAI_DefReclaimedM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int DefReclaimedN()", asFUNCTION(CCircuitAI_DefReclaimedN), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyStatics()", asFUNCTION(CCircuitAI_GetAllyStatics), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyPlants()", asFUNCTION(CCircuitAI_GetAllyPlants), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

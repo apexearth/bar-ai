@@ -87,6 +87,7 @@
 #include "market/vscale.as"         // the scales the market compares, logged per minute (read-only)
 #include "market/want_reclaim.as"   // the obsolete-reclaim Want
 #include "market/lift.as"           // idle turrets flown to the short line
+#include "market/defreclaim.as"     // turrets reclaim the enemy units in their reach
 #include "market/forecast.as"       // what the economy will be in h seconds, from the builds coming
 #include "market/lift_ferry.as"     // front towers built at home and flown up
 #include "market/safety.as"        // commander self-preservation, ahead of the auction

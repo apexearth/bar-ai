@@ -51,6 +51,34 @@ private:
 	int updN = 0;
 };
 
+// apex: turrets reclaim an enemy unit in our base (his 11-03). Held by enemy id; a turret the enemy has left the reach
+// of is let go, and the task ends when the enemy is gone, out of sight, cloaked or unreclaimable.
+class CSReclaimEnemyTask: public CSReclaimTask {
+public:
+	CSReclaimEnemyTask(ITaskModule* mgr, Priority priority, ICoreUnit::Id enemyId, const springai::AIFloat3& position,
+					   int timeout);
+	virtual ~CSReclaimEnemyTask();
+
+	virtual bool CanAssignTo(CCircuitUnit* unit) const override;
+	virtual void Update() override;
+	virtual void OnUnitIdle(CCircuitUnit* unit) override;
+
+	ICoreUnit::Id GetEnemyId() const { return enemyId; }
+
+	static CEnemyInfo* Reclaimable(CCircuitAI* circuit, ICoreUnit::Id enemyId);
+	static bool Reaches(CCircuitUnit* unit, CEnemyInfo* enemy, int frame);
+	static void NoteKill(CCircuitAI* circuit, CCircuitUnit* killer, CEnemyInfo* enemy);
+	static float KilledM(int teamId);
+	static int KilledN(int teamId);
+
+protected:
+	virtual bool Execute(CCircuitUnit* unit) override;
+
+private:
+	ICoreUnit::Id enemyId;
+	int updN = 0;
+};
+
 } // namespace circuit
 
 #endif // SRC_CIRCUIT_TASK_STATIC_RECLAIMTASK_H_

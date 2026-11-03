@@ -528,6 +528,7 @@ Grid::Cells gNanoGrid;
 bool gNanoGridDirty = true;
 uint gNanoGridN = 0;
 float gNanoGridMaxReach = 0.f;
+int gNanoGridEra = 0;   // bumped whenever the grid's contents change
 
 void NanoGridDrop()
 {
@@ -549,6 +550,7 @@ void NanoGridBuild()
 	}
 	gNanoGridN = gOwnNanoPos.length();
 	gNanoGridDirty = false;
+	++gNanoGridEra;
 }
 
 void NanoGridAppend()
@@ -563,6 +565,7 @@ void NanoGridAppend()
 	if (r > gNanoGridMaxReach)
 		gNanoGridMaxReach = r;
 	gNanoGridN = gOwnNanoPos.length();
+	++gNanoGridEra;
 }
 
 // The longest build reach any standing turret has. Through the build, because a

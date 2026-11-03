@@ -27,6 +27,7 @@
 #include "task/PlayerTask.h"
 #include "task/fighter/FighterTask.h"
 #include "task/fighter/SquadTask.h"
+#include "task/static/ReclaimTask.h"
 #include "unit/CircuitUnit.h"
 #include "unit/ally/AllyUnit.h"
 #include "unit/enemy/EnemyUnit.h"
@@ -541,6 +542,7 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 				if (GetTeamUnit(evt->attacker) != nullptr) {
 					ISquadTask::NoteTargetKill(this, enemy->GetCircuitDef());
 					ISquadTask::NoteFocusKill(this, GetTeamUnit(evt->attacker), enemy);
+					CSReclaimEnemyTask::NoteKill(this, GetTeamUnit(evt->attacker), enemy);
 				}
 				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
 				ret = 0;

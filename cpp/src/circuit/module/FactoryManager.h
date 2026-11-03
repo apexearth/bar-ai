@@ -38,6 +38,7 @@ namespace TaskS {
 		bool stop;
 		int timeout;
 		int allyId = -1;   // apex: RECLAIM of a teammate's building by id (CSReclaimAllyTask)
+		int enemyId = -1;  // apex: RECLAIM of an enemy unit by id (CSReclaimEnemyTask)
 	};
 
 	static inline SRecruitTask Recruit(CRecruitTask::RecruitType type,
@@ -95,6 +96,19 @@ namespace TaskS {
 		ti.radius = 0.f;
 		ti.timeout = timeout;
 		ti.allyId = allyId;
+		return ti;
+	}
+	static inline SServSTask ReclaimEnemy(IBuilderTask::Priority priority, int enemyId, const springai::AIFloat3& pos,
+			int timeout)
+	{
+		SServSTask ti;
+		ti.type = IBuilderTask::BuildType::RECLAIM;
+		ti.priority = priority;
+		ti.position = pos;
+		ti.target = nullptr;
+		ti.radius = 0.f;
+		ti.timeout = timeout;
+		ti.enemyId = enemyId;
 		return ti;
 	}
 	static inline SServSTask Patrol(IBuilderTask::Priority priority,

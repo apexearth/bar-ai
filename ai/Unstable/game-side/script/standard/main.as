@@ -187,6 +187,7 @@ void UpdateChunk(int c)
 	}
 	if (!ApexActive())
 		return;
+	{ double _t = Perf::T0(); Market::DefReclaimStep(); Perf::Add("up.defrec", _t); }
 	if (c == 0) {
 		Market::WantTestTick();
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
