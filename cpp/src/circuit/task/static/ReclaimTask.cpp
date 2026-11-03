@@ -10,10 +10,13 @@
 #include "module/EconomyManager.h"
 #include "module/FactoryManager.h"
 #include "unit/action/DGunAction.h"
+#include "unit/enemy/EnemyUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
 #include "spring/SpringCallback.h"
+
+#include <map>
 
 namespace circuit {
 
@@ -170,6 +173,123 @@ void CSReclaimAllyTask::OnUnitIdle(CCircuitUnit* unit)
 		return;
 	}
 	Execute(unit);
+}
+
+static std::map<int, std::pair<float, int>> reclaimEnemyKills;
+
+CSReclaimEnemyTask::CSReclaimEnemyTask(ITaskModule* mgr, Priority priority, ICoreUnit::Id enemyId,
+									   const AIFloat3& position, int timeout)
+		: CSReclaimTask(mgr, priority, position, {0.f, 0.f}, timeout, 0.f)
+		, enemyId(enemyId)
+{
+}
+
+CSReclaimEnemyTask::~CSReclaimEnemyTask()
+{
+}
+
+CEnemyInfo* CSReclaimEnemyTask::Reclaimable(CCircuitAI* circuit, ICoreUnit::Id enemyId)
+{
+	CEnemyInfo* e = circuit->GetEnemyInfo(enemyId);
+	if ((e == nullptr) || !e->IsInLOS() || (e->GetCircuitDef() == nullptr) || !e->GetCircuitDef()->IsReclaimable()
+		|| (e->GetUnit() == nullptr))
+	{
+		return nullptr;
+	}
+	try {
+		if (e->GetUnit()->IsCloaked()) {
+			return nullptr;
+		}
+	} catch (const std::exception&) {
+		return nullptr;
+	}
+	return e;
+}
+
+bool CSReclaimEnemyTask::Reaches(CCircuitUnit* unit, CEnemyInfo* enemy, int frame)
+{
+	const float r = unit->GetCircuitDef()->GetBuildDistance() + enemy->GetData()->GetRadius();
+	return unit->GetPos(frame).SqDistance(enemy->GetPos()) <= SQUARE(r);
+}
+
+void CSReclaimEnemyTask::NoteKill(CCircuitAI* circuit, CCircuitUnit* killer, CEnemyInfo* enemy)
+{
+	if ((killer == nullptr) || (enemy == nullptr) || (enemy->GetCircuitDef() == nullptr)
+		|| (dynamic_cast<CSReclaimEnemyTask*>(killer->GetTask()) == nullptr))
+	{
+		return;
+	}
+	auto& k = reclaimEnemyKills[circuit->GetTeamId()];
+	k.first += enemy->GetCircuitDef()->GetCostM();
+	++k.second;
+}
+
+float CSReclaimEnemyTask::KilledM(int teamId)
+{
+	auto it = reclaimEnemyKills.find(teamId);
+	return (it == reclaimEnemyKills.end()) ? 0.f : it->second.first;
+}
+
+int CSReclaimEnemyTask::KilledN(int teamId)
+{
+	auto it = reclaimEnemyKills.find(teamId);
+	return (it == reclaimEnemyKills.end()) ? 0 : it->second.second;
+}
+
+bool CSReclaimEnemyTask::CanAssignTo(CCircuitUnit* unit) const
+{
+	return unit->GetCircuitDef()->IsAbleToReclaim() && !unit->GetCircuitDef()->IsMobile();
+}
+
+bool CSReclaimEnemyTask::Execute(CCircuitUnit* unit)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CEnemyInfo* e = Reclaimable(circuit, enemyId);
+	if (e == nullptr) {
+		return false;
+	}
+	TRY_UNIT(circuit, unit,
+		unit->CmdReclaimEnemy(e, UNIT_CMD_OPTION, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
+	)
+	return true;
+}
+
+void CSReclaimEnemyTask::Update()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CEnemyInfo* e = Reclaimable(circuit, enemyId);
+	if (e == nullptr) {
+		manager->AbortTask(this);
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	std::vector<CCircuitUnit*> gone;
+	for (CCircuitUnit* u : units) {
+		if (!Reaches(u, e, frame)) {
+			gone.push_back(u);
+		}
+	}
+	if (gone.size() == units.size()) {
+		manager->AbortTask(this);
+		return;
+	}
+	for (CCircuitUnit* u : gone) {
+		RemoveAssignee(u);
+	}
+	if ((++updN % 8 == 0) && !units.empty()) {
+		for (CCircuitUnit* u : units) {
+			Execute(u);
+		}
+	}
+}
+
+void CSReclaimEnemyTask::OnUnitIdle(CCircuitUnit* unit)
+{
+	if (units.size() <= 1) {
+		manager->AbortTask(this);
+		return;
+	}
+	RemoveAssignee(unit);
 }
 
 } // namespace circuit
