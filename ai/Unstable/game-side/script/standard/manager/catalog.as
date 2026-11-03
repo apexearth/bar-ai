@@ -95,6 +95,7 @@ array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
 array<bool> gKamikaze;   // suicide unit: ammunition, not army
 array<bool> gShield;     // projectile shield structure
 array<float> gShieldR;   // ...and the radius its dome covers
+array<float> gShieldP;   // ...and the hit points it holds
 array<bool> gRezzer;     // can resurrect wrecks
 array<float> gSurfT;     // threat vs surface targets
 array<float> gAirT;      // threat vs air
@@ -138,7 +139,7 @@ void Init()
 	gSurfDpsOn = ai.GetTunable("apex_surf_dps", TUNE_SURF_DPS) > 0.f;
 	gAimTrue.resize(n); gDumbFire.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gWaterT.resize(n); gRole.resize(n); gKamikaze.resize(n);
-	gShield.resize(n); gShieldR.resize(n); gRezzer.resize(n);
+	gShield.resize(n); gShieldR.resize(n); gShieldP.resize(n); gRezzer.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -219,6 +220,7 @@ void Init()
 		gKamikaze[i]     = cdef.IsKamikazeDef();
 		gShield[i]       = cdef.IsShieldDef();
 		gShieldR[i]      = cdef.GetShieldRadius();
+		gShieldP[i]      = cdef.GetMaxShield();
 		gRezzer[i]       = cdef.IsRezAble();
 		gSurfT[i]        = cdef.GetSurfThreat();
 		gAirT[i]         = cdef.GetAirThreat();
