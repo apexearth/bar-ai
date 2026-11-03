@@ -1,12 +1,12 @@
 namespace Market {
 //------------------------------------------------------------------------------
 // THE EFFIGY RUSH (his 2026-11-03): while a finished effigy of ours stands, his death costs the
-// effigy, not the game, so he raids their base or army the way humans raid AIs.
+// effigy, not the game, so he walks into their base and D-guns their dearest buildings.
 //   death(t) = effigy metal + its energy at the floor price + lathe x (respawn stun from t + rebuild)
-//   V(t)     = rK x K - rL x L + (he lives ? E : 0) - lathe x (walk + fight + kill E)
-// K, L and the fight time come from the one assessment (SqAssess, docs/army.md) with him as a pool
-// of one whose metal is death(t) and whose dps carries his D-gun; E is their unarmed metal in his
-// range at t. He goes to the best t while V > 0. No finished effigy: nothing here runs.
+//   V(t)     = metal destroyed at t before their fire kills him - (he dies ? death(t) : 0)
+//              - lathe x (walk + fight)
+// Targets are their base and the cells of their unarmed things, never their army; a raid under way
+// is re-priced on its own target. No finished effigy: nothing here runs.
 //------------------------------------------------------------------------------
 
 // unit_respawning.lua with the commander defs' minimum_respawn_stun 5, distance_stun_multiplier 1
@@ -137,18 +137,22 @@ void EffigyKeepNote(CCircuitUnit@ u, CCircuitDef@ d, const AIFloat3& in site)
 // ---- their unarmed units: what a raid takes once the armed ones are dealt with ----
 array<float> gEfrUX, gEfrUZ, gEfrUM, gEfrUH;
 Grid::Cells gEfrUGrid;
+array<float> gEfrAX, gEfrAZ, gEfrAD, gEfrAR;
+Grid::Cells gEfrAGrid;
+float gEfrARMax = 0.f;
 
 void EfrUnarmedScan()
 {
 	gEfrUX.resize(0); gEfrUZ.resize(0); gEfrUM.resize(0); gEfrUH.resize(0);
 	gEfrUGrid.Begin(512.f, 0.f, 0.f, float(AiTerrainWidth()), float(AiTerrainHeight()));
+	gEfrAX.resize(0); gEfrAZ.resize(0); gEfrAD.resize(0); gEfrAR.resize(0);
+	gEfrAGrid.Begin(512.f, 0.f, 0.f, float(AiTerrainWidth()), float(AiTerrainHeight()));
+	gEfrARMax = 0.f;
 	const int nT = aiEnemyMgr.GetEnemyUnitTotal();
 	for (int i = 0; i < nT; ++i) {
 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
 		if (!Catalog::ValidId(d) || Catalog::gFlyer[d] || Catalog::gKamikaze[d] || (Catalog::gCostM[d] <= 0.f))
 			continue;
-		if ((Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f) && (Catalog::gLandRange[d] > 0.f))
-			continue;   // armed: the assessment's
 		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
 		if ((los < 0) || ((los & (4 | 8 | 32 | 64)) != 0))
 			continue;
@@ -157,6 +161,16 @@ void EfrUnarmedScan()
 		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
 		if (!OnMap(p))
 			continue;
+		if ((Catalog::gSurfDps[d] > 0.f) && (Catalog::gSurfT[d] > 0.f) && (Catalog::gLandRange[d] > 0.f)) {
+			gEfrAX.insertLast(p.x);
+			gEfrAZ.insertLast(p.z);
+			gEfrAD.insertLast(Catalog::gSurfDps[d]);
+			gEfrAR.insertLast(Catalog::gLandRange[d]);
+			if (Catalog::gLandRange[d] > gEfrARMax)
+				gEfrARMax = Catalog::gLandRange[d];
+			gEfrAGrid.Add(p.x, p.z);
+			continue;
+		}
 		gEfrUX.insertLast(p.x);
 		gEfrUZ.insertLast(p.z);
 		gEfrUM.insertLast(Catalog::gCostM[d]);
@@ -179,29 +193,6 @@ void EfrUnarmedAt(float x, float z, float r, float& out m, float& out h)
 		m += gEfrUM[i];
 		h += gEfrUH[i];
 	}
-}
-
-// His D-gun as dps: one of their armed non-commanders (the D-gun does nothing to a commander) per
-// shot, a shot every reload or every shot's energy at our income, whichever is slower.
-float EfrDGunDps(CCircuitUnit@ u)
-{
-	const float cost = u.DGunCostE();
-	const float eInc = Eco::EInc();
-	if ((cost <= 0.f) || (eInc <= 0.f))
-		return 0.f;
-	float dgI = cost / eInc;
-	if (dgI < u.DGunReload())
-		dgI = u.DGunReload();
-	float hs = 0.f;
-	int n = 0;
-	for (uint e = 0; e < Military::gCfEDef.length(); ++e) {
-		const int d = Military::gCfEDef[e];
-		if (Military::CfIsCom(d))
-			continue;
-		hs += Catalog::gHealth[d];
-		++n;
-	}
-	return ((n > 0) && (dgI > 0.f)) ? hs / float(n) / dgI : 0.f;
 }
 
 // ---- the decision ----
@@ -232,8 +223,82 @@ string EfrKindName(int k)
 	return "-";
 }
 
+// Their fire on him standing at (x, z) with his own reach r: every armed unit seen whose range covers him.
+float EfrFireAt(float x, float z, float r)
+{
+	float d = 0.f;
+	if (gEfrAX.length() == 0)
+		return 0.f;
+	gEfrAGrid.Query(x, z, r + gEfrARMax);
+	for (uint k = 0; k < gEfrAGrid.hit.length(); ++k) {
+		const int i = gEfrAGrid.hit[k];
+		if ((i < int(gEfrAX.length())) && (Military::CfDist(gEfrAX[i], gEfrAZ[i], x, z) <= r + gEfrAR[i]))
+			d += gEfrAD[i];
+	}
+	return d;
+}
+
+// What he destroys at (x, z) in s seconds: a D-gun shot every dgI on the dearest building in reach, his
+// guns on the rest. Out: the metal, the seconds to clear it all (1e9 if he cannot), the D-gun share.
+float EfrKillAt(float x, float z, float r, float s, float dgI, float dps, float& out clearS, float& out dgM)
+{
+	clearS = 0.f;
+	dgM = 0.f;
+	if (gEfrUX.length() == 0)
+		return 0.f;
+	array<float> m, h;
+	gEfrUGrid.Query(x, z, r);
+	for (uint k = 0; k < gEfrUGrid.hit.length(); ++k) {
+		const int i = gEfrUGrid.hit[k];
+		if ((i < int(gEfrUX.length())) && (Military::CfDist(gEfrUX[i], gEfrUZ[i], x, z) <= r)) {
+			m.insertLast(gEfrUM[i]);
+			h.insertLast(gEfrUH[i]);
+		}
+	}
+	const int n = int(m.length());
+	if (n == 0)
+		return 0.f;
+	array<int> ord(n);
+	for (int i = 0; i < n; ++i)
+		ord[i] = i;
+	for (int a = 1; a < n; ++a) {
+		const int oi = ord[a];
+		int b = a - 1;
+		while ((b >= 0) && (m[ord[b]] < m[oi])) {
+			ord[b + 1] = ord[b];
+			--b;
+		}
+		ord[b + 1] = oi;
+	}
+	int shots = 0;
+	if (dgI > 0.f)
+		shots = (s >= 1e8f) ? n : (int(s / dgI) + 1);
+	if (shots > n)
+		shots = n;
+	float restM = 0.f, restH = 0.f;
+	for (int q = 0; q < n; ++q) {
+		if (q < shots)
+			dgM += m[ord[q]];
+		else {
+			restM += m[ord[q]];
+			restH += h[ord[q]];
+		}
+	}
+	const float dgS = (shots > 0) ? float(shots - 1) * dgI : 0.f;
+	const float gunS = (dps > 0.f) ? restH / dps : ((restH > 0.f) ? 1e9f : 0.f);
+	clearS = (dgS > gunS) ? dgS : gunS;
+	float gunM = restM;
+	if ((s < clearS) && (restH > 0.f)) {
+		const float frac = (dps > 0.f) ? dps * s / restH : 0.f;
+		gunM = restM * ((frac < 1.f) ? frac : 1.f);
+	}
+	return dgM + gunM;
+}
+
 void EfrPrice(CCircuitUnit@ u)
 {
+	const bool committed = gEfrOn;
+	const AIFloat3 was = gEfrAt;
 	gEfrOn = false;
 	gEfrV = 0.f;
 	gEfrKind = -1;
@@ -254,32 +319,33 @@ void EfrPrice(CCircuitUnit@ u)
 	gEfrEffM = Catalog::gCostM[ed] + Catalog::gCostE[ed] * EPriceFloor();
 	const float bp = Catalog::gBuildPower[cd];
 	gEfrBuildS = (bp > 0.f) ? Catalog::gBuildTime[ed] / bp : 0.f;
-	Military::SqAssessRead();
 	EfrUnarmedScan();
-	gEfrDg = EfrDGunDps(u);
-	Military::SqPool@ p = Military::SqPool();
-	p.n = 1.f;
-	p.dps = Catalog::gSurfDps[cd] + gEfrDg;
-	p.hp = Catalog::gHealth[cd] * u.GetHealthPercent();
-	p.rng = rng;
-	p.minRng = rng;
-	p.spd = spd;
-	p.x = here.x;
-	p.z = here.z;
-	if ((p.dps <= 0.f) || (p.hp <= 0.f)) {
+	float dgI = 0.f;
+	{
+		const float cost = u.DGunCostE();
+		const float eInc = Eco::EInc();
+		if ((cost > 0.f) && (eInc > 0.f)) {
+			dgI = cost / eInc;
+			if (dgI < u.DGunReload())
+				dgI = u.DGunReload();
+		}
+	}
+	gEfrDg = (dgI > 0.f) ? 1.f / dgI : 0.f;
+	const float dps = Catalog::gSurfDps[cd];
+	const float hp = Catalog::gHealth[cd] * u.GetHealthPercent();
+	if (((dps <= 0.f) && (dgI <= 0.f)) || (hp <= 0.f)) {
 		gEfrWhy = "unarmed";
 		return;
 	}
 
-	// candidates: their base, cells of their unarmed units his reach covers from the middle, their army groups
-	array<float> cx, cz, ce, ceh, key, cl;
+	// candidates: their base and the cells of their unarmed things -- labs, extractors, generators, builders.
+	// Their army is not a target: on our ground the base's own answer fights it.
+	array<float> cx, cz;
 	array<int> ck;
-	array<bool> cb;
 	float fbx, fbz;
 	Military::SqFoeBase(fbx, fbz);
-	const bool haveBase = (fbx >= 0.f) && OnMap(AIFloat3(fbx, 0.f, fbz));
-	if (haveBase) {
-		cx.insertLast(fbx); cz.insertLast(fbz); ck.insertLast(EFR_BASE); cb.insertLast(true); cl.insertLast(0.f);
+	if ((fbx >= 0.f) && OnMap(AIFloat3(fbx, 0.f, fbz))) {
+		cx.insertLast(fbx); cz.insertLast(fbz); ck.insertLast(EFR_BASE);
 	}
 	const float cell = (rng * 1.41421356f > 64.f) ? rng * 1.41421356f : 64.f;
 	const int nx = int(float(AiTerrainWidth()) / cell) + 1;
@@ -299,45 +365,32 @@ void EfrPrice(CCircuitUnit@ u)
 	for (int k = 0; k < nx * nz; ++k) {
 		if (bm[k] <= 0.f)
 			continue;
-		const float x = bx[k] / bm[k], z = bz[k] / bm[k];
-		cx.insertLast(x); cz.insertLast(z); ck.insertLast(EFR_ECO); cl.insertLast(0.f);
-		cb.insertLast(haveBase && (Military::CfDist(x, z, fbx, fbz) <= Military::gBaseExtent));
+		cx.insertLast(bx[k] / bm[k]); cz.insertLast(bz[k] / bm[k]); ck.insertLast(EFR_ECO);
 	}
-	for (uint g = 0; g < Military::gCfFcM.length(); ++g) {
-		if (Military::gCfFcN[g] <= 0)
-			continue;
-		cx.insertLast(Military::gCfFcX[g]); cz.insertLast(Military::gCfFcZ[g]); ck.insertLast(EFR_ARMY);
-		cb.insertLast(false); cl.insertLast(Military::gCfFcM[g]);
+	// A raid under way is priced on its own target only: the walk already made is spent.
+	if (committed && OnMap(was)) {
+		int best = -1;
+		float bestD = 1e30f;
+		for (uint c = 0; c < cx.length(); ++c) {
+			const float dd = Military::CfDist(cx[c], cz[c], was.x, was.z);
+			if (dd < bestD) {
+				bestD = dd;
+				best = int(c);
+			}
+		}
+		if ((best < 0) || (bestD > cell)) {
+			cx.resize(0); cz.resize(0); ck.resize(0);
+		} else {
+			const float bxv = cx[best], bzv = cz[best];
+			const int bk = ck[best];
+			cx.resize(1); cz.resize(1); ck.resize(1);
+			cx[0] = bxv; cz[0] = bzv; ck[0] = bk;
+		}
 	}
 	const int nC = int(cx.length());
 	gEfrCands = nC;
-	// asked best metal per second of walk first, as the squads rank theirs
-	for (int c = 0; c < nC; ++c) {
-		float m, h;
-		EfrUnarmedAt(cx[c], cz[c], rng, m, h);
-		ce.insertLast(m);
-		ceh.insertLast(h);
-		key.insertLast((m + cl[c]) / (here.distance2D(AIFloat3(cx[c], 0.f, cz[c])) / spd + 1.f));
-	}
-	array<int> ord(nC);
-	for (int i = 0; i < nC; ++i)
-		ord[i] = i;
-	for (int a = 1; a < nC; ++a) {
-		const int oi = ord[a];
-		int b = a - 1;
-		while ((b >= 0) && (key[ord[b]] < key[oi])) {
-			ord[b + 1] = ord[b];
-			--b;
-		}
-		ord[b + 1] = oi;
-	}
-
-	const double t0 = ai.ClockUs();
 	bool any = false;
-	for (int q = 0; q < nC; ++q) {
-		if ((q > 0) && (ai.ClockUs() - t0 > Military::SQ_SLICE_US))
-			break;
-		const int c = ord[q];
+	for (int c = 0; c < nC; ++c) {
 		AIFloat3 t(cx[c], 0.f, cz[c]);
 		if (!ai.CanDefReachAt(Catalog::Def(cd), here, t, rng))
 			continue;
@@ -345,40 +398,40 @@ void EfrPrice(CCircuitUnit@ u)
 		const float walkS = here.distance2D(t) / spd;
 		const float stunS = EFFIGY_STUN_S + t.distance2D(gEfyPos) * EFFIGY_STUN_PER_ELMO;
 		const float deathM = gEfrEffM + gEfrLathe * (stunS + gEfrBuildS);
-		p.m = deathM;
-		Military::SqAssess(p, here.x, here.z, t.x, t.z, cb[c], 0);
-		const bool fought = Military::gSqAThemN > 0;
-		const float L = fought ? Military::gCfRL * Military::gSqAL : 0.f;
-		const float K = fought ? Military::gCfRK * Military::gSqAK : 0.f;
-		const float fightS = fought ? Military::gCfSimT : 0.f;
-		const bool lives = L <= 0.f;
-		const float E = lives ? ce[c] : 0.f;
-		const float killS = lives ? ceh[c] / p.dps : 0.f;
-		const float timeM = gEfrLathe * (walkS + fightS + killS);
-		const float v = K + E - L - timeM;
+		const float fire = EfrFireAt(t.x, t.z, rng);
+		const float s = (fire > 0.f) ? hp / fire : 1e9f;
+		float clearS, dgM;
+		const float killM = EfrKillAt(t.x, t.z, rng, s, dgI, dps, clearS, dgM);
+		if (killM <= 0.f)
+			continue;
+		const bool lives = s >= clearS;
+		const float L = lives ? 0.f : deathM;
+		const float fightS = lives ? clearS : s;
+		const float timeM = gEfrLathe * (walkS + fightS);
+		const float v = killM - L - timeM;
 		if (any && (v <= gEfrV))
 			continue;
 		any = true;
 		gEfrV = v;
 		gEfrAt = t;
 		gEfrKind = ck[c];
-		gEfrK = K;
+		gEfrK = dgM;
 		gEfrL = L;
-		gEfrE = E;
+		gEfrE = killM - dgM;
 		gEfrTimeM = timeM;
 		gEfrWalk = walkS;
 		gEfrStunS = stunS;
 		gEfrDeathM = deathM;
 		gEfrLives = lives;
-		gEfrThemN = Military::gSqAThemN;
-		gEfrThemM = Military::gSqAThemM;
+		gEfrThemN = int(fire);
+		gEfrThemM = s;
 	}
 	if (!any) {
-		gEfrWhy = (nC == 0) ? "no-target" : "unreachable";
+		gEfrWhy = (nC == 0) ? (committed ? "cleared" : "no-target") : "unreachable";
 		return;
 	}
 	gEfrOn = gEfrV > 0.f;
-	gEfrWhy = "priced";
+	gEfrWhy = committed ? "held" : "priced";
 }
 
 // Once a second from ComDecideTick, after the ship's test.
@@ -423,7 +476,7 @@ void EffigyRushTick(CCircuitUnit@ u)
 		+ " lathe=" + formatFloat(gEfrLathe, "", 0, 1)
 		+ " tgt=" + EfrKindName(gEfrKind) + "@" + int(gEfrAt.x) + "," + int(gEfrAt.z)
 		+ " walk=" + formatFloat(gEfrWalk, "", 0, 1) + "s"
-		+ " them=" + gEfrThemN + "/" + int(gEfrThemM) + "m"
+		+ " fire=" + gEfrThemN + " surv=" + ((gEfrThemM >= 1e8f) ? "inf" : formatFloat(gEfrThemM, "", 0, 0) + "s")
 		+ " K=" + int(gEfrK) + " E=" + int(gEfrE) + " L=" + int(gEfrL) + " timeM=" + int(gEfrTimeM)
 		+ " dgDps=" + int(gEfrDg) + " lives=" + (gEfrLives ? 1 : 0)
 		+ " v=" + int(gEfrV) + " cands=" + gEfrCands + " asked=" + gEfrAsked
