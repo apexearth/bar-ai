@@ -2121,21 +2121,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// frame would otherwise never reach this at all, which is exactly the
 	// state he dies in (apexearth, watching: "he did *nothing* to protect
 	// himself").
-	// HIS NEXT LIFE (comrush.as), asked only when his decision is WORK with nothing reaching him, so
-	// ahead of the hurt retreat: respawned at 1 hp at home, that would hold him off it while he heals.
-	// A commander that lists no effigy never asks.
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && CommRules()) {
-		AIFloat3 eSite;
-		CCircuitDef@ eDef = EffigyKeepAsk(unit, eSite);
-		if (eDef !is null) {
-			IUnitTask@ et = Requests::Take(unit, eDef, Task::BuildType::STORE, Task::Priority::HIGH,
-					eSite, Requests::SAME_SITE, SQUARE_SIZE * 16.f);
-			if (et !is null) {
-				EffigyKeepNote(unit, eDef, eSite);
-				return et;
-			}
-		}
-	}
 	{
 		const double _tCs = Perf::T0();
 		IUnitTask@ safe = CommanderSafety(unit);
