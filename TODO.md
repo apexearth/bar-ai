@@ -478,3 +478,11 @@ scales the economy far more -- Nuke there only as a turtle-then-nukes plan, or a
 style's draw weight falls with its key investment's share of the team's economy (silo, gantry...): rare and
 turtle-paired in a 1v1, a live option in a 4v4. A price, not a 1v1 ban. Style lab 11-02 agrees so far: Nuke and T3
 hurt in 1v1/2v2 and helped in 4v4.
+Two layers, not one list (his 11-02): TEAM STRATEGY is exclusive, committed and timed -- the whole team does it with
+overwhelming force (air strike: everyone stops ground and masses air, then hits the front or the eco at once; rush;
+T3; nuke; artillery mass; stealth raid on the eco; NORMAL = no strategy, what "Balanced" was). "If you put 20% into
+all these ideas you won't get anywhere." PERSONALITY is per seat and not exclusive: a scout-lover builds more scouts,
+an artillery-lover more artillery, the turtle more shields and defences (front seat), the air-lover more air (back
+seat). Scout and Shield are personalities only -- "how do you kill someone with scouts? You cannot." Build: fold the
+team styles into plannet's team plan (minus SCOUT and SHIELD), give the plan build-up/stage/strike timing and one pick
+on every host; personalities live only in the seat dials (scout, air, reach, fast, tech exist; add turtle, stealth).

@@ -155,6 +155,18 @@ void PlanNetDecide()
 	if (ai.frame < gPlanNextAt)
 		return;
 	gPlanNextAt = ai.frame + 30 * SECOND;
+	// ONE TEAM CHOICE (his 11-02): with personalities on, the team style IS the strategy and its plan stands for as long
+	// as the style is held; the plan's own lease and net no longer re-pick under it (an ARTY plan ran under SCOUT).
+	if (PersOn() && (ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE) < 0.f)) {
+		const int s = int(ai.GetTeamBoard(PB_STYLE, 0.f)) - 1;
+		if ((s >= 0) && (s < ST_N)) {
+			const int p = (ST_PLAN[s] >= 0) ? ST_PLAN[s] : NG_NORMAL;
+			if (p != gPlan)
+				AiLog("apex: plan t=" + ai.teamId + " follows style " + StName(s) + " -> " + NgName(p));
+			gPlan = p;
+			return;
+		}
+	}
 	NnExploreRoll();
 	// step 2: every seat plays the pricer leader's choice (planprice.as PpChoose), no lease
 	if (PlanFromPriceOn() && (ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE) < 0.f)) {

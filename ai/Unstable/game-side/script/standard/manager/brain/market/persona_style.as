@@ -9,11 +9,12 @@ namespace Market {
 // balanced; once the style's lean is no larger than one seat's own flavour (STYLE_AMP^c <= PERS_SEAT_AMP) the team
 // draws a style it has not tried. Log only, never chat.
 const int ST_BALANCED = 0, ST_ARTY = 1, ST_STEALTH = 2, ST_AIR = 3, ST_FAST = 4, ST_T3 = 5, ST_NUKE = 6;
-const int ST_SHIELD = 7, ST_SCOUT = 8, ST_N = 9;
-const array<string> ST_NAMES = {"BALANCED", "ARTY", "STEALTH", "AIR", "FAST", "T3", "NUKE", "SHIELD", "SCOUT"};
-const array<int> ST_PLAN = {-1, NG_ARTY, -1, NG_AIR, -1, NG_T3, NG_MISSILE, NG_MASS, -1};
-const array<int> ST_KEY = {-1, PD_CLASS + LC_REACH, -1, PD_AIR, PD_FAST, PD_TECH, PD_TECH, PD_CLASS + LC_TANK, PD_SCOUT};
-const array<float> ST_DRAW_W = {2.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
+const int ST_SHIELD = 7, ST_SCOUT = 8, ST_RUSH = 9, ST_N = 10;
+const array<string> ST_NAMES = {"BALANCED", "ARTY", "STEALTH", "AIR", "FAST", "T3", "NUKE", "SHIELD", "SCOUT", "RUSH"};
+const array<int> ST_PLAN = {-1, NG_ARTY, -1, NG_AIR, -1, NG_T3, NG_MISSILE, NG_MASS, -1, NG_RUSH};
+const array<int> ST_KEY = {-1, PD_CLASS + LC_REACH, -1, PD_AIR, PD_FAST, PD_TECH, PD_TECH, PD_CLASS + LC_TANK, PD_SCOUT, PD_AGGR};
+// TEAM STRATEGIES ONLY (his 11-02): FAST, SHIELD and SCOUT are seat personalities, never drawn for the team (still forceable).
+const array<float> ST_DRAW_W = {2.f, 1.f, 1.f, 1.f, 0.f, 1.f, 1.f, 0.f, 0.f, 1.f};
 const float STYLE_AMP = 3.5f;
 const float PERS_PRESSURE = 1.5f;
 const int PB_STYLE = 9200, PB_GEN = 9201, PB_C = 9202, PB_USED = 9203, PB_AT = 9204, PB_R = 9205, PB_RT = 9206, PB_RA = 9207, PB_RA0 = 9208;
@@ -193,7 +194,7 @@ bool PsFitsReady()
 // a style is open when something its key fit names is in our own build tree and the game allows it
 int PsAvailMask()
 {
-	int mask = 1 << ST_BALANCED;
+	int mask = (1 << ST_BALANCED) | (1 << ST_RUSH);
 	const uint n = PsN();
 	for (int s = 1; s < ST_N; ++s) {
 		for (uint u = 1; u < n; ++u) {
@@ -426,7 +427,7 @@ void PsSetStyle(int s, int used, float ra0, const string &in why)
 	if ((ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE) < 0.f) && !PlanFromPriceOn()) {
 		if (plan >= 0)
 			PlanSet(plan, "team style");
-		else if ((gPlan != NG_NORMAL) && (gen > 1))
+		else if (gPlan != NG_NORMAL)
 			PlanSet(NG_NORMAL, "team style");
 	}
 }
@@ -606,6 +607,7 @@ void PersTick()
 	PsPublish();
 	PsLead();
 	PsFollow();
+	PersPlaceTick();
 	if (gStyleGen > 0)
 		PsStat();
 }

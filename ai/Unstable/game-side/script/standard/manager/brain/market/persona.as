@@ -6,7 +6,7 @@ namespace Market {
 const float PERS_SEAT_AMP = 2.f;
 const float PERS_AGGR_AMP = 1.5f;
 const int PD_AIR = 0, PD_TECH = 1, PD_AGGR = 2, PD_CLASS = 3, PD_FAST = PD_CLASS + LC_N, PD_SCOUT = PD_FAST + 1;
-const int PD_BOMB = PD_SCOUT + 1, PD_GUN = PD_BOMB + 1, PD_FIGHT = PD_GUN + 1, PD_N = PD_FIGHT + 1;
+const int PD_BOMB = PD_SCOUT + 1, PD_GUN = PD_BOMB + 1, PD_FIGHT = PD_GUN + 1, PD_TURTLE = PD_FIGHT + 1, PD_N = PD_TURTLE + 1;
 array<float> gPd(PD_N, 0.f);
 int gPdOn = -1;
 
@@ -23,6 +23,42 @@ void PersSeatDraw(int keyDial)
 		gPd[i] = float(AiRandom(0, 20000)) / 10000.f - 1.f;
 	if ((keyDial >= 0) && (keyDial < PD_N))
 		gPd[keyDial] = abs(gPd[keyDial]);
+	gPdTurtleRaw = gPd[PD_TURTLE];
+	gPd[PD_TURTLE] = 0.f;
+	if (gPdPlaced)
+		PersPlace();
+}
+
+// THE SEAT'S PLACE PICKS ITS TYPE (his 11-02): the front player likes shields and defences, the back player air,
+// the middle the army -- only on a team with a front, a middle and a back (a lone seat is no turtle). Applied once
+// the team's homes are known (30 s; at the first draw every seat read as the front), and on every redraw after.
+bool gPdPlaced = false;
+float gPdTurtleRaw = 0.f;
+void PersPlace()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	int seats = 0;
+	if (mates !is null)
+		for (uint i = 0; i < mates.length(); ++i)
+			if (TtAlive(int(mates[i])))
+				++seats;
+	const float ex = TeamExposure();
+	gPd[PD_TURTLE] = -abs(gPdTurtleRaw);
+	if ((seats >= 3) && (ex >= 2.f / 3.f))
+		gPd[PD_TURTLE] = abs(gPdTurtleRaw);
+	else if ((seats >= 3) && (ex <= 1.f / 3.f))
+		gPd[PD_AIR] = abs(gPd[PD_AIR]);
+	if ((seats >= 3) && (ex > 1.f / 3.f) && (ex < 2.f / 3.f))
+		gPd[PD_TURTLE] = gPdTurtleRaw;
+}
+
+void PersPlaceTick()
+{
+	if (gPdPlaced || !PersOn() || (ai.frame < 30 * SECOND))
+		return;
+	gPdPlaced = true;
+	PersPlace();
+	AiLog("apex: persona-seat t=" + ai.teamId + " exposure=" + NnF(TeamExposure(), 2) + " " + PersSeatLine());
 }
 
 string PersSeatLine()
@@ -31,7 +67,7 @@ string PersSeatLine()
 		+ " tank=" + NnF(gPd[PD_CLASS + LC_TANK], 2) + " mid=" + NnF(gPd[PD_CLASS + LC_MID], 2)
 		+ " reach=" + NnF(gPd[PD_CLASS + LC_REACH], 2) + " dps=" + NnF(gPd[PD_CLASS + LC_DPS], 2)
 		+ " fast=" + NnF(gPd[PD_FAST], 2) + " scout=" + NnF(gPd[PD_SCOUT], 2) + " bomb=" + NnF(gPd[PD_BOMB], 2)
-		+ " gun=" + NnF(gPd[PD_GUN], 2) + " fight=" + NnF(gPd[PD_FIGHT], 2);
+		+ " gun=" + NnF(gPd[PD_GUN], 2) + " fight=" + NnF(gPd[PD_FIGHT], 2) + " turtle=" + NnF(gPd[PD_TURTLE], 2);
 }
 
 float PersMul(int dial)
@@ -77,7 +113,7 @@ float PersWantMul(Want@ w)
 		return PsSenseLean(d) * (Catalog::gRadar[d] ? PersMul(PD_SCOUT) : 1.f);
 	// shield domes and the defensive layer (the shield style's fits; every other style fits none of them)
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_AIRDEF))
-		return PsUnitLean(d);
+		return PsUnitLean(d) * PersMul(PD_TURTLE);
 	return 1.f;
 }
 
