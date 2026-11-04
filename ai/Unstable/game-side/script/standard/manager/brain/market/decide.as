@@ -1572,7 +1572,7 @@ void ElecLog()
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
-		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comEscMetalSkip=" + gComEscMetalSkip + " comEscStallSkip=" + gComEscStallSkip + " comLabLeft=" + gComLabLeft + " comLabIdle=" + gComLabIdle + " comFlips=" + gComFlips + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
+		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comHomeAssist=" + gComHomeAssist + "/" + gComHomeAssistAsk + " comHomeNone=" + gComHomeNone + " comEscMetalSkip=" + gComEscMetalSkip + " comEscStallSkip=" + gComEscStallSkip + " comLabLeft=" + gComLabLeft + " comLabIdle=" + gComLabIdle + " comFlips=" + gComFlips + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
@@ -1604,6 +1604,8 @@ int gNextRefLog = 0;
 const int REFUSAL_MEMO_S = 45;
 
 int gPlantRefLogAt = 0;
+const float COM_HOME_REACH = 1400.f;   // WRDistilled's COMMANDER_WALK
+int gComHomeAssistAsk = 0, gComHomeAssist = 0, gComHomeNone = 0;
 void NoteRefused(CCircuitUnit@ unit, Want@ w)
 {
 	const int did = (w.def is null) ? -1 : int(w.def.id);
@@ -3244,6 +3246,57 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	Perf::Add("dec.draw", _tDraw);
 	NnTechPicked(ranked);
+	// TUNE_COM_HOME_ASSIST (his 11-03, against WRDistilled: their commander helps the plant at home while ours
+	// walked 2,500 out for extractors; their army 5-9x ours from minute 8): past the first plant he takes no job
+	// farther than COM_HOME_REACH from home -- every such want leaves the list, so a refusal cannot fall through
+	// to one -- and when the job chosen was one, the nearest lab with a queue is his job. After the draw: before
+	// it the top want is usually near home and the draw then picks the far extractor.
+	if ((ranked.length() > 0) && !aaPanic && unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (ai.GetTunable("apex_com_home_assist", TUNE_COM_HOME_ASSIST) > 0.f)
+		&& (Factory::gFacUnits.length() > 0) && Builder::gHomeSet)
+	{
+		const bool topFar = OnMap(ranked[0].pos) && (ranked[0].pos.distance2D(Builder::gHomePos) > COM_HOME_REACH);
+		array<Want@> nearW;
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (!OnMap(ranked[ri].pos) || (ranked[ri].pos.distance2D(Builder::gHomePos) <= COM_HOME_REACH))
+				nearW.insertLast(ranked[ri]);
+		}
+		if (topFar) {
+			++gComHomeAssistAsk;
+			CCircuitUnit@ lab = null;
+			float labD = 1e30f;
+			for (uint fi = 0; fi < Brain::gFQFac.length(); ++fi) {
+				CCircuitUnit@ f = Brain::gFQFac[fi];
+				if ((f is null) || (f.CountQueued(null) <= 0))
+					continue;
+				const float fd = Builder::gHomePos.distance2D(f.GetPos(ai.frame));
+				if (fd < labD) {
+					labD = fd;
+					@lab = f;
+				}
+			}
+			if (lab !is null) {
+				Want@ aw = Want();
+				aw.kind = WK_ASSIST;
+				aw.pos = lab.GetPos(ai.frame);
+				aw.spotId = int(lab.id);
+				aw.gain = 1.f;
+				aw.mCost = 1.f;
+				aw.tCost = 1.f;
+				aw.value = 0.5f;
+				@gAssistTarget = lab;
+				gAssistTargetId = lab.id;
+				gAssistGuardS = 60;
+				nearW.insertAt(0, aw);
+				++gComHomeAssist;
+			}
+			why = "comhome";
+		}
+		if (nearW.length() > 0)
+			ranked = nearW;
+		else
+			++gComHomeNone;
+	}
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Only an emergency takes a hand off a job it is on: the stall, the

@@ -350,6 +350,8 @@ local NAMES = {
 	"apex_budget_hold",      -- budget.as + production.as con floors/builder price + decide.as hoists: orders that skip the budget's draw pay mult(row)/mult(army) while army is under its share (0)
 	"apex_small_hard",       -- smallhard.as + army.as ArmyFloor + production.as + nnraid.as + plannet.as TaPick + want_assist.as + comdecide.as: short path contact prices army to their strength at arrival, starves their extractors (0)
 	"apex_com_home",         -- comhome.as + decide.as ChargeTrip + want_assist.as + comdecide.as + comship.as + safety.as: the commander's time off the lab priced as army owed, his fight estimate fixed, the base he defends, his walk-ins priced (0)
+	"apex_com_home_assist",  -- decide.as: past the first plant the commander takes no job farther than 1,400 from home; a far choice becomes the lab (0)
+	"apex_plant_free",       -- want_plant.as CopyWaived: a plant copy is never refused (0)
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
 	"apex_open_race",        -- openrace.as + production.as con floor/e-stall + budget.as hold ledger + DefendTask/GuardTask.cpp catchability: con vs fighter on one clock (0)
 	"apex_eco_return",       -- ecoreturn.as + want_energy.as ProposeConvert/ProposeEnergy + price.as ERealizeShare/ValueOf + want_mex.as + smallhard.as/rush.as/army.as/budget.as: eco by return at the energy available, army extras by the threat arriving (0)

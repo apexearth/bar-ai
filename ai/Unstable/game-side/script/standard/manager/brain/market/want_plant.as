@@ -696,7 +696,7 @@ bool NanoBlockFull(int d)
 
 bool CopyWaived(int d)
 {
-	if (AirPlantOwed(d))
+	if (AirPlantOwed(d) || (ai.GetTunable("apex_plant_free", TUNE_PLANT_FREE) > 0.f))
 		return true;
 	// NANOS FIRST, ALWAYS (his rule, restated 2026-09-30 after an overflow
 	// waiver skipped it: "make some nanoturrets around the factories before
@@ -713,23 +713,6 @@ bool CopyWaived(int d)
 			return true;
 	}
 	return WealthWaiver() && LinesAllWorking(d);
-}
-
-// A copy bought to MOVE a walled-in plant (the reclaim market's move law):
-// the twin is the vacancy's successor, not a duplicate.
-array<int> gMoveWaivedAt;
-void NoteMoveWaived(int d)
-{
-	while (int(gMoveWaivedAt.length()) <= d)
-		gMoveWaivedAt.insertLast(-1000000);
-	gMoveWaivedAt[d] = ai.frame;
-	NoteCopyWaived(d);
-}
-bool MoveWaived(int d)
-{
-	if ((d < 0) || (d >= int(gMoveWaivedAt.length())))
-		return false;
-	return (ai.frame - gMoveWaivedAt[d]) < 30 * SECOND;
 }
 
 // A copy bought under the waiver is SAFE FROM THE RETIRE LAW for the replant
