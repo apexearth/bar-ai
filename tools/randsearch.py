@@ -40,7 +40,7 @@ RESTART = os.path.join(neuro.NN, "rand_restart")
 # his 10-14: three opponents and 1v1/2v2/4v4 ("variation here is good", team games bring air); WRDistilled
 # is built for 1v1 only. Game i of every network plays SETUPS[i % 12], so each rung's record is the same
 # mix for every network. Records before 10-14 played WRDistilled 1v1 only (rand-barb-20261013.json: BARb hard 1v1).
-WRD, HARD, AGG = "WRDistilled:0.2", "BARb:stable:hard", "BARb:stable:hard_aggressive"
+WRD, HARD, AGG = "WRDistilled:0.3", "BARb:stable:hard", "BARb:stable:hard_aggressive"
 SETUPS = [
     (1, "Comet Catcher Remake 1.8", WRD), (2, "Glacier Pass", HARD), (4, "Comet Catcher Remake 1.8", AGG),
     (1, "Comet Catcher Remake 1.8", HARD), (2, "Frozen_Ford_V2", AGG), (4, "Ice Scream v2.5.2", HARD),

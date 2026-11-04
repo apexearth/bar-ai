@@ -484,7 +484,7 @@ bool PlantCopyRefusable(int d)
 		&& !UnlocksProduct(d)
 		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) >= 1)
 		&& (DupBpSubstMul(d) < 1.f)
-		&& !CopyWaived(d);
+		&& !CopyWaived(d) && !MoveWaived(d);
 }
 
 int gRezSiteRefused = 0;

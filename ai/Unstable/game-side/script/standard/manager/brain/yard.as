@@ -348,7 +348,20 @@ void YardWatch()
 	// Twice the crossing limit is seconds for a hover; the plant is a last
 	// resort, so it waits at least as long as a penned unit's test does.
 	const int eatAfter = (2 * limit > Military::UNBLOCK_STILL) ? (2 * limit) : Military::UNBLOCK_STILL;
-	if ((structs == 0) && (age >= eatAfter) && (now - gYpNamedAt[s] >= 2 * limit)) {
+	// His 11-04: the plant goes only once Market::PlantReplaced; until then the units on its footprint
+	// are eaten instead (on Comet the first lab went at 9.0 min over one unit standing in it).
+	if ((structs == 0) && (age >= eatAfter) && (now - gYpNamedAt[s] >= 2 * limit)
+		&& !Market::PlantReplaced(fac))
+	{
+		++gYdTerrain;
+		for (uint i = 0; i < inside.length(); ++i) {
+			const int n = NanosEat(inside[i], int(inside.length() - i));
+			if (n > 0) {
+				++gYdUnitEat;
+				ate += " " + inside[i].circuitDef.GetName() + "x" + n;
+			}
+		}
+	} else if ((structs == 0) && (age >= eatAfter) && (now - gYpNamedAt[s] >= 2 * limit)) {
 		++gYdTerrain;
 		const int n = NanosEat(fac, 1);
 		if (n > 0) {
