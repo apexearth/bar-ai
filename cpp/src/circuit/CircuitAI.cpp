@@ -3741,9 +3741,7 @@ bool CCircuitAI::IsPosOnMap(const AIFloat3& pos) const
 //
 // File_getContent routes to CFileHandler with none of the alliance gating that
 // makes Game_getTeamResourceIncome useless (see GetTeamMetalIncome), so an AI
-// can read the same configs the gadgets read. This is how the lava tide's own
-// schedule becomes knowable at frame 0 instead of being learned a crest at a
-// time: manager/lava.as parses it.
+// can read the same configs the gadgets read (script: ai.ReadVfsFile).
 //
 // Empty string on any failure, including a file that is not there -- callers
 // must treat that as "no answer", never as "empty config".
