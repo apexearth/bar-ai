@@ -14,7 +14,6 @@ description: Where buildings land — base bands, nano gravity, the advsol pack,
 | Where a plant (gantry, air plant, tech lab) lands | `LatheSite`: one probe per nano block, the legal footprint scored on standing lathe PLUS room for the ring the line is due (`RoomBPAt`: `PackSlots` in probe mode, capped at `NanosDueFor` -- his 2026-09-20: not against a wall with no room for turrets, preferably where turrets already stand), snapped to the cell C++ keeps; a ground plant's doorway must face out; the interior site is the fallback. Log `apex: lathe-site ... stand= room= due=` | `brain/market/sites.as` |
 | The nano core | `PackSlots` walks from the plant's heart-facing edge (`PackHeart`), resumes where the last slice stopped (`PackResume`) -- one turret core, plants on its rim | `brain/market/nanopack.as` |
 | A plant the core swallowed | moves: priced in the reclaim market as room (footprint + doorway) against the line's downtime, `PlantEnclosure` = least-filled of beyond-doorway and both flanks; `retire=false` so the re-buy is not discounted. Log `apex: plant-walled` | `brain/market/want_reclaim.as` |
-| Advsol pack | Requests chokepoint: advanced solars are STRICTLY SERIAL whatever the bank (`apex_advsol_serial`) — a second asker folds onto the live site through `JoinFor` instead of opening another, and the pack rule keeps them adjacent | `builder/requests/governed.as` (`EffectiveCap`) |
 | Nano turret sites | `ExecuteWant`'s `WK_NANO` branch: the working army line furthest short of its ceiling-weighted flow share NET of the lathe already on it (`LineSiteFor`, 09-18 -- `NeediestLine`'s floored number is the count's currency and ties every line once the economy is spending, tie = oldest lab), a sink frame only while positive, a bare reactor frame over a served line, else the biggest line | `brain/market/execute.as` |
 | The lattice itself | `CCircuitAI::LatticeOf`: per def, world axes, pitch = footprint, phase = the base anchor's CORNER (so 6-cell labs and 3-cell nanos share edge lines). Snapping is idempotent -- the parity is in the phase, not applied after rounding. Applies everywhere on the map, not only inside `GRID_RANGE`. Script asks `ai.SnapToLattice(def, pos)`; there is no script-side copy of the rounding | `CircuitAI.cpp`, `manager/lattice.as` |
 | A taken lattice slot | C++ `IBuilderTask::Execute`: rings of the def's lattice (`LatticeNeighbour`, 8 rings / 200 probes, nearest free first, each probe ONE build square wide with the commit's own predicate) before the 1600-elmo square search -- and the square search's answer is put back on the lattice (its cell or a neighbour); only when none is free does a building stand off the row, logged `apex: off-lattice`. `CBNanoTask` used to override this with a private square search: that was the "nano one space away" | `cpp/.../BuilderTask.cpp`, `NanoTask.cpp` |
@@ -52,7 +51,7 @@ description: Where buildings land — base bands, nano gravity, the advsol pack,
 
 ## Tunables
 
-`apex_advsol_serial` · `apex_dup_bank` · `apex_reactor_spacing/tight`
+`apex_dup_bank` · `apex_reactor_spacing/tight`
 
 (Six placement knobs this skill used to list were deleted 2026-08-31 — `git log
 -p` on this file has the names. `tools/dashboard_audit.py` is the live list;

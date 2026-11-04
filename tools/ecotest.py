@@ -3,7 +3,7 @@
 
     python tools/ecotest.py                         # lane c9, 20 min, seed 1
     python tools/ecotest.py --lane watch --minutes 16
-    python tools/ecotest.py --ai-option apex_lab_rate=1 --out matches/eco/lab-rate
+    python tools/ecotest.py --ai-option apex_<name>=1 --out matches/eco/<name>
     python tools/ecotest.py --read matches/eco/canon20b   # re-read a finished run
 
 His reference (memory canon-eco-game, from his 2026-09-08 demo): 1v1 vs NullAI on Comet Catcher Remake 1.8,

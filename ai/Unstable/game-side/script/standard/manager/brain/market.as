@@ -49,9 +49,7 @@
 #include "market/persona_style.as"  // the team's style: drawn hidden from what the game allows, fades when it trades badly
 #include "market/calib.as"          // calibration: the risk each finished structure was priced at (apex: calib-born)
 #include "market/land.as"           // land value: rent from the neighbours' metal per cell (apex_land_value)
-#include "market/yield.as"          // line yield: enemy metal destroyed per metal spent, per type and lab (apex_line_yield)
 #include "market/rush.as"           // their army racing a big investment of ours: floor and tech price
-#include "market/pressure.as"       // short contact: shorter horizon, team push, contest their expansions
 #include "market/mapshare.as"       // under our share of the extractor spots: army nudge, aggression, claim value
 #include "market/smallhard.as"      // short path contact: army to their strength at arrival, starve their extractors
 #include "market/earlyball.as"      // short contact: the cheap fast ball priced by the base it razes, sent whole; field watch; air scouts
@@ -73,7 +71,6 @@
 #include "market/protect_shelled.as"    // the shelled census: long-range fire on our statics, and the jammer under it
 #include "market/protect_knot.as"       // knots of mutual support, and the bearing they face
 #include "market/protect_fill.as"       // DefSiteFill: every site's prevented loss, cached per def
-#include "market/protect_teeth.as"      // the choke-teeth Want
 #include "market/protect_senseprice.as" // radar/jam/shield/AA/targfac prices
 #include "market/aathreat.as"       // apex_aa_threat: AA sized and sited where their air hurts us
 #include "market/protect_refill.as"     // a gun the enemy killed: the same gun back on its gap

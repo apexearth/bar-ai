@@ -429,16 +429,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (sp > 0)
 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
 	}
-	if (StockCtl(unit) || (StockEscortOn() && StockDef(unit.circuitDef))) {
-		// TUNE_STOCK_ESCORT: the escort duty stands under the stock army; off it, back to stock
-		if (StockEscortOn()) {
-			unit.SetScriptFree(false);
-			IUnitTask@ et = JwJoinable(EscortElect(unit, unit.circuitDef, true), unit);
-			if (et !is null)
-				return NoteElect("escort", et);
-		}
+	if (StockCtl(unit))
 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
-	}
 	const CCircuitDef@ cdef = unit.circuitDef;
 	MarkSpearhead(cdef);
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask

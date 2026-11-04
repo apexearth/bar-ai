@@ -692,8 +692,6 @@ int NanosDueFor(int did, int nanoDef)
 	return (bp > 0.f) ? int(ceil(bp / Catalog::gBuildPower[nanoDef])) : 0;
 }
 
-bool BigNearOn() { return ai.GetTunable("apex_big_near", TUNE_BIG_NEAR) > 0.f; }
-
 float RoomBPAt(int did, int nanoDef, int due, const AIFloat3& in s)
 {
 	if (due <= 0)
@@ -718,13 +716,6 @@ bool LatheDepthOk(int did, bool plant, const AIFloat3& in s)
 }
 
 int gLatheDepthRefused = 0;
-int gLcOn = -1;
-bool LatheConcentrate()
-{
-	if (gLcOn < 0)
-		gLcOn = (ai.GetTunable("apex_lathe_concentrate", TUNE_LATHE_CONCENTRATE) > 0.f) ? 1 : 0;
-	return gLcOn > 0;
-}
 
 // A SITE IS THE TEAM'S ANSWER, NOT THE ASKER'S. LatheSite (7.8 ms) and SuperSite (6.1 ms) were walked
 // afresh for every hand that priced the same plant: his 8v8, 1,089 and 1,490 calls. Kept one memo
@@ -912,7 +903,7 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			best = s0;
 			bestStand = RingBPAt(s0);
 			bestRoom = RoomBPAt(did, nanoDef, due, s0);
-			bestBP = (bestStand + bestRoom) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s0, NanoRange())));
+			bestBP = (bestStand + bestRoom) / float(1 + RisingNear(s0, NanoRange()));
 			interiorBP = bestBP;
 		}
 	}
@@ -931,11 +922,8 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		if (doorway)
 			ask = ask + exitDir * r;
 		else if (BigEcoDef(did)) {
-			// ...and under apex_big_near half a reach in, inside the block's cover: asked at the full reach the site
-			// stood at the edge of it (his 10-22 watch: AFUS with 19-51 turrets in reach while ~470 stood idle)
-			const float off = BigNearOn() ? (0.5f * r) : r;
-			ask = (Military::ForwardFraction(ask - exitDir * off) <= Military::ForwardFraction(ask + exitDir * off))
-				? ask - exitDir * off : ask + exitDir * off;   // a generator takes the block's back edge
+			ask = (Military::ForwardFraction(ask - exitDir * r) <= Military::ForwardFraction(ask + exitDir * r))
+				? ask - exitDir * r : ask + exitDir * r;   // a generator takes the block's back edge
 		}
 		const double _tF = Perf::T0();
 		AIFloat3 raw = ai.FindBuildSiteNear(def, ask, r * 2.f);
@@ -968,25 +956,14 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 			++doorRefused;
 			continue;
 		}
-		// The ring's lathe over the frames already rising in it: several
-		// groups, one build beside each -- or, concentrated (TUNE_LATHE_CONCENTRATE, his 10-18: build what is
-		// important, not many things at once; we waste a lot of room), the richest lathe whatever rises there.
+		// The ring's lathe over the frames already rising in it: several groups, one build beside each.
 		++fits;
 		const double _tR = Perf::T0();
 		const float stand = RingBPAt(s);
 		float room = RoomBPAt(did, nanoDef, due, s);
 		if (_tR > 0.0)
 			_lsRoom += ai.ClockUs() - _tR;
-		// room is worth only the turrets the site is still short of: ground beside standing turrets is not worth less
-		// than empty ground with space for them (apex_big_near)
-		if (BigNearOn() && Catalog::ValidId(nanoDef)) {
-			float shortBP = float(due) * Catalog::gBuildPower[nanoDef] - stand;
-			if (shortBP < 0.f)
-				shortBP = 0.f;
-			if (room > shortBP)
-				room = shortBP;
-		}
-		const float bp = (stand + room) / float(1 + (LatheConcentrate() ? 0 : RisingNear(s, r)));
+		const float bp = (stand + room) / float(1 + RisingNear(s, r));
 		if (fromBlock)
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z) + ":block-fit@"
 				+ int(s.x) + "," + int(s.z) + "/" + int(bp);

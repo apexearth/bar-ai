@@ -1200,15 +1200,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			// fallback, cached as before -- an asker that finds no packed
 			// cell must still be able to place somewhere rather than idle.
 			const AIFloat3 raw = OnMap(slot) ? slot : w.pos;
-			array<AIFloat3> flush1;
-			if (NanoFlushOn() && (FlushNanoCells(int(w.def.id), raw, 1, flush1) > 0)) {
-				gNanoSite = flush1[0];
-				gNanoSiteAt = ai.frame;
-				gNanoSiteKey = -1;
-			}
 			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1;
-			if ((flush1.length() == 0) && (nk != gNanoSiteKey)
-				|| (ai.frame - gNanoSiteAt >= 2 * SECOND))
+			if ((nk != gNanoSiteKey) || (ai.frame - gNanoSiteAt >= 2 * SECOND))
 			{
 				gNanoSiteKey = nk;
 				gNanoSiteAt = ai.frame;
@@ -1335,8 +1328,6 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 							askK = 1;
 						array<AIFloat3> packK;
 						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
-						if (NanoFlushOn() && (int(packK.length()) < askK))
-							FlushNanoCells(int(w.def.id), baseK, askK - int(packK.length()), packK);
 						if (nLines > 0)
 							NoteNanoDry(anchorK, packK.length() == 0);
 						// No factory standing leaves the anchor at -1.
@@ -1391,14 +1382,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// two things at once: a deficit nothing in flight will cover is the other,
 	// and it is the one that mattered, because a stall guarantees the bank is
 	// NOT overflowing and so guaranteed the answer was serialized.
-	// Energy short of what is ordered AND a bank that covers the rung: the
-	// metal is there to feed a second site. MCostScale reads 1 in a stall
-	// (requests outrun income while the bank sits at 90%), so the parallel
-	// flag was off exactly when the deficit needed it.
+	// A deficit AND a bank that covers the rung: the metal is there to feed a second site.
 	bool par = (MCostScale() < 1.f)
-			|| ((w.kind == WK_ENERGY) && (EnergyShortOfOrdered()
-				|| ((EnergyDeficitE() > 0.f) && (w.def !is null)
-					&& Requests::BankCovers(w.def))));
+			|| ((w.kind == WK_ENERGY) && (EnergyDeficitE() > 0.f) && (w.def !is null)
+				&& Requests::BankCovers(w.def));
 	// ...and OVERFLOWING ENERGY opens them for the one building that exists to
 	// absorb it. The test above reads the METAL side only -- MCostScale is a
 	// metal stall -- so a converter, whose entire trigger is energy we are

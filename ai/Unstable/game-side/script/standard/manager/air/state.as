@@ -590,10 +590,9 @@ float StrikeGainWing(int d, float fillSec)
 	return MarginalGain(d, held) / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
-// apex_air_rich, or this seat's coin while its trial runs (manager/trial.as; v0.3.8 shipped it as a trial).
 bool AirRichOn()
 {
-	return Trial::On("air_rich", TUNE_AIR_RICH, TUNE_TRIAL_AIR_RICH);
+	return ai.GetTunable("apex_air_rich", TUNE_AIR_RICH) > 0.f;
 }
 
 // The trial's footprint, counted where planes and plants finish: every bomber, the ones that came in while the
@@ -614,18 +613,6 @@ void TrialNoteFinished(CCircuitUnit@ unit)
 			if (!gun && !AirEcoBarMet())   // the bar gates strike planes only; gunships come through the army market
 				Trial::Note("air_eco_priced", "belowBar", 1.f);
 		}
-	}
-	if (!Trial::Running("air_rich", TUNE_TRIAL_AIR_RICH))
-		return;
-	AirRichOn();   // registers the coin before the first minute's line
-	const int d = int(unit.circuitDef.id);
-	if (IsBomberDef(d)) {
-		Trial::Note("air_rich", "bombers", 1.f);
-		if (HeldBombers() > ScaledBombers())
-			Trial::Note("air_rich", "pastCount", 1.f);
-	} else if (Catalog::ValidId(d) && !Catalog::gMobile[d] && (Catalog::gBuildPower[d] > 0.f)
-		&& (unit.circuitDef.GetName().findFirst("aap") >= 0)) {
-		Trial::Note("air_rich", "advAirPlants", 1.f);
 	}
 }
 

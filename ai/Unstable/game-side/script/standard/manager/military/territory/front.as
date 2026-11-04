@@ -317,9 +317,6 @@ void RebuildRing(const AIFloat3& in home)
 	// outright also stops the ring closing on itself, which is what wrapped the
 	// drawn line around our own half of the map.
 	//
-	// apex_front_rear_arc=1 restores the full ring for a genuinely surrounded
-	// base.
-	const bool rearToo = ai.GetTunable("apex_front_rear_arc", TUNE_FRONT_REAR_ARC) > 0.f;
 	AIFloat3 toEnemy = aiEnemyMgr.GetEnemyPos() - home;
 	const bool haveBearing = toEnemy.SqLength2D() > NEAR_ZERO;
 	const float sep = haveBearing ? sqrt(toEnemy.SqLength2D()) : 0.f;
@@ -346,7 +343,7 @@ void RebuildRing(const AIFloat3& in home)
 	for (int r = 0; r < FRONT_RAYS; ++r) {
 		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
-		if (!rearToo && haveBearing
+		if (haveBearing
 			&& ((dir.x * toEnemy.x + dir.z * toEnemy.z) <= 0.f))
 		{
 			gRayR.insertLast(reach);

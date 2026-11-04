@@ -107,7 +107,6 @@ void CrewExecNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, int leader)
 		@gIncTask[uid] = t;
 		gIncVal[uid] = w.value / w.nnMult;
 		gIncGain[uid] = w.gain;
-		gIncAlone[uid] = false;
 	}
 }
 

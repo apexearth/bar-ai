@@ -273,16 +273,6 @@ uint InFlightCap()
 // site is never blocked; this only serializes duplicates.
 uint EffectiveCap(const CCircuitDef@ want)
 {
-	// ADVANCED SOLARS ARE STRICTLY SERIAL, whatever the bank. apexearth
-	// 2026-08-21: "A new advanced solar order should not be wanted while we
-	// already have one being fulfilled." The pack rule keeps them adjacent;
-	// the ORDER is one at a time -- a second asker folds onto the live one
-	// through JoinFor and helps finish it instead of opening another.
-	if (ai.GetTunable("apex_advsol_serial", TUNE_ADVSOL_SERIAL) > 0.f) {
-		const string n = want.GetName();
-		if ((n == "armadvsol") || (n == "coradvsol") || (n == "legadvsol"))
-			return 1;
-	}
 	uint cap = InFlightCap();
 	// The cap is a metal-feed cap; with metal being wasted the feed is not the
 	// limit, the hands are.

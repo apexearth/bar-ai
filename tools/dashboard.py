@@ -505,11 +505,10 @@ def lift(d):
 ECODEF_RE = re.compile(
     r"\[f=(\d+)\].*apex: ecodef-stat t=(\d+) on=(\d+) radar=(\d+) gOld=([\d.]+) gNew=([\d.]+) "
     r"djOffer=(\d+) djWin=(\d+) djNoGain=(\d+) djV=([\d.]+) fieldDraw=(\d+) fieldWin=(\d+) "
-    r"covOffer=(\d+) covWin=(\d+) bfOffer=(\d+) bfWin=(\d+) covNoPrice=(\d+) danger=([\d.]+) "
-    r"threat=(-?\d+) meet=(-?\d+)")
+    r"covOffer=(\d+) covWin=(\d+) bfOffer=(\d+) bfWin=(\d+) covNoPrice=(\d+)")
 ECODEF_KEYS = ["on", "radar", "gOld", "gNew", "djOffer", "djWin", "djNoGain", "djV",
                "fieldDraw", "fieldWin", "covOffer", "covWin", "bfOffer", "bfWin", "covNoPrice",
-               "danger", "threat", "meet", "sdjFired", "sdjPriced", "sdjAgree"]
+               "sdjFired", "sdjPriced", "sdjAgree"]
 SHADOW_DJ_RE = re.compile(r"apex: shadow-defjoin t=(\d+) .* all=(\d+)/(\d+)/(\d+)")
 
 

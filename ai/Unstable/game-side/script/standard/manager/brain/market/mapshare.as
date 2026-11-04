@@ -259,7 +259,7 @@ void MapShareUpdate()
 	if (!gMsOn || (ai.frame < gMsLogAt))
 		return;
 	gMsLogAt = ai.frame + 60 * SECOND;
-	const float before = ArmyTargetBase() * gPressHoldMul;
+	const float before = ArmyTargetBase();
 	AiLog(Factory::T() + "apex: mapshare-stat t=" + ai.teamId
 		+ " ours=" + gMsOurs + " foe=" + gMsFoe + " spots=" + gMsSpots
 		+ " share=" + formatFloat(gMsShare, "", 0, 2)

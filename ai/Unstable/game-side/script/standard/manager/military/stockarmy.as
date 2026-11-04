@@ -16,9 +16,9 @@ bool StockArmy()
 	return gSaOn > 0;
 }
 
-// HOW HARD THE ARMY PICKS ITS FIGHTS (apex_attack_mod; his 10-24: "high aggression values on army"): the threat
+// HOW HARD THE ARMY PICKS ITS FIGHTS (his 10-24: "high aggression values on army"): the threat
 // multiplier an attack task counts the enemy at when it chooses a target. behaviour.json counts them at face value
-// (1.0); stock BARb ships 0.25-0.3. 0 leaves the config's; a plan may set its own for a strike (AttackModSet).
+// (1.0); stock BARb ships 0.25-0.3. A plan may set its own for a strike (AttackModSet).
 float gAttackModNow = -1.f;
 float gAttackModCfg = -1.f;   // behaviour.json's, read before anything set it
 void AttackModSet(float m)
@@ -39,8 +39,7 @@ void AttackModTick()
 	if ((Market::StrikePhase() != Market::SK_NONE) || (Market::DynModOn() > 0.f))
 		return;   // the strike phases or the balance set it (strike.as)
 	// 0 means the config's -- restored, not ignored: a strike's mod otherwise stood for the rest of the game
-	const float m = ai.GetTunable("apex_attack_mod", TUNE_ATTACK_MOD);
-	AttackModSet((m > 0.f) ? m : gAttackModCfg);
+	AttackModSet(gAttackModCfg);
 }
 
 // apex_our_air: under the stock army, aircraft stay ours (C++ CCircuitAI::IsOurAir)
@@ -89,17 +88,11 @@ bool StockCtl(CCircuitUnit@ u)
 	return StockArmy() && (u !is null) && StockDef(u.circuitDef);
 }
 
-bool StockEscortOn()
-{
-	return StockArmy() && (ai.GetTunable("apex_stock_escort", TUNE_STOCK_ESCORT) > 0.f);
-}
 
 // true: the layer stands down, counted under its tag
 bool StockQuiet(const string &in tag)
 {
 	if (!StockArmy())
-		return false;
-	if ((tag == "escort") && StockEscortOn())
 		return false;
 	for (uint i = 0; i < gSaTag.length(); ++i) {
 		if (gSaTag[i] == tag) {

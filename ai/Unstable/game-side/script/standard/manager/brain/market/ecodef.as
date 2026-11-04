@@ -4,7 +4,7 @@ namespace Market {
 // The counters below are what `apex: ecodef-stat` prints once a minute.
 
 bool gEdOnSet = false;
-bool gEdRadar = false, gEdDefJoin = false, gEdField = false, gEdCover = false, gEdDanger = false;
+bool gEdRadar = false, gEdDefJoin = false, gEdField = false, gEdCover = false;
 void EdLatch()
 {
 	if (gEdOnSet)
@@ -14,13 +14,11 @@ void EdLatch()
 	gEdDefJoin = ai.GetTunable("apex_defjoin_price", TUNE_DEFJOIN_PRICE) > 0.5f;
 	gEdField = ai.GetTunable("apex_field_priced", TUNE_FIELD_PRICED) > 0.5f;
 	gEdCover = ai.GetTunable("apex_cover_priced", TUNE_COVER_PRICED) > 0.5f;
-	gEdDanger = ai.GetTunable("apex_def_danger", TUNE_DEF_DANGER) > 0.5f;
 }
 bool RadarPriceOn() { EdLatch(); return gEdRadar; }
 bool DefJoinPriceOn() { EdLatch(); return gEdDefJoin; }
 bool FieldPricedOn() { EdLatch(); return gEdField; }
 bool CoverPricedOn() { EdLatch(); return gEdCover; }
-bool DefDangerOn() { EdLatch(); return gEdDanger; }
 
 // per builder id: the gain of the want its current task was elected on
 array<float> gIncGain(32001, 0.f);
@@ -39,7 +37,6 @@ float gEdDjV = 0.f;         // summed value x1000 of the offers
 int gEdFieldDraw = 0, gEdFieldWin = 0;
 int gEdCovOffer = 0, gEdCovWin = 0, gEdCovNoPrice = 0;
 int gEdBfOffer = 0, gEdBfWin = 0;
-float gEdDangerShare = 1.f, gEdThreat = 0.f, gEdMeet = 0.f;
 int gNextEdLog = 0;
 
 // DefJoinShadow (decide.as), per minute: `apex: shadow-defjoin`
@@ -121,7 +118,7 @@ void EcoDefLog()
 	EdLatch();
 	AiLog(Factory::T() + "apex: ecodef-stat t=" + ai.teamId
 		+ " on=" + (gEdRadar ? 1 : 0) + (gEdDefJoin ? 1 : 0) + (gEdField ? 1 : 0)
-			+ (gEdCover ? 1 : 0) + (gEdDanger ? 1 : 0)
+			+ (gEdCover ? 1 : 0)
 		+ " radar=" + gEdRadarN
 			+ " gOld=" + formatFloat((gEdRadarN > 0) ? gEdRadarOldG / float(gEdRadarN) : 0.f, "", 0, 2)
 			+ " gNew=" + formatFloat((gEdRadarN > 0) ? gEdRadarNewG / float(gEdRadarN) : 0.f, "", 0, 2)
@@ -129,9 +126,7 @@ void EcoDefLog()
 			+ " djV=" + formatFloat((gEdDjOffer > 0) ? gEdDjV / float(gEdDjOffer) : 0.f, "", 0, 2)
 		+ " fieldDraw=" + gEdFieldDraw + " fieldWin=" + gEdFieldWin
 		+ " covOffer=" + gEdCovOffer + " covWin=" + gEdCovWin
-		+ " bfOffer=" + gEdBfOffer + " bfWin=" + gEdBfWin + " covNoPrice=" + gEdCovNoPrice
-		+ " danger=" + formatFloat(gEdDangerShare, "", 0, 2)
-			+ " threat=" + int(gEdThreat) + " meet=" + int(gEdMeet));
+		+ " bfOffer=" + gEdBfOffer + " bfWin=" + gEdBfWin + " covNoPrice=" + gEdCovNoPrice);
 	DefJoinShadowLog();
 }
 

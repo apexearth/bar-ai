@@ -32,7 +32,6 @@ array<int> gCombatId;
 array<int> gCombatSent;      // frame we last ordered this unit back
 array<int> gCombatBucket;    // last observed task bucket, for transition tags
 int gNextWithdraw = 0;
-int gNextTaskAbort = 0;
 int gWithdrawn = 0;
 int gHeldCommitted = 0;
 int gHeldGround = 0;
@@ -696,35 +695,6 @@ void UpdateWithdraw()
 					}
 				}
 			}
-		}
-		// A LOST FIGHT ENDS AS A TASK, NOT AS A CROWD OF ORDERS. The per-unit
-		// pull-back measurably fails: the W order is one-shot and the task
-		// re-asserts every tick, so units die in place ping-ponging or
-		// walking the wrong way, at full hp. Aborting the task is
-		// the C++ attack-break's own shape -- every member re-elects at once,
-		// pools at home behind the massing bar, and leaves together with the
-		// next real group. ATTACK/RAID only: a home DEFEND pool must keep
-		// fighting, and chargers/colossi were already exempted above.
-		// MEASURED AND REVERTED TO OPT-IN (winrate6, 8+8 decision-length
-		// games): 37 aborts, combined 1W-11L against iteration 4's 4W-10L,
-		// Glacier trade 0.597 -> 0.348. The ledger reads "losing" transiently
-		// in any bloody attrition fight, and aborting mid-commitment throws
-		// away units already engaged -- the retreat-death shape at squad
-		// scale. Default 0; the arm stays for A/B.
-		if ((ai.GetTunable("apex_fight_abort", TUNE_FIGHT_ABORT) > 0.f)
-			&& losingFight
-			&& ((ft == Task::FightType::ATTACK) || (ft == Task::FightType::RAID))
-			&& (ai.frame >= gNextTaskAbort))
-		{
-			gNextTaskAbort = ai.frame + 5 * SECOND;
-			AppendFightHist(int(u.id), "A", FightCtx(u));
-			AiLog(Factory::T() + "apex: fight-abort "
-				+ ((u.circuitDef !is null) ? u.circuitDef.GetName() : "?")
-				+ " at=" + int(p.x) + "," + int(p.z)
-				+ " trade=" + int(tLost) + ":" + int(tKilled)
-				+ " -- task re-pools");
-			t.Abort();
-			continue;
 		}
 		if (!leash && !recallHome && !outgunned && !losingFight
 			&& !consolidate && !LosingHere(p))

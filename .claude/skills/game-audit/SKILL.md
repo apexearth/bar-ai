@@ -125,7 +125,7 @@ between periodic BARAI_STATS rows -- Spring's income folds reclaim in, so a
 wreck feast reads as a rich economy and both the AI and a naive audit call
 a lab "licensed" (apexearth: "Make sure we aren't tricked by reclaim
 events"). Every flag prints corrected AND raw so the reclaim share shows on
-its face. The bars are the AI's own (apex_t2_metal 30; gantry team ~100 via
+its face. The bars are the AI's own (T2 at 30 m/s; gantry team ~100 via
 apex_gantry_afford_s, host floor 0.6 x apex_gantry_host_inc with a 0.9x
 window-vs-EMA tolerance); `gantry-too-late` requires a FED HOST to have
 existed, because the host floor holds a poor-split team back by design.

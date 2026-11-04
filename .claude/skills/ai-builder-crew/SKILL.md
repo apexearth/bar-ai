@@ -70,4 +70,4 @@ auction sees fewer and fewer bidders each election.
 
 `apex_request_drain` (7.0) · `apex_site_cost_per_worker` (300) ·
 `apex_peel_eco_keep` (2) · `apex_assist_release` (1, master for peeling) ·
-`apex_dup_bank` (1.0) · `apex_advsol_serial`
+`apex_dup_bank` (1.0)

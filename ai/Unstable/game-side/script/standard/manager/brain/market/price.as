@@ -57,6 +57,12 @@ void PrTuneFill()
 	gVwMcsDepth = ai.GetTunable("apex_vw_mcs_depth", TUNE_VW_MCS_DEPTH);
 }
 
+float PayH()
+{
+	PrTuneFill();
+	return gPrPaybackH;
+}
+
 // The wage of one builder-second: the metal flow each working builder carries.
 // A choice that occupies a builder longer forgoes more of this.
 float Wage()

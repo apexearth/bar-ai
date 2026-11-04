@@ -551,7 +551,6 @@
 		},
 		"armdrag": {
 			// un-ignored 2026-08-29 for the teeth line -- his walls ruling;
-			// ProposeTeeth is the only buyer.
 			"role": ["static"]
 		},
 		"cordrag": {

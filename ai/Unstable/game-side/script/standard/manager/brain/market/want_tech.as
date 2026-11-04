@@ -957,12 +957,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					fundedMul = floorMul;
 			}
 		}
-		// Two plants can unlock the same thing; the one whose line is worth
-		// less here -- its units times the ground they cross (want_plant
-		// LineMul) -- is worth less for it. PlantLineWorth is the old
-		// power-per-cost mean, kept as the control arm.
-		const float lineW = (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f)
-				? LineMul(d) : PlantLineWorth(d);
+		// Two plants can unlock the same thing; the one whose line is worth less (power per cost) is worth less for it.
+		const float lineW = PlantLineWorth(d);
 		float techGain = 0.f;
 		const bool waterUnlock = WaterPlantUnlocks(d);
 		// THE UNLOCK IS BOUGHT ONCE. A kin plant standing or ordered already brings the

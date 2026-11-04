@@ -28,7 +28,6 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // hoists (estall, cover, role) still override.
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
-array<bool> gIncAlone(32001, false);   // the job was the only want offered: the market had no work for this hand
 array<float> gIncWalk0(32001, 0.f);   // the walk the job started with (TUNE_HOIST_WAITS prices what is already paid)
 
 // A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
@@ -38,7 +37,6 @@ void DecideIdGone(int id)
 		return;
 	@gIncTask[id] = null;
 	gIncVal[id] = 0.f;
-	gIncAlone[id] = false;
 	gIncWalk0[id] = 0.f;
 	gLastDecideAt[id] = -30000;
 	gYoungN[id] = 0;
@@ -56,13 +54,6 @@ int gKeepJob = 0;
 int gHoistWaitN = 0;   // hoists that waited for a hand walking to a live job (TUNE_HOIST_WAITS)
 int gSameTypeKeep = 0;   // confirmations whose same-type answer was dropped for the job in hand
 int gHwOn = -1;
-int gDwOn = -1;
-bool DrawWaitsOn()
-{
-	if (gDwOn < 0)
-		gDwOn = (ai.GetTunable("apex_draw_waits", TUNE_DRAW_WAITS) > 0.f) ? 1 : 0;
-	return gDwOn > 0;
-}
 bool HoistWaitsOn()
 {
 	if (gHwOn < 0)
@@ -313,7 +304,6 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	if (slot == 8) return ProposeMex(unit);
 	if (slot == 9) return ProposeAirDef(unit);
 	if (slot == 10) return ProposeGeo(unit);
-	if (slot == 11) return ProposeTeeth(unit);
 	if (slot == 12) return ProposeSuper(unit);
 	return ProposeProtect(unit);
 }
@@ -1161,7 +1151,6 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 7)  { @w = MemoPropose(1, unit);         Perf::Add("want.tech", _t); }
 	else if (step == 8)  { @w = MemoPropose(2, unit);         Perf::Add("want.nano", _t); }
 	else if (step == 9)  { @w = MemoPropose(4, unit);         Perf::Add("want.reclobs", _t); }
-	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
 	else if (step == 12) { @w = ProposeReclaimSquatter(unit); Perf::Add("want.reclsqt", _t); }
 	else if (step == 13) { if (!OutForUpgrades(unit)) @w = ProposeFactoryGuard(unit, AssistEcoPick(unit, ProposeAssist(unit)));  Perf::Add("want.assist", _t); }
@@ -1176,7 +1165,6 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 		}
 		Perf::Add("want.protect", _t);
 	}
-	else if (step == 15) { if (!EcoOnly()) @w = MemoPropose(11, unit);  Perf::Add("want.teeth", _t); }
 	else if (step == 16) { if (!EcoOnly()) @w = MemoPropose(3, unit);   Perf::Add("want.sense", _t); }
 	else if (step == 17) { if (!EcoOnly()) @w = MemoPropose(9, unit);   Perf::Add("want.airdef", _t); }
 	else if (step == 18) { if (!EcoOnly()) @w = MemoPropose(12, unit);  Perf::Add("want.super", _t); }
@@ -1210,56 +1198,10 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 		}
 		return null;
 	}
-	if (SecondAdvLabWaits(w)) {
-		++gSalDropN;
-		if (ai.frame >= gSalLogAt) {
-			gSalLogAt = ai.frame + 60 * SECOND;
-			AiLog(Factory::T() + "apex: second-lab-wait t=" + ai.teamId + " " + w.def.GetName() + " backlog=" + gUpHandsB
-				+ " drops=" + gSalDropN);
-		}
-		return null;
-	}
 	ChargeTrip(w, unit);
 	if (w !is null)
 		w.src = step;
 	return w;
-}
-
-// NO SECOND ADVANCED LAB BEFORE THE EXTRACTORS ARE UPGRADED (TUNE_ADV_LAB_WAIT; his 10-17 ruling: making two
-// advanced labs when we have not upgraded our metal extractors is an absolute issue; which comes first is the
-// AI's). v0.3.0 on Glacier Pass s242: advanced air plant 17.2 min, T2 lab 18.8, no moho until after 20. A plant
-// want of T2 that is not the advanced plant already standing or under way is dropped while one stands or is
-// under way and any extractor we hold is below the best extraction.
-int gSalOn = -1, gSalDropN = 0, gSalLogAt = 0;
-bool SecondAdvLabWaits(Want@ w)
-{
-	if (gSalOn < 0)
-		gSalOn = (ai.GetTunable("apex_adv_lab_wait", TUNE_ADV_LAB_WAIT) > 0.f) ? 1 : 0;
-	if ((gSalOn <= 0) || (w is null) || (w.def is null) || ((w.kind != WK_PLANT) && (w.kind != WK_TECH)))
-		return false;
-	// The tier is the build tree's (TreeTier), so a gantry, an experimental plant or a modded one counts
-	// with the T2 labs -- the config's T2 attribute did not know the scav plants (his 10-18 game).
-	const int d = int(w.def.id);
-	if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (TreeTier(d) < 2))
-		return false;
-	bool have = false;
-	for (uint fi = 0; (fi < Factory::gFacUnits.length()) && !have; ++fi) {
-		CCircuitUnit@ fu = Factory::gFacUnits[fi];
-		have = (fu !is null) && (fu.circuitDef !is null) && (TreeTier(int(fu.circuitDef.id)) >= 2);
-	}
-	for (uint ci = 0; (ci < ComLen()) && !have; ++ci) {
-		const int cd = gComDef[ci];
-		if ((gComState[ci] == CS_FINISHED) || (cd == d) || !Catalog::ValidId(cd) || Catalog::gMobile[cd]
-			|| (TreeTier(cd) < 2))
-			continue;
-		if ((gComState[ci] == CS_ORDERED) && (gComTask[ci] !is null) && (Requests::Workers(gComTask[ci]) == 0))
-			continue;   // an order nobody walks to is not in flight (AdvPlantInFlight's clause)
-		have = true;
-	}
-	if (!have)
-		return false;
-	UpgradeHandsWant();
-	return gUpHandsB > 0;
 }
 
 // THE PRICE CARD (his 10-26: "a lot of this is easily discoverable by logging things out more"): every term of the
@@ -2311,20 +2253,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 			continue;
 		}
-		// THE BUDGET IS A LEVER, not a log. BudgetMult is target/actual, bounded
-		// 0.35..2, computed every frame for nobody -- apexearth 2026-09-22: "if
-		// we already see that our build power is high, then we do it even less
-		// ... and 0.38 divided by 0.1 amplifies that one -- we whip things back
-		// into shape". apex_budget already gates it and already reads 1.
-		// Applied to the value, the correction is then raised to the draw's
-		// commitment exponent, which cancels it -- and cancels it hardest for
-		// the expensive wants, whose exponent is the largest. apex_budget_after
-		// moves it onto the ticket instead, where a 2x correction is 2x the
-		// chance of being drawn.
-		if ((c.kind != WK_SUPER)
-			&& (ai.GetTunable("apex_budget_lever", TUNE_BUDGET_LEVER) > 0.f)
-			&& (ai.GetTunable("apex_budget_after", TUNE_BUDGET_AFTER) <= 0.f))
-			c.value *= BudgetCatMult(CategoryOf(c.kind));
 		{
 			const float pm = PersWantMul(c);
 			c.value *= pm;
@@ -2543,9 +2471,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// then adds metal income that needs energy to spend.
 	//
 	// Keep hoisting while what is ORDERED still does not cover the deficit, and
-	// stop by itself when it does. The deficit, not EnergyShortOfOrdered: that
-	// predicate is behind apex_e_parallel (0), so it read false for every
-	// builder and the hoist fired only for the ones the interrupt had freed.
+	// stop by itself when it does: the deficit itself, so the hoist fires for every
+	// builder, not only the ones the interrupt had freed.
 	// The interrupt's own bar ("above 400 we probably don't need it"): one
 	// bar for both by-fiat answers to a stall.
 	// ...except with the metal bank full: then the stall is not a transient
@@ -3136,18 +3063,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 		}
 	}
-	// A FLOOR THAT FIRES WHILE ITS CATEGORY IS ALREADY OVER TARGET IS NOT A
-	// FLOOR. It guarantees a minimum, and buildpower has run 0.32 against a
-	// 0.15 target while defence sat at 0.09 against 0.29. BudgetMult is
-	// target/actual, so > 1 is "still short" -- below that the nano floor
-	// yields and the election falls through to the priced draw.
-	const bool bpShort = (ai.GetTunable("apex_floor_yield", TUNE_FLOOR_YIELD) <= 0.f)
-			|| (Brain::BudgetMult(Brain::BUILDPOWER) > 1.f);
-	// TUNE_NANO_PRICED (his 10-18): a nano justifies itself by the build power it adds to what is in its reach, at
-	// what the economy can feed -- the priced want; the 2/4/9-per-plant count stands down.
 	// Not while energy is the bottleneck (his 11-02 watch game: the first constructor started a nano at 1:17 in an
 	// energy stall and every hand slowed with it); the priced draw buys the generator, and the floor returns after.
-	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && bpShort && !NanoPricedOn() && !HardEStall()) {
+	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && !HardEStall()) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
 				continue;
@@ -3326,25 +3244,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	Perf::Add("dec.draw", _tDraw);
 	NnTechPicked(ranked);
-	if (ReserveOn() && (ranked.length() > 0) && !aaPanic && (why != "estall") && (why != "aa")
-		&& (why != "defpanic") && (why != "penned") && (why != "cover"))
-	{
-		const float rv = ReserveValue();
-		if (rv > 0.f) {
-			if (ranked[0].value / ((ranked[0].nnMult > 0.f) ? ranked[0].nnMult : 1.f) < rv) {
-				Want@ rw = ReserveWant(unit, rv);
-				if (rw !is null) {
-					ranked.insertAt(0, rw);
-					why = "reserve";
-				} else {
-					++gRsNoFac;
-				}
-			} else {
-				++gRsBeaten;
-			}
-		}
-		ReserveLog();
-	}
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Only an emergency takes a hand off a job it is on: the stall, the
@@ -3403,11 +3302,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const float bdK = Catalog::gBuildDist[int(unit.circuitDef.id)];
 				const float remK = unit.GetPos(ai.frame).distance2D(ip);
 				const float incNow = gIncVal[uidk] * ((gIncWalk0[uidk] > remK) ? (gIncWalk0[uidk] / ((remK > bdK) ? remK : bdK)) : 1.f);
-				// TUNE_DRAW_WAITS: the draw too -- drawn once per job, not per election (roles off measured
-				// what a re-draw each election costs: -7% metal, +10-52% decisions).
 				const bool drawn = (why == "draw") || (why == "ladder") || (why.findFirst("held") == 0);
 				const bool hoistWaits = HoistWaitsOn() && OnMap(ip) && !Builder::SiteHot(ip)
-						&& (!drawn || DrawWaitsOn())
+						&& !drawn
 						&& (remK > bdK + 64.f)
 						&& (top.value / ((top.nnMult > 0.f) ? top.nnMult : 1.f) <= incNow);
 				if (hoistWaits) {
@@ -3641,7 +3538,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
-				gIncAlone[int(unit.id)] = (ranked.length() <= 1);
 				gIncGain[int(unit.id)] = ranked[i].gain;
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.

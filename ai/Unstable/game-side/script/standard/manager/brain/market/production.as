@@ -637,10 +637,6 @@ int SpotHandsOwed()
 	int k = int(floor(sqrt(float(n) * cycS * pw / costC) + 0.5f));
 	if (k < 1)
 		k = 1;
-	// A spot takes one hand: past k = N every spot is claimed in one cycle and each further hand adds only its
-	// cost, so the least time never asks more hands than open spots (his 10-18 game: k=34-50 for 7-11 open).
-	if (ConUseOn() && (k > int(n)))
-		k = int(n);
 	gSpotHandsVal = k;
 	if (ai.frame >= gNextSpotHandsLog) {
 		gNextSpotHandsLog = ai.frame + 30 * SECOND;
@@ -1119,17 +1115,20 @@ float BestLatheBPPerM()
 	return topBPM;
 }
 
-bool LabRateOn()
-{
-	return ai.GetTunable("apex_lab_rate", TUNE_LAB_RATE) > 0.f;
-}
-
 int gLabBest = -1;
 bool LabBestOn()
 {
 	if (gLabBest < 0)
 		gLabBest = (ai.GetTunable("apex_lab_best", TUNE_LAB_BEST) > 0.f) ? 1 : 0;
 	return (gLabBest > 0) || ProduceFocus();
+}
+
+int gAocOn = -1;
+bool ArmyOneCurrencyOn()
+{
+	if (gAocOn < 0)
+		gAocOn = (ai.GetTunable("apex_army_one_currency", TUNE_ARMY_ONE_CURRENCY) > 0.f) ? 1 : 0;
+	return gAocOn > 0;
 }
 
 CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
@@ -1357,35 +1356,8 @@ bool ConStandsIdle(bool flyer, int tier = 1)
 		IUnitTask@ t = w.task;
 		if ((t is null) || (t.GetType() == Task::Type::IDLE))
 			return true;
-		// ...or on the only job the market offered it (his 10-18 c9 game: 892 field reclaims at ~0
-		// "over nothing" while the floors ordered 473 more cons).
-		const int wid = int(w.id);
-		if (ConUseOn() && (wid >= 0) && (wid < int(gIncAlone.length())) && gIncAlone[wid] && (gIncTask[wid] is t))
-			return true;
 	}
 	return false;
-}
-
-int gConUseOn = -1;
-int gCpOn = -1;
-int gAocOn = -1;
-bool ArmyOneCurrencyOn()
-{
-	if (gAocOn < 0)
-		gAocOn = (ai.GetTunable("apex_army_one_currency", TUNE_ARMY_ONE_CURRENCY) > 0.f) ? 1 : 0;
-	return gAocOn > 0;
-}
-bool ConPricedOn()
-{
-	if (gCpOn < 0)
-		gCpOn = (ai.GetTunable("apex_con_priced", TUNE_CON_PRICED) > 0.f) ? 1 : 0;
-	return gCpOn > 0;
-}
-bool ConUseOn()
-{
-	if (gConUseOn < 0)
-		gConUseOn = (ai.GetTunable("apex_con_use", TUNE_CON_USE) > 0.f) ? 1 : 0;
-	return gConUseOn > 0;
 }
 
 // Constructors of this tier (2 = advanced and above), standing plus queued.
@@ -1789,24 +1761,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	// max() says when a step is build-bound rather than feed-bound. The
 	// constructor gain below already prices overflow capture, so the metal has
 	// somewhere to go.
-	// The spare-metal floor is the binding term two thirds of the time and the
-	// budget cannot see it, so army outruns its share while defence sits under
-	// its own with the corrector railed. Offer the spare only as far as army is
-	// still owed; the rest stays for the constructor market, which does price
-	// against the target.
 	float richBal = richGap;
-	{
-		const float rb = ai.GetTunable("apex_army_rich_balance", TUNE_ARMY_RICH_BALANCE);
-		if (rb > 0.f) {
-			const float tgt = Brain::TargetShare(Brain::ARMY);
-			float owed = (tgt > 0.f) ? (1.f - Brain::ShareOf(Brain::ARMY) / tgt) : 0.f;
-			if (owed < 0.f)
-				owed = 0.f;
-			else if (owed > 1.f)
-				owed = 1.f;
-			richBal *= (1.f - rb) + rb * owed;
-		}
-	}
 	// Before our own T2 lab stands, spare metal is the T2 lab's, not T1 army
 	// (apexearth 2026-09-26: at +100% the T1 window is too short to use).
 	// ...and behind them it is the economy's -- unless the economy is not
@@ -2752,7 +2707,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			// AND THE STANDING COMPOSITION TARGET: tank / middle / reach / dps
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
-			ppc *= (1.f + tLineBite * LineShortfall(LineClassOf(d))) * PersClassMul(LineClassOf(d)) * UnitYieldMul(d);
+			ppc *= (1.f + tLineBite * LineShortfall(LineClassOf(d))) * PersClassMul(LineClassOf(d));
 			if (ebLogNow)
 				ebS += EbF("ls", ppc);
 			float aoeH = 0.f;
@@ -2992,10 +2947,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			// TUNE_ARMY_ONE_CURRENCY (his 10-18/10-19: get the valuations balanced). One unit closes at most its own
 			// strength of the gap -- its cost times the strength factor p, never more than the gap -- over the
 			// fill time, so its gain is min(gap, cost x p)/fill in metal/s and its value that per metal, the
-			// currency every other want and the constructor are priced in. The x cost below (09-07, so a big unit
-			// is not charged its cost twice) is cancelled here: before, an army value was metal/s and a con's was
-			// metal/s per metal, ~one unit-cost apart (Fatboy 2,114 against the T2 con 0.28, matches/scale s21).
-			// The 10-18 version capped at cost and still went through the x cost; its A/B measured that.
+			// currency every other want and the constructor are priced in. Step 3 of todo/one-pricing-scale.md.
 			if (ArmyOneCurrencyOn()) {
 				const float gapUsed = gainViaRole ? effGap : ((rGap > 0.f) ? rGap : 0.f);
 				const float pR = ppc / linePPC;
@@ -3104,8 +3056,6 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		const bool walker = !Catalog::gFlyer[d];
 		if (consNeedA < 0)
 			consNeedA = ConsNeedAny(walker);
-		// TUNE_CON_USE: the floors honour "no new constructor while one of ours stands idle" as the priced path does.
-		const bool idleHeld = ConUseOn() && ConStandsIdle(Catalog::gFlyer[d], Catalog::gAdvHand[d] ? 2 : 1);
 		// FIGHTERS OWED COME BEFORE THE FLOORS (his 10-31): the army share cannot see the air answer, so at its share
 		// with no fighters the con floor took the air plant (32 T2 air cons to 2 fighters, 60k of fighters wanted)
 		const bool ftrOwed = !walker && Air::AnswerFighterOwed(prods);
@@ -3115,7 +3065,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		// the queue at a time, so the other air keeps coming.
 		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
 		// the moment the last one flew, and the lab made nothing else.
-		if (!idleHeld && !ftrOwed && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
+		if (!ftrOwed && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
 			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_AIRCON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
 		{
@@ -3146,19 +3096,15 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		// the only way to close their lead, and yielding starved the cons for a
 		// whole game (Comet 40 min: 4-11 extractors against their 59).
 		const bool foeOutguns = ArmyShortOfFoe() && WeOutEarnThem();
-		// TUNE_CON_PRICED: the army is held at its share (doctrine), so past the first con the floors yield to
-		// an army under its target share as measured -- the con multiplier sizes the floor, it does not discount
-		// the army's share (at 5x the lab yielded only below a fifth of it; his 10-18: a third of their army).
-		const bool cpOn = ConPricedOn();
-		const float yieldMul = cpOn ? 1.f : ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f);
-		const float yieldCons = cpOn ? 1.f : ((gConFloorMul > 1.f) ? gConFloorMul : 1.f);
+		const float yieldMul = (gConFloorMul > 0.01f) ? gConFloorMul : 0.01f;
+		const float yieldCons = (gConFloorMul > 1.f) ? gConFloorMul : 1.f;
 		const bool armyBehind = foeOutguns || ftrOwed || ((Brain::gSpentTotal > 1.f)
 			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= yieldCons)
 			&& (Brain::ShareOf(Brain::ARMY) * yieldMul < Brain::TargetShare(Brain::ARMY)));
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
-		if (!idleHeld && (consNeedA > 0) && floorOn && walker && OpenRaceOn()) {
+		if ((consNeedA > 0) && floorOn && walker && OpenRaceOn()) {
 			const int orcF = OpenRacePick(fac, fid, prods, d, slot);
 			if (orcF > 0) {
 				AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
@@ -3167,7 +3113,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				return Catalog::Def(orcF);
 			}
 		}
-		if (!idleHeld && (consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
+		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -3181,7 +3127,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			return Catalog::Def(d);
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
-		if (!idleHeld && (ceilNeed > 0) && !foeOutguns && !ftrOwed && ReachesCeiling(d) && !(walker && FlyingConLab(true))
+		if ((ceilNeed > 0) && !foeOutguns && !ftrOwed && ReachesCeiling(d) && !(walker && FlyingConLab(true))
 			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_T2CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
@@ -3369,9 +3315,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 						+ " upD=" + formatFloat(upD, "", 0, 1)) : "") + ")";
 			continue;
 		}
-		// TUNE_LAB_RATE: the army bid (and the bomber's, above) is a demand rate; a constructor priced per metal sat
-		// one unit-cost below it (the T2 con 0.28 beside a Fatboy 2,114). On, the con bids its rate as well.
-		const float v = ((LabRateOn() ? gain : (gain / Catalog::gCostM[d]))) * bdhKeep;
+		const float v = gain / Catalog::gCostM[d] * bdhKeep;
 		if (bdhKeep < 1.f)
 			Brain::BudgetHoldNoteFac(bdhKeep);
 		if (prankNow)

@@ -947,7 +947,6 @@ void UpdateNnRaid()
 // An enemy death our raid pack was in reach of is the pack's kill.
 void NrNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
-	Market::PressNoteDeath(int(edef.id), pos, byUs);
 	Market::SmallHardNoteDeath(int(edef.id), byUs);
 	Market::EarlyBallNoteKill(int(edef.id), pos, byUs);
 	Market::SpotRaceNoteKill(edef.costM, byUs);

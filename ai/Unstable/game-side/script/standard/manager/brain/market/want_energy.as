@@ -715,12 +715,6 @@ float EnergyDeficitNowE()
 	return need - Eco::EInc();
 }
 
-bool EnergyShortOfOrdered()
-{
-	if (ai.GetTunable("apex_e_parallel", TUNE_E_PARALLEL) <= 0.f)
-		return false;
-	return EnergyDeficitE() > 0.f;
-}
 
 // Same memo, same reason. Build progress and EffBP are both settled for the
 // frame, so the stamp is the only thing that can move under it.
@@ -1349,22 +1343,6 @@ float BPGap()
 	// the hands arrive.
 	if (gap < blTerm)
 		gap = blTerm;
-	// THE OVERFLOW IS A FLOOR TOO (apex_bp_overflow_floor): metal we are throwing away each second is capacity we
-	// lack, whatever the nameplate count says -- the bank term above is an addend the -40 of `net` swallowed. His
-	// 10-26 1v1 (v0.4.07): bank 100% from minute 9.6 to 12.7 at 80-113 m/s, ~10k metal excessed by 13:18, 9 nano
-	// decisions against 69 energy and 58 mex.
-	// The waste is income less what is actually SPENT: OverflowM reads pull, and pull stayed at or over income with
-	// the bank pinned (the builders ask for more than they can lay down), so the first version never engaged
-	// (eco test 548 vs 551 m/s, bank full 29% vs 34% of samples).
-	if (ai.GetTunable("apex_bp_overflow_floor", TUNE_BP_OVERFLOW_FLOOR) > 0.f) {
-		const float st3 = Eco::MStor();
-		float over = 0.f;
-		if ((st3 > 1.f) && (Eco::MCur() >= 0.95f * st3))
-			over = Eco::MInc() - aiEconomyMgr.metal.usage;
-		over *= EFeedShare();
-		if (gap < over)
-			gap = over;
-	}
 	const float gapM = (gap > 0.f) ? gap : 0.f;
 	// EVERY CLAUSE SEPARATELY, once a minute. The three clauses are in the same
 	// currency and nothing printed which of them carries the number, so a gap

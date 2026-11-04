@@ -369,7 +369,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	float hTtdH = 0.f;
 	bool  hDomOn = false;
 	bool  hEffOn = false;
-	bool  hT1Out = false;
 	bool  hTeamObs = false;
 	float hLineW = 1.f;    // read inside the slot loop, same for every slot
 	float hBestEff = -1.f;  // the wall-efficiency benchmark, built on first ask
@@ -420,8 +419,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hTtdH =ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
 		hEffOn = ai.GetTunable("apex_wall_efficient", TUNE_WALL_EFFICIENT) > 0.f;
-		hT1Out = (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f)
-				&& AdvancedHandOwned();
 		hLineW = ai.GetTunable("apex_wall_line_w", TUNE_WALL_LINE_W);
 		hTeamObs = ai.GetTunable("apex_def_team_obsolete", TUNE_DEF_TEAM_OBSOLETE) > 0.f;
 	}
@@ -485,17 +482,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					gDwObs[d] = teamObs;
 			}
 			Gate(GATE_DEF_OBSOLETE, gDwObs[d] < 1.f);
-			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
-			// 2026-09-19: "spend as much money as it would take to upgrade a
-			// T2 Mex on tier 1 towers in the center of our base... at the
-			// same time as we're slowly upgrading a Mex"). The shortfall
-			// waits for the advanced hand's gun. Refused before the site
-			// fill: a refused tower's sites were priced and thrown away.
-			if (Gate(GATE_DEF_T1LATE, hT1Out && T1Tower(d))) {
-				DwEnsure(d);
-				gDwT1[d] = 0.f;
-				continue;
-			}
 			{ const double _tF = Perf::T0(); DefSiteFill(d, reach, adds, hMexFloorWave, hSiteWave, hEnemyPrior); Perf::Add("pw.fill", _tF); }
 			const float kCost = Catalog::gCostM[d]
 					+ Catalog::BuildSecondsAt(d, hEffBP) * hWage;
@@ -1204,7 +1190,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		JamSightPropose(unit, w);
 	if ((half == HALF_GROUND) && !defOff) {
 		const double _tRf = Perf::T0();
-		Want@ rf = RefillPropose(unit, hT1Out);
+		Want@ rf = RefillPropose(unit);
 		Perf::Add("pw.refill", _tRf);
 		if ((rf !is null) && ((w.def is null) || !unit.circuitDef.CanBuild(w.def) || (rf.value > w.value))) {
 			RefillNoteOffered();

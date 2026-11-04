@@ -1046,17 +1046,9 @@ void BaseFrontRefresh()
 		@gBfMedium = SideDef3("armbeamer", "corhllt", "leghlt");
 	if (gBfHeavy is null)
 		@gBfHeavy = SideDef3("armhlt", "corhlt", "leghlt");
-	// ON while what can reach the base inside the army's fill time beats what
-	// stands there (Military::DangerGap) -- so the guns start while they walk.
-	const bool byDanger = ai.GetTunable("apex_bf_danger", TUNE_BF_DANGER) > 0.5f;
-	const float gapS = Military::DangerGap();
-	if (byDanger) {
-		gBfActive = gapS > 0.f;
-	} else {
-		if (Military::Stance() == Military::S_AGGRESSIVE)
-			gBfAggroUntil = ai.frame + 120 * SECOND;
-		gBfActive = Military::Outmassed() || (ai.frame < gBfAggroUntil);
-	}
+	if (Military::Stance() == Military::S_AGGRESSIVE)
+		gBfAggroUntil = ai.frame + 120 * SECOND;
+	gBfActive = Military::Outmassed() || (ai.frame < gBfAggroUntil);
 	AIFloat3 foe;
 	if (!gBfActive || (gBfMedium is null) || !FoeRef(foe))
 		return;
@@ -1096,18 +1088,7 @@ void BaseFrontRefresh()
 		owned += gOwnCount[uint(gBfHeavy.id)];
 	gBfFilled = owned;
 	gBfOpen = open;
-	// Guns handed out inside the hold window are not standing yet, so the gap
-	// does not see them.
-	int inFlight = 0;
-	for (uint i = 0; i < n; ++i) {
-		if (ai.frame <= gBfTakenAt[i] + 30 * SECOND)
-			++inFlight;
-	}
-	if (byDanger) {
-		const float gunS = Military::DgStr(int(gBfMedium.id));
-		const int need = GunpCount(int(ceil(gapS / ((gunS > 0.1f) ? gunS : 0.1f)))) - inFlight;
-		gBfWanted = owned + ((need > 0) ? need : 0);
-	} else {
+	{
 		const float gunM = Catalog::gCostM[int(gBfMedium.id)];
 		const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 		float threatM = Military::EnemyArmyCost();

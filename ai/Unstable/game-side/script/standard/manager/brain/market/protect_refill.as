@@ -221,9 +221,9 @@ float RefillGain(uint i, int d, float horizS)
 }
 
 // The dead def when this hand may build it, else its cheapest gun at least as dear.
-int RefillDefFor(CCircuitUnit@ unit, int uid, int d0, bool t1Out)
+int RefillDefFor(CCircuitUnit@ unit, int uid, int d0)
 {
-	if (unit.circuitDef.CanBuild(Catalog::Def(d0)) && !(t1Out && T1Tower(d0)))
+	if (unit.circuitDef.CanBuild(Catalog::Def(d0)))
 		return d0;
 	const array<int>@ b = Catalog::BuildsOf(uid);
 	int best = -1;
@@ -231,7 +231,7 @@ int RefillDefFor(CCircuitUnit@ unit, int uid, int d0, bool t1Out)
 		const int d = b[q];
 		if (!Catalog::gAvailable[d] || Catalog::gFloater[d] || Catalog::gSub[d]
 			|| Catalog::gNeedGeo[d] || !RefillGun(d)
-			|| (Catalog::gCostM[d] < Catalog::gCostM[d0]) || (t1Out && T1Tower(d)))
+			|| (Catalog::gCostM[d] < Catalog::gCostM[d0]))
 			continue;
 		if ((best < 0) || (Catalog::gCostM[d] < Catalog::gCostM[best]))
 			best = d;
@@ -251,7 +251,7 @@ void RefillLog()
 }
 
 // The best refill this hand can place, or null.
-Want@ RefillPropose(CCircuitUnit@ unit, bool t1Out)
+Want@ RefillPropose(CCircuitUnit@ unit)
 {
 	if (!RefillOn())
 		return null;
@@ -273,7 +273,7 @@ Want@ RefillPropose(CCircuitUnit@ unit, bool t1Out)
 			++gRfHotSkip;
 			continue;
 		}
-		const int d = RefillDefFor(unit, uid, gRfDef[i], t1Out);
+		const int d = RefillDefFor(unit, uid, gRfDef[i]);
 		if (d < 0)
 			continue;
 		float gain = RefillGain(i, d, horizS);

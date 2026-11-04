@@ -982,8 +982,6 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
 			continue;
-		if ((sc == SC_GANTRY) && GantryPlantOn())
-			{ GantryWhy(sc, "plant-market"); continue; }
 		if (slotFull && (sc != SC_GANTRY))
 			continue;
 		if ((sc == SC_GANTRY) && StrikeBuilding())
@@ -1153,25 +1151,12 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// that fixed the 4v4 economy reads each player its slice of the
 			// census, but ONE shared line answers the census whole -- full
 			// enemy army at match ratio against the team's whole standing.
-			// ...ON THE ONE ARMY COUNT (apex_gantry_gap_est): EnemyArmyCost reads a third of their army, so the gap
-			// read ~0 and the gantry fell to its insurance share -- his 10-26 1v1: 165-380 m/s, minutes 23-29, no
-			// gantry (v 1.5-3.2), a silo pushed instead; "A gantry is a safer choice than a nuke silo".
-			const bool gapEst = ai.GetTunable("apex_gantry_gap_est", TUNE_GANTRY_GAP_EST) > 0.f;
-			float gapF = (gapEst ? Military::FoeArmyM() : Military::EnemyArmyCost())
-					* ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO)
-					- (gapEst ? Military::OurArmyM() : Military::TeamArmyCost());
+			float gapF = Military::EnemyArmyCost() * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO)
+					- Military::TeamArmyCost();
 			if (gapF < 0.f)
 				gapF = 0.f;
 			const float gapStream = gapF / ((fillS > 1.f) ? fillS : 60.f);
 			gain = (OverflowM() + gapStream) * afford;
-			// THE T3 GAP: their T3 (at least the biggest unit their gantry builds, once one was seen) is answered only
-			// by T3 -- his 10-26 "T3 defense and T3 units of our own increase in priority"
-			if (gapEst) {
-				float t3Gap = Military::FoeT3M() * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO)
-						- Military::OurT3M();
-				if (t3Gap > 0.f)
-					gain += t3Gap / ((fillS > 1.f) ? fillS : 60.f) * afford;
-			}
 			// CAPABILITY INSURANCE (apexearth: "If the enemy comes at us
 			// with a Behemoth and we do not have one we are in big
 			// trouble"): the answer to enemy T3 has to exist BEFORE one is

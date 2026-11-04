@@ -152,8 +152,6 @@ local NAMES = {
 	"apex_retreat_cost_scale",
 	"apex_retreat_floor",
 	"apex_stake_weight",
-	"apex_t1_tower_late",
-	"apex_plant_copy",
 	"apex_static_guard",
 	"apex_wave_meet",
 	"apex_chase_min_ratio",
@@ -170,10 +168,8 @@ local NAMES = {
 	"apex_eco_target_base8",
 	"apex_air_eco_base",
 	"apex_line_terrain",
-	"apex_line_quality",
 	"apex_cover_leaves",
 	"apex_cover_by_raid",
-	"apex_screen_gap",
 	"apex_team_line",
 	"apex_def_dominance",
 	"apex_def_afford_s",
@@ -184,14 +180,12 @@ local NAMES = {
 	"apex_replant_discount",
 	"apex_replant_window_s",
 	"apex_e_committed",
-	"apex_e_parallel",
 	"apex_plant_inflight",
 	"apex_cover_push_s",
 	"apex_radar_price",
 	"apex_defjoin_price",
 	"apex_field_priced",
 	"apex_cover_priced",
-	"apex_def_danger",
 	"apex_def_measured",
 	"apex_mexup_boost",
 	"apex_foe_tier_fade",
@@ -225,7 +219,6 @@ local NAMES = {
 	"apex_frame_risk",
 	"apex_front_band_frac",
 	"apex_front_min_reach",
-	"apex_front_rear_arc",
 	"apex_front_safe_edge",
 	"apex_greed_cons",
 	"apex_hot_radius",
@@ -248,7 +241,6 @@ local NAMES = {
 	"apex_consolidate_edge", -- withdraw.as: local ally metal must meet pack metal times this or fall back (1)
 	"apex_kill_from",
 	"apex_seen_halflife",
-	"apex_budget_live",
 	"apex_commit_bail",
 	"apex_retreat_behind",
 	"apex_con_stand_heal",
@@ -329,7 +321,6 @@ local NAMES = {
 	"apex_eta_commit_bonus", -- want_energy.as: share of the extra fleet-time a bigger reactor commits, credited to the ladder's smaller pick in the tie-break (0 = off)
 	"apex_retreat_scale", -- posture.as: scale every def's retreat hp threshold (1 = config value; lower fights longer before pulling out)
 	"apex_budget_after", -- decide.as: apply the budget correction to the draw ticket instead of the value the draw sharpens (0 = off)
-	"apex_army_rich_balance", -- production.as: offer the spare-metal army floor only as far as army is under its budget target (0 = off, 1 = full)
 	"apex_t2_energy",
 	"apex_t2_energy_reactor",
 	"apex_t2_hold_boost",
@@ -339,7 +330,6 @@ local NAMES = {
 	"apex_trade_window",      -- withdraw.as: seconds the local-trade death ledger remembers (15)
 	"apex_losing_trade",      -- withdraw.as: pull back when our combat metal dead nearby > theirs times this (3)
 	"apex_losing_floor",      -- withdraw.as: our combat metal that must die nearby before the trade trigger speaks (250)
-	"apex_fight_abort",       -- withdraw.as: 1 = abort losing attack/raid tasks (measured worse; experiment arm, default 0)
 	"apex_withdraw_near",
 	"apex_withdraw_reissue",
 	"apex_range_mod",
@@ -356,7 +346,6 @@ local NAMES = {
 	"apex_aoe_vs_blob",      -- production.as + splash.as: ground splash units priced by the enemy their shell catches; splash demand tracks their clumped army (0)
 	"apex_unit_upkeep",      -- upkeep.as + production.as: under lag every mobile unit ordered pays a slot price; cheap bodies order less (0)
 	"apex_rush_aware",       -- rush.as + army.as ArmyFloor + want_tech/plant/super/energy: army floor and tech price from their walk time vs our next tier's lock (0)
-	"apex_small_pressure",   -- pressure.as + army.as + price.as PayH + massing.as HoldWhy + plannet.as TaPick + protect_target.as: short contact shortens the horizon, team push, contest their expansions (0)
 	"apex_map_share",        -- mapshare.as + army.as + massing.as + plannet.as TaPick + nnraid.as + want_mex.as: under our seat share of the extractor spots, army nudge, aggression and claim value (0)
 	"apex_budget_hold",      -- budget.as + production.as con floors/builder price + decide.as hoists: orders that skip the budget's draw pay mult(row)/mult(army) while army is under its share (0)
 	"apex_small_hard",       -- smallhard.as + army.as ArmyFloor + production.as + nnraid.as + plannet.as TaPick + want_assist.as + comdecide.as: short path contact prices army to their strength at arrival, starves their extractors (0)
@@ -381,7 +370,6 @@ local NAMES = {
 	"apex_gantry_own_slot",  -- want_super.as: the gantry neither takes nor waits for the strategic one-at-a-time slot
 	"apex_nano_early",       -- sites.as PlantFrames/GantryShortSite + want_nano.as FactoryNanoShort + execute.as nano batch: T2+ plant frames take their nanos while rising (0)
 	"apex_t2_eco",           -- t2eco.as + nntech.as rule + decide.as super push/next-tier hoist: the ladder's evidence for the next tier; upgrades before the strategic hoists (0)
-	"apex_adv_lab_wait",     -- decide.as SecondAdvLabWaits: no second T2 lab before the extractors are upgraded (0)
 	"apex_inflight_hold",    -- price.as displacedM: a build pays for the projects in progress it holds up (0)
 	"apex_income_accel",     -- floor.as IncomeAccelM: income wants credited the share of income times the in-flight gain (0)
 	"apex_lab_assist",       -- want_assist.as LabAssistGuard: lab orders priced, lab guards priced by the time they save (0)
@@ -395,17 +383,13 @@ local NAMES = {
 	"apex_spill_outgrown",   -- production.as: 1 = a full bank lifts the outgrown T1 tier (the 10-18 behaviour), 0 = it stays out (0)
 	"apex_reclaim_idle_nano", -- want_reclaim.as: idle nano turrets priced for reclaim (1)
 	"apex_gift_stake",       -- gift.as: gifts asked only while the seat has more standing than the gap (0)
-	"apex_lab_best",         -- production.as: a lab builds its best-priced unit, not a draw (0)
 	"apex_lab_inherit",      -- want_tech.as: the advanced lab priced from its upgrades' own prices, time as a horizon share (1)
 	"apex_air_feed_cap",     -- want_plant.as: air plant yield capped at spare metal (1)
 	"apex_nano_upgrade",     -- want_reclaim.as: turrets guard a rising mex upgrade in reach (1)
 	"apex_draw_best",        -- decide.as: builders take the best-priced want, no category draw (0)
 	"apex_crew_split",       -- crew.as: field and home crews (1)
-	"apex_lab_rate",         -- production.as: lab constructors bid their gain rate (0)
 	"apex_lift_turrets", -- lift.as: transports priced on idle turrets moved (0)
 	"apex_lift_hands", -- lift.as: transports fly builders to far jobs (0)
-	"apex_nano_flush", -- nanopack.as: overflow turrets flush against the block (0)
-	"apex_big_near", -- sites.as: big generators inside the turret block (0)
 	"apex_lag_reclaim", -- want_reclaim.as: idle turrets reclaimed sooner while the host lags (1)
 	"apex_air_finish", -- nnair.as: cadence launch waits for a finishing wing (1)
 	"apex_nuke_blind", -- nukes.as: no re-strike on ground hit twice since its last look (1)
@@ -424,22 +408,18 @@ local NAMES = {
 	"apex_strike_mod", -- strike.as: attack threat modifier during the strike (0.3)
 	"apex_plan_from_price", -- planprice.as: the team plays the best-priced plan (0)
 	"apex_er_q", -- ecoreturn.as: q scales the four army consumers (1)
-	"apex_trial_er_q", -- trial.as: apex_er_q by a coin per seat (0: ended in v0.4.05, q kept)
 	"apex_plan_price", -- planprice.as: the plan pricer runs (1)
 	"apex_verbose", -- plannet.as: thinking in chat, local watch games only (0)
 	"apex_produce_focus", -- strike.as: one best unit per lab in PRODUCE (0)
 	"apex_produce_nocons", -- strike.as: no new constructors in PRODUCE (0)
 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
-	"apex_attack_mod", -- stockarmy.as: attack threat modifier at runtime (0 = config)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)
 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
 	"apex_air_eco_priced",
 	"apex_trial_air_eco_priced", -- trial.as: a coin per seat for apex_air_eco_priced (1) -- air/state.as: air bought on price, no income bar (1)
-	"apex_trial_air_rich", -- trial.as: a coin per seat for apex_air_rich (1) -- air/state.as: bombers bought past the count while they pay (1)
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
-	"apex_army_press", -- StockFight.inl: attack squads press remembered/mirrored enemy ground (1)
 	"apex_hot_road_memo", -- decide.as ChargeTrip: a still-hot refused road zeroes that hand's want (1)
 	"apex_air_obs_evidence", -- state.as SettleStrike: run weight by bombers sent over the planned wing (1)
 	"apex_keep_route", -- TravelAction.cpp: same-place re-routes keep the route (1)
@@ -447,18 +427,13 @@ local NAMES = {
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
 	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
-	"apex_lathe_concentrate", -- sites.as LatheSite: the richest lathe, not one build per block (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
-	"apex_con_use", -- production.as: constructors sized by use (0)
 	"apex_hoist_waits", -- decide.as: hoists wait for a hand walking to a live job (0)
-	"apex_draw_waits", -- decide.as: the draw also waits for a hand walking to a live job (0)
-	"apex_reserve", -- want_assist.as: hold back for the factories while the army is short (0)
+	"apex_army_one_currency", -- production.as: army products in metal/s, one currency (0)
+	"apex_lab_best",         -- production.as: a lab builds its best-priced unit, not a draw (0)
 	"apex_unlock_once", -- register.as: a plant is the metal unlock only once (0)
-	"apex_con_priced", -- production.as: cons on their price, not the floors (0)
 	"apex_memo_reprice", -- decide.as: memo answers shared by region, walk re-priced (0)
 	"apex_reelect_ttl", -- C++ BuilderTask: re-confirm a walking builder at the price refresh, not 3 s (0)
-	"apex_nano_priced", -- want_nano.as: no nanos-per-plant floor, nanos on price (0)
-	"apex_army_one_currency", -- production.as: army products in metal/s, one currency (0)
 	"apex_unit_limit",       -- decide.as ProposeStep: TEST ONLY, drop wants for a def at its unit count limit (0)
 	"apex_hands_once",       -- want_plant.as HandKinOf: a plant's build-power half divided by plants of any domain already making builders of its tier (0)
 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)
@@ -507,7 +482,6 @@ local NAMES = {
 	"apex_rez_flee_s",
 	"apex_rez_scan_s",
 	"apex_rez_react_s",
-	"apex_t2_metal",
 	"apex_reclaim_energy_dist",
 	-- Economy-first targeting and group sizing (2026-08-09). The first three of
 	-- the fighter tunables above no longer have a reader; the fighter delta was
@@ -576,7 +550,6 @@ local NAMES = {
 	"apex_leak_screen_m",     -- want_protect.as: fielded army value at which the mobile screen takes over leak defence; below it every mex carries the full cover floor (800)
 	"apex_air_aa_split",      -- air/state.as: 1 = strike sizes vs enemy AA divided by their base count (one raid, one base), 0 = whole-map AA census
 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
-	"apex_teeth",            -- want_protect.as: 1 = teeth line across defended gates
 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
 	"apex_t1_def_late",
@@ -639,7 +612,6 @@ local NAMES = {
 	"apex_con_log_t2_b",
 	"apex_reclaim_pad",
 	"apex_dup_bank",
-	"apex_advsol_serial",
 	"apex_raid_mexline",
 	"apex_roam_front",
 	"apex_roam_r",
@@ -657,19 +629,14 @@ local NAMES = {
 	"apex_eco_role",
 	"apex_eco_force",
 	"apex_eco_lean", -- army.as: a 3-4 player team's farthest seat leans eco, this share of the phase, not strict (0)
-	"apex_bp_overflow_floor", -- want_energy.as: overflowing metal floors the build-power gap (0)
-	"apex_gantry_gap_est", -- want_super.as: the gantry gap on the one army count (0)
 	"apex_ladder_yields", -- decide.as: the ladder's mex claim yields to a tower priced above it (0)
 	"apex_bare_mex_hz", -- protect_measured.as: a bare extractor's guard on our bare extractors' death rate (0)
-	"apex_stock_escort", -- hooks.as: the escort duty stands under the stock army (0)
-	"apex_gantry_plant", -- want_plant.as: the gantry priced by the plant market like any lab (0)
 	"apex_inflight_ps", -- price.as: the in-flight hold under shared metal, min(cost, remaining) (0)
 	"apex_persona", -- persona_style.as + persona.as: hidden team style and seat flavours (0)
 	"apex_persona_force", -- persona_style.as: the team plays this style all game, -1 hidden draw (-1)
 	"apex_calib_risk", -- calib.as: survival on our measured structure death rate (0)
 	"apex_opp_wait", -- decide.as: the opportunity charge waits only until another hand takes the job (0)
 	"apex_land_value", -- land.as: rent from the neighbours' metal per cell (0)
-	"apex_line_yield", -- yield.as: labs and units priced by enemy metal destroyed per metal spent (0)
 	"apex_nano_payback", -- want_nano.as: nanos pay the plant payback rule, gain x the share of turrets working (1)
 	"apex_pn_explore", -- policy.as: training push on every network output (0)
 	"apex_pn_explore_tilt", -- policy.as: training push on a choice or list option's output (0.05)
@@ -706,9 +673,6 @@ local NAMES = {
 	"apex_draw_front",
 	"apex_hold_release",
 	"apex_budget",
-	"apex_budget_lever", -- market/decide.as: whether the budget multiplier actually scales wants (0 = logged only)
-	"apex_floor_yield", -- market/decide.as: a floor stands down while its category is over target (0 = off)
-	"apex_deathwalk_price", -- want_mex.as: price a hot-road spot through TripRisk instead of refusing it (0 = off)
 	"apex_nosite_diag", -- protect_want.as: log WHY a defence site scored zero gain (0 = off)
 	"apex_com_mex_price", -- want_mex.as: what a mex spot outside the commander's leash is worth to him, 0..1 (0 = the veto)
 	"apex_share_army",

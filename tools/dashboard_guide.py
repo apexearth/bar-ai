@@ -140,19 +140,6 @@ PANELS = [
              "changes. OFF: the army floor is only the enemy army we have seen. "
              "`apex: rush-stat` each minute shows the walk time, the threat, "
              "the floor before and after, and how hard tech was marked down"),
-            ("TUNE_SMALL_PRESSURE", "ON: on a map where their army can walk "
-             "to us faster than it could outbuild the army we keep, the AI "
-             "plans for a shorter game: economy is valued over a shorter "
-             "horizon and the army it keeps grows (up to double). Whether to "
-             "leave home is judged on the whole team's army against theirs, "
-             "not each player's own group, and the team marches together; "
-             "only a player whose own base is being hit stays to defend. The "
-             "team attack goes for their outer extractors when taking them "
-             "pays, and our outer extractors lean on the army rather than "
-             "extra towers. On a big map nothing changes. "
-             "`apex: pressure-stat` each minute shows the walk time, the "
-             "horizon, the army target before and after, team vs their army, "
-             "pushes, players joined and their extractors taken"),
             ("TUNE_MAP_SHARE", "ON: while our team holds fewer of the map's "
              "metal spots than its fair share (our players over all players, "
              "half in an even game), the AI keeps a somewhat bigger army (up "
@@ -471,10 +458,6 @@ PANELS = [
              "goes first). `apex: t2eco-stat` every minute shows the T2 constructors, the fusion and upgrade "
              "jobs they were offered and won, what beat them, and the lab evidence. OFF: the lab waits for the "
              "market price and the strategic hoist outranks the upgrades."),
-            ("TUNE_ADV_LAB_WAIT", "ON: once one advanced (T2) lab stands or is being built, no second advanced lab "
-             "is started until every extractor we hold is upgraded. Which advanced lab comes first is still the "
-             "AI's choice. `apex: second-lab-wait` shows when one waited. OFF: a second advanced lab can go up "
-             "before any extractor is upgraded."),
             ("TUNE_UNIT_LIMIT", "TEST ONLY. ON: builders stop choosing a building once its unit limit is reached, "
              "for test games where every team may own only a few extractors. It also applies the old BARb "
              "config's count limits (one energy storage, three Guardians), so leave it OFF for normal play."),
@@ -664,10 +647,8 @@ GROUPS = [
                   "arrived yet"),
                  ("TUNE_E_BILL_SHARE", "WHILE E-STALLED, prices a building's ENERGY bill against energy INCOME -- an advanced solar costs 5,000 E to make, which a 100 E/s economy cannot afford and a 400 E/s one barely notices. Off prices the bill by build length instead, which ignores income entirely"),
                  ("TUNE_E_COMMITTED", "counts the energy draw of work already ORDERED into the pull that prices energy, so a generator is worth buying BEFORE the stall rather than after it"),
-                 ("TUNE_E_PARALLEL", "lets a STALL open parallel energy sites, not only an overflowing bank -- otherwise a big deficit is answered one small turbine at a time"),
                  ("TUNE_E_FEED_BOUND", "stops the standing fleet asking for the energy of hands the METAL feed cannot run. Off (the default) the ask is the fleet's full nominal speed, which rises with our own build power and holds the 'would anything absorb this?' term at 1.00 even with the bank full. On, it was measured to move the e-stall and change no outcome -- see docs/tunables.md"),
                  ("TUNE_PLANT_INFLIGHT", "discounts a new lab by the labs of other domains already under construction -- stops the bot/vehicle/air rotation leaving three unfinished frames"),
-                 ("TUNE_PLANT_COPY", "his 2026-08-27 ruling, on by default: no second plant of a type we already own. 0 lets a copy compete on price, which was measured worse -- -0.67 extractors at minute 4 and THEIRS +0.55 -- so the ruling is exonerated"),
                  ("TUNE_COVER_PUSH_S", "how affordable a mex sentry must be before it may JUMP the auction queue -- seconds of economic power. Lower delays the first turrets further"),
                  ("TUNE_MEX_LOSS_COVER", "share of our extractors the enemy recently killed (kills / standing + kills, fading over the structure-loss memory) at which every extractor's gun jumps the queue. Below it guns are bought only when worth more than the next claim; 0 restores the gun-always rule"),
                  ("TUNE_COM_LAB_EARLY", "before our first T2 lab, while the army is under its target, the commander spends every other minute assisting the lab. 0 turns it off"),
@@ -686,7 +667,6 @@ GROUPS = [
                  ("TUNE_VW_MCS_FROM", "metal-bank fill at which the metal bill starts being forgiven (search scaffolding)"),
                  ("TUNE_VW_MCS_SPAN", "bank fill over which that forgiveness ramps to full (search scaffolding)"),
                  ("TUNE_VW_MCS_DEPTH", "how much of the metal bill a full bank forgives (search scaffolding)"),
-                 ("TUNE_BUDGET_LEVER", "whether the category budget's target/actual multiplier actually SCALES wants or is only logged. Measured OFF: 32 games with it on won 3.1% against 48 games off at 12.5%, and his live read agreed -- it moves defence share 0.16 -> 0.23 and does not move economy at all, because economy is the category most often decided with no rival want to price against"),
                  ("TUNE_T2_FUSION_PULL", "while the T2 switch is on and no advanced generator stands, TAKE the fusion instead of drawing it. The switch already names fusions as its purpose but only removes army from the target, and the freed metal went to wind: measured first fusion at minute 16.2 against BARb's 9.7, from a T2 plant we finished FIRST at 8.0"),
              ]},
             {"title": "Metal converters",
@@ -902,7 +882,6 @@ GROUPS = [
                      "elected to rush it and the rest follow on income.",
              "reads": "manager/techlead.as, factory/phase.as",
              "knobs": [
-                 ("TUNE_T2_METAL", "T2 waits for a bigger metal economy"),
                  ("TUNE_T2_ENERGY", "T2 waits for a bigger grid"),
                  ("TUNE_T2_ENERGY_REACTOR", "the lower energy bar that applies "
                   "once a reactor already stands"),
@@ -1141,13 +1120,6 @@ GROUPS = [
                   "the price will charge them, so a constructor that just "
                   "finished a mex covers THAT mex; 0 is the old distance-blind "
                   "choice that sent it across the base"),
-                 ("TUNE_T1_TOWER_LATE", "his 2026-09-19 rule, on by default: "
-                  "once an ADVANCED hand exists, no basic tower at all. 0 is "
-                  "the arm that measures it, and it was measured innocent -- "
-                  "with the rule off our light towers per 6-min bucket moved "
-                  "4.31 -> 4.56 against BARb's 9.31, and mexes lost were "
-                  "unchanged. What holds the tower count down is the hands and "
-                  "the sites, not this"),
                  ("TUNE_DEF_TRADE", "credits a turret with stopping more enemy "
                   "metal, so towers win more auctions. Measured 2026-08-26: "
                   "raising it 3 -> 8 moved defence share only 0.071 -> 0.087 "
@@ -1198,10 +1170,6 @@ GROUPS = [
                   "default"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
-                 ("TUNE_SCREEN_GAP", "how far IN FRONT of the squad's longest "
-                  "row a short-range row holds, elmos. Short units stop walking "
-                  "to their own reach and stand as a shield for the guns "
-                  "instead. 0 restores stand-at-your-own-range"),
                  ("TUNE_LINE_TERRAIN", "weigh a production line by how much "
                   "of the map its ARMY can move around in -- 1 on, 0 off. On a "
                   "flat map every line reads the same and this changes nothing; "
@@ -1219,11 +1187,6 @@ GROUPS = [
                   "pays for. They fight what reaches their building and walk "
                   "back; they move only when the flanks change. Trap: that "
                   "metal is not in the attack army. apex: flank-stat each minute"),
-                 ("TUNE_LINE_QUALITY", "weigh a production line -- its whole "
-                  "price, and the tech want -- by its units (median army-per-"
-                  "metal) times the ground they can cross, against the best line "
-                  "of its class and tier: flat map, vehicles; hills everywhere, "
-                  "bots. 1 on, 0 old pricing. apex: line-quality logs the census"),
                  ("TUNE_DEF_DOMINANCE", "refuse a tower that a gun we can "
                   "AFFORD RIGHT NOW beats on both reach and killing power -- a "
                   "defence slot holds one building, so a beaten tower is "
@@ -1401,10 +1364,6 @@ GROUPS = [
                   "extractor and the guns on the base's front edge bid in the "
                   "lottery instead of jumping it. On = fewer towers, watch "
                   "extractors lost"),
-                 ("TUNE_DEF_DANGER", "how much defence a seat holds follows "
-                  "the part of the enemy army we have seen that our own army "
-                  "cannot meet. On = a seat our army protects buys only its "
-                  "extractor guards; a seat the enemy outweighs buys towers"),
                  ("TUNE_DEF_MEASURED", "towers are valued on how often the "
                   "enemy has actually come near our extractors and base, not "
                   "on the assumption that an unguarded extractor is attacked "
@@ -1672,8 +1631,6 @@ GROUPS = [
                   "stay open. 0 switches roles off; 1 leaves no open hands"),
                  ("TUNE_ROLE_TAU", "the split of need looks further back, so "
                   "roles change hands more slowly"),
-                 ("TUNE_BUDGET_LIVE", "price the spend curves against live "
-                  "income instead of a smoothed read"),
              ]},
             {"title": "Pricing time",
              "what": "Cost includes time. A build that delivers nothing for "
@@ -1887,8 +1844,6 @@ GOALS = [
              "note": "extractor and base-front towers bid instead of jumping the queue"},
             {"ref": "TUNE_DEFJOIN_PRICE", "dir": "up",
              "note": "helping a tower go up is priced, not automatic"},
-            {"ref": "TUNE_DEF_DANGER", "dir": "up",
-             "note": "a seat's tower budget follows the danger our army cannot meet"},
             {"ref": "TUNE_DEF_MEASURED", "dir": "up",
              "note": "towers valued on how often the enemy has actually come"},
             {"ref": "TUNE_FLANK_GUARD", "dir": "up",
@@ -2010,9 +1965,6 @@ GOALS = [
                "to rush it; everyone else follows on their own income. Judge it "
                "on the RUSHER's first-T2 time, not the team average.",
         "steps": [
-            {"ref": "TUNE_T2_METAL", "dir": "either",
-             "note": "metal income required before committing to T2 — lower is "
-                     "sooner"},
             {"ref": "TUNE_T2_ENERGY", "dir": "either",
              "note": "energy income required before T2"},
             {"ref": "TUNE_TECH_PIPE", "dir": "up",

@@ -11,13 +11,6 @@ const int NS_SINK = 4;
 const int NS_FARM = 5;
 const int NS_FLOOR = 6;
 const int NS_YARD = 7;   // beside a yard, at the exact spot priced: the land probe cannot place it
-int gNpOn = -1;
-bool NanoPricedOn()
-{
-	if (gNpOn < 0)
-		gNpOn = (ai.GetTunable("apex_nano_priced", TUNE_NANO_PRICED) > 0.f) ? 1 : 0;
-	return gNpOn > 0;
-}
 
 // BARb's floor (apexearth 2026-09-11, twice: "we have to do at least that
 // good"; "factories with insufficient supporting nanos should have nanos as
@@ -538,7 +531,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// is (-1,-1), so the zero-vs-zero case no longer reads as an on-map sink.
 	// The fortification takes the site whenever it priced the demand: a lathe
 	// bought to hold the wall is worth nothing at the eco farm.
-	if ((floorNeed > 0.f) && OnMap(floorPos) && !NanoPricedOn()) {
+	if ((floorNeed > 0.f) && OnMap(floorPos)) {
 		site = floorPos;
 		src = NS_FLOOR;
 	} else if ((labNeed > 0.f) && (labNeed >= over)) {

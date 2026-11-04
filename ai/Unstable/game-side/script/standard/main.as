@@ -219,7 +219,7 @@ void UpdateChunk(int c)
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::PlanPriceTick(); Market::StrikeTick(); Market::ThinkTick(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
 		if (Market::PersOn()) { double _t = Perf::T0(); Market::PersTick(); Perf::Add("up.persona", _t); }
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::UpkeepTick(); Perf::Add("up.upkeep", _t); }
-		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Market::PressUpdate(); Perf::Add("up.rush", _t); }
+		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Perf::Add("up.rush", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Market::ExpandFarUpdate(); Market::EcoReturnUpdate(); Market::LiveBanStat(); Perf::Add("up.mapshare", _t); }
 		if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::SmallHardUpdate(); Perf::Add("up.smallhard", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EarlyBallUpdate(); Market::OpenRaceUpdate(); Perf::Add("up.earlyball", _t); }

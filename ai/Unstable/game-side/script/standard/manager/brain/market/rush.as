@@ -214,7 +214,7 @@ float RushMul(float costM)
 
 void RushUpdate()
 {
-	if (!RushOn() && !PressureOn() && !SmallHardOn())
+	if (!RushOn() && !SmallHardOn())
 		return;
 	if (ai.frame >= gRushAt + 5 * SECOND)
 		RushRefresh();

@@ -390,7 +390,7 @@ int TaPick(AIFloat3 &out at, float &out r)
 	// the spot race prices their extractors, their cons and the contested spots on one list
 	if (SpotRaceOn() && SmallHardExpansion(at, r))
 		return 5;
-	if (PressExpansion(at, r) || MapShareExpansion(at, r) || SmallHardExpansion(at, r))
+	if (MapShareExpansion(at, r) || SmallHardExpansion(at, r))
 		return 5;
 	float m = 0.f;
 	if (Military::TurretTarget(at, r, m)) {
@@ -431,8 +431,6 @@ void TaOpen(int phase, const string why)
 	ai.SetTeamBoard(BOARD_TA_PHASE, float(phase));
 	ai.SetTeamBoard(BOARD_TA_OP, float(op));   // last: a reader that sees the new id sees its fields
 	++gTaOpsMade;
-	if ((kind == 5) && (gMsPickAt != ai.frame) && (gSmhPickAt != ai.frame))
-		++gPressExpOps;
 	MapShareNoteOp(kind);
 	SmallHardNoteOp(kind);
 	AiLog(Factory::T() + "apex: team-op " + op + " " + TA_PHASES[phase] + " (" + why + ") " + TA_KINDS[kind]
@@ -466,7 +464,7 @@ bool TaTwice(int slot, bool cond)
 void TaLead()
 {
 	const int phase = TaPhase();
-	const bool pushes = PlanPushes() || ((gPlan == NG_NORMAL) && (PressShort() || MapSharePush() || SmallHardPush()));
+	const bool pushes = PlanPushes() || ((gPlan == NG_NORMAL) && (MapSharePush() || SmallHardPush()));
 	if (!pushes || (ai.GetTunable("apex_team_army", TUNE_TEAM_ARMY) <= 0.f)) {
 		if (phase != TA_NONE)
 			TaOpen(TA_NONE, "plan holds");

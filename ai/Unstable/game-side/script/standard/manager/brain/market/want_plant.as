@@ -1041,21 +1041,6 @@ float LineTerrainMul(int plantDef)
 	return (m > 1.f) ? 1.f : m;
 }
 
-// WHAT THE LINE IS WORTH HERE: its units times the ground they can cross.
-// apexearth 2026-09-12: "we just make bots almost all the time. So in maps
-// where vehicles are obviously more powerful, we don't do quite as well" and
-// "if the map is mostly flat with just some hills then we want vehicles but
-// if it is full of hills all over the place then we might want bots". The
-// units' worth is the median product on the yardstick production buys single
-// units with (UnitPPC, speed, sight); the ground is the pathfinder's own
-// reach for the line (LineCoverage). Their product, against the best line of
-// the class and tier, multiplies the WHOLE plant price -- the opening plant
-// is bought at minute 1 for its constructor, and a production-half term
-// moved nothing there (docs/tunables.md).
-array<float> gLineQual;
-array<float> gLineMulV;
-int gLineQualAt = -999999;
-
 // The dry-map x0 the UNIT market already applies (production.as's amphib test,
 // same shape), asked where the LINE is priced -- a plant bought for products
 // production.as will refuse is bought for nothing.
@@ -1261,81 +1246,6 @@ int LineTier(int d)
 	return (d >= 0 && d < int(gLineTier.length())) ? gLineTier[d] : 0;
 }
 
-// THE MEDIAN UNIT, NOT THE BEST ONE, as LineCoverage: the best is one
-// outlier speaking for the line (the T1 hover plant read 5x the bot lab on
-// the Halberd alone); the median is what the line will actually mass.
-float LineBestWorth(int plantDef)
-{
-	array<float> w;
-	const array<int>@ prods = Catalog::gBuildsList[plantDef];
-	for (uint i = 0; i < prods.length(); ++i) {
-		if (!Catalog::gAvailable[prods[i]] || !LineCombat(prods[i]))
-			continue;
-		w.insertLast(LineUnitWorth(prods[i]));
-	}
-	// -1 is "no combat line here", which the census has no opinion about; 0 is
-	// a combat line whose every unit prices at nothing, which is a verdict.
-	if (w.length() == 0)
-		return -1.f;
-	w.sortAsc();
-	return w[w.length() / 2];
-}
-
-// ShieldShare and the worth means move, so the census is re-read per minute;
-// the log line is the instrument -- what OUR model thinks of each line here.
-float LineQualityMul(int plantDef)
-{
-	if (int(gLineQual.length()) <= Catalog::gDefCount) {
-		gLineQual.resize(Catalog::gDefCount + 1);
-		gLineMulV.resize(Catalog::gDefCount + 1);
-	}
-	if (ai.frame >= gLineQualAt + MINUTE) {
-		gLineQualAt = ai.frame;
-		array<float> bestOf(12, 0.f);   // class*4 + tier
-		array<float> bestMul(12, 0.f);
-		array<float> own(Catalog::gDefCount + 1, -1.f);
-		for (int d = 1; d <= Catalog::gDefCount; ++d) {
-			// a plant is a line only if a mobile builder can place it: the
-			// scavenger lootbox "plants" build things no line ever will
-			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
-				|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) == 0)
-				|| !Producible(d))   // OUR tree: against the other faction's best
-				continue;            // a whole faction's plants would price at 0.66
-			own[d] = LineBestWorth(d);
-			if (own[d] < 0.f) {
-				own[d] = -1.f;
-				continue;
-			}
-			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
-			if (own[d] > bestOf[k])
-				bestOf[k] = own[d];
-			const float m = own[d] * LineTerrainMul(d);
-			if (m > bestMul[k])
-				bestMul[k] = m;
-		}
-		string row = "";
-		for (int d = 1; d <= Catalog::gDefCount; ++d) {
-			gLineQual[d] = 1.f;
-			gLineMulV[d] = 1.f;
-			if (own[d] < 0.f)
-				continue;
-			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
-			if (bestOf[k] <= 0.f)
-				continue;
-			gLineQual[d] = own[d] / bestOf[k];
-			gLineMulV[d] = (bestMul[k] > 0.f) ? (own[d] * LineTerrainMul(d) / bestMul[k]) : 1.f;
-			if (PlantClass(d) == PC_LAND)
-				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineMulV[d], "", 0, 2)
-						+ "(q" + formatFloat(gLineQual[d], "", 0, 2)
-						+ " t" + formatFloat(LineTerrainMul(d), "", 0, 2) + ")";
-		}
-		AiLog("apex: line-quality t=" + ai.teamId + row);
-	}
-	if (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) <= 0.f)
-		return 1.f;
-	return gLineQual[plantDef];
-}
-
 // WHAT A LINE'S UNITS HAVE ACTUALLY TRADED (his ruling 2026-09-22: "per-unit
 // performance absolutely should feed into factory selection"). Per unit, the
 // exchange record from both sides of the matrix: our copies' record, and the
@@ -1397,17 +1307,6 @@ float RecordLineMul(int plantDef)
 		AiLog("apex: record-line t=" + ai.teamId + row);
 	}
 	return gRecLine[plantDef];
-}
-
-// The line factor on the whole plant: units x ground, best line of the class
-// and tier = 1. With the tunable off the terrain term alone applies, on the
-// production half, as before.
-float LineMul(int plantDef)
-{
-	LineQualityMul(plantDef);
-	if (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) <= 0.f)
-		return 1.f;
-	return gLineMulV[plantDef];
 }
 
 // WHAT THE TEAM ALREADY FIELDS.
@@ -1589,68 +1488,9 @@ int HandKinOf(int d, int con)
 }
 
 int gPlantPaybackCut = 0, gPlantPaybackLogAt = 0;
-// apex_gantry_plant: the gantry leaves the super market and is priced here like any lab (his 10-26: factory agnostic)
-bool GantryPlantOn()
-{
-	return (ai.GetTunable("apex_gantry_plant", TUNE_GANTRY_PLANT) > 0.f) || YieldOn();   // the gantry is priced by its yield in the plant market
-}
-
-// THE BEST LINE WE STAND: the strength per metal of the best combat line among our finished plants. A new line is worth
-// the army metal it would take times how much more strength each metal buys there (his 10-26: 600 m/s, a gap of 30k,
-// every T2 line spending and the gantry priced at 2.4 -- the same metal into stronger units is the gantry's whole case).
-int gQoAt = -1;
-float gQoBest = 0.f;
-float OwnBestLineWorth()
-{
-	if (gQoAt == ai.frame)
-		return gQoBest;
-	gQoAt = ai.frame;
-	gQoBest = 0.f;
-	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
-		CCircuitUnit@ f = Factory::gFacUnits[i];
-		if ((f is null) || (f.circuitDef is null))
-			continue;
-		const float q = LineBestWorth(int(f.circuitDef.id));
-		if (q > gQoBest)
-			gQoBest = q;
-	}
-	return gQoBest;
-}
-
-float LineQualityGain(int d, float armyFlow)
-{
-	if (!GantryPlantOn() || (armyFlow <= 0.f))
-		return 0.f;
-	const float own = YieldOn() ? OwnBestLineQY() : OwnBestLineWorth();
-	const float q = YieldOn() ? (LineBestWorth(d) * LineYieldCorr(d)) : LineBestWorth(d);
-	if ((own <= 0.f) || (q <= own))
-		return 0.f;
-	return armyFlow * (q / own - 1.f);
-}
-
-// where the plant market stops a gantry, for a hand that can build one: `apex: gantry-plant`
-int gGpLogAt = 0;
-bool GpAsks(int uid)
-{
-	if (!GantryPlantOn() || (ai.frame < gGpLogAt))
-		return false;
-	const array<int>@ b = Catalog::BuildsOf(uid);
-	for (uint i = 0; i < b.length(); ++i)
-		if (IsGantryDef(b[i]) && Catalog::gAvailable[b[i]])
-			return true;
-	return false;
-}
-void GpLog(const string &in stage)
-{
-	gGpLogAt = ai.frame + 20 * SECOND;
-	AiLog(Factory::T() + "apex: gantry-plant t=" + ai.teamId + " " + stage + " inc=" + int(Eco::MInc())
-		+ " lines=" + Factory::gFactoryCount + " gap=" + int(ArmyTarget() - ArmyValue()) + " spare=" + NnF(SpareMetalRate(), 1));
-}
-
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
-	const bool gpAsk = GpAsks(int(unit.circuitDef.id));
 	// ONE PLANT START AT A TIME, ANY TIER (his watched loss: armlab and
 	// armhp elected 8 frames apart at 16.7m; only T2/T3 were serialized).
 	// Starts only -- standing copies stay governed by wealth, and the
@@ -1658,8 +1498,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	if (AnyPlantInFlight()) {
 		if (!WealthWaiver()) {
 			AdvDeferLog("plant-any");
-			if (gpAsk)
-				GpLog("in-flight");
 			return w;
 		}
 		// Logged so the audit can tell a sanctioned parallel start from the
@@ -1697,8 +1535,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const bool evOn = Air::EveryOn();
 	const bool navalEx = MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead();
 	if (overLine && !navalEx && !evOn) {
-		if (gpAsk)
-			GpLog("over-line supported=" + supported);
 		return w;
 	}
 	const int uid = int(unit.circuitDef.id);
@@ -1742,8 +1578,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const float pipeTerm = BPGap() * pipe;
 	const float prodHalf = prodTerm * pipe;
 	if ((stream + pipeTerm + prodHalf <= 0.05f) && !evOn) {
-		if (gpAsk)
-			GpLog("no-demand prod=" + NnF(prodHalf, 2));
 		return w;
 	}
 	// None of these varies with the candidate plant; the two flags and the
@@ -1783,9 +1617,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const bool evAir = evOn && (dClass == PC_AIR);
 		// a line that out-yields our best is not another mouth to feed: it takes the army metal we already spend (his
 		// 10-27 games: the gantry unoffered until 150 m/s with a lab and two air plants standing)
-		if (waterOnly && !evAir && ((dClass != PC_WATER) || !navalEx) && !BetterLine(d)) {
-			if (gpAsk && IsGantryDef(d))
-				GpLog("over-line lines=" + Factory::gFactoryCount + " supported=" + supported);
+		if (waterOnly && !evAir && ((dClass != PC_WATER) || !navalEx)) {
 			continue;
 		}
 		// A naval lead with no hand that can reach its water buys the plant
@@ -1907,15 +1739,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				}
 			}
 		}
-		// TUNE_GANTRY_PLANT: a plant that makes no constructor is priced on its production half alone, like any lab
 		const bool hands = bestMob > 0.f;
-		if (!hands) {
-			if (!GantryPlantOn())
-				continue;
-			bestMob = 1.f;
-		}
-		if (hands)
-			MeasureReach(d, bestCon, at, unit);
+		if (!hands)
+			continue;
+		MeasureReach(d, bestCon, at, unit);
 		// gMexOpen is the LAND asker's own probe and cannot see water ground,
 		// so a water line asks its own reach whether any is open.
 		const bool anyOpen = hands && ((dClass == PC_WATER)
@@ -1942,12 +1769,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
-		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
 		float prodOwn = evAir ? Air::EvPlantProdYield(d, fillS0)
-				: prodHalf * FoeTierPlantMul(d)
-					* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d) * LineYieldMul(d);
-		if (evAir)
-			prodOwn *= LineYieldMul(d);
+				: prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d) * TeamLineMul(d) * RecordLineMul(d);
 		// A LINE WE CANNOT FEED ADDS NO THROUGHPUT, air too (his 10-19: "we still build the second T2 plant too
 		// early... I'd never do that until I have multiple fusion alive with energy converters"). The ground
 		// half is already capped at the metal nothing spends (prodTerm above); the air yield was not. Converted
@@ -1957,30 +1780,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if (prodOwn > spare)
 				prodOwn = (spare > 0.f) ? spare : 0.f;
 		}
-		float qualOwn = 0.f;   // the better-line part: what nanos on our other lines cannot substitute
-		// TUNE_GANTRY_PLANT: the army metal this line would take, at the gap's own urgency and never past the army's
-		// share of income, buys more strength here than on our best line -- a copy gains nothing
-		if (GantryPlantOn() && ((aGap > 0.f) || YieldOn())) {
-			float flow = (aGap > 0.f) ? (aGap / ((fillS0 > 1.f) ? fillS0 : 180.f)) : 0.f;
-			const float armyRate = Eco::MInc() * Brain::TargetShare(Brain::ARMY);
-			if (flow > armyRate)
-				flow = armyRate;
-			// yield: a better line re-prices the army metal we will be spending once it is ready, not the gap's slice (his
-			// 10-27: stats 4.6 against our best line's 1.2 priced the gantry at gain 0.9, the gap split four ways)
-			const float qFlow = YieldOn() ? LineFlowAtReady(d, Catalog::gBuildPower[uid]) : (flow / float(1 + lines0));
-			qualOwn = LineQualityGain(d, qFlow) * pipe * FoeTierPlantMul(d);
-			prodOwn += qualOwn;
-		}
 		// Economy-only: a lab builds constructors only, so the army it would field is no part of its worth (a bot
 		// lab bought at gain 1.33 and a vehicle plant at 30 beside the air plants, 10-20).
 		if (EcoOnly())
-			{ prodOwn = 0.f; qualOwn = 0.f; }
+			prodOwn = 0.f;
 		const float gain = conHalf + prodOwn;
-		if (gpAsk && !hands)
-			GpLog("priced " + Catalog::Def(d).GetName() + " prodHalf=" + NnF(prodHalf, 2) + " prodOwn=" + NnF(prodOwn, 2)
-				+ " tierMul=" + NnF(FoeTierPlantMul(d), 2) + " q=" + NnF(LineBestWorth(d), 3)
-				+ " qOwn=" + NnF(YieldOn() ? OwnBestLineQY() : OwnBestLineWorth(), 3) + " gain=" + NnF(gain, 2)
-				+ (YieldOn() ? (" corr=" + NnF(LineYieldCorr(d), 2) + " flow=" + NnF(gYdFlow, 1) + " readyS=" + int(gYdReadyS) + " incT=" + int(gYdIncT)) : ""));
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
@@ -2099,8 +1903,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				break;
 			}
 		}
-		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f)
-			&& (ai.GetTunable("apex_plant_copy", TUNE_PLANT_COPY) <= 0.f)) {
+		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f)) {
 			if (ai.frame >= gNextPlantDupLog) {
 				gNextPlantDupLog = ai.frame + 30 * SECOND;
 				AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
@@ -2138,15 +1941,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// the air constructors are the hands that raise the turrets (his 10-20: "we don't have nano turrets because
 		// we don't have the air cons building them"). On the whole price it zeroed the plant while no army stood.
 		const float evCaution = evAir ? Air::EvSeatCaution() : 1.f;
-		// the better-line part takes no build-power substitution: nanos on our other lines cannot make its units (his
-		// 10-27 games: the gantry's 200-940 reached the decision as 1-27 through dupSubst ~0.07 and the latency)
-		float dupGain = (conSub + (prodOwn - qualOwn) * evCaution * ((evAir && !isCopy) ? 1.f : dupSubst)
-				+ qualOwn * evCaution) / float(1 + dupKin);
+		float dupGain = (conSub + prodOwn * evCaution * ((evAir && !isCopy) ? 1.f : dupSubst)) / float(1 + dupKin);
 		if (liveOther > 0)
 			dupGain /= float(1 + liveOther);
-		// the value below is built from dupGain, not gain: the line factor
-		// has to land here or it decides nothing (8 games said so)
-		dupGain *= LineMul(d);
 		// The duplicate decision, in one line, so the audit can assert it
 		// rather than infer it from two labs standing.
 		if (((reachKin > 0) || (handKin > 0)) && (ai.frame >= gNextPlantDupLog)) {
@@ -2215,7 +2012,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				+ ",prod" + formatFloat(prodOwn, "", 0, 2)
 				+ ",reach" + formatFloat(gPlantReach[d], "", 0, 2)
 				+ ",terr" + formatFloat(LineTerrainMul(d), "", 0, 2)
-				+ ",line" + formatFloat(LineMul(d), "", 0, 2)
 				+ ",rec" + formatFloat(RecordLineMul(d), "", 0, 2)
 				+ ",rate" + formatFloat(rateMul, "", 0, 2)
 				+ ",mob" + formatFloat(bestMob, "", 0, 2)

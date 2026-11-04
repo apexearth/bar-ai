@@ -933,11 +933,11 @@ def check_lab_timing(text, rep):
     face (apexearth 2026-08-28: "Make sure we aren't tricked by reclaim
     events which temporarily boost our income").
 
-    The bars are the AI's OWN: T2 wants apex_t2_metal (30 m/s) sustained; the
+    The bars are the AI's OWN: T2 wants 30 m/s sustained; the
     gantry wants ~apex_gantry_host_inc (100) from its host and ~100 team
     (apex_gantry_afford_s at the 9.2k bill). Advanced plants serialize per
     player ("a huge 'no no'", 2026-08-28)."""
-    T2_BAR = 30.0          # apex_t2_metal
+    T2_BAR = 30.0
     GANTRY_TEAM = 100.0    # bill / apex_gantry_afford_s
     GANTRY_HOST = 60.0     # 0.6 x apex_gantry_host_inc -- green's 50 flags
     ADV_PLANTS = {         # T2/T3 factories, all three factions
