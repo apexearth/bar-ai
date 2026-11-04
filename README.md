@@ -90,8 +90,8 @@ nuke salvos, long-range plasma.
 ### Measured, not guessed
 
 Changes are tested in headless AI-vs-AI games, mostly against stock BARb, and judged on what the
-games show rather than on whether the new code ran. [`docs/versions.md`](docs/versions.md) logs
-results per release, including the changes that made it worse.
+games show rather than on whether the new code ran. Each release tag
+records what it measured, including the changes that made it worse ([`docs/versions.md`](docs/versions.md)).
 
 ## Play against it
 
@@ -224,7 +224,7 @@ matches/ tournaments/ runtime/ vendor/   game output and upstream clones (gitign
 | [`docs/working.md`](docs/working.md) | commands, testing, building, releasing |
 | [`docs/traps.md`](docs/traps.md) | silent failure modes, each with its check |
 | [`docs/tunables.md`](docs/tunables.md) | why each default is what it is |
-| [`docs/versions.md`](docs/versions.md) | releases and their measured record |
+| [`docs/versions.md`](docs/versions.md) | one line per release |
 
 `ISSUES.md` is what is wrong now, `TODO.md` holds plays not yet built, and `USER-FEEDBACK.md` the
 owner's open requests.

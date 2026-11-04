@@ -1,0 +1,4 @@
+# Repo-wide searches skip these (frozen release copies, lane slots, stock BARb); search them by explicit path.
+/ai/v*/
+/ai/lane-*/
+/reference/

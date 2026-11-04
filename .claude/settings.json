@@ -25,6 +25,12 @@
         "hooks": [
           { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/command_guard.py\"" }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/read_guard.py\"" }
+        ]
       }
     ]
   }

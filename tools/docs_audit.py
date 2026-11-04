@@ -29,6 +29,7 @@ VARIANT = ROOT / "ai" / "Unstable" / "game-side" / "script" / "standard"
 
 # Where prose lives.
 PROSE = [ROOT / "CLAUDE.md", ROOT / "USER-FEEDBACK.md", ROOT / "ISSUES.md"]
+PROSE += sorted((ROOT / "issues").glob("*.md")) + sorted((ROOT / "todo").glob("*.md"))
 PROSE += sorted((ROOT / "docs").glob("*.md"))
 PROSE += sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
 PROSE += sorted((ROOT / ".claude" / "agents").glob("*.md"))

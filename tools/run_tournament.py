@@ -67,7 +67,7 @@ class Job:
 
 
 SPEED = 0   # --speed, applied to every run_match this process spawns
-RECORD_SEED = False   # --record-seed, likewise (opt-in, see ISSUES.md)
+RECORD_SEED = False   # --record-seed, likewise (opt-in, see run_match.py)
 
 def _ram_limited_workers() -> int:
     """How many concurrent matches free RAM allows. Windows only; else no limit."""
@@ -112,7 +112,7 @@ def worker_dirs(n: int) -> queue.Queue:
     The dir name includes this process's PID: two run_tournament.py invocations
     both default to --workers 1, and without the PID both would land on the same
     "engine-w0" and silently overwrite each other's script.txt mid-run -- a real
-    incident (see notes/open-issues.md #37) where one tournament's match loaded
+    incident (`git show 2aefc570:notes/open-issues.md`, #37) where one tournament's match loaded
     the OTHER tournament's script and recorded a corrupted result as a normal
     win/loss, with no error anywhere. Never share a write dir across processes.
     """

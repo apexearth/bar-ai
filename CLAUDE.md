@@ -35,7 +35,7 @@ his core tenet is: always be making economy. The nets decide; balances are their
 - **Work directly**; an agent only when he asks or for a broad search (his 11-03: a fresh agent re-reads everything at full price; the cached main context is ~10x cheaper).
 - **Claim a lane** (`python tools/lane.py init <name>`) before building, deploying or running; `Apex:Unstable` is his slot.
 - **Count every running engine** before launching one; his game sets the limit (`working.md`).
-- Load the owning skill instead of reading the source tree; exclude `vendor/`, `matches/`, `changes/`, `reference/` from repo-wide searches.
+- Load the owning skill instead of reading the source tree; `.rgignore` keeps `ai/v*/`, lane slots and `reference/` out of repo-wide searches; never Read a big file whole (`tools/hooks/read_guard.py` refuses over 40 KB).
 
 ## Before you do X, read Y
 
@@ -74,9 +74,9 @@ his core tenet is: always be making economy. The nets decide; balances are their
 - **Commit message**: what changed and what was measured.
 - **`ISSUES.md`**: index of what is wrong now, one line per `issues/<name>.md`; the live validation list is `issues/validation.md`.
 - **`USER-FEEDBACK.md`**: his open asks. Read before starting work.
-- **`TODO.md`**: his named plays and unbuilt behaviours, in his words.
+- **`TODO.md`**: index of his named plays and unbuilt behaviours, one line per `todo/<name>.md`, in his words.
 
-An entry is deleted when it is built and measured. `changes/CHANGES.md` and `notes/` are frozen history.
+An entry is deleted when it is built and measured; old text lives in git, not in the tree.
 
 ## Layout
 

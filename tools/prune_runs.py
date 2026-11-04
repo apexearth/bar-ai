@@ -9,8 +9,8 @@ perpetually in size." The rule this encodes, from that cleanup:
                         matches/_engine stays -- it holds the warm archive
                         cache that saves ~35s per run
   - matches/<run>       deleted when older than --days (default 5) AND not
-                        referenced by name in ISSUES.md / CHANGES.md /
-                        USER-FEEDBACK.md / changes/ / feedback/ / notes/
+                        referenced by name in ISSUES.md / issues/ / TODO.md /
+                        USER-FEEDBACK.md / todo/ / docs/
   - tournaments demos   *.sdfz inside tournament match dirs deleted when the
                         tournament is older than --days; ledgers, summaries,
                         configs and infologs are never touched
@@ -33,8 +33,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-EVIDENCE = ["ISSUES.md", "CHANGES.md", "USER-FEEDBACK.md"]
-EVIDENCE_GLOBS = ["changes/*.md", "feedback/*.md", "notes/*.md"]
+EVIDENCE = ["ISSUES.md", "TODO.md", "USER-FEEDBACK.md"]
+EVIDENCE_GLOBS = ["issues/*.md", "todo/*.md", "docs/*.md"]
 
 
 def engines_running() -> bool:

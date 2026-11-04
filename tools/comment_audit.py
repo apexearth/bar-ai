@@ -63,7 +63,7 @@ SRC = (".as", ".py", ".cpp", ".h", ".lua")
 # apexearth 2026-09-05, on a docs/tunables.md entry: "It's so black and white... This is
 # a good example of comments/content being added to our docs, blowing up our
 # context, and causing baggage we carry down the road."
-PROSE = ("docs/", "ISSUES.md", "USER-FEEDBACK.md", "TODO.md", "CLAUDE.md",
+PROSE = ("docs/", "issues/", "todo/", "ISSUES.md", "USER-FEEDBACK.md", "TODO.md", "CLAUDE.md",
          "BAR-GUIDE.md", "README.md")
 
 # A rule stated without its exception is baggage: the next session obeys it

@@ -837,7 +837,7 @@ def run(args) -> int:
     # OPT-IN. Seeding every match from the live record cut our army spend from
     # 12.8% of metal to 1.3% on identical code, because 26.7% of that file's
     # rows are zero-dealt and the record ranks the army around its mean. See
-    # ISSUES.md; --record-seed asks for it deliberately.
+    # --record-seed asks for it deliberately.
     live_rec = MATCHES / "_engine" / "AI" / "Skirmish" / "Apex" / "Unstable" / "apex-record.txt"
     if (live_rec.exists() and getattr(args, "record_seed", False)
             and write_dir.resolve() != (MATCHES / "_engine").resolve()):
@@ -1190,7 +1190,7 @@ def main() -> int:
                     help="per-AI option on side B, repeatable; an apex_* key outranks the modoption for that side only")
     ap.add_argument("--record-seed", action="store_true",
                     help="seed each match's unit record from the live game "
-                         "(off by default: it collapsed army spend, see ISSUES.md)")
+                         "(off by default: it collapsed army spend)")
     ap.add_argument("--no-record-seed", action="store_true",
                     help=argparse.SUPPRESS)
     ap.add_argument("--restrict", action="append", default=[], metavar="UNIT=N",

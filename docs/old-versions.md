@@ -1,4 +1,4 @@
-# Versions and candidates
+# Old versions: the v0.2.6 -> v0.2.7 candidate head-to-heads (10-15..10-20)
 
 One row per release or candidate: what it is, and its measured record. Head-to-head is against v0.2.6,
 sides swapped every game, starts staggered 15 s; a time-limit game goes to the side clearly ahead on army

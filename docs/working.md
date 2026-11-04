@@ -13,7 +13,7 @@ Traps with S numbers are in `traps.md`.
 - **Spread work across frames, never batch it.** A section whose `maxMs` is many times its `avgUs` is batching.
 - **One change at a time**, judged on `composition.py`; firing is not evidence (`traps.md`, Method).
 - **Comments:** default none; one line of what looks wrong otherwise and why. Never a finding, measurement, date or session story; change the code, change the comment; never state a cause you did not measure. Run `comment_audit.py` before committing a change that touched comments.
-- **Where things are written:** the commit message (what changed, what was measured); `ISSUES.md` (wrong now, with evidence); `USER-FEEDBACK.md` (his open asks); `TODO.md` (his named plays, unbuilt); `tunables.md` (why a default is what it is); `doctrine.md` (his directives only). An entry is deleted when built and measured.
+- **Where things are written:** the commit message (what changed, what was measured); `ISSUES.md` (index of what is wrong now; one file per issue in `issues/`, the validation list in `issues/validation.md`); `USER-FEEDBACK.md` (his open asks); `TODO.md` (index of his named plays, unbuilt; one file per play in `todo/`); `tunables.md` (why a default is what it is); `doctrine.md` (his directives only). An entry is deleted when built and measured.
 - **Files stay under ~600 lines**; an edit anchor that does not match does nothing (S18).
 - **Never author Python in a Bash heredoc**: `Write` a script (scratchpad or `tools/`), then run it.
 - **Work directly**; delegate only when he asks or for a broad search whose file dumps you do not need. Write the finding down before an agent ends.
@@ -25,8 +25,8 @@ Traps with S numbers are in `traps.md`.
 Measured over 20 sessions, 86% of tokens were Bash, by volume. Batch independent probes into one
 call; ask for the answer (`grep -c`, `| sort | uniq -c`, `| head`), not the corpus; `grep -n` then
 `sed -n 'A,Bp'` instead of `cat`; use `review.py`/`trace.py`/`diagnose.py` instead of hand-rolled
-infolog greps; load the owning skill instead of reading the source tree; exclude `vendor/`,
-`matches/`, `changes/`, `reference/` from repo-wide searches.
+infolog greps; load the owning skill instead of reading the source tree; `.rgignore` keeps frozen
+release copies (`ai/v*/`), lanes and `reference/` out of searches; big files are read by range.
 
 ## Commands
 
