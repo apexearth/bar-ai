@@ -39,3 +39,6 @@ scratch_*.log
 /.barai-lanes
 /ai/lane-*
 reference/within-reason/
+
+# Windows crash dumps from the shell
+*.stackdump
