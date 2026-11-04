@@ -600,8 +600,6 @@ PANELS = [
                 "Nothing here is a count or a cap — set what you want at two "
                 "incomes and the curve is solved for you.",
         "extra": [
-            ("TUNE_CON_LOG_T1_A", ""), ("TUNE_CON_LOG_T1_B", ""),
-            ("TUNE_CON_LOG_T2_A", ""), ("TUNE_CON_LOG_T2_B", ""),
         ],
         "hide_extra": True,
     },
@@ -621,8 +619,6 @@ GROUPS = [
                      "what it is currently drawing.",
              "reads": "brain/market/want_energy.as",
              "knobs": [
-                 ("TUNE_E_PER_METAL", "more energy per metal of income — a "
-                  "bigger grid for the same economy"),
                  ("TUNE_E_HEADROOM", "builds further ahead of demand; lower "
                   "runs the grid tighter and stalls sooner"),
                  ("TUNE_ENERGY_GROWTH", "energy is worth more against "
@@ -734,10 +730,6 @@ GROUPS = [
              "what": "Eating our own obsolete buildings and the map's wrecks.",
              "reads": "brain/market/want_energy.as, kinds.as",
              "knobs": [
-                 ("TUNE_RECLAIM_GEN_E", "raises the income floor below which "
-                  "generators are never eaten — safer, slower to modernise"),
-                 ("TUNE_RECLAIM_PAD", "keeps more headroom before eating a "
-                  "generator"),
                  ("TUNE_OBSOLETE_RATIO", "a replacement must be further ahead "
                   "before the old one is torn down"),
              ]},
@@ -795,8 +787,6 @@ GROUPS = [
                   "demand for more builders"),
                  ("TUNE_MOBILE_BP_EFF", "credits mobile builders with more of "
                   "their nominal worker time (they walk, so it is under 1)"),
-                 ("TUNE_GREED_CONS", "a quiet enemy licenses a bigger builder "
-                  "fleet"),
              ]},
             {"title": "Crew size at one site",
              "what": "How many builders pile onto a single building, and when "
@@ -882,9 +872,6 @@ GROUPS = [
                      "elected to rush it and the rest follow on income.",
              "reads": "manager/techlead.as, factory/phase.as",
              "knobs": [
-                 ("TUNE_T2_ENERGY", "T2 waits for a bigger grid"),
-                 ("TUNE_T2_ENERGY_REACTOR", "the lower energy bar that applies "
-                  "once a reactor already stands"),
                  ("TUNE_TECH_PIPE", "discounts a tech plant's unlock value "
                   "against the delay before it delivers"),
                  ("TUNE_TECH_SURVIVAL", "discounts tech by the risk borne "
@@ -1965,8 +1952,6 @@ GOALS = [
                "to rush it; everyone else follows on their own income. Judge it "
                "on the RUSHER's first-T2 time, not the team average.",
         "steps": [
-            {"ref": "TUNE_T2_ENERGY", "dir": "either",
-             "note": "energy income required before T2"},
             {"ref": "TUNE_TECH_PIPE", "dir": "up",
              "note": "discounts the delay before a tech plant delivers, so tech "
                      "outbids immediate spending"},
@@ -1986,9 +1971,6 @@ GOALS = [
         "steps": [
             {"ref": "spend:SPEND_BUILDPOWER", "dir": "up",
              "note": "the share of spend that becomes constructors and nanos"},
-            {"ref": "TUNE_CON_LOG_T1_A", "dir": "up",
-             "note": "use the T1 constructor curve editor above rather than this "
-                     "coefficient directly"},
             {"ref": "TUNE_BP_HEADROOM", "dir": "up",
              "note": "aim for more lathe capacity per metal of income"},
             {"ref": "TUNE_SITE_COST_PER_WORKER", "dir": "down",
@@ -2015,8 +1997,6 @@ GOALS = [
                      "generator while overflowing"},
             {"ref": "TUNE_CONV_HORIZON", "dir": "up",
              "note": "converters must pay back sooner, so fewer are built"},
-            {"ref": "TUNE_E_PER_METAL", "dir": "either",
-             "note": "the size of grid the AI aims at per metal of income"},
         ],
         "watch": "the Economy chart on any run detail page — energy waste and "
                  "stall bands.",

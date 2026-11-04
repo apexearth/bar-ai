@@ -220,7 +220,6 @@ local NAMES = {
 	"apex_front_band_frac",
 	"apex_front_min_reach",
 	"apex_front_safe_edge",
-	"apex_greed_cons",
 	"apex_hot_radius",
 	"apex_hz_approach",
 	"apex_incoming_closing",
@@ -282,8 +281,6 @@ local NAMES = {
 	"apex_push_team_ratio",
 	"apex_raid_min_early",
 	"apex_raid_tau",
-	"apex_reclaim_gen_e",
-	"apex_reclaim_solar_e",
 	"apex_reinforce_frac",
 	"apex_request_drain",
 	"apex_path_infl_margin",
@@ -321,8 +318,6 @@ local NAMES = {
 	"apex_eta_commit_bonus", -- want_energy.as: share of the extra fleet-time a bigger reactor commits, credited to the ladder's smaller pick in the tie-break (0 = off)
 	"apex_retreat_scale", -- posture.as: scale every def's retreat hp threshold (1 = config value; lower fights longer before pulling out)
 	"apex_budget_after", -- decide.as: apply the budget correction to the draw ticket instead of the value the draw sharpens (0 = off)
-	"apex_t2_energy",
-	"apex_t2_energy_reactor",
 	"apex_t2_hold_boost",
 	"apex_withdraw_ally_r",
 	"apex_withdraw_behind",
@@ -569,8 +564,6 @@ local NAMES = {
 	"apex_kite_foe_pad",      -- SquadTask.cpp: margin over the closing enemy's range that triggers the backstep (120)
 	"apex_extra_plant_army",  -- choose.as: fraction of the army budget target extras must see fed (0.85)
 	"apex_eta",               -- eta.as: 0 shadow-log the ETA ladder, 1 let it re-rank the economic categories
-	"apex_energy_headroom",   -- maketask.as: energy income target as multiple of current pull (1.35)
-	"apex_t2_energy_from",    -- maketask.as: metal income from which the T2 energy floor applies (12)
 	"apex_flank_pct",         -- AttackTask.cpp: percent of attack squads that route around a side (35)
 	"apex_flank_frac",        -- AttackTask.cpp: lateral offset as fraction of the approach distance (0.45)
 	"apex_flank_min_dist",    -- AttackTask.cpp: extra floor on the flank's approach length; 0 = the squad's own weapon range rules (0)
@@ -608,17 +601,10 @@ local NAMES = {
 	"apex_unblock_still",
 	"apex_unblock_period",
 	"apex_kill_quota",
-	"apex_con_log_t1_a",
-	"apex_con_log_t1_b",
-	"apex_con_log_t2_a",
-	"apex_con_log_t2_b",
-	"apex_reclaim_pad",
 	"apex_dup_bank",
 	"apex_raid_mexline",
 	"apex_roam_front",
 	"apex_roam_r",
-	"apex_e_per_metal",
-	"apex_fusion_min_energy",
 	"apex_super_self_frac",
 	"apex_gantry_afford_s",
 	"apex_super_flight_per",

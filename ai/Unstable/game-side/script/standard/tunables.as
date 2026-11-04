@@ -36,8 +36,6 @@
 //   justifies: one extra copy per (its cost x this) of banked metal.
 const float TUNE_DUP_BANK = 1.f;
 
-// Build energy while income < pull * this.
-const float TUNE_ENERGY_HEADROOM = 1.35f;
 
 // [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE. 0 changes nothing; 1 lets the
 //   ETA re-rank wants WITHIN the four economic categories. See docs/tunables.md.
@@ -52,40 +50,14 @@ const float TUNE_ECO_ONLY = 0.f;
 //   costs a full ladder simulation per ranked want; on when apex_eta is.
 const float TUNE_ETA_LOG = 0.f;
 
-// [metal or metal/s] -- Energy per metal: the grid target follows METAL income
-//   (energy.pull is throttled demand and self-reports "fine" while starving...
-const float TUNE_E_PER_METAL = 20.f;
-
-// [metal or metal/s] -- A fusion costs ~21,000 ENERGY to construct: starting
-//   one on a small grid drains it -- the lathe plus a producing T2 lab stalls...
-const float TUNE_FUSION_MIN_ENERGY = 1000.f;
-
-// [energy/s] -- energy income below which winds and advanced solars are never
-//   reclaimed (apexearth: ">2000 reclaim wind and advanced solar"); wind's cliff
-//   additionally scales down on bad-wind maps.
-const float TUNE_RECLAIM_GEN_E = 2000.f;
-
-// [ratio] -- PADDING: a victim is only eligible while the grid AFTER eating it
-//   still clears pull by this factor.
-const float TUNE_RECLAIM_PAD = 1.5f;
-
-// Income cliffs below which a generator tier is never eaten (apexearth
-//   2026-08-15: solars ~500, wind/advsol ~2000, wind scaled...
-const float TUNE_RECLAIM_SOLAR_E = 500.f;
 
 
-// [energy/s] -- Energy income required before starting T2 (techlead.as
-//   RushReady), and the lower bar once a reactor already stands.
-const float TUNE_T2_ENERGY = 1200.f;
 
-// [metal/s] -- NOT a T2 permission knob: the metal income from which the
-//   energy-buildup lane starts enforcing its pre-T2 energy floor (building the
-//   grid FOR T2, ahead of the decision itself).
-const float TUNE_T2_ENERGY_FROM = 12.f;
 
-// [energy/s] -- The lower T2 energy bar once a reactor already stands
-//   (apex_t2_energy is the bar without one).
-const float TUNE_T2_ENERGY_REACTOR = 400.f;
+
+
+
+
 
 // ---------------------------------------------------------------------------
 // Constructors, build power, nanos
@@ -94,25 +66,14 @@ const float TUNE_T2_ENERGY_REACTOR = 400.f;
 //   behind) is allowed; 0 removes it.
 const float TUNE_CONSERVATIVE_HOLD = 1.f;
 
-// [curve] -- T1 constructor curve slope: cons wanted = A x ln(income) + B. At
-//   A=4.6/B=-6.55 that is ~4 cons at 10 m/s, ~14 at 100. See docs/tunables.md.
-const float TUNE_CON_LOG_T1_A = 4.6f;
 
-// [curve] -- T1 constructor curve intercept -- see apex_con_log_t1_a.
-const float TUNE_CON_LOG_T1_B = -6.55f;
 
-// [curve] -- T2 constructor curve slope: cons wanted = A x ln(income) + B.
-const float TUNE_CON_LOG_T2_A = 6.0f;
 
-// [curve] -- T2 constructor curve intercept -- see apex_con_log_t2_a.
-const float TUNE_CON_LOG_T2_B = -16.0f;
 
 // [ratio] -- Outmassed reads true while enemy massing threat exceeds our team
 //   army value times this; being outmassed suspends cheap-constructor growth.
 const float TUNE_CON_OUTMASSED = 1.f;
 
-// A PASSIVE read of the enemy licenses a bigger builder fleet.
-const float TUNE_GREED_CONS = 1.7f;
 
 // [metal] -- Workers allowed on one build site: one more per this much of the
 //   building's cost -- past that another pair of hands beats opening the next
