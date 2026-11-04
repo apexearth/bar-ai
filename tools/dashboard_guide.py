@@ -914,9 +914,6 @@ GROUPS = [
                   "this metal/s lifts the plant-copy ban and the one-advanced-"
                   "plant-at-a-time rule — lower and a wasteful economy earns "
                   "its second gantry (or parallel T2 plants) earlier"),
-                 ("TUNE_BLAST_AISLE", "gap in elmos between a big generator's "
-                  "own clusters — bigger keeps more of the farm outside one "
-                  "chain explosion, at the cost of longer walks"),
                  ("TUNE_CON_FEED_HEADROOM", "how many constructors the lines "
                   "may pay for, as a multiple of what income keeps fed — "
                   "lower means army sooner once the hands are hired"),
@@ -1146,10 +1143,6 @@ GROUPS = [
                   "turrets: a 2500-buildtime Guard over a 17400-buildtime "
                   "Agitator, which is what stops defences dying half-built on "
                   "the front line. 0 removes the pressure entirely"),
-                 ("TUNE_DEF_ECO_S", "seconds of total economic power we may "
-                  "hold in static defence -- the whole size of the standing "
-                  "holding. RAISE for a turtle that can carry a Pulsar, LOWER "
-                  "to spend the metal on army instead"),
                  ("TUNE_DEF_OFF", "1 builds NO turrets at all, ground or AA: "
                   "radar, jammers and units are the whole defence. This is the "
                   "no-turret fighting test from docs/doctrine.md -- override it on a "
@@ -1194,12 +1187,6 @@ GROUPS = [
                   "is 500 in a +100% game. Below it that player's target names "
                   "no army and no defence at all; above it the role stops "
                   "existing. RAISE for a longer greed phase"),
-                 ("TUNE_ECO_TARGET_BASE_8", "the same economy for an "
-                  "EIGHT-player team, at no bonus -- 500 here is 1000 m/s "
-                  "in a +100% game (his 2026-09-14 ruling: 1k, not 2k; one of eight "
-                  "spends the whole early game on economy). While it grows "
-                  "the cover, spill and escort floors buy no army for that "
-                  "player either; a raid on its home ends the growth"),
                  ("TUNE_ARMY_ECO_S", "seconds of total economic power we may "
                   "hold as ARMY -- the other half of the same split, on the "
                   "same basis as TUNE_DEF_ECO_S above, so the two numbers "
@@ -1527,10 +1514,6 @@ GROUPS = [
                      "`apex: lava` line.",
              "reads": "manager/lava.as",
              "knobs": [
-                 ("TUNE_LAVA", "[toggle] prices and places against the tide. "
-                  "Off, the AI builds on a lava map exactly as it did before "
-                  "— the only way to A/B this on the same map. The "
-                  "sense keeps logging either way"),
              ]},
             {"title": "Scouting",
              "reads": "manager/brain/market/want_tech.as",
@@ -1677,16 +1660,12 @@ GROUPS = [
              "knobs": [
                  ("TUNE_FARM_ROW_W", "a wider energy farm row — wider rows "
                   "read as a line, narrower ones stack into a block"),
-                 ("TUNE_FARM_ROWS", "how far rearward the farm scan walks "
-                  "before giving up"),
                  ("TUNE_CLUSTER_N", "how many of one building stand together "
                   "before a fresh cluster starts"),
                  ("TUNE_FUS_BACK", "founds the first fusion deeper behind the "
                   "base anchor"),
                  ("TUNE_FARM_BACK", "plans the eco farm further behind the "
                   "base anchor"),
-                 ("TUNE_SLOT_TRIES", "lattice slots tried before a placement "
-                  "gives up"),
                  ("TUNE_ROOM_WORTH", "what the ground under an obsolete "
                   "building is worth once the base is full — raise it to "
                   "reclaim old wind, solar and converters to make room"),
@@ -1702,9 +1681,6 @@ GROUPS = [
                  ("TUNE_RECLAIM_REZ_BIAS", "how much more a reclaim is worth "
                   "to a rezbot than to a constructor that could be claiming "
                   "ground — raise it to keep cons expanding"),
-                 ("TUNE_AISLE_GROW", "a growing cluster must keep the walking "
-                  "street to its neighbours instead of filling it in — fewer "
-                  "units sealed into pockets, at the cost of more sprawl"),
              ]},
         ],
     },
@@ -1883,10 +1859,6 @@ GOALS = [
                      "makes covering it pay"},
             {"ref": "TUNE_SPACE_RENT", "dir": "up",
              "note": "rewards building on ground our turrets already cover"},
-            {"ref": "TUNE_DEF_ECO_S", "dir": "up",
-             "note": "lets the standing defence holding grow -- it is a share "
-                     "of economic power, so this is how much turtle the "
-                     "economy buys"},
             {"ref": "TUNE_DEF_TRADE", "dir": "up",
              "note": "credits a turret with stopping more enemy metal"},
             {"ref": "TUNE_UNPROT_DISCOUNT", "dir": "up",

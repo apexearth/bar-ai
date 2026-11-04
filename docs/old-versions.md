@@ -2,7 +2,7 @@
 
 One row per release or candidate: what it is, and its measured record. Head-to-head is against v0.2.6,
 sides swapped every game, starts staggered 15 s; a time-limit game goes to the side clearly ahead on army
-x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size: a difference under
+x mexes at the end (a scratch script, not kept), else a draw. 12 games per map size: a difference under
 ~25 points is inside the noise.
 
 | Version | Tag | What changed | Small (Red Comet 4v4) | Mid (Comet Catcher 4v4) | Large (Supreme Isthmus 4v4) |

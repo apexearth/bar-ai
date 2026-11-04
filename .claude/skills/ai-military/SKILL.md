@@ -108,7 +108,7 @@ against that one question.
 
 `apex_stance*` · `apex_withdraw_odds` ·
 `apex_super_self_frac` (0.4) · `apex_roam_front/apex_roam_r` ·
-`apex_siege_fear_frac` · `apex_raid_mexline` · `apex_raid_pack`
+`apex_raid_pack`
 
 ## Open items (as of 2026-08-21)
 

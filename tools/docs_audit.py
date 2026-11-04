@@ -56,7 +56,7 @@ SURVEYS = set()
 EXTERNAL_FILES = {"aiSimpleName.lua", "aiCustomData.lua", "parse_demo_file.py",
                   "config/x.json", "gadgets.lua", "units.json",
                   "launcher_cfg.json", "config.json", "interface_skirmish.lua",
-                  "springsettings.cfg"}
+                  "springsettings.cfg", "game_energy_conversion.lua", "gui_chat.lua"}
 
 # A doc that says a thing is GONE is not rotten -- it is the cure. Suppress a
 # reference whose own line reports the absence, or every correct obituary reads
@@ -134,7 +134,7 @@ def main():
     declared |= set(re.findall(r"\bfunction\s+([A-Za-z_$][A-Za-z0-9_$]*)", code))
     declared |= set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=",
                                code))
-    tunables = set(re.findall(r'GetTunable\("([a-z_0-9]+)"', code))
+    tunables = set(re.findall(r'Get[A-Za-z]*Tunable\("([a-z_0-9]+)"', code))
 
     # Every file that exists, by basename and by tail path.
     have = set()

@@ -122,8 +122,8 @@ One file, one `<script>`, plain ES6, no framework. Conventions that matter:
 
 **Verify a UI change actually runs.** `node --check` on the extracted script
 catches syntax only. The stubbed-DOM harness pattern (a fake `document`,
-`fetch` pointed at a live server on another port, then drive `loadBalance()` /
-`renderGoals()` / `renderTunables()` and assert no `undefined`/`NaN` reaches the
+`fetch` pointed at a live server on another port, then drive the page's load and render functions (`loadBudget()`,
+`renderSpend()` and the rest) and assert no `undefined`/`NaN` reaches the
 markup) is what catches the rest — that is how the growth panel's missing curve
 knobs and the `restoreTab` regression were both found before shipping.
 
