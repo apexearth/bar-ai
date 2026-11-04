@@ -1,21 +1,13 @@
 # Switches nobody plays (2026-11-03, cleanup 11-04)
 
 A switch at 0 in `tunables.as` (and in the release) that is not a lobby option runs in no game anyone plays.
-11-04 deleted 38 of them, script side, keeping the off path (smoke game on lane-slim: compiled and played); each
+11-04 deleted 38 of them first, script side, keeping the off path (smoke game on lane-slim: compiled and played); each
 one's measurement is in that commit message. Kept on purpose: diagnostics and training (ETA_LOG, PERF,
 CATALOG_DUMP, NN_RECORD, VERBOSE, FORECAST_LOG, PN_EXPLORE, PN_RULE_CENTRE, DRAW_*, PING), test aids (UNIT_LIMIT
 for `--restrict-mex`, DEF_OFF), the lobby option PERSONA, and LAB_BEST / ARMY_ONE_CURRENCY, which steps 3-4 of
 `todo/one-pricing-scale.md` use.
 
-**Still to delete, needs care:**
-- `TUNE_COM_HOME` (comhome.as): its helpers are called by live commander code (comdecide, comrush, comship,
-  smallhard, lift) without the switch, so only the switched parts can go.
-- C++, needs a DLL build: `TUNE_ONE_ARMY` (AttackTask ArmyStep/FollowArmy/StageArmy, MilitaryManager board; also
-  forced off under the stock army), `TUNE_KEEP_ROUTE` (TravelAction.cpp SetPath), `TUNE_FLUSH_KIN`
-  (BuilderTask.cpp flush pass).
-- Read by nothing at all (check.py dashboard section): T2_ENERGY, T2_ENERGY_REACTOR, CON_LOG_T1_A/B,
-  CON_LOG_T2_A/B, ECO_TARGET_BASE_8, E_PER_METAL, GREED_CONS, RECLAIM_GEN_E, RECLAIM_PAD, AISLE_GROW,
-  ENERGY_HEADROOM, FUSION_MIN_ENERGY, RAID_MIN_EARLY, RECLAIM_SOLAR_E, SCREEN_MAX, T2_ARMY_FLOOR.
+**11-04, second pass:** COM_HOME (comhome.as is now just ComHomeLathe, which the effigy rush reads), the C++ ONE_ARMY (AttackTask follow/stage), KEEP_ROUTE (TravelAction) and FLUSH_KIN (BuilderTask flush rank), 14 policy.as knobs nothing called, and lava.as, which nothing included. Constants the AI reads directly, not through GetTunable (RAID_MIN_EARLY, SCREEN_MAX, T2_ARMY_FLOOR, AISLE_GROW, ECO_TARGET_BASE_8), are used and stay.
 
 **Built for one of his asks, never given a fair test (his call: test a short list, delete the rest and move
 the ask back to `todo/`):** team massive air (TEAM_AIR), the rush as a play (STRIKE_PHASES, STRIKE_SCHEDULE,

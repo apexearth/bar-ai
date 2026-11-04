@@ -8,7 +8,6 @@ budget alone).
 
 Traced (apex_order_trace, 20-min 2v2): 20,125 route changes, builders 55%, retreats 15%, scouts 13%, raids 9%;
 70-90% moved the goal under 64 elmos. apex_keep_route (keep the walked route when the new one ends within 64 of it)
-cut army commands per unit-minute to 16-20 from 25-33, but went 6-13 on Starwatcher vs v0.3.5: OFF (validation #68)
-until a larger big-map run. Measured and left off or reverted: apex_order_dedupe (<1%), apex_travel_step 2 (-6%),
+cut army commands per unit-minute to 16-20 from 25-33, but went 6-13 on Starwatcher vs v0.3.5; deleted 11-04, never played. Measured and left off or reverted: apex_order_dedupe (<1%), apex_travel_step 2 (-6%),
 apex_travel_samestep (noise). What is left is mostly units near enemies, which the lean path re-orders every second.
 Next: hold a unit's order while its goal has not moved enough to change its route.

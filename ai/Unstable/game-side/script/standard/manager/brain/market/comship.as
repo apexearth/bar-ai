@@ -204,13 +204,12 @@ void ComShipAssess(CCircuitUnit@ u)
 				|| (gp.distance2D(Builder::gHomePos) > Builder::BASE_DANGER_DIST))
 				continue;
 			float sl = 0.f;
-			const float comM = ComHomeComM(g);
-			const float m = Military::GroundArmyOf(g, sl) + comM;
+			const float m = Military::GroundArmyOf(g, sl);
 			if (m <= 0.f)
 				continue;
 			++gShipHome;
 			gShipFoeM += m;
-			if ((comM <= 0.f) && ShipAllRaiders(g))
+			if (ShipAllRaiders(g))
 				continue;
 			if (!census) {
 				census = true;
@@ -270,7 +269,6 @@ void ComShipAssess(CCircuitUnit@ u)
 	gShipHopeless = gShip && (gShipStrCom * Military::ANSWER_PARITY > 1.f);
 	if (gShipHopeless)
 		gShip = false;
-	ComHomeShip(u);
 	if (gShip) {
 		++gShipSec;
 		ai.PublishTeamValue("comship", float(ai.frame));

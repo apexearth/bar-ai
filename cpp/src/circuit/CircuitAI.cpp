@@ -1244,9 +1244,8 @@ int CCircuitAI::Update(int frame)
 		// dupable = moves a re-send provably could not change; DROPPED only when
 		// apex_order_dedupe is on, counted either way, so the number is what
 		// turning it on would buy rather than what it bought.
-		LOG("apex: orders t=%i move=%u fight=%u patrol=%u attack=%u target=%u dupable=%u routeKept=%u doorRefused=%u",
-				teamId, ordSent[0], ordSent[1], ordSent[2], ordSent[3], ordSent[4], ordSup[0], routeKept, doorRefused);
-		routeKept = 0;
+		LOG("apex: orders t=%i move=%u fight=%u patrol=%u attack=%u target=%u dupable=%u doorRefused=%u",
+				teamId, ordSent[0], ordSent[1], ordSent[2], ordSent[3], ordSent[4], ordSup[0], doorRefused);
 		doorRefused = 0;
 		{
 			// apex: EVERY command the wrappers sent this minute, by who got it (his 10-22: "throttle it so APM doesn't

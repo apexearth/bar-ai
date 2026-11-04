@@ -291,7 +291,6 @@ void CAttackTask::Update()
 	RepairBreak(frame);
 	holdWas = holding;
 	holding = false;
-	ArmyStep(frame);
 
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
@@ -313,11 +312,7 @@ void CAttackTask::Update()
 	}
 
 	atStage = false;
-	if (walkOn) {
-		if (startPos.SqDistance2D(walkPos) < SQUARE(DEFAULT_SLACK * 4)) {
-			return;
-		}
-	} else if ((GetTarget() == nullptr) && circuit->GetMilitaryManager()->IsFocusFor(frame, this)
+	if ((GetTarget() == nullptr) && circuit->GetMilitaryManager()->IsFocusFor(frame, this)
 		&& !circuit->GetMilitaryManager()->IsFocusGo())
 	{
 		// Stage short of the line's reach, then back toward home until the threat
@@ -355,13 +350,13 @@ void CAttackTask::Update()
 		return;
 	}
 
-	AIFloat3 endPos = walkOn ? walkPos : position;
+	AIFloat3 endPos = position;
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	const float eps = pathfinder->GetSquareSize();
 	// to a staging point (no target) the squad walks to the point, not to weapon range of it
-	float pathRange = (walkOn || (GetTarget() == nullptr)) ? DEFAULT_SLACK : std::max(highestRange - eps, eps);
+	float pathRange = (GetTarget() == nullptr) ? DEFAULT_SLACK : std::max(highestRange - eps, eps);
 	AIFloat3 via;
-	const bool viaPath = !walkOn && (GetTarget() != nullptr) && FlankStep(position, GetTarget()->GetId(), frame, via);
+	const bool viaPath = (GetTarget() != nullptr) && FlankStep(position, GetTarget()->GetId(), frame, via);
 	if (viaPath) {
 		endPos = via;
 		pathRange = DEFAULT_SLACK * 2;
@@ -1696,180 +1691,6 @@ void CAttackTask::RepairBreak(int frame)
 			tdef->GetDef()->GetName(), hp, best->GetCircuitDef()->GetDef()->GetName());
 	SetTarget(best);
 	position = best->GetPos();
-}
-
-// ONE BIG ARMY (his 10-14, docs/doctrine.md): every ground attack squad but the strongest walks to it and
-// fights its target, so the army moves and fights together instead of probing one spot per squad.
-// The split head scales the pull (x the map's diagonal) and, above 1, the merge reach; near 0 every
-// squad is its own, as before 10-14. A threat to our base keeps its own answer; a team push owns everyone.
-void CAttackTask::ArmyStep(int frame)
-{
-	walkOn = false;
-	following = false;
-	staging = false;
-	CCircuitAI* circuit = manager->GetCircuit();
-	CMilitaryManager* mm = circuit->GetMilitaryManager();
-	if (!mm->IsOneArmy()) {
-		stageKey = -1;
-		return;
-	}
-	CAttackTask* army = (mm->IsFocusFor(frame, this) || (repairerId >= 0) || leader->GetCircuitDef()->IsAbleToFly())
-			? nullptr : mm->GetMainArmy();
-	if (army == this) {
-		StageArmy(frame);
-		return;
-	}
-	stageKey = -1;
-	if ((army == nullptr) || tgtThreat || !FollowArmy(army, frame) || (frame < nextArmyLog)) {
-		return;
-	}
-	nextArmyLog = frame + FRAMES_PER_SEC * 30;
-	const AIFloat3& lp = leader->GetPos(frame);
-	circuit->LOG("apex: army-follow t=%i lead=%s n=%i pow=%.1f army=%s armyN=%i armyPow=%.1f d=%.0f how=%s",
-			circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(), attackPower,
-			army->leader->GetCircuitDef()->GetDef()->GetName(), (int)army->units.size(), army->attackPower,
-			lp.distance2D(army->leader->GetPos(frame)),
-			!walkOn ? "share" : (army->staging ? "stage" : "walk"));
-}
-
-bool CAttackTask::CanShareTarget(CEnemyInfo* t) const
-{
-	if (t->IsHidden()) {
-		return false;
-	}
-	CCircuitDef* edef = t->GetCircuitDef();
-	CCircuitDef* cdef = leader->GetCircuitDef();
-	if ((edef != nullptr)
-		&& (((edef->GetCategory() & cdef->GetTargetCategory()) == 0) || edef->IsAbleToFly()))
-	{
-		return false;
-	}
-	return manager->GetCircuit()->GetTerrainManager()->CanMobileReachAt(leader->GetArea(), t->GetPos(), highestRange);
-}
-
-bool CAttackTask::FollowArmy(CAttackTask* army, int frame)
-{
-	CCircuitAI* circuit = manager->GetCircuit();
-	CMilitaryManager* mm = circuit->GetMilitaryManager();
-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-	const AIFloat3& lp = leader->GetPos(frame);
-	const AIFloat3& ap = army->leader->GetPos(frame);
-	const float d = lp.distance2D(ap);
-	if ((d > mm->GetArmyPullR()) || !terrainMgr->CanMoveToPos(leader->GetArea(), ap)) {
-		return false;
-	}
-	// what already stands in our reach is shot first; the army is joined after
-	CEnemyInfo* own = GetTarget();
-	if ((own != nullptr) && (lp.SqDistance2D(own->GetPos()) < SQUARE(highestRange + DEFAULT_SLACK * 4))) {
-		return false;
-	}
-	following = true;
-	CEnemyInfo* at = army->GetTarget();
-	if ((d <= army->highestRange + highestRange) && !army->staging && (at != nullptr) && CanShareTarget(at)) {
-		if (at != own) {
-			SetTarget(at);
-			targetSince = frame;
-		}
-		// its commitment and its way in too: the squads beside it arrive with it
-		commitUntil = army->commitUntil;
-		flankKey = army->flankKey;
-		flankDir = army->flankDir;
-		flankR = army->flankR;
-		flankOff = army->flankOff;
-		flankUntil = army->flankUntil;
-		flankDone = army->flankDone;
-		position = at->GetPos();
-		mm->NoteArmy(CMilitaryManager::AE_SHARE);
-		return true;
-	}
-	// stragglers gather forward at the army, never at home
-	walkPos = army->staging ? army->walkPos : ap;
-	CTerrainManager::CorrectPosition(walkPos);
-	walkPos = terrainMgr->GetMovePosition(leader->GetArea(), walkPos);
-	walkOn = true;
-	mm->NoteArmy(CMilitaryManager::AE_WALK);
-	return true;
-}
-
-// THE ARMY ARRIVES TOGETHER (docs/doctrine.md: no trickling in one at a time). Short of a new target the main
-// army stands until the squads walking to it have come, or what stands with it beats what guards the
-// target, or the farthest of them has had its walk. The stage head scales the stand-off and that odds.
-void CAttackTask::StageArmy(int frame)
-{
-	CEnemyInfo* t = GetTarget();
-	if ((t == nullptr) || tgtThreat) {
-		stageKey = -1;
-		return;
-	}
-	if (t->GetId() != stageKey) {
-		stageKey = t->GetId();
-		stageGo = false;
-		stageUntil = -1;
-	}
-	if (stageGo) {
-		return;
-	}
-	CCircuitAI* circuit = manager->GetCircuit();
-	CMilitaryManager* mm = circuit->GetMilitaryManager();
-	const float sMul = mm->GetStageMul();
-	const AIFloat3& lp = leader->GetPos(frame);
-	const AIFloat3& tp = t->GetPos();
-	const float standR = (highestRange + DEFAULT_SLACK * 4) * sMul;
-	float withPow = 0.f, comingPow = 0.f, etaS = 0.f;
-	for (IFighterTask* ft : mm->GetTasks(IFighterTask::FightType::ATTACK)) {
-		CAttackTask* o = dynamic_cast<CAttackTask*>(ft);
-		if ((o == nullptr) || (o->leader == nullptr)) {
-			continue;
-		}
-		const float od = o->leader->GetPos(frame).distance2D(lp);
-		if ((o == this) || (od <= highestRange + o->highestRange)) {
-			withPow += o->attackPower;
-		} else if (o->following) {
-			comingPow += o->attackPower;
-			etaS = std::max(etaS, od / std::max(o->lowestSpeed, 1.f));
-		}
-	}
-	const float fightR = std::max(leader->GetCircuitDef()->GetLosRadius(), 400.f) * 2.f;
-	const float foe = mm->GetEnemyInflNear(tp, fightR);
-	const bool first = (stageUntil < 0);
-	if (first) {
-		stageUntil = frame + int(etaS * FRAMES_PER_SEC);
-	}
-	const float dT = lp.distance2D(tp);
-	const char* why = (comingPow <= 0.f) ? "none" : ((withPow > foe * sMul) ? "odds"
-			: ((frame >= stageUntil) ? "time" : ((dT <= standR) ? "close" : nullptr)));
-	if (why != nullptr) {
-		stageGo = true;
-		if (!first) {
-			mm->NoteArmy(CMilitaryManager::AE_GO);
-			circuit->LOG("apex: army-go t=%i lead=%s n=%i why=%s with=%.1f coming=%.1f foe=%.1f mul=%.2f",
-					circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(), why,
-					withPow, comingPow, foe, sMul);
-		}
-		return;
-	}
-	AIFloat3 dir = lp - tp;
-	dir.y = 0.f;
-	dir = dir / dT;
-	float d = standR;
-	AIFloat3 stage = tp + dir * d;
-	CThreatMap* tm = circuit->GetThreatMap();
-	for (int k = 0; (k < 40) && (d + DEFAULT_SLACK * 2 < dT) && (tm->GetThreatAt(leader, stage) > THREAT_MIN); ++k) {
-		d += DEFAULT_SLACK * 2;
-		stage = tp + dir * d;
-	}
-	CTerrainManager::CorrectPosition(stage);
-	walkPos = circuit->GetTerrainManager()->GetMovePosition(leader->GetArea(), stage);
-	walkOn = true;
-	staging = true;
-	mm->NoteArmy(CMilitaryManager::AE_STAGE);
-	if (first) {
-		circuit->LOG("apex: army-stage t=%i lead=%s n=%i tgt=%s dTgt=%.0f stand=%.0f with=%.1f coming=%.1f foe=%.1f"
-				" etaS=%.0f mul=%.2f",
-				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
-				(t->GetCircuitDef() != nullptr) ? t->GetCircuitDef()->GetDef()->GetName() : "-", dT, d,
-				withPow, comingPow, foe, etaS, sMul);
-	}
 }
 
 } // namespace circuit

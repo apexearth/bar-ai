@@ -427,21 +427,15 @@ void ComRaidFill(CCircuitUnit@ unit)
 			continue;
 		int tier = 0, nMob = 0, nRaid = 0, nKill = 0;
 		float vmax = 0.f, dps = 0.f, hpS = 0.f, rng = 0.f;
-		const bool guns = ComHomeOn();
 		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
 		for (int k = 0; k < nU; ++k) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
 			if (!Catalog::ValidId(d) || Catalog::gFlyer[d])
 				continue;
-			// their standing guns, seen: what a claim or a walk-in stands under (apex_com_home)
-			if (!Catalog::gMobile[d]) {
-				if (!guns || (Catalog::gSurfDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
-					continue;
-				rng = (Catalog::gLandRange[d] > rng) ? Catalog::gLandRange[d] : rng;
-			}
+			if (!Catalog::gMobile[d])
+				continue;
 			++nMob;
-			if (ComHomeDgKills(d))
-				++nKill;
+			++nKill;
 			dps += Catalog::gSurfDps[d];
 			if (Catalog::gSurfDps[d] > 0.f) hpS += Catalog::gHealth[d];
 			if (Catalog::gSpeed[d] > vmax)

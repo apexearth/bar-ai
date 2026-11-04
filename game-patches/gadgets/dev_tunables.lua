@@ -104,7 +104,6 @@ local NAMES = {
 	"apex_comm_rules",
 	"apex_conv_horizon",
 	"apex_tech_survival",
-	"apex_lava",
 	"apex_bp_backlog_s",
 	"apex_front_line",
 	"apex_standoff_cover",
@@ -161,7 +160,6 @@ local NAMES = {
 	"apex_coward_rear_mod",
 	"apex_def_reach_cap",
 	"apex_def_site_walk",
-	"apex_def_eco_s",
 	"apex_def_off",
 	"apex_army_eco_s",
 	"apex_eco_target_base",
@@ -344,7 +342,6 @@ local NAMES = {
 	"apex_map_share",        -- mapshare.as + army.as + massing.as + plannet.as TaPick + nnraid.as + want_mex.as: under our seat share of the extractor spots, army nudge, aggression and claim value (0)
 	"apex_budget_hold",      -- budget.as + production.as con floors/builder price + decide.as hoists: orders that skip the budget's draw pay mult(row)/mult(army) while army is under its share (0)
 	"apex_small_hard",       -- smallhard.as + army.as ArmyFloor + production.as + nnraid.as + plannet.as TaPick + want_assist.as + comdecide.as: short path contact prices army to their strength at arrival, starves their extractors (0)
-	"apex_com_home",         -- comhome.as + decide.as ChargeTrip + want_assist.as + comdecide.as + comship.as + safety.as: the commander's time off the lab priced as army owed, his fight estimate fixed, the base he defends, his walk-ins priced (0)
 	"apex_com_home_assist",  -- decide.as: past the first plant the commander takes no job farther than 1,400 from home; a far choice becomes the lab (0)
 	"apex_plant_free",       -- want_plant.as CopyWaived: a plant copy is never refused (0)
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
@@ -419,10 +416,8 @@ local NAMES = {
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
 	"apex_hot_road_memo", -- decide.as ChargeTrip: a still-hot refused road zeroes that hand's want (1)
 	"apex_air_obs_evidence", -- state.as SettleStrike: run weight by bombers sent over the planned wing (1)
-	"apex_keep_route", -- TravelAction.cpp: same-place re-routes keep the route (1)
 	"apex_fac_lanes", -- FactoryTask.cpp: the lab site test refuses lanes and other factories' doors (1)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
-	"apex_flush_kin", -- C++ flush pass prefers kin (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
 	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
 	"apex_hoist_waits", -- decide.as: hoists wait for a hand walking to a live job (0)
@@ -609,7 +604,6 @@ local NAMES = {
 	"apex_gantry_afford_s",
 	"apex_super_flight_per",
 	"apex_copy_overflow_m",
-	"apex_blast_aisle",
 	"apex_con_feed_headroom",
 	"apex_unit_afford_s",
 	"apex_aid_respond",

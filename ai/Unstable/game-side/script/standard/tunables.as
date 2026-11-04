@@ -126,10 +126,6 @@ const float TUNE_T2_ARMY_HOLD = 1.f;
 //   siege squad is fixed (his 10-14: search on the one-army code, siege off).
 const float TUNE_SIEGE = 0.f;
 
-// [toggle 0/1] -- One army: ground attack squads walk to and follow the main
-//   army, which stages short of each new target (AttackTask ArmyStep). Off: the
-//   search measured 4/41 on it vs 12/48 without (his 10-14: back to old code).
-const float TUNE_ONE_ARMY = 0.f;
 
 // [toggle 0/1] -- The economy hand: with two constructors or more, one always
 //   holds the energy role (generators, converters) and is never released by the
@@ -928,7 +924,6 @@ const float TUNE_RUSH_AWARE = 1.f;   // [toggle 0/1] the army floor covers the e
 const float TUNE_MAP_SHARE = 1.f;   // [toggle 0/1] while our team holds fewer extractor spots than its seat share of the map: army target x (1 + gap), the leave-home bar and the stance hold lean to attack, raids and the team operation go for their extractors on the ground between, and a free spot's mex is worth (1 + gap) more (his 2026-10-15)
 const float TUNE_SMALL_HARD = 1.f;   // [toggle 0/1] where our pathfinder's walk to them is shorter than their time to outbuild our holding army: army floor covers their strength at arrival (seen army, their commanders, their likely extractor income x the walk), fast units priced by the income they can deny, raids and the team operation price their extractors by income denied for the rest of the horizon, the commander's lathe at the lab is army owed and his claims fear their unseen commander; mex pricing untouched (his 2026-10-16)
 const float TUNE_COM_HOME_ASSIST = 0.f;   // [toggle 0/1] past the first plant the commander's best job farther than 1,400 from home sends him to assist the lab instead (decide.as, comescort; his 11-03 vs WRDistilled)
-const float TUNE_COM_HOME = 0.f;   // [toggle 0/1] the commander's jobs away from a recruiting lab pay contact k x army gap x his lathe for the time they keep him away, and the lab guard earns it; his fight estimate stops crediting D-gun kills on commanders and lets a lone foe keep full fire; their commanders count as ground army at our base, which he defends while k x the stake there outweighs his expected death; his D-gun walk-in in peace prices the seen guns and unseen commanders where it goes (his 2026-10-16, small maps)
 const float TUNE_TEAM_AIR = 0.f;   // [toggle 0/1] the team leader prices the AIR plan against NORMAL every 30 s (square-law ground fight with and without the hold's army spend, plus one air sortie through the AA we have seen); under AIR every seat builds an air plant, bombers and gunships priced on the team target's shortfall, fighters only against seen fighters, holds them at one rally behind our lines, and all launch together when the gathered wing finishes the target; the scored strikes reprice the plan (his 2026-10-16)
 const float TUNE_BUDGET_HOLD = 1.f;   // [toggle 0/1] while army is under its budget share, the orders that skip the budget's draw price -- constructor floors, priced builders at the lab, and the hoisted nano, defence and defence-assist wants -- keep budget mult(row)/mult(army) of their odds or value when their row is over its share (his 2026-10-16, small maps)
 const float TUNE_EARLY_BALL = 1.f;   // [toggle 0/1] on short contact (apex_small_hard's k) a fast cheap unit is priced by the enemy metal a ball of them razes before their production answers, the massing pool waits for that ball, units are priced by the ground they watch per metal until income saturates it, scouts stop counting as patrol, and an air scout is priced by the unseen enemy metal its sweep adds (his 2026-10-16)
@@ -956,7 +951,6 @@ const float TUNE_LAB_ASSIST = 1.f;   // [toggle 0/1] a lab's order is a priced p
 const float TUNE_SITE_CACHE = 1.f;   // [toggle 0/1] perf: LatheSite and SuperSite answers kept one memo lifetime while our building set holds (sites.as)
 const float TUNE_CATCHUP_WALL = 1.f;   // [toggle 0/1] a host running faster than the game's speed is catching up behind the server: the election budget accrues per wall-clock frame, not per frame replayed (perf.as CatchingUp; his 2026-10-19)
 const float TUNE_FLUSH_PLACE = 1.f;   // [toggle 0/1] (C++ apex_flush_place; needs the rebuilt DLL) a farm build takes the nearest free site flush against an edge of one of our buildings before the lattice rings (BuilderTask.cpp; his 2026-10-18: "build up down left right off one of the existing types when you can")
-const float TUNE_FLUSH_KIN = 0.f;   // [toggle 0/1] (C++ apex_flush_kin; needs the rebuilt DLL) the flush pass ranks a site beside the same def, then the same footprint, ahead of any building, each rank worth two of the building's footprints of distance (his 10-20: blocks of one kind)
 const float TUNE_HOIST_WAITS = 1.f;   // [toggle 0/1] a hoist (floor, role, field, defjoin, metalfirst...) waits while the hand is still walking to a live job; the draw and the emergencies still move it (decide.as; his 2026-10-18: cons walk far, work 2 s, walk back)
 const float TUNE_UNLOCK_ONCE = 1.f;   // [toggle 0/1] a T2/T3 plant is the metal unlock (metal-first assists, MetalPathStarved) only if its units upgrade extractors and only until such a plant stands -- the extractor rule's sibling (register.as IsMetalUnlock; his 2026-10-18); and the tech market prices the unlock once: a second plant beside a standing or ordered kin gets no unlock value (want_tech.as)
 const float TUNE_MEMO_REPRICE = 1.f;   // [toggle 0/1] position-keyed memo answers are shared over a region four cells wide and their walk re-priced per asker (decide.as MemoServe; perf, his scav 8v8 at 3.9x the frame budget)
@@ -1733,7 +1727,6 @@ const float TUNE_TRIAL_AIR_ECO_PRICED = 1.f;   // [toggle 0/1] trial.as: apex_ai
 const float TUNE_MEX_BASIC = 1.f;   // [toggle 0/1] protect_target.as: mex cover is tower reach less raider reach, guard sites cover several mexes, a mex's first gun not scaled by the gunp head
 const float TUNE_HOT_ROAD_MEMO = 1.f;   // [toggle 0/1] decide.as ChargeTrip: a want on a road C++ refused for heat, still hot, is worth 0 to that hand
 const float TUNE_AIR_OBS_EVIDENCE = 1.f;   // [toggle 0/1] state.as SettleStrike: a strike run weighs by bombers sent over the wing planned
-const float TUNE_KEEP_ROUTE = 0.f;   // [toggle 0/1] TravelAction.cpp: a new route ending within 64 of the one being walked keeps it (no reset, no order)
 const float TUNE_FAC_LANES = 1.f;   // [toggle 0/1] FactoryTask.cpp: the lab site test refuses lanes and other factories' doors
 const float TUNE_LANE_RECLAIM = 1.f;   // [toggle 0/1] want_reclaim.as: an idle plant on a street or in an ally's factory door is priced for reclaim
 const float TUNE_FORECAST_LOG = 0.f;   // [toggle 0/1] forecast.as: log the 60-second forecast's error outside eco-only games too

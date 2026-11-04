@@ -1407,13 +1407,6 @@ CAttackTask* CMilitaryManager::GetMainArmy()
 	return best;
 }
 
-float CMilitaryManager::GetArmyPullR() const
-{
-	const float w = float(CTerrainManager::GetTerrainWidth());
-	const float h = float(CTerrainManager::GetTerrainHeight());
-	return splitMul * std::sqrt(w * w + h * h);
-}
-
 void CMilitaryManager::UpdateArmyBoard()
 {
 	const int frame = circuit->GetLastFrame();
@@ -1988,14 +1981,8 @@ void CMilitaryManager::UpdateDefenceTasks()
 		commitMul = commit;
 		stageMul = stage;
 		retreatMul = retreat;
-		const bool one = TeamBoardGet(ally, BOARD_ONE_ARMY + tid, 0.f) > 0.f;
-		if (one != oneArmy) {
-			circuit->LOG("apex: army-board t=%i oneArmy=%i", tid, one ? 1 : 0);
-		}
-		oneArmy = one;
 		if (circuit->IsStockArmy()) {
 			oddsMul = massMul = flankMul = splitMul = commitMul = stageMul = retreatMul = 1.f;
-			oneArmy = false;
 		}
 		UpdateArmyBoard();
 	}

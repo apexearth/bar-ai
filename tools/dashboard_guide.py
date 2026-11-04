@@ -169,20 +169,6 @@ PANELS = [
              "arrival, the army floor before and after, units ordered by "
              "kind, raids and kills on their extractors and the commander's "
              "jobs"),
-            ("TUNE_COM_HOME", "ON: on a small map, while the army is short, "
-             "the commander's time away from the factory costs the army he "
-             "would have built there, so far jobs lose to helping the factory "
-             "and helping the factory is worth the army it makes. He no longer "
-             "thinks his D-gun kills an enemy commander (it does no damage to "
-             "one) or that a single enemy's fire halves during a fight. An "
-             "enemy commander wrecking our base counts as an attack on it; he "
-             "defends when what stands there outweighs his risk of dying and "
-             "runs home rather than sideways. Chasing a target with the D-gun "
-             "counts the enemy towers and unseen commanders where it leads. "
-             "On a big map almost nothing changes. `apex: comhome-stat` each "
-             "minute shows his seconds by job and by how far forward, the "
-             "factory help's value against what won, base-attack seconds and "
-             "his answer, chases refused and fight/retreat swaps"),
             ("TUNE_EARLY_BALL", "ON (needs TUNE_SMALL_HARD): where their "
              "base is close, a cheap fast unit is worth the enemy metal a "
              "ball of them would destroy before the enemy's new units stop "
@@ -1189,8 +1175,7 @@ GROUPS = [
                   "existing. RAISE for a longer greed phase"),
                  ("TUNE_ARMY_ECO_S", "seconds of total economic power we may "
                   "hold as ARMY -- the other half of the same split, on the "
-                  "same basis as TUNE_DEF_ECO_S above, so the two numbers "
-                  "together read as the priority split. RAISE to field more "
+                  "RAISE to field more "
                   "army for the same economy"),
                  ("TUNE_FRAME_RISK", "charges every building for the chance it "
                   "is killed BEFORE it finishes, at the local hazard rate "

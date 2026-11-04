@@ -836,8 +836,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	CCircuitUnit@ fac = null;
 	// The commander's lab at its army price is offered wherever he stands; the walk is billed below.
-	const bool home = (comArmyW > 0.f) && ComHomeOn();
-	float best = home ? 1e18f : 600.f * 600.f;
+	float best = 600.f * 600.f;
 	for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
 		CCircuitUnit@ f = Brain::gFQFac[i];
 		if ((f is null) || (f.CountQueued(null) <= 0))
@@ -860,11 +859,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	}
 	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
 	const float mFree = FreeMetalFlow();
-	// Under the army gap his pull at the lab takes metal from economy into army, which is what the
-	// gap price pays for: bounded by income and bank, not by what nobody else is spending.
-	if (home)
-		drain = ComHomeLathe(unit);
-	else if (mFree < drain)
+	if (mFree < drain)
 		drain = mFree;
 	if (drain <= 0.05f)
 		return w;
@@ -892,8 +887,6 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	g.mCost = drain * 10.f * MCostScale();
 	g.tCost = (walkSec + 10.f) * WageOf(unit);
 	g.value = g.gain / (g.mCost + g.tCost);
-	if (comArmyW > 0.f)
-		ComHomeNoteGuard(g.value);
 	++gFacGuardBids;
 	if (g.value <= w.value)
 		return w;
@@ -909,7 +902,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	}
 	@gAssistTarget = fac;
 	gAssistTargetId = fac.id;
-	gAssistGuardS = home ? (int(walkSec) + 10) : 10;
+	gAssistGuardS = 10;
 	return g;
 }
 

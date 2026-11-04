@@ -364,7 +364,6 @@ void SmallHardComTick(CCircuitUnit@ u)
 	if (u is null)
 		return;
 	const int c = ShComJob(u);
-	ComHomeTick(u, c);
 	SprNoteComJob(c);
 	if (gSmhOn)
 		++gSmhJobN[c];

@@ -771,7 +771,7 @@ float LiftHandWorth(CCircuitUnit@ plane, CCircuitUnit@ u, AIFloat3& out site, fl
 	if (saved <= 0.f)
 		return 0.f;
 	const bool com = u.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
-	const float stake = (com ? ComHomeWorthM() : Catalog::gCostM[ud]) + Catalog::gCostM[int(plane.circuitDef.id)];
+	const float stake = (com ? (gAssetsM + ArmyValue()) : Catalog::gCostM[ud]) + Catalog::gCostM[int(plane.circuitDef.id)];
 	return saved * WageOf(u) - LiftRouteLossP(plane, at, site) * stake;
 }
 

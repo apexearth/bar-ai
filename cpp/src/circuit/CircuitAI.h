@@ -779,7 +779,6 @@ public:
 	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
 	void NoteOrder(int kind, int bucket, bool suppressed, int src = 0);
 	void NoteCmd(const CCircuitUnit* u, int kind);
-	void NoteRouteKept() { ++routeKept; }
 	void NoteDoorRefused() { ++doorRefused; }
 	unsigned doorRefused = 0;   // site probes refused for standing in a friendly factory's doorway (apex_door_clear)
 	// apex: the team's last refused roads (IBuilderTask::ApplyPathUnbounded), read by CCircuitUnit HotRoadTo
@@ -791,7 +790,6 @@ public:
 		hotRoads[hotRoadNext].at = at;
 		hotRoadNext = (hotRoadNext + 1) % 8;
 	}
-	unsigned routeKept = 0;
 	// apex: orders the arbiter refused, per call site -- what a centre TRIED to
 	// do while a higher-ranked decision was still running.
 	void NoteOrderRefused(int src, int byPrio);

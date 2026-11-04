@@ -1280,19 +1280,6 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 {
 	if ((w is null) || (w.kind == WK_NONE) || !OnMap(w.pos) || (w.value <= 0.f))
 		return;
-	// The lab he is not at, on the commander's every other job (comhome.as): a time cost, so the
-	// exposure reprice below keeps it.
-	{
-		const float away = ComHomeAwayM(unit, w);
-		if (away != w.awayM) {
-			const float c0 = w.mCost + w.tCost;
-			w.tCost += away - w.awayM;
-			w.awayM = away;
-			const float c1 = w.mCost + w.tCost;
-			if ((c0 > 0.f) && (c1 > 0.f))
-				w.value *= c0 / c1;
-		}
-	}
 	if (w.kind == WK_MEX)
 		return;
 	const float c = w.mCost + w.tCost;
@@ -3444,7 +3431,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Air::EvNoteElection(top.value, altV,
 			(top.kind == WK_PLANT) && (top.def !is null) && AirPlant(int(top.def.id)));
 	}
-	ComHomeNoteElection(unit, top);
 	ValMixNote(ranked, top);
 	if (PersOn())
 		PersNoteTop(top);

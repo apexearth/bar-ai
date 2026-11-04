@@ -10,7 +10,7 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
-| [off-switches](issues/off-switches.md) | 11-03 | 38 deleted 11-04; left: commander-home, 3 in C++, 17 read by nothing, 26 of his asks awaiting his test-or-delete call |
+| [off-switches](issues/off-switches.md) | 11-03 | 56 deleted 11-04; left: 26 of his asks awaiting his test-or-delete call |
 | [glacier-pass-plus0](issues/glacier-pass-plus0.md) | 11-03 | too many sites at once; energy short after the opening; slow to finish |
 | [8v8-first-gantry-late](issues/8v8-first-gantry-late.md) | 10-31 | the team's first T3 lab 22-26 min vs BARb's 14-18; waiting on his ruling on who hosts and pays |
 | [lrpc-orders-die](issues/lrpc-orders-die.md) | 10-24 | ~90% of long-range gun tasks never finish at forward sites; risk model reads them 0.44-0.50 |
