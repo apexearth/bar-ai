@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -39,6 +40,7 @@ STATE = os.path.join(RISK, "loop.json")
 LOG = os.path.join(RISK, "loop.log")
 ON = os.path.join(RISK, "loop_on")
 BATCH = 48
+MIN_FREE_GB = 10
 WINDOW = 12                      # ledgers fitted on: the seed ledger plus the newest batches
 SEED_LEDGER = os.path.join(LEDGERS, "20261104-pg.jsonl")
 REL = "script/standard/manager/brain/market/riskweights.as"
@@ -118,10 +120,26 @@ def risk_was_on(out):
     return "apex: risk t=" in txt and " on=1" in txt
 
 
+RICH_SHARE = 0.35   # his 11-05: "a game that has modified overall resources ... build power and range"
+
+
+def rich_modoptions(seed):
+    """the game's own multipliers for a share of games, the same for every player: late-game scale in early minutes"""
+    import random as _r
+    r = _r.Random(seed * 31 + 7)
+    if r.random() >= RICH_SHARE:
+        return {}
+    return {"multiplier_resourceincome": r.choice((1.5, 2, 3)), "multiplier_buildpower": r.choice((1, 1.5, 2)),
+            "multiplier_builddistance": r.choice((1, 1.25, 1.5))}
+
+
 def play(st, v, gi, slot):
     seed = randsearch.game_seed(20000 + v, gi)
     setup = randsearch.draw_setup(seed)
     setup["version"] = v
+    mods = rich_modoptions(seed)
+    if mods:
+        setup["modoptions"] = mods
     with open(os.path.join(st["dir"], "c%02d-g%d.setup.json" % (v, gi)), "w", encoding="utf-8") as fh:
         json.dump(setup, fh)
     neuro.play((st["dir"], v, gi, setup["per_side"], setup["map"], seed, opts_path(st), slot, setup["foe"], setup))
@@ -130,8 +148,12 @@ def play(st, v, gi, slot):
 
 def step(st):
     v = st["version"]
+    st["pending"] = [p for p in st["pending"] if os.path.exists(os.path.join(p, "result.json"))]
+    if len(st["pending"]) < BATCH:
+        save(st)
+        return
     batch, rest = st["pending"][:BATCH], st["pending"][BATCH:]
-    games = [p for p in batch if os.path.exists(os.path.join(p, "result.json"))]
+    games = batch
     off = [p for p in games if not risk_was_on(p)] if playing() else []
     if off:
         log("PAUSED: %d games did not play the learned risk (first %s)" % (len(off), off[0]))
@@ -151,10 +173,20 @@ def step(st):
     window = st["ledgers"][-WINDOW:]
     cand = risknet.fit_model(window)
     s_cur, s_cand = risknet.score(cur, [path]), risknet.score(cand, [path])
-    loss = lambda s: s["frame"]["loss"] + s["builder"]["loss"]  # noqa: E731
-    take = loss(s_cand) < loss(s_cur)
+    if s_cur is None or s_cand is None:
+        log("no jobs in %d games; no step" % len(games))
+        st["pending"] = rest
+        save(st)
+        return
+    # THE MARGIN (11-04 review: accepting any smaller loss accepted 4 of 5 refits that were no better): the refit
+    # must lower the loss per game by more than twice its standard error across these games
+    gc, gn = risknet.score_games(cur, [path]), risknet.score_games(cand, [path])
+    d = [gc[g] - gn[g] for g in gc if g in gn]
+    mean_d = sum(d) / len(d) if d else 0.0
+    se_d = (sum((x - mean_d) ** 2 for x in d) / max(1, len(d) - 1) / max(1, len(d))) ** 0.5 if len(d) > 1 else 1e9
+    take = mean_d > 2 * se_d
     rec = {"version": v, "at": time.strftime("%Y-%m-%d %H:%M"), "games": len(games), "current": s_cur,
-           "candidate": s_cand, "accepted": take}
+           "candidate": s_cand, "accepted": take, "gain_per_game": round(mean_d, 3), "se": round(se_d, 3)}
     st["history"].append(rec)
     st["ledgers"].append(path)
     st["pending"] = rest
@@ -167,7 +199,7 @@ def step(st):
             v, len(games), s_cur["jobs"], s_cur["frame"]["loss"], s_cur["frame"]["auc"] or 0, s_cur["builder"]["loss"],
             s_cur["builder"]["auc"] or 0, s_cand["frame"]["loss"], s_cand["frame"]["auc"] or 0,
             s_cand["builder"]["loss"], s_cand["builder"]["auc"] or 0, len(window),
-            ("v%d accepted" % (v + 1)) if take else "kept v%d" % v))
+            (("v%d accepted" % (v + 1)) if take else "kept v%d" % v) + " (gain per game %.2f +- %.2f)" % (mean_d, se_d)))
 
 
 def status():
@@ -195,19 +227,31 @@ def main(argv):
             on = os.path.exists(ON)
             w = cem.workers()
             slots = [s for s in range(16) if s not in {r[1] for r in running.values()}]
-            while on and len(running) < w and slots:
+            # a full disk fails every game at start (11-05: C: at 0.2 GB, games left no result): wait for space
+            free_gb = shutil.disk_usage(REPO).free / 2 ** 30
+            if free_gb < MIN_FREE_GB:
+                if not st.get("diskLow"):
+                    log("disk low: %.1f GB free on the repo's drive; no new games until %d GB" % (free_gb, MIN_FREE_GB))
+                    st["diskLow"] = True
+                    save(st)
+            elif st.get("diskLow"):
+                log("disk back: %.1f GB free; games resume" % free_gb)
+                st["diskLow"] = False
+                save(st)
+            while on and len(running) < w and slots and free_gb >= MIN_FREE_GB:
                 gi = st["next_game"]
                 st["next_game"] += 1
                 save(st)
                 slot = slots.pop(0)
                 running[ex.submit(play, st, st["version"], gi, slot)] = (gi, slot)
-            if len(st["pending"]) >= BATCH:
+            if len(st["pending"]) >= BATCH and time.time() >= st.get("retryAt", 0):
                 try:
                     step(st)
                 except Exception:
-                    log("step failed:\n" + traceback.format_exc())
-                    os.replace(ON, ON + ".paused")
-                    return
+                    # logged, and the games go on: one failed step idled the machine 02:27-09:19 on 11-05
+                    log("step failed (games continue, retry in 30 min):\n" + traceback.format_exc())
+                    st["retryAt"] = time.time() + 1800
+                    save(st)
                 continue
             if not running:
                 if not on:
@@ -220,7 +264,10 @@ def main(argv):
                 gi, slot = running.pop(f)
                 try:
                     out = f.result()
-                    st["pending"].append(out)
+                    if os.path.exists(os.path.join(out, "result.json")):
+                        st["pending"].append(out)
+                    else:
+                        log("game %d left no result; not counted" % gi)
                 except Exception:
                     log("game %d failed:\n%s" % (gi, traceback.format_exc()))
                 save(st)

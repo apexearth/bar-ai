@@ -152,6 +152,25 @@ def score(model, paths):
     return out
 
 
+def score_games(model, paths):
+    """total log-loss per game (frame + builder heads), keyed by game: the unit a refit is judged across"""
+    _, X, yf, yb, games = load(paths)
+    if len(X) == 0:
+        return {}
+    nk = len(model["kinds"])
+    Z = np.array(X, dtype=np.float64)
+    Z[:, nk:] = np.clip((Z[:, nk:] - np.array(model["mu"][nk:])) / np.array(model["sd"][nk:]), -8, 8)
+    tot = np.zeros(len(X))
+    for head, y in (("frame", yf), ("builder", yb)):
+        h = model["heads"][head]
+        p = np.clip(1.0 / (1.0 + np.exp(-(h["b"] + Z @ np.array(h["w"])))), 1e-5, 1 - 1e-5)
+        tot += -(y * np.log(p) + (1 - y) * np.log(1 - p))
+    out = {}
+    for g, v in zip(games, tot):
+        out[g] = out.get(g, 0.0) + float(v)
+    return out
+
+
 def fnum(x):
     """an AngelScript float literal: it rejects `0f` and `1e-05f`, so a mantissa always carries a point"""
     if not math.isfinite(x):

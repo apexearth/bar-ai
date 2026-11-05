@@ -386,6 +386,8 @@ def play(job):
            "--ai-options-file", opt_file]
     if setup.get("handicap"):
         cmd += ["--handicap", "%d,%d" % tuple(setup["handicap"])]
+    for k, v in (setup.get("modoptions") or {}).items():
+        cmd += ["--modoption", "%s=%s" % (k, v)]
     # runtime/nn/watch-slot names the worker whose games open a window (his 10-13: he watches
     # the search's own games, never an outdated build)
     try:
