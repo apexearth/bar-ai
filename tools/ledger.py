@@ -104,15 +104,13 @@ def read_game(mdir):
     if not ours or not os.path.exists(log):
         return []
     ally = ally_teams(mdir)
-    our_ally = {ally.get(t) for t in ours} - {None}
-
-    def friendly(t):
+    def friend(mine, t):
         t = int(t)
-        return t in ours or (t >= 0 and ally.get(t) in our_ally)
+        return t == mine or (t >= 0 and ally.get(t) is not None and ally.get(t) == ally.get(mine))
 
-    def enemy(t):
+    def foe(mine, t):
         t = int(t)
-        return t >= 0 and not friendly(t)
+        return t >= 0 and not friend(mine, t)
 
     last_decide = {}
     last_nn = {}
@@ -218,23 +216,23 @@ def read_game(mdir):
                        "how": "standing", "killedM": 0.0, "armyM": 0.0}
     # our units the enemy killed, for a frame that died with no attacker named near them (a shell whose owner was
     # already gone, a frame left when its builder died)
-    enemy_kills = [(int(f), int(x), int(z)) for f, team, d, c, x, z, built, mob, at, atk, uid, atkid in deaths
-                   if int(team) in ours and enemy(at)]
+    enemy_kills = [(int(f), int(x), int(z), ally.get(int(team))) for f, team, d, c, x, z, built, mob, at, atk, uid, atkid
+                   in deaths if int(team) in ours and foe(int(team), at)]
     lost_frames = []
     for f, team, d, c, x, z, built, mob, at, atk, uid, atkid in deaths:
         team, f = int(team), int(f)
         if team in ours and built == "0" and d in placed_defs and uid not in assets:
-            if friendly(at):
+            if friend(team, at):
                 how = "own"
-            elif enemy(at):
+            elif foe(team, at):
                 how = "enemy"
-            elif any(abs(kf - f) <= NEAR_KILL_F and math.hypot(kx - int(x), kz - int(z)) <= NEAR_KILL_R
-                     for kf, kx, kz in enemy_kills):
+            elif any(ka == ally.get(team) and abs(kf - f) <= NEAR_KILL_F
+                     and math.hypot(kx - int(x), kz - int(z)) <= NEAR_KILL_R for kf, kx, kz, ka in enemy_kills):
                 how = "enemy"
             else:
                 how = "decayed"
             lost_frames.append({"game": game, "team": team, "def": d, "cost": float(c), "frame": f, "uid": uid,
-                                "x": int(x), "z": int(z), "by": atk, "own": friendly(at), "frameHow": how,
+                                "x": int(x), "z": int(z), "by": atk, "own": friend(team, at), "frameHow": how,
                                 "frameLost": True})
     # founders in the order things happened: an asset finished late must not take an earlier frame's decision
     order = [(a["finished"], "a", uid) for uid, a in assets.items()] + \
@@ -247,12 +245,12 @@ def read_game(mdir):
             r["decision"]["endFrame"] = fr
     for f, team, d, c, x, z, built, mob, at, atk, uid, atkid in deaths:
         f, team, c = int(f), int(team), float(c)
-        if atkid in assets and enemy(team):
+        if atkid in assets and foe(assets[atkid]["team"], team):
             assets[atkid]["killedM"] += c
         if uid in assets and team in ours:
             a = assets[uid]
             a["ended"] = f
-            a["how"] = "reclaimed/self" if friendly(at) else ("killed by " + atk)
+            a["how"] = "reclaimed/self" if friend(team, at) else ("killed by " + atk)
     for team, f, unit, c, fac, facid in prods:
         if facid in assets and not BUILDER.search(unit):
             assets[facid]["armyM"] += float(c)

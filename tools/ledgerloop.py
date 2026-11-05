@@ -16,6 +16,7 @@ tournaments/<stamp>-ledger/matches/c<version>-g<game>.
 """
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import shutil
@@ -131,6 +132,7 @@ def game_minutes():
 
 
 RICH_SHARE = 0.35   # his 11-05: "a game that has modified overall resources ... build power and range"
+RELEASE_FOE, RELEASE_SHARE = "Apex:v0.5.05:standard", 0.25
 
 
 def rich_modoptions(seed):
@@ -153,6 +155,10 @@ def play(st, v, gi, slot):
     # his 11-05: BARb fights much as we do, WRDistilled plays a different game; train against BARb only
     if setup["foe"] == randsearch.WRD:
         setup["foe"] = (randsearch.HARD, randsearch.AGG)[seed % 2]
+    # his 11-05: a quarter of games against our last release, fixed while this tree changes; both seats are ours,
+    # so both sides' jobs reach the ledger
+    if __import__("random").Random(seed * 17 + 3).random() < RELEASE_SHARE:
+        setup["foe"] = RELEASE_FOE
     mods = rich_modoptions(seed)
     if mods:
         setup["modoptions"] = mods
@@ -163,6 +169,9 @@ def play(st, v, gi, slot):
 
 
 def step(st):
+    # a fix to the readers takes effect at the next step, with no restart dropping the games in flight
+    importlib.reload(ledger)
+    importlib.reload(risknet)
     v = st["version"]
     st["pending"] = [p for p in st["pending"] if os.path.exists(os.path.join(p, "result.json"))]
     if len(st["pending"]) < BATCH:
