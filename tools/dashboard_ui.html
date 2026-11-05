@@ -154,6 +154,14 @@
 <!-- ================= NET ================= -->
 <section id="tab-net" class="tab">
   <div class="card">
+    <b>Learning from each decision</b> <span class="dim">&mdash; every build job, fight and unit judged on what it actually
+      did (tools/ledgerloop.py), and the test bench that checks whether the AI plays better (tools/bench.py). The
+      scorecard is ours &divide; theirs: 1.00 is even with the enemy, above 1 is better.</span>
+    <div id="lr-status" class="dim" style="margin-top:6px"></div>
+    <div id="lr-loop"></div>
+    <div id="lr-bench"></div>
+  </div>
+  <div class="card">
     <b>Training</b> <span class="dim" id="tr-about">&mdash; learning from our own choices (tools/pgloop.py). In every training game
       each decision gets a small random push, and each push is credited with how our economy, army and trade against
       theirs moved over the next 2 minutes, against what the position predicted. Every 16 games one small step makes a
@@ -1958,6 +1966,8 @@ const svWidth = el => Math.max(300, Math.round(el.clientWidth || 900));
 async function loadNet(refresh) {
   clearTimeout(SV_TIMER);
   if (!$("#tab-net").classList.contains("on")) return;
+  try { LR = await api("/api/learning"); renderLearning(); }
+  catch (e) { setHTML($("#lr-status"), "<span class='loss'>" + esc(e.message) + "</span>"); }
   try { TR = await api("/api/training"); renderTraining(); }
   catch (e) { setHTML($("#tr-status"), "<span class='loss'>" + esc(e.message) + "</span>"); }
   try { SV = await api("/api/search" + (refresh ? "?refresh=1" : "")); }
@@ -2028,6 +2038,72 @@ function svDots(el, cats, label, series, field) {
     s += `<circle cx="${x(v.gm)}" cy="${yc(i)}" r="${q.muted ? 3.5 : 5.5}" style="fill:${q.color};${q.muted ? "fill-opacity:.7" : ""}"${svTip(tip)}/>`;
   });
   return s + "</svg>";
+}
+
+/* ---------- learning from each decision (/api/learning) ---------- */
+let LR = null;
+const lrN = (v, d) => (v == null || isNaN(v) ? "–" : Number(v).toFixed(d == null ? 2 : d));
+const lrCls = v => (v == null ? "" : (v >= 1.0 ? "win" : "loss"));
+
+function renderLearning() {
+  if (!LR) return;
+  const L = LR.loop, M = LR.model;
+  let s = "";
+  if (L && !L.error) {
+    s += "Training loop: <b>" + (L.running ? "running" : "stopped") + "</b>, model v" + esc(L.version) +
+      ", " + svInt(L.finished) + " games finished, " + svInt(L.waiting) + " toward the next step (48), steering play: <b>" +
+      (L.steering ? "on" : "off") + "</b>.";
+  } else {
+    s += "No training loop yet.";
+  }
+  if (M && M.heads) {
+    s += " Survival model on " + svInt(M.jobs) + " jobs: " + Object.keys(M.heads).map(k =>
+      esc(k) + " AUC " + lrN(M.heads[k].auc)).join(", ") + " (0.5 is guessing, 1.0 is perfect).";
+  }
+  setHTML($("#lr-status"), s);
+  let h = "";
+  if (L && L.history && L.history.length) {
+    h += "<h2>Model versions</h2><table><tr><th>when</th><th>v</th><th>games</th><th>current: frame / builder AUC</th>" +
+      "<th>candidate</th><th></th></tr>";
+    for (const r of L.history.slice().reverse()) {
+      const c = r.current || {}, d = r.candidate || {};
+      h += "<tr><td>" + esc(r.at) + "</td><td>" + esc(r.version) + "</td><td>" + esc(r.games) + "</td><td>" +
+        lrN((c.frame || {}).auc) + " / " + lrN((c.builder || {}).auc) + "</td><td>" + lrN((d.frame || {}).auc) + " / " +
+        lrN((d.builder || {}).auc) + "</td><td>" + (r.accepted ? "accepted" : "kept") + "</td></tr>";
+    }
+    h += "</table>";
+  }
+  setHTML($("#lr-loop"), h);
+  let b = "";
+  for (const B of (LR.benches || [])) {
+    b += "<h2>Bench: " + esc(B.name) + " <span class='dim'>" + esc(B.registered || "") + " &middot; vs " + esc(B.foe || "") +
+      " &middot; metric " + esc(B.metric || "") + (B.done ? "" : " &middot; running") + "</span></h2>";
+    if (B.error) { b += "<div class='loss'>" + esc(B.error) + "</div>"; continue; }
+    const arms = B.arms || {};
+    b += "<div class='dim'>arm a: " + esc((arms.a || []).join(" ") || "as is") + " &middot; arm b: " +
+      esc((arms.b || []).join(" ") || "as is") + (B.games ? " &middot; games " + B.games[0] + " / " + B.games[1] : "") + "</div>";
+    const V = B.verdict;
+    if (V) {
+      const t = Math.abs(V.t);
+      b += "<div>b &minus; a: <b>" + (V.diff >= 0 ? "+" : "") + lrN(V.diff, 3) + "</b> &plusmn; " + lrN(V.se, 3) + " over " +
+        V.pairs + " pairs &rarr; <b>" + (t > 2 ? "a real difference" : "no difference shown") + "</b></div>";
+    }
+    const sc = B.scorecard || {};
+    for (const arm of ["a", "b"]) {
+      const rows = sc[arm] || [];
+      if (!rows.length) continue;
+      b += "<table><tr><th>arm " + arm + " &middot; minute</th><th>damage efficiency</th><th>metal produced</th>" +
+        "<th>army value</th><th>games</th></tr>";
+      for (const r of rows) {
+        b += "<tr><td>" + r.minute + "</td><td class='" + lrCls(r.dmg) + "'>" + lrN(r.dmg) + "</td><td class='" +
+          lrCls(r.prod) + "'>" + lrN(r.prod) + "</td><td class='" + lrCls(r.army) + "'>" + lrN(r.army) + "</td><td>" +
+          r.n + "</td></tr>";
+      }
+      b += "</table>";
+    }
+  }
+  if (LR.busy && !(LR.benches || []).length) b += "<div class='dim'>reading the bench games&hellip; this page refreshes on its own</div>";
+  setHTML($("#lr-bench"), b);
 }
 
 /* ---------- training: learning from our own choices (/api/training) ---------- */

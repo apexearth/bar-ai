@@ -1345,6 +1345,112 @@ def lean_view():
             "kinds": leanloop.kind_names(), "updated": (LEAN_DIR / "state.json").stat().st_mtime}
 
 
+# ---------- learning from each decision (tools/ledgerloop.py, tools/bench.py; his 11-04) ----------
+_LEARN = {"benches": {}, "busy": False}
+_LEARN_LOCK = threading.Lock()
+
+
+def _bench_dirs():
+    return sorted((p for p in REPO.glob("tournaments/*-bench-*") if (p / "bench.json").exists()), key=lambda p: p.name, reverse=True)
+
+
+def _bench_summary(d):
+    """one bench run: its registration, the paired verdict on the registered metric, and his scorecard per arm"""
+    sys.path.insert(0, str(REPO / "tools"))
+    import bench
+    reg = json.loads((d / "bench.json").read_text(encoding="utf-8"))
+    dirs = reg.get("dirs")
+    if not dirs:
+        dirs = {}
+        for arm in ("a", "b"):
+            log = d / ("arm-%s.log" % arm)
+            if log.exists():
+                out = [ln.split("output:", 1)[1].strip() for ln in log.read_text(encoding="utf-8", errors="replace").splitlines()
+                       if ln.startswith("output:")]
+                if out:
+                    dirs[arm] = out[0]
+    res = {"name": reg.get("name"), "registered": reg.get("registered"), "metric": reg.get("metric"),
+           "foe": reg.get("foe"), "arms": reg.get("arms"), "maps": reg.get("maps"), "done": bool(reg.get("dirs"))}
+    if len(dirs) < 2:
+        return res
+    A, B = bench.arm_games(dirs["a"], reg["metric"]), bench.arm_games(dirs["b"], reg["metric"])
+    keys = sorted(set(A) & set(B))
+    res["games"] = [len(A), len(B)]
+    if len(keys) >= 3:
+        diff = [B[k] - A[k] for k in keys]
+        n = len(diff)
+        m = sum(diff) / n
+        sd = math.sqrt(sum((x - m) ** 2 for x in diff) / (n - 1))
+        res["verdict"] = {"pairs": n, "a": sum(A[k] for k in keys) / n, "b": sum(B[k] for k in keys) / n,
+                          "diff": m, "se": sd / math.sqrt(n), "t": (m / (sd / math.sqrt(n))) if sd > 0 else 0.0}
+    cards = {}
+    for arm in ("a", "b"):
+        sc = bench.scorecard(dirs[arm])
+        rows = []
+        for mi in bench.CARD_MIN:
+            vals = [c[mi] for c in sc.values() if mi in c]
+            if len(vals) >= 3:
+                gm = lambda k: math.exp(sum(math.log(max(1e-6, v[k])) for v in vals) / len(vals))  # noqa: E731
+                rows.append({"minute": mi, "dmg": gm("dmg"), "prod": gm("prod"), "army": gm("army"), "n": len(vals)})
+        cards[arm] = rows
+    res["scorecard"] = cards
+    return res
+
+
+def _learn_refresh():
+    try:
+        for d in _bench_dirs()[:6]:
+            sig = (sum(1 for _ in d.parent.glob("*bench-%s-*" % d.name.split("-bench-", 1)[1])),
+                   len(list(REPO.glob("tournaments/*bench-%s-*/matches/*/result.json" % d.name.split("-bench-", 1)[1]))))
+            old = _LEARN["benches"].get(d.name)
+            if old and old.get("_sig") == sig:
+                continue
+            try:
+                s = _bench_summary(d)
+            except Exception as e:  # noqa: BLE001
+                s = {"name": d.name, "error": str(e)}
+            s["_sig"] = sig
+            with _LEARN_LOCK:
+                _LEARN["benches"][d.name] = s
+    finally:
+        _LEARN["busy"] = False
+
+
+def learning_view():
+    loop = None
+    st = REPO / "runtime" / "risk" / "loop.json"
+    if st.exists():
+        try:
+            j = json.loads(st.read_text(encoding="utf-8"))
+            done = len(list(Path(j["dir"]).glob("matches/*/result.json"))) if j.get("dir") else 0
+            loop = {"version": j.get("version"), "launched": j.get("next_game"), "finished": done,
+                    "waiting": len(j.get("pending", [])), "started": j.get("started"),
+                    "steering": (REPO / "runtime" / "risk" / "play_on").exists(),
+                    "running": (REPO / "runtime" / "risk" / "loop_on").exists(),
+                    "history": [{"at": h.get("at"), "version": h.get("version"), "games": h.get("games"),
+                                 "accepted": h.get("accepted"), "current": h.get("current"),
+                                 "candidate": h.get("candidate")} for h in j.get("history", [])[-12:]]}
+        except Exception as e:  # noqa: BLE001
+            loop = {"error": str(e)}
+    model = None
+    mp = REPO / "runtime" / "risk" / "model.json"
+    if mp.exists():
+        try:
+            m = json.loads(mp.read_text(encoding="utf-8"))
+            model = {"jobs": (m.get("fitted") or {}).get("jobs"),
+                     "heads": {k: {"auc": v.get("auc"), "loss": v.get("loss")} for k, v in m.get("heads", {}).items()}}
+        except Exception:  # noqa: BLE001
+            model = None
+    if not _LEARN["busy"]:
+        _LEARN["busy"] = True
+        threading.Thread(target=_learn_refresh, daemon=True).start()
+    with _LEARN_LOCK:
+        benches = [{k: v for k, v in b.items() if k != "_sig"} for b in _LEARN["benches"].values()]
+    benches.sort(key=lambda b: b.get("registered") or "", reverse=True)
+    return {"loop": loop, "model": model, "benches": benches, "busy": _LEARN["busy"]}
+
+
+
 def training_view():
     """The training run: held leans (tools/leanloop.py) when one exists, else learning from our own choices
     (tools/pgloop.py): running or paused, the version playing, games launched and waiting for the next step, every
@@ -1712,6 +1818,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(search_view(q.get("refresh") == "1"))
             elif u.path == "/api/training":
                 self.send_json(training_view())
+            elif u.path == "/api/learning":
+                self.send_json(learning_view())
             elif u.path == "/api/progress":
                 self.send_json(progress_view(q))
             elif u.path == "/api/games":
