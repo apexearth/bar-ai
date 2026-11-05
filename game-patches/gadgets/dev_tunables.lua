@@ -343,6 +343,7 @@ local NAMES = {
 	"apex_budget_hold",      -- budget.as + production.as con floors/builder price + decide.as hoists: orders that skip the budget's draw pay mult(row)/mult(army) while army is under its share (0)
 	"apex_small_hard",       -- smallhard.as + army.as ArmyFloor + production.as + nnraid.as + plannet.as TaPick + want_assist.as + comdecide.as: short path contact prices army to their strength at arrival, starves their extractors (0)
 	"apex_com_home_assist",  -- decide.as: past the first plant the commander takes no job farther than 1,400 from home; a far choice becomes the lab (0)
+	"apex_learned_risk",     -- risk.as: the learned job risk replaces the exposure charge and trip risk (0)
 	"apex_plant_free",       -- want_plant.as CopyWaived: a plant copy is never refused (0)
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
 	"apex_open_race",        -- openrace.as + production.as con floor/e-stall + budget.as hold ledger + DefendTask/GuardTask.cpp catchability: con vs fighter on one clock (0)

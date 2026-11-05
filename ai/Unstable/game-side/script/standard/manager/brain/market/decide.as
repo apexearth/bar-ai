@@ -1326,7 +1326,8 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 	const float worth = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 			? (gAssetsM + ArmyValue()) : Catalog::gCostM[int(unit.circuitDef.id)];
 	const AIFloat3 up = unit.GetPos(ai.frame);
-	w.tripM = TripRiskFrom(up, w.pos) * worth;
+	// The learned risk's builder head is this term for the kinds it covers (risk.as).
+	w.tripM = (LearnedRiskOn() && (RiskKindIndex(w.kind) >= 0)) ? 0.f : (TripRiskFrom(up, w.pos) * worth);
 	// A metal reclaim is a claim: the commander stakes only what there can kill him.
 	if ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT)
 		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
@@ -2206,6 +2207,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// exposed ground -- charging it would quietly suppress every want
 		// that forgot to name a site.
 		if ((c.pos.x < 1.f) && (c.pos.z < 1.f))
+			continue;
+		if (LearnedRiskOn() && ApplyLearnedRisk(c, unit))
 			continue;
 		const float charge = ExposeCharge(c, c.pos, airBuilder,
 				Catalog::gCostM[int(unit.circuitDef.id)], lossH, frameK);

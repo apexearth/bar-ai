@@ -136,6 +136,9 @@ def worker_dirs(n: int) -> queue.Queue:
     return q
 
 
+RANDOM_BOX = 0.0   # --random-box: forwarded to every match
+
+
 def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
          match_root: Path, per_side: int = 1,
          sides: str | None = None, boxes: str = "lr",
@@ -159,6 +162,8 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
     ]
     if box_size > 0:
         cmd += ["--box-size", str(box_size)]
+    if RANDOM_BOX > 0:
+        cmd += ["--random-box", str(RANDOM_BOX)]
     if handicap and str(handicap) != "0":
         cmd += ["--handicap", str(handicap)]
     if sides:
@@ -282,6 +287,9 @@ def main() -> int:
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
                     help="start-box size as a map fraction, e.g. 0.35")
+    ap.add_argument("--random-box", dest="random_box", type=float, default=0.0,
+                    help="his 11-04: start boxes this fraction of the map at a random spot per seed, mirrored "
+                         "between the sides (run_match --random-box)")
     ap.add_argument("--handicap", type=str, default="0",
                     help="percent resource bonus, one for every AI or A,B per side; gets 8v8s to game over. "
                          "rand:LO-HI draws one bonus per game for every AI (even sides)")
@@ -305,6 +313,8 @@ def main() -> int:
     ap.add_argument("--report", nargs="?", const="", metavar="RUN_DIR",
                     help="summarise a finished run (default: the most recent)")
     args = ap.parse_args()
+    global RANDOM_BOX
+    RANDOM_BOX = args.random_box
     global SPEED
     SPEED = args.speed
     globals()['RECORD_SEED'] = args.record_seed

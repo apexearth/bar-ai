@@ -719,7 +719,7 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 		ln += (i == 0 ? " | " : " ; ") + CatName(cat) + "," + KindName(w.kind)
 			+ "," + ((w.def is null) ? "-" : w.def.GetName());
 		for (uint k = 0; k < NN_ONUM; ++k)
-			ln += "," + NnF(o[k], (k < 2) ? 3 : 2);
+			ln += "," + NnF(o[k], (k < 2) ? 3 : (((k == 8) || (k == 14)) ? 6 : 2));   // risk and site loss are small: 2 decimals zeroed them
 		ln += "," + int(w.pos.x) + "," + int(w.pos.z) + "," + NnF(p, 6) + "," + NnF(w.nnMult, 3)
 			+ "," + (w.nnPriced ? 0 : 1);
 	}

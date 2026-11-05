@@ -390,10 +390,15 @@ float SmValueAt(Want@ w, CCircuitUnit@ unit, const AIFloat3& in at)
 	c.posted = w.posted;
 	c.pos = at;
 	c.buildSec = w.buildSec;
-	const float gain = w.gain + ExposeCharge(w, w.pos, air, Catalog::gCostM[ud], lossH, frameK);
+	const bool rk = LearnedRiskOn();
+	float gain = w.gain + (rk ? 0.f : ExposeCharge(w, w.pos, air, Catalog::gCostM[ud], lossH, frameK));
+	if (rk && (w.rkScale > 0.f))
+		gain /= w.rkScale;
 	ValueOf(int(w.def.id), gain, WalkSecTo(unit, at), Catalog::gBuildPower[ud], c, w.spotId != PROT_DEF);
-	c.gain -= ExposeCharge(c, at, air, Catalog::gCostM[ud], lossH, frameK);
-	c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
+	if (!(rk && ApplyLearnedRisk(c, unit))) {
+		c.gain -= ExposeCharge(c, at, air, Catalog::gCostM[ud], lossH, frameK);
+		c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
+	}
 	ChargeTrip(c, unit);
 	return c.value;
 }

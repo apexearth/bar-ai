@@ -296,6 +296,36 @@ def spread_starts(rect: dict, per_side: int, boxes: str, starts, size):
     return out[:per_side]
 
 
+def map_symmetry(map_starts, map_size):
+    """how the map maps one side's start onto the other's: 'point' (through the centre), 'mx' (left-right mirror) or
+    'mz' (top-bottom), read off the map's own start positions; 'point' when they cannot say"""
+    w, h = map_size
+    pts = [(float(p[0]), float(p[1])) for p in (map_starts or []) if p is not None and len(p) >= 2]
+    if w <= 0 or h <= 0 or len(pts) < 2:
+        return "point"
+    err = {"point": 0.0, "mx": 0.0, "mz": 0.0}
+    for x, z in pts:
+        for k, (mx, mz) in (("point", (w - x, h - z)), ("mx", (w - x, z)), ("mz", (x, h - z))):
+            err[k] += min(((mx - a) ** 2 + (mz - b) ** 2) ** 0.5 for a, b in pts)
+    return min(err, key=err.get)
+
+
+def random_boxes(rect0: dict, size: float, sym: str, rng) -> tuple[dict, dict]:
+    """his 11-04: a smaller start box at a random spot in side 0's band, and its mirror for side 1, so neither slot
+    plays the same start every game (slot 0 won 50 of 70 decided WRDistilled games on Comet with fixed starts)"""
+    half = size / 2.0
+    l, r = rect0["StartRectLeft"], rect0["StartRectRight"]
+    t, b = rect0["StartRectTop"], rect0["StartRectBottom"]
+    cx = rng.uniform(l + half, r - half) if r - l > size else (l + r) / 2
+    cz = rng.uniform(t + half, b - half) if b - t > size else (t + b) / 2
+    mx, mz = {"point": (1 - cx, 1 - cz), "mx": (1 - cx, cz), "mz": (cx, 1 - cz)}[sym]
+
+    def box(x, z):
+        return {"NumAllies": 0, "StartRectLeft": round(max(0.0, x - half), 4), "StartRectRight": round(min(1.0, x + half), 4),
+                "StartRectTop": round(max(0.0, z - half), 4), "StartRectBottom": round(min(1.0, z + half), 4)}
+    return box(cx, cz), box(mx, mz)
+
+
 def build_script(
     ais: list[AISpec],
     map_name: str,
@@ -319,6 +349,7 @@ def build_script(
     ai_options_b: dict | None = None,
     extras: list | None = None,
     restrictions: dict[str, int] | None = None,
+    random_box: float = 0.0,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
 
@@ -410,6 +441,15 @@ def build_script(
                 box.update({"StartRectTop": 0.0, "StartRectBottom": 1.0,
                             "StartRectLeft": near, "StartRectRight": far})
         rects.append(box)
+    if random_box > 0.0 and len(ais) == 2:
+        import random as _random
+        size = min(0.45, random_box * (max(1, per_side) ** 0.5))
+        sym = map_symmetry(map_starts, map_size)
+        rng = _random.Random("%s|%s" % (seed, map_name))
+        rects[0], rects[1] = random_boxes(rects[0], size, sym, rng)
+        print("boxes    random %.2f (%s mirror): %s | %s" % (size, sym,
+              ",".join("%.2f" % rects[0][k] for k in ("StartRectLeft", "StartRectTop", "StartRectRight", "StartRectBottom")),
+              ",".join("%.2f" % rects[1][k] for k in ("StartRectLeft", "StartRectTop", "StartRectRight", "StartRectBottom"))))
 
     team_id = 0
     for ally, ai in enumerate(ais):
@@ -784,6 +824,7 @@ def run(args) -> int:
         ai_options={**(json.loads(Path(args.ai_options_file).read_text(encoding="utf-8")) if args.ai_options_file else {}),
                     **dict(o.split('=', 1) for o in args.ai_option)},
         ai_options_b=dict(o.split('=', 1) for o in args.ai_option_b),
+        random_box=args.random_box,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -1167,6 +1208,9 @@ def main() -> int:
     ap.add_argument("--write-dir", dest="write_dir",
                     help="engine write dir; give concurrent runs separate ones "
                          "(default: matches/_engine)")
+    ap.add_argument("--random-box", dest="random_box", type=float, default=0.0,
+                    help="his 11-04: a start box of this fraction of the map at a random spot in side 0's band, "
+                         "mirrored for side 1 (the map's own symmetry, read off its starts); seeded by --seed")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
                     help="start-box size as a fraction of the map, e.g. 0.35; 0 = the "
                          "map default from MAP_BOXES (Isthmus 0.45), else auto "

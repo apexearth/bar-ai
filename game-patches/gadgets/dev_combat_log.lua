@@ -59,6 +59,69 @@ local startX, startZ = {}, {}  -- teamID -> start position, for retreat headings
 local costOf, mobileArmed, isCommander = {}, {}, {}
 local isStatic, isConstructor = {}, {}
 
+-- THE ASSET LEDGER (todo/learn-from-each-decision.md, step 2; his 11-04 "damage is generally a better metric"): per
+-- unit of an AI team, the damage it dealt and took in metal -- damage x the victim's metal over its max health, clamped
+-- to the health it had left -- when it was started and finished, and whose build power raised it, by builder kind.
+-- One [BARAI_LIFE] line when it dies, and one for every survivor when the game ends (gameover or the minute cap).
+local life = {}                -- unitID -> record
+local lifeDead = {}            -- unitID -> true once its record is printed: its blast and late shells add nothing
+local builderKind = {}         -- unitDefID -> "com" | "con" | "nano" | "fac" | false
+local lifeFlushed = false
+local lifeCapFrame = math.floor((tonumber(modOptions.dev_maxgameminutes or 0) or 0) * 60 * 30)
+
+local function kindOfBuilder(udid)
+	local k = builderKind[udid]
+	if k == nil then
+		local ud = UnitDefs[udid]
+		k = false
+		if ud and ud.isBuilder then
+			if (ud.customParams or {}).iscommander ~= nil then
+				k = "com"
+			elseif ud.isFactory then
+				k = "fac"
+			elseif (ud.speed or 0) > 0 then
+				k = "con"
+			else
+				k = "nano"
+			end
+		end
+		builderKind[udid] = k
+	end
+	return k
+end
+
+local function lifeOf(uid, team, udid)
+	if lifeDead[uid] then
+		return nil
+	end
+	local l = life[uid]
+	if l == nil then
+		l = { dm = 0, tm = 0, c0 = -1, c1 = -1, com = 0, con = 0, nano = 0, fac = 0, gm = 0, gs = 0, mm = 0, em = 0, team = team, udid = udid }
+		life[uid] = l
+	end
+	return l
+end
+
+local function lifeEcho(uid, l, frame, ended, prog)
+	local ud = UnitDefs[l.udid or -1]
+	BARAI_Echo(string.format(
+		"[BARAI_LIFE] frame=%d team=%d uid=%d unit=%s dealtM=%.1f takenM=%.1f started=%d finished=%d prog=%.3f com=%.3f con=%.3f nano=%.3f fac=%.3f gaveMobileM=%.1f gaveStaticM=%.1f madeM=%.1f madeE=%.1f end=%s",
+		frame, l.team or -1, uid, (ud and ud.name) or "?", l.dm, l.tm, l.c0, l.c1, prog or 1,
+		l.com, l.con, l.nano, l.fac, l.gm, l.gs, l.mm, l.em, ended))
+end
+
+local function lifeFlush(why)
+	if lifeFlushed then
+		return
+	end
+	lifeFlushed = true
+	local frame = Spring.GetGameFrame()
+	for uid, l in pairs(life) do
+		local _, prog = Spring.GetUnitIsBeingBuilt(uid)
+		lifeEcho(uid, l, frame, why, prog)
+	end
+end
+
 -- Damage accounting for docs/doctrine.md's first-five-minute test, per team and
 -- cumulative: damage DEALT and RECEIVED split by whether the victim was a
 -- building, damage received FROM buildings, and the constructor
@@ -185,6 +248,13 @@ function gadget:GameStart()
 end
 
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
+	local lr = life[unitID]
+	if lr ~= nil then
+		local _, prog = Spring.GetUnitIsBeingBuilt(unitID)
+		lifeEcho(unitID, lr, Spring.GetGameFrame(), "died", prog)
+		life[unitID] = nil
+	end
+	lifeDead[unitID] = true
 	lastShot[unitID] = nil
 	if not aiTeam[unitTeam] then
 		return
@@ -260,8 +330,8 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 		end
 		lastManualFF[unitID] = true
 	end
-	if attackerTeam == nil or attackerTeam == unitTeam then
-		return   -- own D-gun, crashes, decay: not the fight
+	if attackerTeam == nil or attackerTeam == unitTeam or Spring.AreTeamsAllied(attackerTeam, unitTeam) then
+		return   -- own or allied fire, crashes, decay: not the fight
 	end
 	if attackerID ~= nil then
 		lastShot[attackerID] = Spring.GetGameFrame()
@@ -285,10 +355,13 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 	end
 	lastManual[unitID] = manual or nil
 	defFacts(unitDefID)
-	local hp = Spring.GetUnitHealth(unitID)
+	-- UnitDamaged fires after the hit is applied (Unit.cpp: ApplyDamage, then the event), so `hp` is what is left:
+	-- the damage that landed is damage + min(0, hp). It read hp as the health before, which counted every killing
+	-- blow as 0 and clipped every hit bigger than what was left after it (11-04 review).
+	local hp, maxHp = Spring.GetUnitHealth(unitID)
 	local eff = damage
-	if hp ~= nil and hp < eff then
-		eff = hp
+	if hp ~= nil and hp < 0 then
+		eff = damage + hp
 	end
 	if eff <= 0 then
 		-- already dead: a negative health reads as negative damage. A D-gun's
@@ -297,6 +370,21 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 			dmgOf(attackerTeam).dg = dmgOf(attackerTeam).dg + 1
 		end
 		return
+	end
+	if maxHp ~= nil and maxHp > 0 then
+		local dmM = eff * (costOf[unitDefID] or 0) / maxHp
+		if victimAI then
+			local l = lifeOf(unitID, unitTeam, unitDefID)
+			if l then
+				l.tm = l.tm + dmM
+			end
+		end
+		if attackerAI and attackerID ~= nil then
+			local l = lifeOf(attackerID, attackerTeam, attackerDefID)
+			if l then
+				l.dm = l.dm + dmM
+			end
+		end
 	end
 	local vStatic = isStatic[unitDefID]
 	local aStatic = attackerDefID ~= nil and defFacts(attackerDefID) ~= nil
@@ -335,6 +423,50 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 			t.dg = t.dg + 1
 		end
 	end
+end
+
+function gadget:UnitCreated(unitID, unitDefID, unitTeam)
+	lifeDead[unitID] = nil   -- a reused id is a new unit
+	if aiTeam[unitTeam] then
+		lifeOf(unitID, unitTeam, unitDefID).c0 = Spring.GetGameFrame()
+	end
+end
+
+function gadget:UnitFinished(unitID, unitDefID, unitTeam)
+	if aiTeam[unitTeam] then
+		local l = lifeOf(unitID, unitTeam, unitDefID)
+		if l then
+			l.c1 = Spring.GetGameFrame()
+		end
+	end
+end
+
+function gadget:AllowUnitBuildStep(builderID, builderTeam, unitID, unitDefID, part)
+	if part > 0 and aiTeam[builderTeam] and Spring.GetUnitIsBeingBuilt(unitID) then
+		local bdid = Spring.GetUnitDefID(builderID) or -1
+		local bk = kindOfBuilder(bdid)
+		if bk then
+			local l = lifeOf(unitID, Spring.GetUnitTeam(unitID), unitDefID)
+			if l then
+				l[bk] = l[bk] + part
+			end
+			-- what the builder's lathe went into, in metal: mobile units (army, cons) or buildings
+			local lb = lifeOf(builderID, builderTeam, bdid)
+			if lb then
+				local m = part * defFacts(unitDefID)
+				if isStatic[unitDefID] then
+					lb.gs = lb.gs + m
+				else
+					lb.gm = lb.gm + m
+				end
+			end
+		end
+	end
+	return true
+end
+
+function gadget:GameOver()
+	lifeFlush("alive")
 end
 
 local function snapshot(frame)
@@ -392,5 +524,19 @@ function gadget:GameFrame(frame)
 	if frame >= nextSnap then
 		nextSnap = frame + SNAP_INTERVAL
 		snapshot(frame)
+	end
+	-- what each unit made, metal and energy, summed once a second from the engine's own rates
+	if frame % 30 == 0 then
+		for uid, l in pairs(life) do
+			local mMake, _, eMake = Spring.GetUnitResources(uid)
+			if mMake then
+				l.mm = l.mm + mMake
+				l.em = l.em + (eMake or 0)
+			end
+		end
+	end
+	-- dev_autoquit ends a capped game at the cap's frame: survivors go out one frame before
+	if lifeCapFrame > 0 and frame >= lifeCapFrame - 1 then
+		lifeFlush("alive")
 	end
 end

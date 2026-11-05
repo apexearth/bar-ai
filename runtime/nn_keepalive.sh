@@ -14,6 +14,11 @@ while [ ! -f runtime/nn_stop ]; do
     echo "$(date '+%m-%d %H:%M') restarting leanloop" >> runtime/nn_keepalive.log
     powershell.exe -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath python -ArgumentList '-u','tools/leanloop.py' -RedirectStandardOutput runtime/lean-loop.log -RedirectStandardError runtime/lean-loop.err"
   fi
+  # runtime/risk/loop_on: learning from what each decision did (tools/ledgerloop.py, his 11-04; pgloop is stopped)
+  if [ -f runtime/risk/loop_on ] && [ "$(count "tools/ledgerloop.py" python.exe)" = "0" ]; then
+    echo "$(date '+%m-%d %H:%M') restarting ledgerloop" >> runtime/nn_keepalive.log
+    powershell.exe -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath python -ArgumentList '-u','tools/ledgerloop.py' -RedirectStandardOutput runtime/ledger-loop.log -RedirectStandardError runtime/ledger-loop.err"
+  fi
   # runtime/pg/pg_on: learning from our own choices (tools/pgloop.py, his 10-28; the random search is stopped)
   if [ -f runtime/pg/pg_on ] && [ "$(count "tools/pgloop.py" python.exe)" = "0" ]; then
     echo "$(date '+%m-%d %H:%M') restarting pgloop" >> runtime/nn_keepalive.log
