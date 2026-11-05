@@ -42,18 +42,22 @@ def main():
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--days", type=float, default=3.0)
     ap.add_argument("--dest", default="G:/bar-ai-archive")
+    ap.add_argument("--include-nn", action="store_true",
+                    help="move -nn- training batches too (11-05: the trainers that read them, nntrain/randsearch, are stopped)")
+    ap.add_argument("--only", choices=("matches", "tournaments"), help="one folder")
+    ap.add_argument("--skip", action="append", default=[], help="a folder name to leave in place, repeatable")
     a = ap.parse_args()
     cut = time.time() - a.days * 86400
     dest = Path(a.dest)
     if a.apply and not dest.exists():
         sys.exit(f"{dest} not found")
     total = moved = 0
-    for top in ("matches", "tournaments"):
+    for top in ((a.only,) if a.only else ("matches", "tournaments")):
         src = REPO / top
         if not src.is_dir():
             continue
         for d in sorted(src.iterdir()):
-            if not d.is_dir() or d.name.startswith("_") or "-nn-" in d.name:
+            if not d.is_dir() or d.name.startswith("_") or ("-nn-" in d.name and not a.include_nn) or d.name in a.skip:
                 continue
             if newest_mtime(d) >= cut:
                 continue

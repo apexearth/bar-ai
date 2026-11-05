@@ -120,6 +120,16 @@ def risk_was_on(out):
     return "apex: risk t=" in txt and " on=1" in txt
 
 
+MINUTES_FILE = os.path.join(RISK, "minutes")
+
+
+def game_minutes():
+    try:
+        return max(10, int(open(MINUTES_FILE, encoding="utf-8").read().strip()))
+    except (OSError, ValueError):
+        return 60
+
+
 RICH_SHARE = 0.35   # his 11-05: "a game that has modified overall resources ... build power and range"
 
 
@@ -137,6 +147,12 @@ def play(st, v, gi, slot):
     seed = randsearch.game_seed(20000 + v, gi)
     setup = randsearch.draw_setup(seed)
     setup["version"] = v
+    # his 11-05: "run, like, 60-minute games, not end super early": every game runs to the cap unless one side
+    # dies. The cap is read from runtime/risk/minutes each game (default 60), so changing it needs no restart.
+    setup["minutes"] = game_minutes()
+    # his 11-05: BARb fights much as we do, WRDistilled plays a different game; train against BARb only
+    if setup["foe"] == randsearch.WRD:
+        setup["foe"] = (randsearch.HARD, randsearch.AGG)[seed % 2]
     mods = rich_modoptions(seed)
     if mods:
         setup["modoptions"] = mods
