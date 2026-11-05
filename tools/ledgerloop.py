@@ -130,7 +130,8 @@ def play(st, v, gi, slot):
 
 def step(st):
     v = st["version"]
-    games = [p for p in st["pending"] if os.path.exists(os.path.join(p, "result.json"))]
+    batch, rest = st["pending"][:BATCH], st["pending"][BATCH:]
+    games = [p for p in batch if os.path.exists(os.path.join(p, "result.json"))]
     off = [p for p in games if not risk_was_on(p)] if playing() else []
     if off:
         log("PAUSED: %d games did not play the learned risk (first %s)" % (len(off), off[0]))
@@ -156,7 +157,7 @@ def step(st):
            "candidate": s_cand, "accepted": take}
     st["history"].append(rec)
     st["ledgers"].append(path)
-    st["pending"] = []
+    st["pending"] = rest
     if take:
         st["version"] = v + 1
         install(cand, v + 1)
@@ -194,24 +195,24 @@ def main(argv):
             on = os.path.exists(ON)
             w = cem.workers()
             slots = [s for s in range(16) if s not in {r[1] for r in running.values()}]
-            while on and len(running) < w and slots and len(st["pending"]) + len(running) < BATCH:
+            while on and len(running) < w and slots:
                 gi = st["next_game"]
                 st["next_game"] += 1
                 save(st)
                 slot = slots.pop(0)
                 running[ex.submit(play, st, st["version"], gi, slot)] = (gi, slot)
+            if len(st["pending"]) >= BATCH:
+                try:
+                    step(st)
+                except Exception:
+                    log("step failed:\n" + traceback.format_exc())
+                    os.replace(ON, ON + ".paused")
+                    return
+                continue
             if not running:
                 if not on:
                     log("loop_on gone: stopped")
                     return
-                if len(st["pending"]) >= BATCH:
-                    try:
-                        step(st)
-                    except Exception:
-                        log("step failed:\n" + traceback.format_exc())
-                        os.replace(ON, ON + ".paused")
-                        return
-                    continue
                 time.sleep(5)
                 continue
             done, _ = wait(list(running), timeout=30, return_when=FIRST_COMPLETED)

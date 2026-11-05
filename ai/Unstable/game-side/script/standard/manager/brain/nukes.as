@@ -58,6 +58,26 @@ bool NukeStillWorth(float cost, int hits, float minValue)
 	return believed >= minValue;
 }
 
+// WHAT A LOOK SAW (his 11-04, watching: "the AI keeps nuking places it can clearly see there are no enemies").
+// The mirrored base is a guess for ground we have not seen. In our LOS it is worth only what stands there, and
+// those buildings rank as sighted base targets on their own; out of LOS again it regrows from nothing at the rate
+// a base could be rebuilt -- our own income, the map's measured yield in a mirrored game. A look used to clear the
+// strike count instead, so seeing the ground empty priced the guess whole again and it was nuked again.
+int gNkMirSeenAt = -1;
+float NukeMirrorWorth(const AIFloat3 &in mirror, float cost)
+{
+	if (ai.IsPosInLos(mirror)) {
+		gNkMirSeenAt = ai.frame;
+		return 0.f;
+	}
+	if (gNkMirSeenAt < 0)
+		return cost;
+	const float inc = Eco::MInc();
+	const float rebuildS = cost / ((inc > 1.f) ? inc : 1.f);
+	const float sinceS = float(ai.frame - gNkMirSeenAt) / float(SECOND);
+	return (sinceS >= rebuildS) ? cost : cost * sinceS / rebuildS;
+}
+
 int StrikesOn(const AIFloat3 &in p)
 {
 	for (uint i = 0; i < gHitPos.length(); ++i) {
@@ -706,7 +726,7 @@ void UpdateNukes()
 		AIFloat3 mirror(AiTerrainWidth() - Builder::gHomePos.x, 0.f,
 				AiTerrainHeight() - Builder::gHomePos.z);
 		if (OnMap(mirror) && !VolleyServes(mirror)) {
-			const float cost = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
+			const float cost = NukeMirrorWorth(mirror, ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE));
 			int antis = AntisCovering(mirror);
 			const int assumeFrom2 = int(ai.GetTunable("apex_nuke_assume_from", TUNE_NUKE_ASSUME_FROM)
 					* 60.f) * SECOND;

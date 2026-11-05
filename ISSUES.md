@@ -10,6 +10,7 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
+| [cons-flee-to-map-edge](issues/cons-flee-to-map-edge.md) | 11-04 | constructors run to the map edge when threat covers the whole map, and idle there |
 | [off-switches](issues/off-switches.md) | 11-03 | 56 deleted 11-04; left: 26 of his asks awaiting his test-or-delete call |
 | [glacier-pass-plus0](issues/glacier-pass-plus0.md) | 11-03 | too many sites at once; energy short after the opening; slow to finish |
 | [8v8-first-gantry-late](issues/8v8-first-gantry-late.md) | 10-31 | the team's first T3 lab 22-26 min vs BARb's 14-18; waiting on his ruling on who hosts and pays |
