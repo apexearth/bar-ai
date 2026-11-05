@@ -22,6 +22,7 @@ text: `git log -p TODO.md`.
 | [strike-their-aa](todo/strike-their-aa.md) | 10-23 | their AA as a target; the air waits until it falls |
 | [offensive-air-escalate](todo/offensive-air-escalate.md) | 10-24 | after failed runs, bigger waves, not none |
 | [air-arrives-together](todo/air-arrives-together.md) | 10-24 | wings timed to reach the target together |
+| [stop-trading-one-by-one](todo/stop-trading-one-by-one.md) | 11-05 | we feed units singly into a massed army; see it, then stop it (after the foundation) |
 | [gunships-answer-raids](todo/gunships-answer-raids.md) | 10-23 | gunships sent at a raid on our mexes |
 | [air-swarms-slow-push](todo/air-swarms-slow-push.md) | 10-23 | a packed enemy army as a strike target |
 | [aa-answers-big-air](todo/aa-answers-big-air.md) | 10-23 | our AA stayed small against a huge late air attack |
