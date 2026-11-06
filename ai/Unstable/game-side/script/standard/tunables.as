@@ -860,6 +860,7 @@ const float TUNE_PLANT_PIPE = 2.0f;
 //   never a count.
 const float TUNE_LEARNED_RISK = 1.f;   // [toggle 0/1] a build job's risk is the learned chance its frame dies and its builder is killed (risk.as, tools/risknet.py), replacing the exposure charge, the trip risk and the extractor's job survival (his 11-04)
 const float TUNE_SEAT_PLAN = 0.f;   // [toggle 0/1] plan.as: the seat plan steers builders (1) or only logs beside them (0); his 11-05, todo/seat-plan.md
+const float TUNE_CON_PRIO = 0.f;   // [toggle 0/1] lift.as: a constructor on a job of a kind over its spend share works at low build priority; his 11-06
 const float TUNE_PLANT_FREE = 0.f;   // [toggle 0/1] his 11-03 experiment vs WRDistilled: a second copy of a plant we own is never refused (nanos-first lifted); run with apex_plant_income_per=1 to lift the line count too (want_plant.as CopyWaived)
 const float TUNE_PLANT_INCOME_PER = 50.f;
 

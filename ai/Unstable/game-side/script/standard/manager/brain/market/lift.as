@@ -682,6 +682,32 @@ void NpSend(CCircuitUnit@ u, bool low)
 }
 int gNpLow = 0, gNpHigh = 0;
 int gNpLogAt = 0;
+// CONSTRUCTORS BY THE SAME RULE (his 11-06: "some cons could do work but set themselves to low priority"): a hand on a
+// job of a kind over its share draws what the rest leave (TUNE_CON_PRIO). 2v2 vs BARb, 24 pairs: e/m stall samples
+// -7..-14% (t -0.9..-1.3), army produced +266 m at 12 min, income even to 16 min -- unproven, off.
+uint gNpConNext = 0;
+int gNpConLow = 0;
+void ConPriorityPass()
+{
+	if (ai.GetTunable("apex_con_prio", TUNE_CON_PRIO) <= 0.f)
+		return;
+	const bool wasting = MetalWasting();
+	const uint n = gWorkers.length();
+	if (gNpConNext >= n)
+		gNpConNext = 0;
+	for (uint k = 0; (k < 8) && (gNpConNext < n); ++k, ++gNpConNext) {
+		CCircuitUnit@ u = gWorkers[gNpConNext];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		IUnitTask@ t = u.task;
+		bool low = false;
+		if ((t !is null) && !t.IsDead() && !wasting && (t.buildDef !is null) && (t.GetType() == Task::Type::BUILDER))
+			low = gNpCatOver[NpKindOf(int(t.buildDef.id))];
+		if (low)
+			++gNpConLow;
+		NpSend(u, low);
+	}
+}
 void NanoPriorityPass()
 {
 	if (ai.frame - gNpAt < SECOND)
@@ -697,6 +723,7 @@ void NanoPriorityPass()
 				NpSend(fac, gNpOver);
 		}
 	}
+	ConPriorityPass();
 	const uint n = gOwnNano.length();
 	for (uint k = 0; (k < 8) && (gNpNext < n); ++k, ++gNpNext) {
 		CCircuitUnit@ u = gOwnNano[gNpNext];
@@ -720,10 +747,11 @@ void NanoPriorityPass()
 				kinds += (gNpCatOver[c] ? "1" : "0");
 			AiLog("apex: nanoprio t=" + ai.teamId + " over=" + (gNpOver ? 1 : 0)
 				+ " facs=" + Factory::gFacUnits.length() + " low=" + gNpLow + " high=" + gNpHigh
-				+ " kindsOver=" + kinds);
+				+ " conLow=" + gNpConLow + " kindsOver=" + kinds);
 		}
 		gNpLow = 0;
 		gNpHigh = 0;
+		gNpConLow = 0;
 	}
 }
 

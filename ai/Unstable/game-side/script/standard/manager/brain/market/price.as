@@ -1052,6 +1052,15 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	w.pcRisk = riskM;
 	w.pcLate = gPrLastLateC;
 	w.value = gain / (w.mCost + w.tCost);
+	// DOING NOTHING IS AN OPTION (his 11-05: "how much am I delaying the other one? ... Maybe I should do nothing").
+	// A start whose delay to the jobs in progress costs more than all it returns over the payback horizon leaves us
+	// poorer than not starting. 2v2 vs BARb, 24 pairs (11-06): deleting this cost income at 8 min -6 (t -3.0), at
+	// 12 min -15.6 (t -2.0), metal killed -3.5k (t -3.2), though the economy test without an enemy gained.
+	{
+		const float H = PayH();
+		if ((H > 1.f) && (w.pcDisp > 0.f) && (w.pcDisp >= gain * H))
+			w.value = 0.f;
+	}
 	return w.value;
 }
 
