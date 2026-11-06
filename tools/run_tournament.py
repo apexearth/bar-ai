@@ -310,6 +310,8 @@ def main() -> int:
                          "rebuilding or redeploying (see dev_tunables.lua)")
     ap.add_argument("--engine", help="engine version dir")
     ap.add_argument("--name", help="label for this run's output directory")
+    ap.add_argument("--seed-base", dest="seed_base", type=int, default=None,
+                    help="first seed (default: random per run, recorded in config.json)")
     ap.add_argument("--report", nargs="?", const="", metavar="RUN_DIR",
                     help="summarise a finished run (default: the most recent)")
     args = ap.parse_args()
@@ -346,6 +348,10 @@ def main() -> int:
     pairs = list(itertools.combinations(args.ais, 2))
     per_pair = args.games + (args.games % 2)
 
+    # A fresh base per run (his 11-06): seeds were 1000 + i/2 in every run, so each tournament replayed the same few
+    # openings -- the same team strategy and start boxes -- run after run. Each map gets its own seeds.
+    seed_base = args.seed_base if args.seed_base is not None else random.randrange(1, 1 << 30)
+    map_off = {m: k * 1000 for k, m in enumerate(maps)}
     jobs: list[Job] = []
     for a, b in pairs:
         # --interleave walks the maps round-robin, so a long batch reaches every
@@ -356,7 +362,7 @@ def main() -> int:
             # Swap sides on odd iterations; the seed advances once per swap
             # pair so both orders see identical starting conditions.
             first, second = (a, b) if i % 2 == 0 else (b, a)
-            jobs.append(Job(len(jobs), first, second, map_name, 1000 + i // 2))
+            jobs.append(Job(len(jobs), first, second, map_name, seed_base + map_off[map_name] + i // 2))
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     slug = args.name or _safe("_vs_".join(args.ais))[:60]
@@ -369,7 +375,7 @@ def main() -> int:
         "ais": args.ais, "maps": maps, "games_per_pairing": per_pair,
         "minutes": args.minutes, "workers": args.workers, "engine": args.engine,
         "modoption": args.modoption,
-        "per_side": args.per_side, "sides": args.sides,
+        "per_side": args.per_side, "sides": args.sides, "seed_base": seed_base,
         "jobs": [asdict(j) for j in jobs],
     }, indent=2), encoding="utf-8")
 
