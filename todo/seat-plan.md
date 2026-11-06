@@ -108,3 +108,28 @@ income at 16 min read 56.8, 75.4, 66.4 and 66.5 across runs: compare arms within
 (t -3.0) is beyond that. Its cause: the stay returned before the yields, so a hand holding any plan job never stepped
 aside for a lab, a factory or defence under its share (factories spend 5.5k -> 4.2k by 20 min). The stay now comes
 after them. Next: plan2v2d, 48 pairs.
+
+**plan2v2d (11-06 03:04, 48 pairs, stay after the yields; hands held to the economy's spend share):** income at 12 min
+56.5 -> 48.1 (t -2.3), at 16 -7.5 (t -1.3), army standing -29% (t -1.8); jobs failed -11% (t -1.9), metal lost -12%
+(t -1.4), live requests per seat 17.6 -> 8.7, damage efficiency vs BARb 0.90-0.96 -> 0.96-1.02.
+
+**plan2v2e (11-06 04:08, 48 pairs, ALL hands to the plan, metal share kept):** worse -- income at 12 min -9.0 (t -3.1), at
+16 -15.9 (t -2.6), at 20 -20.5 (t -2.6), army standing -35% (t -3.0), metal produced by 20 min 56.1k -> 47.7k; the hands'
+output fell (units 44.6k -> 38.8k, buildings 75.7k -> 61.2k): hands with no admitted job fall to an election that may
+not start economy, so they help, reclaim or wait. Reverted (c0d55a49).
+
+## Morning summary (11-06)
+
+- The plan delivers the focus he asked for in every run: live build requests per seat roughly halved (8.7-11 vs 15-18),
+  fewer failed jobs, fewer frames left unfinished, better trades.
+- 1v1 (plan4): even economy, metal produced +10% by 20 min, metal lost -39%.
+- 4v4 (plan4v4b): even economy, metal killed +20% (t 2.9), army +31% (t 1.7).
+- 2v2: NOT better. Three 24-pair runs read income at 16 min +9.8, -13.0, -15.6; the 48-pair run -7.5 (12 min -8.4,
+  t -2.3). The A/A (aa2v2) shows single runs reach t ~1.8 alone, so the 48-pair reading is the one to trust.
+- Why 2v2 grows slower: the plan admits economy jobs only up to the economy's spend share of metal, and builders it has
+  no job for fall back to an election that may no longer start economy; the old election overspends on economy and
+  grows faster in the opening. Giving the plan all hands made it worse; capping hands at the share is the better of two.
+- Next idea, not built: let the plan admit economy past its share while metal would otherwise go unspent (feed minus
+  what the factories and defence actually draw, not their target share), and never leave a hand idle while an
+  admissible economy job stands.
+- The plan stays OFF in committed code (TUNE_SEAT_PLAN 0).
