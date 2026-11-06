@@ -31,6 +31,18 @@ game test beats the price they replace.
 | H6 aggression | stance / army share | what pressing or holding gained over the next minutes, by map control, army and eco ratios | not built |
 | H7 scouting | scout sends | what a look revealed, what production did next, how the next fights went | not built |
 | H8 incursions | defence placement | each enemy push: stake exposed, towers/army in reach, share lost | not built |
+| H9 air commitment | keep producing air, stop, or escalate | what each wave returned in metal of damage against its cost and losses, by their AA seen and the game's stage | not built |
+| H10 fight settings | threat scale, engage odds, retreat point, stance | the fight's trade under the setting it was fought with | not built |
+
+**Units are seen by their stats, never by name (his 11-05).** Today the policy net sees 36 game-state numbers and
+leans per want KIND (energy, extractors, factories...); which unit gets built is an equation over that unit's stats
+(solar vs wind: energy per metal at the map's wind, build time, space). Nothing a net sees says what the enemy army
+IS. His bar: every head is fed what a player reads off the field. The enemy's seen army as trait totals (range,
+DPS, alpha, rate of fire, splash, health, speed, cost; air vs ground) and ours, and each candidate unit or building
+by the same traits, so a head can learn counters (snipers -> spam; fast low-damage fire -> beefy splash units),
+whether air is still paying in a long game, and how aggressive to be, and so it works on modded units too. His
+words on the limit: how good the AI can become is capped by simple things like this. Deferred until the foundation
+is strong; the order above still holds, with H4 (matchups) as the first head to take the trait inputs.
 
 ## Making it trainable (the conditions, each checked)
 
