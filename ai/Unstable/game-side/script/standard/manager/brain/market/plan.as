@@ -60,9 +60,14 @@ float PlanGainAt(int d, const AIFloat3& in at)
 		const float chew = (spill < cap) ? spill : cap;
 		return (chew > 0.f) ? chew * Catalog::gConvRatio[d] : 0.f;
 	}
+	// energy at what one e/s is worth to the lathes now (EPriceAt: the conversion floor in surplus, the metal flow
+	// the stall throttles in a stall), not the floor alone (plan2v2f: priced at 1/70 a generator lost to every
+	// extractor, the plan seats built 3.5 fewer by minute 10 and ran 97 e/s short)
 	float dI = Catalog::gMakeM[d];
-	if (Catalog::gMakeE[d] > 0.f)
-		dI += Catalog::gMakeE[d] * ConvRate();
+	if (Catalog::gMakeE[d] > 0.f) {
+		const float hand = (gWorkers.length() > 0) ? (gPlanBP / float(gWorkers.length())) : 100.f;
+		dI += Catalog::gMakeE[d] * EPriceAt(Catalog::BuildSecondsAt(d, (hand > 1.f) ? hand : 100.f));
+	}
 	return (dI > 0.f) ? dI : 0.f;
 }
 
@@ -180,8 +185,8 @@ void SeatPlanUpdate()
 	if (gPoolNow !is null) {
 		for (uint r = 0; r < gPoolNow.def.length(); ++r) {
 			const int d = gPoolNow.def[r];
-			PlanAdd(PJ_RUNG, d, AIFloat3(-1.f, 0.f, -1.f), gPoolNow.cost[r], Catalog::gBuildTime[d],
-					gPoolNow.gain[r], null, feed, bp);
+			const float g = (Catalog::gExtractsM[d] > 0.f) ? gPoolNow.gain[r] : PlanGainAt(d, AIFloat3(-1.f, 0.f, -1.f));
+			PlanAdd(PJ_RUNG, d, AIFloat3(-1.f, 0.f, -1.f), gPoolNow.cost[r], Catalog::gBuildTime[d], g, null, feed, bp);
 			gPjN[gPjN.length() - 1] = gPoolNow.n[r];   // the copies the map still holds, admitted one at a time below
 		}
 	}
@@ -413,6 +418,13 @@ bool PlanAdmitsDef(int d)
 			return true;
 	return false;
 }
+bool PlanListsDef(int d)
+{
+	for (uint i = 0; i < gPjDef.length(); ++i)
+		if ((gPjDef[i] == d) && (gPjKind[i] == PJ_RUNG))
+			return true;
+	return false;
+}
 IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want@ top)
 {
 	// The opening is the election's until the first factory stands: an economy-only plan cannot see that a seat with
@@ -519,8 +531,10 @@ bool PlanFits(Want@ w)
 	const int d = int(w.def.id);
 	// metal spilling or the bank over half full: the plan admitted too little, so an economy start is not refused
 	// (plan2v2e: hands with no admitted job fell to an election that could not start economy, and did less)
+	// the plan refuses only what it prices: converters, stores and nano turrets are not rungs, and refusing them
+	// (plan2v2f: converters -1.5 by minute 10, t -3.7) left them to a bank that had to fill first
 	if (PlanEcoCat(CategoryOf(w.kind)))
-		return PlanAdmitsDef(d) || MetalWasting() || (Eco::MCur() > 0.5f * aiEconomyMgr.metal.storage);
+		return !PlanListsDef(d) || PlanAdmitsDef(d) || MetalWasting() || (Eco::MCur() > 0.5f * aiEconomyMgr.metal.storage);
 	const int cat = NpKindOf(d);
 	const float open = PlanOpenM(cat);
 	if (open <= 0.f)

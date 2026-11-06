@@ -144,3 +144,8 @@ not start economy, so they help, reclaim or wait. Reverted (c0d55a49).
   a game, into buildings 75.3k -> 64.4k (-13% together) while metal spills, so the shortage is hands at work, not
   metal admitted. Next to measure: where a plan seat's builders spend their seconds (walking, waiting for a job, held
   on a job it cannot feed) against the old election's, before changing the admission again.
+- 11-06 morning, the eco test (NullAI, +0, 8 seeds, plan off unless said): the plan-on arm still falls behind late
+  (587 m/s at 20 vs 652). Two flaws found and fixed in plan.as: energy was priced at the conversion floor (a
+  generator lost to every extractor; plan seats built 2.5 fewer generators by minute 10 and 4.2 fewer converters by
+  minute 14, t -6.5, in plan2v2f read with the sides corrected), and the plan refused economy kinds it never lists
+  (converters, stores, nano turrets) until the bank filled (bank +615 at minute 10, t 4.2). Not yet re-measured in 2v2.

@@ -1052,26 +1052,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	w.pcRisk = riskM;
 	w.pcLate = gPrLastLateC;
 	w.value = gain / (w.mCost + w.tCost);
-	// DOING NOTHING IS AN OPTION (his 11-05: "how much am I delaying the other one? Maybe I shouldn't do it. Maybe I
-	// should do nothing"; "every single spend we make needs to be considered in this way"). A start whose delay to the
-	// jobs in progress costs more than all it returns over the payback horizon leaves us poorer than not starting:
-	// it is worth nothing, for every kind alike. Only the delay decides it -- a start that holds nobody up is untouched.
-	{
-		const float H = PayH();
-		if ((H > 1.f) && (w.pcDisp > 0.f) && (w.pcDisp >= gain * H)) {
-			w.value = 0.f;
-			++gNothingWins;
-			if (ai.frame >= gNothingLogAt) {
-				gNothingLogAt = ai.frame + 60 * SECOND;
-				AiLog(Factory::T() + "apex: nothing-wins t=" + ai.teamId + " " + Catalog::Def(defId).GetName()
-					+ " delay=" + int(w.pcDisp) + " returns=" + int(gain * H) + " total=" + gNothingWins);
-			}
-		}
-	}
 	return w.value;
 }
-int gNothingWins = 0;
-int gNothingLogAt = 0;
 
 
 }  // namespace Market

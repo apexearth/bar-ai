@@ -896,8 +896,7 @@ void HelpStatNote(const array<Want@>@ ranked, Want@ top)
 	gHsAt = ai.frame + 60 * SECOND;
 	AiLog(Factory::T() + "apex: help-stat t=" + ai.teamId + " starts=" + gHsStarts + " helpOffered=" + gHsOffered
 		+ " helpPricedHigher=" + gHsHelpHigher + " helpWon=" + gHsHelpWon
-		+ " helpOverStart=" + formatFloat((gHsOffered > 0) ? pow(2.718282f, gHsLogRatio / float(gHsOffered)) : 0.f, "", 0, 3)
-		+ " nothingWins=" + gNothingWins);
+		+ " helpOverStart=" + formatFloat((gHsOffered > 0) ? pow(2.718282f, gHsLogRatio / float(gHsOffered)) : 0.f, "", 0, 3));
 	gHsStarts = 0; gHsOffered = 0; gHsHelpHigher = 0; gHsHelpWon = 0;
 	gHsLogRatio = 0.f;
 }

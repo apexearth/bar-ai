@@ -97,6 +97,11 @@ def _script(m: Path):
 
 def ours(m: Path) -> set[int]:
     ais, _ = _script(m)
+    # against another AI, ours are the Apex seats: result.json lists side a first, and a side-swapped game puts the
+    # opponent there (11-06: half of a bench's games read BARb as us)
+    apex = {t for t, sn in ais if sn.startswith("Apex")}
+    if apex and len(apex) < len(ais) and len({sn for t, sn in ais if t in apex}) == 1:
+        return apex
     try:
         side_a = json.loads((m / "result.json").read_text())["teams"][0]["shortName"]
     except Exception:  # noqa: BLE001

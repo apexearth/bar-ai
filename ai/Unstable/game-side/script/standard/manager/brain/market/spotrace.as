@@ -18,6 +18,7 @@ namespace Market {
 
 const string TV_SPR_HANDS = "sprHands";
 int gSprAt = -999999;
+array<int> gSprOursHeld, gSprOursAt;
 bool gSprHave = false;
 float gSprSpace = -1.f;
 float gSprComMex = 1.f;
@@ -236,7 +237,27 @@ void SprRefresh()
 	gSprYMean = (keyF.length() > 0) ? ySum / float(keyF.length()) : 0.f;
 	keyU.sortAsc();
 	const float cyc0 = btMex / bp0 + gSprSpace / ((v0 > 1.f) ? v0 : 1.f);
-	const float R = (cyc0 > 0.1f) ? hTeam / cyc0 : 0.f;
+	float R = (cyc0 > 0.1f) ? hTeam / cyc0 : 0.f;
+	// OUR CLAIM RATE AS MEASURED, WHEN IT IS SLOWER THAN EVERY HAND CLAIMING. hands / cycle assumes every hand
+	// claims nonstop; most are building something else (v0.5.06 eco test: 8 hands at a 37 s cycle priced the open
+	// spots taken within a minute, the board took 14 -> 20 in minutes 4-8, and the lab sat idle 4 minutes with the
+	// constructor's claim worth 0.0 and 20 spots open; the same in 2v2 against BARb, 21-24 open spots all game).
+	gSprOursHeld.insertLast(gMsOurs);
+	gSprOursAt.insertLast(ai.frame);
+	while ((gSprOursAt.length() > 2) && (ai.frame - gSprOursAt[1] >= 90 * SECOND)) {
+		gSprOursHeld.removeAt(0);
+		gSprOursAt.removeAt(0);
+	}
+	{
+		const float span = float(ai.frame - gSprOursAt[0]) / float(SECOND);
+		if (span >= 60.f) {
+			float meas = float(gMsOurs - gSprOursHeld[0]) / span;
+			if (meas < 0.f)
+				meas = 0.f;
+			if (meas < R)
+				R = meas;
+		}
+	}
 	gSprRUs = R;
 	gSprIdxOf.resize(n);
 	for (uint s = 0; s < n; ++s)
@@ -536,7 +557,7 @@ void SpotRaceUpdate()
 	AiLog(Factory::T() + "apex: spotrace-stat t=" + ai.teamId
 		+ " open=" + gSprOpenAll + " mine=" + gSprS.length() + " P=" + hist
 		+ " foeCons=" + gSprFcGN + "+" + gSprFcAN + "a hands=" + NnF(gSprHandsF, 1) + " rateF=" + NnF(gSprRate * 60.f, 1) + "/m"
-		+ " held=" + held + " team=" + gMsOurs + " foe=" + gMsFoe
+		+ " rateUs=" + NnF(gSprRUs * 60.f, 1) + "/m held=" + held + " team=" + gMsOurs + " foe=" + gMsFoe
 		+ " ask=" + gSprAsk + " fig=" + gSprAskF
 		+ " rCon=" + NnF((gSprAsk > 0) ? gSprRCSum / float(gSprAsk) : 0.f, 2)
 		+ " rFig=" + NnF((gSprAsk > 0) ? gSprRFSum / float(gSprAsk) : 0.f, 2)
