@@ -11,6 +11,16 @@ value it makes possible: an extractor is worth the metal it adds times what meta
 energy's price; a constructor, its build power times build power's price plus what its unlock allows; a lab, what its
 line produces. Then the army's scale flows into everything that funds it, and only ratios decide.
 
+**What each choice takes away from (his 11-05, watching v0.5.06: "when we make decisions about what to do we never
+think about what we're taking away from in our choices").** A price is the option's gain against the best other use of
+the same metal, builders and time, never its gain alone. The tests it must pass, from his All That Glitters 8v8:
+- a builder leaving an unfinished frame pays for that frame's sunk metal and its delayed output (75 T2 extractor
+  frames left under 10% built across our 8 seats);
+- a plant is priced against the army the same metal and build power would field now (every seat bought a T2 air
+  lab while far behind on army);
+- a new site is priced against slowing every site already open (50 m/s split six ways instead of finishing the
+  extractor upgrades first).
+
 **What is wrong today (measured 10-19).**
 - Two currencies. Army gain is gap metal x a strength factor; a con's is income in m/s. In a T2 bot lab
   (matches/labbest) the T2 con read 20-490 against Zeus 8k-347k, Fatboy 37k-1.3M, sniper 31k-2.2M.
