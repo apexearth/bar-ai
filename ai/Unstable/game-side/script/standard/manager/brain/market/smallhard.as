@@ -291,7 +291,6 @@ void ShRefresh()
 	if ((gSmhTc >= 0.f) && (gSmhTA > gSmhTc))
 		gSmhK = (gSmhTA - gSmhTc) / (gSmhTA + gSmhTc);
 	gErKRaw = gSmhK;
-	gSmhK *= EcoReturnArmyMul();
 	gSmhFloorX = gSmhK * (gSmhComM + prod) * ARMY_FLOOR_PARITY / float(fighting);
 	const float A = Military::TeamArmyCost();
 	gSmhHold = (A + gSmhArrive > 1.f) ? A / (A + gSmhArrive) : 0.f;

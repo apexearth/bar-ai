@@ -870,7 +870,11 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 				// was charged 500-2,200 s of "rest" for the mex upgrades its
 				// own metal would fund, and priced below them while 5k E/s
 				// was thrown away on a metal-starved map.
-				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f)) {
+				// An extractor is the upgrade stream, so it pays no stream charge -- but it shares income with every
+				// job in progress like any build (his 11-05: "never 'oh, I'll just make building that mex take
+				// LONGER'"; one seat held 35 live requests against a cap of 7, 75 T2 extractor frames left under 10%).
+				const bool isMex = Catalog::gExtractsM[defId] > 0.f;
+				if (share > 0.f) {
 					// ...and every project in progress (TUNE_INFLIGHT_HOLD, his 10-18: each thing we start
 					// slows the ones already started), for the share of this build's metal that free
 					// flow cannot pay over its own duration -- what overflows holds nobody up.
@@ -889,7 +893,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 							hold = InFlightGainM() * unpaid;
 						}
 					}
-					float held = DisplacedStreamM() + hold - ((gain > 0.f) ? gain : 0.f);
+					float held = (isMex ? 0.f : DisplacedStreamM()) + hold - ((gain > 0.f) ? gain : 0.f);
 					displacedM = held * dur * share + holdPsM;
 					if (displacedM < 0.f)
 						displacedM = 0.f;
@@ -1048,8 +1052,26 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	w.pcRisk = riskM;
 	w.pcLate = gPrLastLateC;
 	w.value = gain / (w.mCost + w.tCost);
+	// DOING NOTHING IS AN OPTION (his 11-05: "how much am I delaying the other one? Maybe I shouldn't do it. Maybe I
+	// should do nothing"; "every single spend we make needs to be considered in this way"). A start whose delay to the
+	// jobs in progress costs more than all it returns over the payback horizon leaves us poorer than not starting:
+	// it is worth nothing, for every kind alike. Only the delay decides it -- a start that holds nobody up is untouched.
+	{
+		const float H = PayH();
+		if ((H > 1.f) && (w.pcDisp > 0.f) && (w.pcDisp >= gain * H)) {
+			w.value = 0.f;
+			++gNothingWins;
+			if (ai.frame >= gNothingLogAt) {
+				gNothingLogAt = ai.frame + 60 * SECOND;
+				AiLog(Factory::T() + "apex: nothing-wins t=" + ai.teamId + " " + Catalog::Def(defId).GetName()
+					+ " delay=" + int(w.pcDisp) + " returns=" + int(gain * H) + " total=" + gNothingWins);
+			}
+		}
+	}
 	return w.value;
 }
+int gNothingWins = 0;
+int gNothingLogAt = 0;
 
 
 }  // namespace Market

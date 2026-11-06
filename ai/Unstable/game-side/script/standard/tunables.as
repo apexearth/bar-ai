@@ -859,6 +859,7 @@ const float TUNE_PLANT_PIPE = 2.0f;
 //   marginal plant's gain is zero beyond 1 + income/this -- income-derived,
 //   never a count.
 const float TUNE_LEARNED_RISK = 1.f;   // [toggle 0/1] a build job's risk is the learned chance its frame dies and its builder is killed (risk.as, tools/risknet.py), replacing the exposure charge, the trip risk and the extractor's job survival (his 11-04)
+const float TUNE_SEAT_PLAN = 0.f;   // [toggle 0/1] plan.as: the seat plan steers builders (1) or only logs beside them (0); his 11-05, todo/seat-plan.md
 const float TUNE_PLANT_FREE = 0.f;   // [toggle 0/1] his 11-03 experiment vs WRDistilled: a second copy of a plant we own is never refused (nanos-first lifted); run with apex_plant_income_per=1 to lift the line count too (want_plant.as CopyWaived)
 const float TUNE_PLANT_INCOME_PER = 50.f;
 
@@ -1713,7 +1714,6 @@ const float TUNE_SCHED_ALL = 0.05f;   // [mod] strike.as schedule: attack threat
 const float TUNE_STRIKE_PHASES = 0.f;   // [toggle 0/1] strike.as: the RUSH plan as build-up (T2 held) -> strike together (aggression) -> T2 during it
 const float TUNE_STRIKE_MOD = 0.05f;   // [0.1-1] strike.as: the attack threat modifier while the strike is out (stock BARb 0.25-0.3)
 const float TUNE_PLAN_FROM_PRICE = 0.f;   // [toggle 0/1] planprice.as PpChoose: the team plays the best-priced plan (a fifth better, two readings)
-const float TUNE_ER_Q = 1.f;   // [toggle 0/1] ecoreturn.as EcoReturnArmyMul: q scales the army row, the army target's map gap, the rush extra and small_hard's k (our odds of killing them, or the threat at our edge); his 10-24 game: outnumbered 0.77 -> q 0.17 -> army share 0.06
 const float TUNE_PLAN_PRICE = 1.f;   // [toggle 0/1] planprice.as: the plan pricer runs (a bisect switch: it calls into the air model)
 const float TUNE_VERBOSE = 0.f;   // [toggle 0/1] plannet.as Say: the team's thinking in chat -- HIS LOCAL WATCH GAMES ONLY (never on in a hosted game)
 const float TUNE_PRODUCE_FOCUS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE each lab builds its best-priced unit, not a mix

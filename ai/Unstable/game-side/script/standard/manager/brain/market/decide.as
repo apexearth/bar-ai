@@ -866,6 +866,42 @@ void ValItemLog()
 	if (s.length() > 0)
 		AiLog(Factory::T() + "apex: valitem t=" + ai.teamId + s);
 }
+// HELP BESIDE EVERY START (his 11-05: "is somebody else already doing this? Should I just help them?"). Per seat per
+// minute: elections a start won, how many had a help (assist) want on offer, and how it was priced against the winner.
+int gHsStarts = 0, gHsOffered = 0, gHsHelpHigher = 0, gHsHelpWon = 0, gHsAt = 0;
+float gHsLogRatio = 0.f;
+void HelpStatNote(const array<Want@>@ ranked, Want@ top)
+{
+	if (top is null)
+		return;
+	if (top.kind == WK_ASSIST) {
+		++gHsHelpWon;
+	} else if ((top.kind != WK_RECLAIM) && (top.def !is null)) {
+		++gHsStarts;
+		float hv = -1.f;
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if ((ranked[i] !is null) && (ranked[i].kind == WK_ASSIST) && (ranked[i].value > hv))
+				hv = ranked[i].value;
+		}
+		if (hv > 0.f) {
+			++gHsOffered;
+			if (hv > top.value)
+				++gHsHelpHigher;
+			if (top.value > 0.f)
+				gHsLogRatio += log(hv / top.value);
+		}
+	}
+	if (ai.frame < gHsAt)
+		return;
+	gHsAt = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: help-stat t=" + ai.teamId + " starts=" + gHsStarts + " helpOffered=" + gHsOffered
+		+ " helpPricedHigher=" + gHsHelpHigher + " helpWon=" + gHsHelpWon
+		+ " helpOverStart=" + formatFloat((gHsOffered > 0) ? pow(2.718282f, gHsLogRatio / float(gHsOffered)) : 0.f, "", 0, 3)
+		+ " nothingWins=" + gNothingWins);
+	gHsStarts = 0; gHsOffered = 0; gHsHelpHigher = 0; gHsHelpWon = 0;
+	gHsLogRatio = 0.f;
+}
+
 void ValMixNote(const array<Want@>@ ranked, Want@ top)
 {
 	if ((ranked is null) || (top is null))
@@ -3402,6 +3438,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			AiLog(ln);
 		}
 	}
+	// THE SEAT PLAN DECIDES (apex_seat_plan 1; todo/seat-plan.md): its job for this hand, unless an emergency or a
+	// defence kind under its share holds it; an economy start the plan did not admit is not taken.
+	if (SeatPlanOn() && !emergency) {
+		SeatPlanUpdate();
+		IUnitTask@ planT = SeatPlanDispatch(unit, ranked, top);
+		if (planT !is null)
+			return planT;
+		@top = SeatPlanFilterTop(ranked, top);
+	}
 	if (top is null) {
 		if (ai.frame >= gNextIdleLog) {
 			gNextIdleLog = ai.frame + 30 * SECOND;
@@ -3435,6 +3480,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			(top.kind == WK_PLANT) && (top.def !is null) && AirPlant(int(top.def.id)));
 	}
 	ValMixNote(ranked, top);
+	HelpStatNote(ranked, top);
+	{ const double _tSp = Perf::T0(); SeatPlanUpdate(); SeatPlanNote(unit, top); Perf::Add("dec.seatplan", _tSp); }
 	if (PersOn())
 		PersNoteTop(top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0

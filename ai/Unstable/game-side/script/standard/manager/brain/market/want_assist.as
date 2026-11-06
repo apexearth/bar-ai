@@ -9,6 +9,20 @@ int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assis
 // into a build the market already values at clearing rates; the bill is
 // the walk and the occupied time. That beats a marginal solar and loses to
 // a fresh mex -- the right ordering by construction.
+// THE TURRETS ACTUALLY WORKING A JOB, in metal/s (his 11-05: "should I just help them?"). Counting every turret in
+// reach as feeding the job (NanoLatheReaching) read a site inside the base as near-done, so helping it priced at a
+// median 0.001 of the start that won instead (bench focus1); a turret works its nearest target, so the ring is the
+// one SEEN lathing the frame (Requests::RingSeen, build power) at the job's own metal per build-power second.
+float HelpRingM(IUnitTask@ job)
+{
+	if ((job is null) || (job.buildDef is null))
+		return 0.f;
+	const int d = int(job.buildDef.id);
+	if (!Catalog::ValidId(d) || (Catalog::gBuildTime[d] <= 1.f))
+		return 0.f;
+	return Requests::RingSeen(job) * Catalog::gCostM[d] / Catalog::gBuildTime[d];
+}
+
 // Can this builder def raise a nano turret (a static lathe with no build list)?
 array<int> gHandNano;   // per def: 0 unknown, 1 yes, 2 no
 bool HandBuildsNano(int uid)
@@ -423,7 +437,7 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 		// included, or the fortieth guard prices like the first.
 		const uint hands = Requests::Workers(gBossJob) + uint(GuardsOnJob(gBossJob));
 		const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN
-				+ NanoLatheReaching(gBossJob.GetBuildPos());
+				+ HelpRingM(gBossJob);
 		float R = gBossJob.buildDef.costM
 				* (1.f - Requests::Progress(gBossJob));
 		if (R < 1.f)
