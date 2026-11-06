@@ -21,6 +21,7 @@ array<float> gJobVal;
 array<float> gJobGain;   // metal/s the finished thing returns -- what an
                          // assist on it is actually accelerating
 array<int> gJobKind;
+array<float> gJobNn;     // the value net's multiplier the job was bought at; an assist on it carries it
 // The job BestJobBoss ranked first, for callers that need to price the help
 // rather than just walk to it.
 IUnitTask@ gBossJob;
@@ -188,6 +189,7 @@ void NoteJob(IUnitTask@ t, Want@ w)
 			// once danger stopped damping it (the eco test at apex_threat_mul=0: extractor gains of 1.6-12 million)
 			gJobGain[i] = w.gain - ((w.accelM > 0.f) ? w.accelM : 0.f);
 			gJobKind[i] = w.kind;
+			gJobNn[i] = w.nnMult;
 			return;
 		}
 	}
@@ -196,6 +198,7 @@ void NoteJob(IUnitTask@ t, Want@ w)
 	gJobVal.insertLast(w.value);
 	gJobGain.insertLast(w.gain - ((w.accelM > 0.f) ? w.accelM : 0.f));
 	gJobKind.insertLast(w.kind);
+	gJobNn.insertLast(w.nnMult);
 }
 
 void JobSweep()
@@ -206,6 +209,7 @@ void JobSweep()
 			gJobVal.removeAt(i);
 			gJobGain.removeAt(i);
 			gJobKind.removeAt(i);
+			gJobNn.removeAt(i);
 			++gJobStamp;
 			continue;
 		}
@@ -226,6 +230,14 @@ float JobValue(IUnitTask@ t)
 }
 
 // What the finished building returns, metal/s. -1 for work nobody priced.
+float JobNn(IUnitTask@ t)
+{
+	for (uint i = 0; i < gJobTask.length(); ++i) {
+		if (gJobTask[i] is t)
+			return gJobNn[i];
+	}
+	return -1.f;
+}
 float JobGain(IUnitTask@ t)
 {
 	for (uint i = 0; i < gJobTask.length(); ++i) {

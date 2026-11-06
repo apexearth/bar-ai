@@ -474,6 +474,18 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// metal reactor is a ten-minute posting and has to be priced as one.
 	w.tCost = (walkSec + occupiedSec) * WageOf(unit);
 	w.value = w.gain / (w.mCost + w.tCost);
+	// HELPING A JOB IS BUYING MORE OF IT (his 11-06: "if you only have one constructor trying to make a heavy laser
+	// turret, it's probably not going to finish"). The value nets multiply every start (1.5-15x on towers) and no
+	// assist, so help on a tower read 1-10% of starting another: our towers took twice BARb's time, half the heavy
+	// lasers and Punishers never finished. An assist carries the multiplier its job was bought at. 2v2 vs BARb, 24
+	// pairs: income at 12 min +10 (t 2.9), at 20 +17 (t 2.4), army +2.6k (t 2.6), heavy lasers unfinished 55% -> 32%.
+	if (gBossJob !is null) {
+		const float jn = JobNn(gBossJob);
+		if (jn > 0.f) {
+			w.value *= jn;
+			w.nnMult *= jn;
+		}
+	}
 	@gAssistTarget = boss;
 	gAssistTargetId = (boss !is null) ? boss.id : -1;
 	gAssistGuardS = 60;
