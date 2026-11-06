@@ -6,7 +6,9 @@
 
 Planes are classed from the game tree's unit files (canfly + the description:
 Bomber / Gunship / Fighter / Construction / Scout), never from a name list.
-"Our side" is every team running an Apex spec (result.json, S16-safe).
+"Our side" is every player team running side A's AI, read from script.txt: result.json lists one entry per SIDE,
+so reading it counted only our first seat in a team game (11-05: 1 of 8 in an 8v8), and both sides when the
+opponent is an Apex release.
 Eco = a dead structure (mob=0) that is not armed: mex, energy, converter, lab,
 nano; the cost is the metal killed.
 """
@@ -79,20 +81,36 @@ def matches(paths):
                     yield m
 
 
-def ours(m: Path) -> set[int]:
+def _script(m: Path):
     try:
-        r = json.loads((m / "result.json").read_text())
+        txt = (m / "script.txt").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return [], {}
+    ais = []
+    for block in re.findall(r"\[ai\d+\]\s*\{(.*?)\}", txt, re.S | re.I):
+        sn, tm = re.search(r"ShortName=([^;]+);", block), re.search(r"\bTeam=(\d+);", block)
+        if sn and tm:
+            ais.append((int(tm.group(1)), sn.group(1)))
+    ally = {int(a): int(b) for a, b in re.findall(r"\[team(\d+)\]\s*\{[^}]*?\bAllyTeam=(\d+);", txt, re.S | re.I)}
+    return ais, ally
+
+
+def ours(m: Path) -> set[int]:
+    ais, _ = _script(m)
+    try:
+        side_a = json.loads((m / "result.json").read_text())["teams"][0]["shortName"]
     except Exception:  # noqa: BLE001
-        return {0}
-    return {t["team"] for t in r.get("teams", []) if "Apex" in t.get("spec", "")
-            or "apex" in t.get("shortName", "").lower()}
+        side_a = next((sn for _, sn in ais if sn.startswith("Apex")), None)
+    return {t for t, sn in ais if sn == side_a} or {0}
 
 
 def winner(m: Path, us: set[int]) -> str:
+    _, ally = _script(m)
     try:
         r = json.loads((m / "result.json").read_text())
         w = set(r["result"]["winners"])
-        return "W" if w & us else ("L" if w else "-")
+        mine = {ally.get(t, t) for t in us}
+        return "W" if w & mine else ("L" if w else "-")
     except Exception:  # noqa: BLE001
         return "?"
 
