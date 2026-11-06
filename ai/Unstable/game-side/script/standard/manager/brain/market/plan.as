@@ -410,12 +410,7 @@ IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want
 	if (Factory::gFactoryCount == 0)
 		return null;
 	const int j = PlanJobFor(unit);
-	if (gPlanStay) {
-		++gSpStay;
-		const int sid = int(unit.id);
-		return gSpLast[sid];
-	}
-	if (j < 0)
+	if ((j < 0) && !gPlanStay)
 		return null;
 	// a want outside the economy whose kind is under its share keeps the hand: defence, sensors and anti-air by
 	// their own shares; a plant by the army's (a lab is what turns metal into army), and always while no factory
@@ -441,6 +436,12 @@ IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want
 			++gSpYield;
 			return null;
 		}
+	}
+	// the job in hand, only once no lab, factory or defence under its share has claimed the hand
+	if (gPlanStay) {
+		++gSpStay;
+		const int sid = int(unit.id);
+		return gSpLast[sid];
 	}
 	if (gPjKind[j] == PJ_FRAME) {
 		IUnitTask@ t = gPjTask[j];

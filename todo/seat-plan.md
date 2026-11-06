@@ -101,3 +101,10 @@ hand holds is scored on its real walk and real remaining work and kept while it 
 job (switch lines 1,025 -> 521, T1 claims decayed under 10% 9.8 -> 3.5, off arm 4.0), and by 20 min metal produced
 (53.3k vs 53.7k) and army spend (18.9k vs 17.2k) were even. The same comparison across three runs read income at 16
 +9.8, -13.0, -15.6: before reading any single 2v2 run, an A/A of this setup (aa2v2) measures how far it swings alone.
+
+**aa2v2 (11-06 02:28, A/A: plan off in both arms, the same 2v2 setup, 24 pairs):** income at 16 min +3.1 +- 7.4, metal
+killed +2.7k (t 1.8), metal lost -4.5k (t -1.4) -- single 2v2 runs reach t ~1.8 by chance, and the plan-off arm's own
+income at 16 min read 56.8, 75.4, 66.4 and 66.5 across runs: compare arms within a run, never runs. plan2v2c's -15.6
+(t -3.0) is beyond that. Its cause: the stay returned before the yields, so a hand holding any plan job never stepped
+aside for a lab, a factory or defence under its share (factories spend 5.5k -> 4.2k by 20 min). The stay now comes
+after them. Next: plan2v2d, 48 pairs.
