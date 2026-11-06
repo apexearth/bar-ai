@@ -136,3 +136,11 @@ not start economy, so they help, reclaim or wait. Reverted (c0d55a49).
 - 4v4 again (plan4v4c, 11-06 05:12, 12 pairs): does NOT confirm plan4v4b -- army standing -29% (t -1.9), metal lost +14%
   (t 1.8), metal produced by 20 min -9%; better: extractors at 16 min +4.3 (t 1.9), jobs failed -14% (t -2.0), live
   requests per seat 23.5 -> 12.2. So across tonight: focus always better, growth and fights not yet.
+- plan2v2f (11-06 05:57, 48 pairs, 2v2, commit 27fddcfc: the economy plans what the army does not take; no economy start
+  refused while metal piles up): WORSE. Income at 12 min -7.2 (t -2.4), 20 min -10.5 (t -1.7); army standing -34%
+  (t -3.2); metal produced by 20 min -8%; metal wasted 110 -> 515 a game. Better as always: jobs failed -14% (t -2.5),
+  live requests per seat 17.1 -> 8.7, unfinished frames 85 -> 71.
+- The mechanism this run shows: the plan's hands do less work in total. Build power put into units 45.8k -> 41.7k metal
+  a game, into buildings 75.3k -> 64.4k (-13% together) while metal spills, so the shortage is hands at work, not
+  metal admitted. Next to measure: where a plan seat's builders spend their seconds (walking, waiting for a job, held
+  on a job it cannot feed) against the old election's, before changing the admission again.
