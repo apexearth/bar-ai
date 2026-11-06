@@ -191,7 +191,7 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_GIFT_STAKE` = 0. His 10-19: a seat with no commander, base or income still asked to be fed units. Untested; on for his watch lane.
 - `TUNE_LAB_BEST` = 0. His 10-19: a new Legion T2 lab drew an Incinerator over the T2 con at one in ten. The 08-23 argmax built 29 cons and no army. A/B pending.
 - `TUNE_LAB_INHERIT` = 1. His 10-19: the lab is worth all your extractors upgraded, limited by the time to get there. Before: armalab v=0.003 against a T1 extractor's 0.06-0.2.
-- `TUNE_AIR_FEED_CAP` = 1. His 10-19 Red Comet game: T2 air plants 6 min after the T2 lab at v=0.82/0.50, the yield mostly the look term (34 of 38).
+- `TUNE_AIR_FEED_CAP` = 1. His 10-19 Red Comet game: T2 air plants 6 min after the T2 lab at v=0.82/0.50, the yield mostly the look term (34 of 38). Since 11-05 a new air plant is capped only against the air plants standing: capped against every line's spend, a seat with ground labs spending all its metal priced its first or replacement air plant at 0 (c05-g1120: every air plant dead by minute 24.5, none rebuilt, against 693 Phoenix bombers; his 11-05: the cap's intent was "not only producing air", and late games can field 200 fighters and 100 bombers).
 - `TUNE_NANO_UPGRADE` = 1. His 10-19. A rule, not a price, until the turret's lab-vs-upgrade choice is in one currency (the valuation job).
 - `TUNE_DRAW_BEST` = 1. The draw moved 40-46% of builder decisions off the top want. 2v2 Comet vs BARb hard +50, 6 seeds: army at 25 min better on all six. On since 10-20.
 - `TUNE_CREW_SPLIT` = 1. His 10-01. 10-20, 5 seeds with DRAW_BEST on: 3-2 for the crew, inside the noise. Stays on.

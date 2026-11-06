@@ -1789,18 +1789,25 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// early... I'd never do that until I have multiple fusion alive with energy converters"). The ground
 		// half is already capped at the metal nothing spends (prodTerm above); the air yield was not. Converted
 		// energy is metal income, so fusions feeding converters are what lift it.
+		// The cap holds a new AIR line against the air lines we have (his 11-05: its intent was "not only producing
+		// air"; capping the first air plant against every ground line's spend left seats with no air plant against
+		// 693 bombers, c05-g1120). Ground survival is the seat caution's (EvSeatCaution).
 		const float prodOwnRaw = prodOwn;
-		if (evAir && (lines0 > 0) && AirFeedCapOn()) {
-			const float spare = SpareMetalRate();
-			if (prodOwn > spare)
-				prodOwn = (spare > 0.f) ? spare : 0.f;
-		}
-		if (evAir && (conHalf + prodOwn <= 0.05f) && (ai.frame >= gNextAirPlantDropLog)) {
-			gNextAirPlantDropLog = ai.frame + 60 * SECOND;
-			AiLog(Factory::T() + "apex: airplant-drop t=" + ai.teamId + " " + Catalog::Def(d).GetName()
-				+ " con=" + NnF(conHalf, 3) + " prod=" + NnF(prodOwnRaw, 3) + " capped=" + NnF(prodOwn, 3)
-				+ " spare=" + NnF(SpareMetalRate(), 3) + " lines=" + lines0 + " airPlants=" + OwnAirPlants()
-				+ " dominated=" + (dominated ? 1 : 0));
+		const int airLines = evAir ? OwnAirPlants() : 0;
+		const float spareNow = (evAir && AirFeedCapOn()) ? SpareMetalRate() : 0.f;
+		if (evAir && (airLines > 0) && AirFeedCapOn() && (prodOwn > spareNow))
+			prodOwn = (spareNow > 0.f) ? spareNow : 0.f;
+		if (evAir && AirFeedCapOn() && (ai.frame >= gNextAirPlantDropLog)) {
+			const float oldCapped = ((lines0 > 0) && (prodOwnRaw > spareNow)) ? ((spareNow > 0.f) ? spareNow : 0.f) : prodOwnRaw;
+			const bool dropped = conHalf + prodOwn <= 0.05f;
+			const bool freed = !dropped && (conHalf + oldCapped <= 0.05f);
+			if (dropped || freed) {
+				gNextAirPlantDropLog = ai.frame + 60 * SECOND;
+				AiLog(Factory::T() + "apex: airplant-" + (dropped ? "drop" : "freed") + " t=" + ai.teamId + " "
+					+ Catalog::Def(d).GetName() + " con=" + NnF(conHalf, 3) + " prod=" + NnF(prodOwnRaw, 3)
+					+ " capped=" + NnF(prodOwn, 3) + " oldCapped=" + NnF(oldCapped, 3) + " spare=" + NnF(spareNow, 3)
+					+ " lines=" + lines0 + " airPlants=" + airLines + " dominated=" + (dominated ? 1 : 0));
+			}
 		}
 		// Economy-only: a lab builds constructors only, so the army it would field is no part of its worth (a bot
 		// lab bought at gain 1.33 and a vehicle plant at 30 beside the air plants, 10-20).

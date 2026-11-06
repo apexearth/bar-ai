@@ -29,6 +29,7 @@ issues gets the next number. `python tools/trial_report.py` reads the trials aft
 
 | # | What he asked for | Change | Instrument | Status |
 |---|---|---|---|---|
+| 95 | Enough air in long games; fighters when their big air comes (11-05: 20-30 heavy bombers met by no fighters) | the air feed cap holds a new air plant only against the air plants standing, not against every ground line's spend | `apex: airplant-freed` (the old rule would have dropped it) / `airplant-drop`; `tools/airstory.py` fighters alive vs their strike air alive, after minute 30 | built, in the training lane |
 | 7 | Commander not reckless | COM_BOLD off on watch, COM_STEP on | commander deaths and where; `comstat step=` | UNVERIFIED |
 | 16 | AA when bombed | TUNE_TEAM_AIRLOSS (watch/v0.2.5) | AA built within 2 min of air losses | UNVERIFIED |
 | 18 | Guard the flanks | TUNE_FLANK_GUARD (watch/v0.2.5) | `flank-stat`, flankstat.py | UNVERIFIED |
