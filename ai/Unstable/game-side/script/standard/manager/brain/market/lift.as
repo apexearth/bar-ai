@@ -603,12 +603,70 @@ void LiftSettleStep()
 // BUILD POWER WHERE IT IS NEEDED (apexearth 2026-10-03: "use the importance
 // option for nano turrets working on what we need more, and set unimportant
 // the items we are over supplied on"). BAR's passive builders draw only what
-// the active ones leave. While the army is at its target, the factories and
-// the turrets that can only reach a factory go passive; a turret with an
-// economy frame rising in reach stays active. A few turrets per pass.
+// the active ones leave. RESOURCES GO BY THE TARGET'S SHARES (his 11-05: "always distribute resources evenly based on
+// the target, such as percentage of spend; don't let a failing army destroy the economy scaling"): a factory, or a
+// turret whose every reachable job is of a kind spending over its target share, goes passive; anything serving a kind
+// under its share stays active. Measured before (25 loop games of 40-60 min): army 40-55% of spend against a 26-30%
+// target after minute 30, economy 13-27% against 29-30%, because the old pass set the factories passive only while
+// the army stood at its target. A few turrets per pass.
 uint gNpNext = 0;
 int gNpAt = -999999;
 bool gNpOver = false;
+array<bool> gNpCatOver(int(Brain::CATS), false);
+const float NP_BAND = 0.1f;   // a kind turns over at its share +10% and back under at -10%, so a pass does not flap
+
+// Which spending kind a build job of def d serves, from the unit's stats (the same rows Brain::CatOf books it in).
+int NpKindOf(int d)
+{
+	if (Catalog::gMobile[d])
+		return Catalog::gBuilder[d] ? int(Brain::BUILDPOWER) : int(Brain::ARMY);
+	if ((Catalog::gMakeE[d] > 1.f) || (Catalog::gConvCapacity[d] > 0.f) || (Catalog::gExtractsM[d] > 0.f)
+		|| (Catalog::gMakeM[d] > 0.f) || (Catalog::gStoreE[d] > 0.f) || (Catalog::gStoreM[d] > 0.f))
+		return int(Brain::ECONOMY);
+	if (Catalog::gBuilder[d] || (Catalog::gBuildsList[d].length() > 0))
+		return int(Brain::BUILDPOWER);
+	if (Catalog::gMaxRange[d] > 0.f)
+		return Catalog::Def(d).IsRoleAny(Unit::Role::AA.mask) ? int(Brain::AIRDEF) : int(Brain::DEFENCE);
+	return int(Brain::ECONOMY);
+}
+
+void NpSharesUpdate()
+{
+	for (int c = 0; c < int(Brain::CATS); ++c) {
+		const float tgt = Brain::TargetShare(Brain::Cat(c));
+		const float act = Brain::ShareOf(Brain::Cat(c));
+		if (act > tgt * (1.f + NP_BAND))
+			gNpCatOver[c] = true;
+		else if (act < tgt * (1.f - NP_BAND))
+			gNpCatOver[c] = false;
+	}
+}
+
+// A turret is passive when it reaches work and every kind of work it reaches is over its share: the frames rising in
+// its reach (Requests::gLive) and the factories it can assist (army).
+bool NpTurretPassive(const AIFloat3& in p, float r)
+{
+	bool any = false;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		if (t.GetBuildPos().distance2D(p) >= r)
+			continue;
+		if (!gNpCatOver[NpKindOf(int(t.buildDef.id))])
+			return false;
+		any = true;
+	}
+	for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
+		CCircuitUnit@ fac = Factory::gFacUnits[f];
+		if ((fac is null) || (fac.GetPos(ai.frame).distance2D(p) >= r + 64.f))
+			continue;
+		if (!gNpCatOver[int(Brain::ARMY)])
+			return false;
+		any = true;
+	}
+	return any;
+}
 // The priority last sent per unit id: CmdBARPriority is a network command, and the pass re-sent every turret's
 // and every factory's each cycle whether it changed or not (his 10-18: our orders lag the online game).
 array<int8> gNpSent(32001, -1);
@@ -624,30 +682,15 @@ void NpSend(CCircuitUnit@ u, bool low)
 }
 int gNpLow = 0, gNpHigh = 0;
 int gNpLogAt = 0;
-bool NanoEcoFrameNear(const AIFloat3& in p, float r)
-{
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null))
-			continue;
-		const int d = int(t.buildDef.id);
-		if (Catalog::gMobile[d])
-			continue;
-		if ((Catalog::gMakeE[d] <= 0.f) && (Catalog::gConvCapacity[d] <= 0.f)
-			&& (Catalog::gExtractsM[d] <= 0.f) && (Catalog::gStoreE[d] <= 0.f))
-			continue;
-		if (t.GetBuildPos().distance2D(p) < r)
-			return true;
-	}
-	return false;
-}
 void NanoPriorityPass()
 {
 	if (ai.frame - gNpAt < SECOND)
 		return;
 	gNpAt = ai.frame;
 	if (gNpNext == 0) {
-		gNpOver = (ArmyValue() + ArmyInFlightM() >= ArmyTarget()) && !MetalWasting();
+		NpSharesUpdate();
+		// metal spilling: nothing needs to wait, every builder draws in full
+		gNpOver = gNpCatOver[int(Brain::ARMY)] && !MetalWasting();
 		for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
 			CCircuitUnit@ fac = Factory::gFacUnits[f];
 			if (fac !is null)
@@ -661,13 +704,7 @@ void NanoPriorityPass()
 			continue;
 		const AIFloat3 p = u.GetPos(ai.frame);
 		const float r = Catalog::gBuildDist[int(u.circuitDef.id)] + 64.f;
-		bool low = false;
-		if (gNpOver && !NanoEcoFrameNear(p, r)) {
-			for (uint f = 0; (f < Factory::gFacUnits.length()) && !low; ++f) {
-				CCircuitUnit@ fac = Factory::gFacUnits[f];
-				low = (fac !is null) && (fac.GetPos(ai.frame).distance2D(p) < r + 64.f);
-			}
-		}
+		const bool low = !MetalWasting() && NpTurretPassive(p, r);
 		NpSend(u, low);
 		if (low)
 			++gNpLow;
@@ -678,8 +715,12 @@ void NanoPriorityPass()
 		gNpNext = 0;
 		if (ai.frame >= gNpLogAt) {
 			gNpLogAt = ai.frame + 60 * SECOND;
+			string kinds = "";
+			for (int c = 0; c < int(Brain::CATS); ++c)
+				kinds += (gNpCatOver[c] ? "1" : "0");
 			AiLog("apex: nanoprio t=" + ai.teamId + " over=" + (gNpOver ? 1 : 0)
-				+ " facs=" + Factory::gFacUnits.length() + " low=" + gNpLow + " high=" + gNpHigh);
+				+ " facs=" + Factory::gFacUnits.length() + " low=" + gNpLow + " high=" + gNpHigh
+				+ " kindsOver=" + kinds);
 		}
 		gNpLow = 0;
 		gNpHigh = 0;
