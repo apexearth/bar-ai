@@ -20,6 +20,7 @@ import importlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -82,6 +83,45 @@ def install(model, version):
         risknet.export(p, model)
 
 
+def git(*a):
+    return subprocess.run(["git", *a], cwd=REPO, capture_output=True, text=True).stdout.strip()
+
+
+def refresh_lane(st):
+    """his 11-05: train the latest version continuously. Between batches the lane is redeployed from the committed
+    AI tree, so each new behaviour is played, learned from and judged by the next games. Uncommitted edits under
+    ai/Unstable (another session's work in progress) hold the refresh; C++ newer than the lane's DLL is reported."""
+    tree = git("rev-parse", "HEAD:ai/Unstable")
+    if not tree or tree == st.get("laneTree"):
+        return
+    dirty = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", "ai/Unstable"], cwd=REPO).returncode != 0 or \
+        git("ls-files", "--others", "--exclude-standard", "ai/Unstable")
+    if dirty:
+        if st.get("laneHeld") != tree:
+            log("lane not refreshed: uncommitted edits under ai/Unstable; it waits for them to be committed")
+            st["laneHeld"] = tree
+            save(st)
+        return
+    r = subprocess.run([sys.executable, os.path.join(REPO, "tools", "deploy_ai.py"), "deploy", "lane-nnlog"],
+                       cwd=REPO, capture_output=True, text=True)
+    if r.returncode != 0:
+        log("lane refresh FAILED (games go on with the old tree):\n" + (r.stdout + r.stderr)[-1500:])
+        st["laneTree"] = tree
+        save(st)
+        return
+    v = st["version"]
+    install(json.load(open(os.path.join(RISK, "v%d.json" % v), encoding="utf-8")), v)
+    head = git("rev-parse", "--short", "HEAD")
+    dll = os.path.join(REPO, "vendor", "engine", "build-nnlog", "AI", "Skirmish", "BARb", "data", "SkirmishAI.dll")
+    since = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(dll))) if os.path.exists(dll) else None
+    newer_cpp = git("log", "--since", since, "--format=%h", "--", "cpp") if since else ""
+    log("lane refreshed to %s (risk model v%d reinstalled)%s" % (
+        head, v, ("; the DLL predates C++ commits " + " ".join(newer_cpp.split()) + ": scripts are current, the "
+                  "DLL is not (tools/build_dll.py on lane nnlog)") if newer_cpp else ""))
+    st["laneTree"], st["laneCommit"] = tree, head
+    save(st)
+
+
 PLAY = os.path.join(RISK, "play_on")   # present: the learned risk prices the games; absent: it only learns from them
 
 
@@ -89,8 +129,14 @@ def playing():
     return os.path.exists(PLAY)
 
 
-def opts_path(st):
-    on = playing()
+STEER_SHARE = 0.5   # his 11-05 "why not play with steering?": half the games steer, half keep showing unsteered choices
+
+
+def steers(seed):
+    return playing() or __import__("random").Random(seed * 13 + 5).random() < STEER_SHARE
+
+
+def opts_path(st, on):
     p = os.path.join(st["dir"], "options-%s.json" % ("on" if on else "off"))
     if not os.path.exists(p):
         with open(p, "w", encoding="utf-8") as fh:
@@ -162,9 +208,12 @@ def play(st, v, gi, slot):
     mods = rich_modoptions(seed)
     if mods:
         setup["modoptions"] = mods
+    setup["steer"] = 1 if steers(seed) else 0
+    setup["commit"] = st.get("laneCommit")
     with open(os.path.join(st["dir"], "c%02d-g%d.setup.json" % (v, gi)), "w", encoding="utf-8") as fh:
         json.dump(setup, fh)
-    neuro.play((st["dir"], v, gi, setup["per_side"], setup["map"], seed, opts_path(st), slot, setup["foe"], setup))
+    neuro.play((st["dir"], v, gi, setup["per_side"], setup["map"], seed, opts_path(st, setup["steer"]), slot,
+                setup["foe"], setup))
     return os.path.join(st["dir"], "matches", "c%02d-g%d" % (v, gi))
 
 
@@ -179,11 +228,16 @@ def step(st):
         return
     batch, rest = st["pending"][:BATCH], st["pending"][BATCH:]
     games = batch
-    off = [p for p in games if not risk_was_on(p)] if playing() else []
+    def meant_to_steer(p):
+        try:
+            s = json.load(open(os.path.join(os.path.dirname(os.path.dirname(p)), os.path.basename(p) + ".setup.json"),
+                               encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return bool(s.get("steer"))
+    off = [p for p in games if meant_to_steer(p) and not risk_was_on(p)]
     if off:
-        log("PAUSED: %d games did not play the learned risk (first %s)" % (len(off), off[0]))
-        os.replace(ON, ON + ".paused")
-        return
+        log("WARNING: %d games drew steering but did not play the learned risk (first %s)" % (len(off), off[0]))
     path = os.path.join(LEDGERS, "loop-%d.jsonl" % v)
     rows = []
     for g in games:
@@ -246,6 +300,7 @@ def main(argv):
         status()
         return
     st = load_state()
+    refresh_lane(st)
     running = {}
     with ThreadPoolExecutor(max_workers=16) as ex:
         while True:
@@ -272,6 +327,7 @@ def main(argv):
             if len(st["pending"]) >= BATCH and time.time() >= st.get("retryAt", 0):
                 try:
                     step(st)
+                    refresh_lane(st)
                 except Exception:
                     # logged, and the games go on: one failed step idled the machine 02:27-09:19 on 11-05
                     log("step failed (games continue, retry in 30 min):\n" + traceback.format_exc())
