@@ -19,7 +19,9 @@ the same metal, builders and time, never its gain alone. The tests it must pass,
 - a plant is priced against the army the same metal and build power would field now (every seat bought a T2 air
   lab while far behind on army);
 - a new site is priced against slowing every site already open (50 m/s split six ways instead of finishing the
-  extractor upgrades first).
+  extractor upgrades first). His words: "it's always 'more of this, more of that', never 'oh, I'll just make
+  building that mex take LONGER'." The cost of a new job is TIME on the jobs it shares income and hands with: each
+  one finishes later, and its output is lost for the delay.
 
 **What is wrong today (measured 10-19).**
 - Two currencies. Army gain is gap metal x a strength factor; a con's is income in m/s. In a T2 bot lab
