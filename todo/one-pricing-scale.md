@@ -23,6 +23,19 @@ the same metal, builders and time, never its gain alone. The tests it must pass,
   building that mex take LONGER'." The cost of a new job is TIME on the jobs it shares income and hands with: each
   one finishes later, and its output is lost for the delay.
 
+**Measured 11-05 (benches mexhold, focus1, focus2 vs v0.5.06, 24 1v1 pairs each vs BARb hard).**
+- Extractors paying the in-flight delay like every other build (price.as `isMex`): unfinished extractor frames
+  12.8 -> 7.9 a game, all unfinished frames 38.6 -> 30.5, income at 12 min +7 (t 0.9). Kept.
+- Doing nothing (price.as): a start whose delay charge exceeds its gain over the payback horizon is worth 0 --
+  fired ~420 seat-minutes in 24 games; with the above, wins 1 -> 4 (t 1.4), income at 12 min +5.3 (t 1.7). Kept.
+- Charging every start the help it forgoes (assist gain x horizon, in the election): WORSE -- metal lost +36%
+  (t 2.2), jobs failed +34% (t 2.5), army -35%. Removed. Why: gains are not metal. A T1 mex bid gain=55.96 with
+  nn=21.8 (it yields ~2 m/s): growth premiums and the network's multiplier ride on gains, so a charge in real metal
+  is crushing for some wants and nothing for others. The help price sits at a median 0.001 of the start that wins
+  for the same reason. Opportunity cost needs every gain in one currency first -- this job.
+- Live build requests per seat did not move (~15 mean, ~27 peak in 1v1; 39 / 90 in his 8v8): starts still
+  outnumber what the hands can finish. `tools/focus.py` reads it; `apex: help-stat` reads help beside every start.
+
 **What is wrong today (measured 10-19).**
 - Two currencies. Army gain is gap metal x a strength factor; a con's is income in m/s. In a T2 bot lab
   (matches/labbest) the T2 con read 20-490 against Zeus 8k-347k, Fatboy 37k-1.3M, sniper 31k-2.2M.
