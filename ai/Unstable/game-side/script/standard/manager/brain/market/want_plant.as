@@ -580,6 +580,19 @@ bool PlantMakesWaterCon(int plant)
 	return false;
 }
 
+int OwnAirPlants()
+{
+	int n = 0;
+	const array<int>@ own = OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		const int d = own[i];
+		if ((gOwnCount[d] > 0) && !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0)
+			&& (PlantClass(d) == PC_AIR))
+			n += gOwnCount[d];
+	}
+	return n;
+}
+
 int OwnedWaterPlants()
 {
 	int n = 0;
@@ -609,6 +622,7 @@ int OwnedWaterPlants()
 int gNextPlantDupLog = 0;
 int gNextPlantLiftLog = 0;
 int gNextPlantCandLog = 0;
+int gNextAirPlantDropLog = 0;
 int gNextWetReachLog = 0;
 int gNextYardHoldLog = 0;
 // When one of our water plants last died (main.as unit-destroyed).
@@ -1775,10 +1789,18 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// early... I'd never do that until I have multiple fusion alive with energy converters"). The ground
 		// half is already capped at the metal nothing spends (prodTerm above); the air yield was not. Converted
 		// energy is metal income, so fusions feeding converters are what lift it.
+		const float prodOwnRaw = prodOwn;
 		if (evAir && (lines0 > 0) && AirFeedCapOn()) {
 			const float spare = SpareMetalRate();
 			if (prodOwn > spare)
 				prodOwn = (spare > 0.f) ? spare : 0.f;
+		}
+		if (evAir && (conHalf + prodOwn <= 0.05f) && (ai.frame >= gNextAirPlantDropLog)) {
+			gNextAirPlantDropLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: airplant-drop t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+				+ " con=" + NnF(conHalf, 3) + " prod=" + NnF(prodOwnRaw, 3) + " capped=" + NnF(prodOwn, 3)
+				+ " spare=" + NnF(SpareMetalRate(), 3) + " lines=" + lines0 + " airPlants=" + OwnAirPlants()
+				+ " dominated=" + (dominated ? 1 : 0));
 		}
 		// Economy-only: a lab builds constructors only, so the army it would field is no part of its worth (a bot
 		// lab bought at gain 1.33 and a vehicle plant at 30 beside the air plants, 10-20).
