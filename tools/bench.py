@@ -36,12 +36,14 @@ def run(a):
     os.makedirs(d, exist_ok=True)
     reg = {"name": a.name, "registered": time.strftime("%Y-%m-%d %H:%M"), "metric": a.metric, "foe": a.foe,
            "maps": a.maps, "games": a.games, "minutes": a.minutes, "workers": a.workers, "random_box": a.random_box,
-           "arms": {"a": a.a_mod, "b": a.b_mod}, "ai": a.ai}
+           "arms": {"a": a.a_mod, "b": a.b_mod}, "ai": a.ai, "ai_a": a.a_ai or a.ai, "ai_b": a.b_ai or a.ai,
+           "per_side": a.per_side}
     with open(os.path.join(d, "bench.json"), "w", encoding="utf-8") as fh:
         json.dump(reg, fh, indent=1)
     procs = {}
-    for arm, mods in (("a", a.a_mod), ("b", a.b_mod)):
-        cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_tournament.py"), "--a", a.ai, "--b", a.foe,
+    for arm, mods, ai in (("a", a.a_mod, a.a_ai or a.ai), ("b", a.b_mod, a.b_ai or a.ai)):
+        cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_tournament.py"), "--a", ai, "--b", a.foe,
+               "--per-side", str(a.per_side),
                "--maps", a.maps, "--games", str(a.games), "--speed", "20", "--workers", str(a.workers),
                "--handicap", "0", "--minutes", str(a.minutes), "--random-box", str(a.random_box),
                "--name", "bench-%s-%s" % (a.name, arm)]
@@ -146,6 +148,7 @@ def report(d):
     n = len(keys)
     print("bench %s (registered %s): metric %s, arms a=%s b=%s" % (reg["name"], reg["registered"], metric,
                                                                   reg["arms"]["a"] or "-", reg["arms"]["b"] or "-"))
+    print("  arm a plays %s, arm b plays %s, %d a side" % (reg.get("ai_a", reg["ai"]), reg.get("ai_b", reg["ai"]), reg.get("per_side", 1)))
     if n < 3:
         print("  only %d pairs" % n)
         return
@@ -183,6 +186,9 @@ def main():
     r.add_argument("--random-box", dest="random_box", type=float, default=0.2)
     r.add_argument("--a-mod", dest="a_mod", action="append", default=[])
     r.add_argument("--b-mod", dest="b_mod", action="append", default=[])
+    r.add_argument("--a-ai", dest="a_ai", default=None, help="arm a plays this AI instead of --ai (a release against a candidate)")
+    r.add_argument("--b-ai", dest="b_ai", default=None)
+    r.add_argument("--per-side", dest="per_side", type=int, default=1)
     r.add_argument("--metric", default="score")
     p = sub.add_parser("report")
     p.add_argument("dir")
