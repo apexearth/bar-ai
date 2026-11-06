@@ -196,9 +196,10 @@ void SeatPlanUpdate()
 	const float ecoShare = Brain::TargetShare(Brain::ECONOMY) + Brain::TargetShare(Brain::BUILDPOWER);
 	float metalLeft = feed * H * ((ecoShare > 0.05f) ? ecoShare : 0.05f);
 	float eLeft = EtaEnergyAvail() * H + Eco::ECur();
-	// and the economy's share of the hands: the rest help the factories, raise defence, reclaim (bench plan2: 96% of
-	// the hands planned for economy, frames absorbing them, army -56%, extractors -5.7 at minute 16)
-	const float handShare = (ecoShare > 0.05f) ? ecoShare : 0.05f;
+	// All the hands, not the economy's spend share of them (plan2v2d, 48 pairs: hands capped at that share left half the
+	// builders to whatever the election left, income at 12 min -8.4, t -2.3). Shares are about metal; the metal
+	// budget above is what keeps the army's share, and a lab, a factory or defence under its share still takes a hand.
+	const float handShare = 1.f;
 	float workLeft = bp * H * handShare;
 	float bpLeft = bp * handShare;
 	gPlanAdmitted = 0;

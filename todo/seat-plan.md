@@ -108,3 +108,10 @@ income at 16 min read 56.8, 75.4, 66.4 and 66.5 across runs: compare arms within
 (t -3.0) is beyond that. Its cause: the stay returned before the yields, so a hand holding any plan job never stepped
 aside for a lab, a factory or defence under its share (factories spend 5.5k -> 4.2k by 20 min). The stay now comes
 after them. Next: plan2v2d, 48 pairs.
+
+**plan2v2d (11-06 03:04, 48 pairs, stay after the yields):** the plan is NOT better in 2v2 yet -- income at 12 min
+56.5 -> 48.1 (t -2.3), at 16 -7.5 (t -1.3), army standing -29% (t -1.8); better: jobs failed -11% (t -1.9), metal
+lost -12% (t -1.4), live requests per seat 17.6 -> 8.7, damage efficiency vs BARb 0.90-0.96 -> 0.96-1.02. By 20 min
+metal produced -2%, army spend +3%, economy spend -7%, factories -13%. Suspect: economy jobs held to the economy's spend
+share of the HANDS as well as the metal (~45% of build power), the rest left to the election. Next (plan2v2e, 48
+pairs): all hands to the plan, the metal share kept.
