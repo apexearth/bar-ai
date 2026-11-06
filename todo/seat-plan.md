@@ -95,3 +95,9 @@ on the mean walk, so all scored alike and the first in the list took the hand; T
 9.8 a game. 712 of 4,238 planned starts were rated by the election under a quarter of its best want. Fix: the job a
 hand holds is scored on its real walk and real remaining work and kept while it scores at least the best other job
 (12-min 2v2: 6 switches, 21 stays).
+
+**plan2v2c (11-06 01:56, the plan2v2 setup with the stay fix):** AGAINST the plan -- income at 8 min -9.3 (t -2.6), at
+16 -15.6 (t -3.0), at 20 -36.9 (t -2.6), army standing -36% (t -2.5), metal killed -26% (t -2.6). The stay fix did its
+job (switch lines 1,025 -> 521, T1 claims decayed under 10% 9.8 -> 3.5, off arm 4.0), and by 20 min metal produced
+(53.3k vs 53.7k) and army spend (18.9k vs 17.2k) were even. The same comparison across three runs read income at 16
++9.8, -13.0, -15.6: before reading any single 2v2 run, an A/A of this setup (aa2v2) measures how far it swings alone.
