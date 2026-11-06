@@ -87,3 +87,11 @@ requests per seat 17.0 -> 11.1. Worse: unfinished extractor frames 29.0 -> 41.2 
 **plan4v4b (11-06 00:13, 4v4 vs BARb hard, 3 land maps, 12 pairs, 40 min):** metal killed 51.6k -> 61.8k (t 2.9),
 army standing 32.9k -> 43.0k (t 1.7), metal lost 162.6k -> 138.6k (t -1.3), extractors at 16 min 65.1 -> 68.0 (t 1.3);
 income mixed (12 min +9.6, 16 min -15.6, both inside noise); scorecard vs BARb equal (metal produced 1.18-1.27 both).
+
+**plan2v2b (11-06 01:21, the plan2v2 setup again, instrumented):** no repeat of plan2v2 -- income at 16 min -13.0
+(t -1.6), at 20 +11.4 (t 0.8), metal lost -10% (t -1.1), wins 0 -> 1. Instruments: 1,025 plan switches in 24
+games, 961 of them a claim left for another claim (713 at 0%, 198 under half, 50 over half) -- every claim was scored
+on the mean walk, so all scored alike and the first in the list took the hand; T1 claims decayed under 10% 4.5 ->
+9.8 a game. 712 of 4,238 planned starts were rated by the election under a quarter of its best want. Fix: the job a
+hand holds is scored on its real walk and real remaining work and kept while it scores at least the best other job
+(12-min 2v2: 6 switches, 21 stays).

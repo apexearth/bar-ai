@@ -294,8 +294,29 @@ int PlanJobFor(CCircuitUnit@ unit)
 			best = int(i);
 		}
 	}
+	// THE JOB IN HAND, ON ITS REAL WALK AND REAL REMAINING WORK (bench plan2v2b: 1,025 plan switches, 961 of them a
+	// claim left for another claim -- every claim priced on the mean walk scored alike and the first in the list took
+	// the hand, so the half-walked claim decayed). Kept while it scores at least the best other job.
+	gPlanStay = false;
+	const int uid = int(unit.id);
+	if ((uid >= 0) && (uid < int(gSpLast.length()))) {
+		IUnitTask@ cur = gSpLast[uid];
+		if ((cur !is null) && !cur.IsDead() && (cur.buildDef !is null)) {
+			const int cd = int(cur.buildDef.id);
+			const float done = Requests::Progress(cur);
+			const float remW = Catalog::gBuildTime[cd] * (1.f - done);
+			const AIFloat3 cp = cur.GetBuildPos();
+			const float working = PLAN_WINDOW_S - (OnMap(cp) ? me.distance2D(cp) / v : 0.f);
+			const float g = PlanGainAt(cd, cp);
+			if ((done < 1.f) && (remW > 1.f) && (working > 0.f) && (g > 0.f) && (g / remW * working >= bestS)) {
+				gPlanStay = true;
+				return -1;
+			}
+		}
+	}
 	return best;
 }
+bool gPlanStay = false;
 
 // SHADOW: per election, does the builder's choice match what the plan would send it to?
 int gSpnElect = 0, gSpnAgree = 0, gSpnNoJob = 0, gSpnHelp = 0, gSpnFound = 0, gSpnAt = 0;
@@ -335,8 +356,9 @@ void SeatPlanNote(CCircuitUnit@ unit, Want@ top)
 		+ " bp=" + int(gPlanBP) + " bpUsed=" + int(gPlanBPUsed) + " frames=" + frames + " admitted=" + gPlanAdmitted
 		+ " | elections=" + gSpnElect + " agree=" + gSpnAgree + " noJob=" + gSpnNoJob + " planHelp=" + gSpnHelp
 		+ " planFound=" + gSpnFound + " | steer=" + (SeatPlanOn() ? 1 : 0) + " disp=" + gSpDisp + " help=" + gSpDispHelp
-		+ " found=" + gSpDispFound + " yield=" + gSpYield + " dropped=" + gSpDrop + " orphans=" + gSpOrphan + " |" + head);
-	gSpDisp = 0; gSpDispHelp = 0; gSpDispFound = 0; gSpYield = 0; gSpDrop = 0; gSpOrphan = 0;
+		+ " found=" + gSpDispFound + " yield=" + gSpYield + " dropped=" + gSpDrop + " orphans=" + gSpOrphan + " switches=" + gSpSwitch + " stays=" + gSpStay
+		+ " riskyFound=" + gSpRiskyFound + " |" + head);
+	gSpDisp = 0; gSpDispHelp = 0; gSpDispFound = 0; gSpYield = 0; gSpDrop = 0; gSpOrphan = 0; gSpRiskyFound = 0; gSpStay = 0;
 	gSpnElect = 0; gSpnAgree = 0; gSpnNoJob = 0; gSpnHelp = 0; gSpnFound = 0;
 }
 
@@ -349,6 +371,27 @@ namespace Market {
 // priced for that def. Defence, air defence, sensors and plants stay with the election while their kind is under
 // its spend share (his 11-05 share ruling); economy is started only by the plan.
 int gSpDisp = 0, gSpDispHelp = 0, gSpDispFound = 0, gSpYield = 0, gSpDrop = 0, gSpOrphan = 0;
+int gSpSwitch = 0, gSpSwitchAt = 0, gSpRiskyFound = 0, gSpStay = 0;
+array<IUnitTask@> gSpLast(32001);
+// THE PLAN'S OWN CHURN (bench plan2v2: T1 claims left under 10% built 3.0 -> 8.1 a game with the plan on): a hand
+// moved to a new job while the last one the plan gave it still stands unfinished.
+void PlanNoteGiven(CCircuitUnit@ unit, IUnitTask@ t)
+{
+	const int id = int(unit.id);
+	if ((id < 0) || (id >= int(gSpLast.length())))
+		return;
+	IUnitTask@ old = gSpLast[id];
+	if ((old !is null) && (old !is t) && !old.IsDead() && (old.buildDef !is null) && (Requests::Progress(old) < 1.f)) {
+		++gSpSwitch;
+		if (ai.frame >= gSpSwitchAt) {
+			gSpSwitchAt = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: plan-switch t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " left " + old.buildDef.GetName() + " done=" + NnF(Requests::Progress(old), 2)
+				+ " for " + ((t.buildDef !is null) ? t.buildDef.GetName() : "-") + " total=" + gSpSwitch);
+		}
+	}
+	@gSpLast[id] = t;
+}
 bool PlanEcoCat(int cat)
 {
 	return (cat == CAT_METAL) || (cat == CAT_ENERGY) || (cat == CAT_BP);
@@ -367,6 +410,11 @@ IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want
 	if (Factory::gFactoryCount == 0)
 		return null;
 	const int j = PlanJobFor(unit);
+	if (gPlanStay) {
+		++gSpStay;
+		const int sid = int(unit.id);
+		return gSpLast[sid];
+	}
 	if (j < 0)
 		return null;
 	// a want outside the economy whose kind is under its share keeps the hand: defence, sensors and anti-air by
@@ -408,6 +456,7 @@ IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want
 					++gSpDisp;
 					++gSpOrphan;
 					gPjHave[j] += Catalog::gBuildPower[int(unit.circuitDef.id)];
+					PlanNoteGiven(unit, ta);
 					return ta;
 				}
 			}
@@ -418,6 +467,7 @@ IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want
 		++gSpDisp;
 		++gSpDispHelp;
 		gPjHave[j] += Catalog::gBuildPower[int(unit.circuitDef.id)];
+		PlanNoteGiven(unit, t);
 		return t;
 	}
 	for (uint i = 0; i < ranked.length(); ++i) {
@@ -429,6 +479,10 @@ IUnitTask@ SeatPlanDispatch(CCircuitUnit@ unit, const array<Want@>@ ranked, Want
 			++gSpDisp;
 			++gSpDispFound;
 			gPjHave[j] += Catalog::gBuildPower[int(unit.circuitDef.id)];
+			// a start the election itself rated far below its best want: the plan took a site the price called risky
+			if ((ranked.length() > 0) && (ranked[0] !is null) && (w.value < 0.25f * ranked[0].value))
+				++gSpRiskyFound;
+			PlanNoteGiven(unit, t);
 			return t;
 		}
 	}
