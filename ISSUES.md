@@ -17,7 +17,7 @@ unproven. `python tools/trial_report.py` after his games.
 | [lrpc-orders-die](issues/lrpc-orders-die.md) | 10-24 | ~90% of long-range gun tasks never finish at forward sites; risk model reads them 0.44-0.50 |
 | [turret-knot](issues/turret-knot.md) | 10-24 | the knot rule piles turrets at one site; his call: leave for now, watch |
 | [static-defence-fear](issues/static-defence-fear.md) | 10-23 | a player says we fear towers; scenarios pass; needs what the player saw |
-| [antinuke-blind](issues/antinuke-blind.md) | 11-05 | one anti-nuke unless a silo is seen; a guessed-base nuke spam kills us |
+| [antinuke-blind](issues/antinuke-blind.md) | 11-05 | BARb builds one anti-nuke; our salvo counts only antis seen, so the guessed base gets single missiles |
 | [air-late-game](issues/air-late-game.md) | 11-05 | long games: 4 in 10 waves unescorted, half short of their target, no fighters against massed air |
 | [gunships-hover-in-aa](issues/gunships-hover-in-aa.md) | 10-23 | the air net picks GO over WAIT; next is targeted training on scored runs |
 | [army-order-volume](issues/army-order-volume.md) | 10-22 | ~33 commands per army unit a minute; units re-path every ~2 s |
