@@ -72,3 +72,8 @@ nothing when nothing admitted fits.
   gaveStaticM) -- dispatch sent every hand to the top job however far. plan4: a hand takes the planned job where its
   time does most good, return per unit of work x the seconds it lathes inside the window after its walk.
 - The opening stays the election's until the first factory stands (the first controlled game built no lab).
+| plan4 | dispatch by the hand's own return: gain / work x seconds lathed in the window after its walk | 15.2 -> 11.0 | 28.2 -> 26.9 | -31% standing at the end (t -1.5) | -1.4 (t -0.8) | -2.0 (t -0.8) |
+
+plan4, games reaching minute 20 (18 off / 15 on): metal produced 26,414 -> 28,963, army spend 9,598 -> 9,419 (equal),
+economy spend 6,178 -> 7,397, metal lost by 30 min 20,416 -> 12,391 (t -1.9). The hands' output is equal again (units
+16.4k vs 15.9k, buildings 26.7k vs 27.2k). Next: 4v4 (plan4v4), where his complaints came from.
