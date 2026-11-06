@@ -83,3 +83,7 @@ resumed, q deleted in both arms):** wins 0 -> 4 (t 2.1), income at 8 min 34.3 ->
 (t 1.7), at 20 68.8 -> 83.0 (t 1.2), metal lost 38,440 -> 27,174 (t -3.3); by 20 min metal produced +8%, army spend
 +11%; scorecard vs BARb: damage efficiency 0.84-0.87 -> 0.98-1.06, metal produced 0.92-0.98 -> 1.09-1.22. Live
 requests per seat 17.0 -> 11.1. Worse: unfinished extractor frames 29.0 -> 41.2 a game -- next.
+
+**plan4v4b (11-06 00:13, 4v4 vs BARb hard, 3 land maps, 12 pairs, 40 min):** metal killed 51.6k -> 61.8k (t 2.9),
+army standing 32.9k -> 43.0k (t 1.7), metal lost 162.6k -> 138.6k (t -1.3), extractors at 16 min 65.1 -> 68.0 (t 1.3);
+income mixed (12 min +9.6, 16 min -15.6, both inside noise); scorecard vs BARb equal (metal produced 1.18-1.27 both).
