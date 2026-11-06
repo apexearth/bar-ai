@@ -11,7 +11,7 @@ value it makes possible: an extractor is worth the metal it adds times what meta
 energy's price; a constructor, its build power times build power's price plus what its unlock allows; a lab, what its
 line produces. Then the army's scale flows into everything that funds it, and only ratios decide.
 
-**What each choice takes away from (his 11-05, watching v0.5.06: "when we make decisions about what to do we never
+**Every single spend (his 11-05: "every single spend we make needs to be considered in this way"), in the shared price and the election, never per kind.** **What each choice takes away from (his 11-05, watching v0.5.06: "when we make decisions about what to do we never
 think about what we're taking away from in our choices").** A price is the option's gain against the best other use of
 the same metal, builders and time, never its gain alone. The tests it must pass, from his All That Glitters 8v8:
 - a builder leaving an unfinished frame pays for that frame's sunk metal and its delayed output (75 T2 extractor
