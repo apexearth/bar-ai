@@ -25,6 +25,7 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_FAC_QUEUE` = 1.5. Below 1 the plant idles by construction; the margin covers order lag.
 - `TUNE_T2_ECO` = 0. His 10-17: fusions and upgraded mexes first. 20 games vs BARb hard: the ladder took the T2 lab at 8.3-12.3 min but it was ordered at 14-23 (same seed: lab 12.8 vs 25.4 min, income at 32 min 308 vs 163). Unmeasured.
 - `TUNE_INFLIGHT_HOLD` = 1. His 10-18: every build started while others are in progress slows them, and the price must carry that (his game: armaap at v=2.08, armalab five frames later). On since 10-18; unmeasured.
+- `TUNE_CON_PRIO` = 0 (`apex_con_prio`). His 11-06: "some cons could do work but set themselves to low priority". A constructor on a job of a kind over its spend share goes to BAR's low build priority, like turrets and factories. 2v2 vs BARb, 24 pairs: stall samples -7..-14% (t -1), army produced +266 m at 12 min, income even to 16 min. Unproven; off.
 - `TUNE_FLUSH_PLACE` = 1. His 10-18: build flush off existing buildings, no wasted gaps. 10-18, his setup, 3 seeds: structures per cluster 3.4-4.5 -> 5.7-6.0, ground used 27-29% -> 32-34%, results even. C++ (needs the DLL).
 - `TUNE_HOIST_WAITS` = 1. His 10-18: cons walk far, work 2 s, walk back; 56% of such trips ended on a hoist. Alone, 3 seeds: decisions -25%, metal 1.16 -> 1.13M, losses even. On.
 - `TUNE_MEMO_REPRICE` = 1. Perf. 10-18 his scav 8v8, seed 32: memo hits 28.7k -> 38.0k, a full decision 4.5 -> 4.0 ms, builder elections -9%.
