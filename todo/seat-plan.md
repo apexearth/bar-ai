@@ -133,3 +133,6 @@ not start economy, so they help, reclaim or wait. Reverted (c0d55a49).
   what the factories and defence actually draw, not their target share), and never leave a hand idle while an
   admissible economy job stands.
 - The plan stays OFF in committed code (TUNE_SEAT_PLAN 0).
+- 4v4 again (plan4v4c, 11-06 05:12, 12 pairs): does NOT confirm plan4v4b -- army standing -29% (t -1.9), metal lost +14%
+  (t 1.8), metal produced by 20 min -9%; better: extractors at 16 min +4.3 (t 1.9), jobs failed -14% (t -2.0), live
+  requests per seat 23.5 -> 12.2. So across tonight: focus always better, growth and fights not yet.

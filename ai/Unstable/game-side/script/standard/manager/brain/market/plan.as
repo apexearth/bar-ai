@@ -194,7 +194,17 @@ void SeatPlanUpdate()
 	// The economy's share of the feed, not all of it (his 11-05: resources by the target's shares): the army's share
 	// stays with the factories, defence's with its election (bench plan2: the whole feed planned for economy, army -56%).
 	const float ecoShare = Brain::TargetShare(Brain::ECONOMY) + Brain::TargetShare(Brain::BUILDPOWER);
-	float metalLeft = feed * H * ((ecoShare > 0.05f) ? ecoShare : 0.05f);
+	// WHAT THE ARMY DOES NOT TAKE (plan2v2d/e: held to the economy's target share, the plan grew slower than the old
+	// election in 2v2 -- income at 12 min -8.4 and -9.0; the metal the defence share named but nothing was drawing
+	// went unplanned). The economy may plan the window's metal less the army's share and less what the open frames
+	// of every other kind still need; the army keeps its share for the factories.
+	float metalLeft = feed * H * (1.f - Brain::TargetShare(Brain::ARMY));
+	for (uint q = 0; q < gPjKind.length(); ++q)
+		if ((gPjKind[q] == PJ_FRAME) && (gPjGain[q] <= 0.f))
+			metalLeft -= gPjRemM[q];
+	const float floorM = feed * H * ((ecoShare > 0.05f) ? ecoShare : 0.05f);
+	if (metalLeft < floorM)
+		metalLeft = floorM;
 	float eLeft = EtaEnergyAvail() * H + Eco::ECur();
 	// and the economy's share of the hands: the rest help the factories, raise defence, reclaim (bench plan2: 96% of
 	// the hands planned for economy, frames absorbing them, army -56%, extractors -5.7 at minute 16)
@@ -507,8 +517,10 @@ bool PlanFits(Want@ w)
 	if ((w is null) || (w.def is null) || (w.kind == WK_ASSIST) || (w.kind == WK_RECLAIM))
 		return true;
 	const int d = int(w.def.id);
+	// metal spilling or the bank over half full: the plan admitted too little, so an economy start is not refused
+	// (plan2v2e: hands with no admitted job fell to an election that could not start economy, and did less)
 	if (PlanEcoCat(CategoryOf(w.kind)))
-		return PlanAdmitsDef(d);
+		return PlanAdmitsDef(d) || MetalWasting() || (Eco::MCur() > 0.5f * aiEconomyMgr.metal.storage);
 	const int cat = NpKindOf(d);
 	const float open = PlanOpenM(cat);
 	if (open <= 0.f)
