@@ -2,6 +2,8 @@
 // escort, retreat, and every unit's retreat/power/threat. Production keys (role, limit, attribute, since,
 // build_speed, scout, aa_threat) are ours. 2v2 vs BARb, 24 pairs: own vs foe near our deaths 4.0 v 7.8 ->
 // 5.1 v 5.6, metal lost outnumbered 2:1 39% -> 23%, damage efficiency 0.78-0.84 -> 0.88-0.91, kills +2.5k.
+// Except escort: his 08-21 rule, every constructor outside the base keeps one armed guard all game ([12, 1, 100000]);
+// against stock [2, 1, 600], 24 pairs: damage efficiency 0.86-0.97 -> 0.93-1.02, income at 20 min +16.6 (t 2.0), lost -2.1k.
 // The commented version this replaced is in git history.
 {
 	"quota": {
@@ -72,9 +74,9 @@
 			500.0
 		],
 		"escort": [
-			2,
+			12,
 			1,
-			600
+			100000
 		]
 	},
 	"behaviour": {
