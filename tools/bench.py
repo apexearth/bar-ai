@@ -38,7 +38,7 @@ def run(a):
     reg = {"name": a.name, "registered": time.strftime("%Y-%m-%d %H:%M"), "metric": a.metric, "foe": a.foe,
            "maps": a.maps, "games": a.games, "minutes": a.minutes, "workers": a.workers, "random_box": a.random_box,
            "arms": {"a": a.a_mod, "b": a.b_mod}, "ai": a.ai, "ai_a": a.a_ai or a.ai, "ai_b": a.b_ai or a.ai,
-           "per_side": a.per_side}
+           "per_side": a.per_side, "handicap": a.handicap}
     # a fresh base every bench, shared by both arms so the pairs still match (his 11-06: every bench replayed seeds
     # 1000-1003, so the opening -- the team strategy, the start boxes -- came out the same run after run)
     seed_base = a.seed_base if a.seed_base is not None else random.randrange(1, 1 << 30)
@@ -50,7 +50,7 @@ def run(a):
         cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_tournament.py"), "--a", ai, "--b", a.foe,
                "--per-side", str(a.per_side),
                "--maps", a.maps, "--games", str(a.games), "--speed", "20", "--workers", str(a.workers),
-               "--handicap", "0", "--minutes", str(a.minutes), "--random-box", str(a.random_box),
+               "--handicap", a.handicap, "--minutes", str(a.minutes), "--random-box", str(a.random_box),
                "--name", "bench-%s-%s" % (a.name, arm), "--seed-base", str(seed_base)]
         for m in mods:
             cmd += ["--modoption", m]
@@ -187,6 +187,7 @@ def main():
     r.add_argument("--maps", default=MAPS)
     r.add_argument("--games", type=int, default=12, help="per map per arm; even, so each seed plays both slots")
     r.add_argument("--seed-base", type=int, default=None, help="first seed (default: random per bench, both arms share it)")
+    r.add_argument("--handicap", default="0", help="resource bonus %% for every AI, or A,B per side (default 0)")
     r.add_argument("--minutes", type=int, default=25)
     r.add_argument("--workers", type=int, default=3)
     r.add_argument("--random-box", dest="random_box", type=float, default=0.2)
