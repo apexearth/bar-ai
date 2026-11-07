@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..5ee739ce 100644
+index aeea9339..daee85e4 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -6,6 +6,7 @@
@@ -836,7 +836,18 @@ index aeea9339..5ee739ce 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1751,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1160,20 +1745,46 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+ 	for (auto& module : modules) {
+ 		module->UnitDamaged(unit, attacker);
+ 	}
++	if ((militaryManager != nullptr) && IsValidWeaponDefId(weaponId)
++		&& ((attacker != nullptr) || (GetFriendlyUnit(attackerId) == nullptr)))
++	{
++		militaryManager->NoteStructFire(unit, attacker, weaponId, dir);
++	}
+ 
+ 	return 0;  // signaling: OK
+ }
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -876,7 +887,7 @@ index aeea9339..5ee739ce 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1209,6 +1815,13 @@ int CCircuitAI::UnitGiven(ICoreUnit::Id unitId, int oldTeamId, int newTeamId)
+@@ -1209,6 +1820,13 @@ int CCircuitAI::UnitGiven(ICoreUnit::Id unitId, int oldTeamId, int newTeamId)
  		module->UnitGiven(unit, oldTeamId, newTeamId);
  	}
  
@@ -890,7 +901,7 @@ index aeea9339..5ee739ce 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1250,7 +1863,8 @@ int CCircuitAI::EnemyEnterLOS(CEnemyInfo* enemy)
+@@ -1250,7 +1868,8 @@ int CCircuitAI::EnemyEnterLOS(CEnemyInfo* enemy)
  	for (int fId : friendlies) {
  		CCircuitUnit* unit = GetTeamUnit(fId);
  		if ((unit != nullptr) && (unit->GetTask()->GetType() != IUnitTask::Type::NIL)) {
@@ -900,7 +911,7 @@ index aeea9339..5ee739ce 100644
  		}
  	}
  
-@@ -1288,6 +1902,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1907,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -908,7 +919,7 @@ index aeea9339..5ee739ce 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +2078,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +2083,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -923,7 +934,7 @@ index aeea9339..5ee739ce 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,7 +2097,12 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,7 +2102,12 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -936,7 +947,7 @@ index aeea9339..5ee739ce 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,179 +2111,2506 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,177 +2116,2504 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1288,7 +1299,7 @@ index aeea9339..5ee739ce 100644
 +	springai::SkirmishAI* ai = GetSkirmishAI();
 +	if (ai == nullptr) {
 +		return;
- 	}
++	}
 +	springai::OptionValues* opts = ai->GetOptionValues();
 +	if (opts != nullptr) {
 +		const int n = opts->GetSize();
@@ -1296,7 +1307,7 @@ index aeea9339..5ee739ce 100644
 +			aiOpts[opts->GetKey(i)] = opts->GetValue(i);
 +		}
 +		delete opts;
-+	}
+ 	}
 +}
  
 -	// stagger the Update's
@@ -1312,8 +1323,6 @@ index aeea9339..5ee739ce 100644
 -	while ((actionIterator < actionUnits.size()) && (n != 0)) {
 -		CCircuitUnit* unit = actionUnits[actionIterator];
 -		if (unit->IsDead()) {
--			actionUnits[actionIterator] = actionUnits.back();
--			actionUnits.pop_back();
 +int CCircuitAI::LoadOptionFloats(const std::string& name)
 +{
 +	optFloats.clear();
@@ -3551,12 +3560,10 @@ index aeea9339..5ee739ce 100644
 +	while ((actionIterator < actionUnits.size()) && (n != 0)) {
 +		CCircuitUnit* unit = actionUnits[actionIterator];
 +		if (unit->IsDead()) {
-+			actionUnits[actionIterator] = actionUnits.back();
-+			actionUnits.pop_back();
+ 			actionUnits[actionIterator] = actionUnits.back();
+ 			actionUnits.pop_back();
  			DeleteTeamUnit(unit);
- 		} else {
- 			if (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER) {
-@@ -1751,6 +4704,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +4709,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -8104,7 +8111,7 @@ index e56339eb..99c17e5f 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b0..546e2cfd 100644
+index a44c20b0..2acd0c7f 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -14,28 +14,39 @@
@@ -8790,7 +8797,7 @@ index a44c20b0..546e2cfd 100644
  void CMilitaryManager::MarkPorc(CCircuitUnit* unit, int defPointId)
  {
  	porcToPoint[unit] = defPointId;
-@@ -1063,93 +1198,464 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
+@@ -1063,93 +1198,576 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
  	scoutTasks.erase(it);
  }
  
@@ -9171,6 +9178,118 @@ index a44c20b0..546e2cfd 100644
 +	return true;
 +}
 +
++// apex_shell_answer (his 11-07: "Humans will often sit under jammer with long-range units and just shell the AI,
++// and that's something we should stop them from being able to do"). Measured 11-07 at +50: 63% of what we lost
++// inside our own tower cover was killed from outside every covering tower's reach, and 84% of those killers lived
++// another minute -- the stock defend search takes only enemies standing in our defend influence, and never a
++// hidden one. A shooter of our structures is marked for the defenders; an unseen one leaves the point its shot
++// came from (the fake-enemy estimate), which a defend pool with nothing else to fight walks to and so lights up.
++bool CMilitaryManager::ShellAnswerOn()
++{
++	const int frame = circuit->GetLastFrame();
++	if (frame != shellReadFrame) {
++		shellReadFrame = frame;
++		shellAnswer = circuit->GetTunable("apex_shell_answer", 0.f) > 0.f;
++	}
++	return shellAnswer;
++}
++
++void CMilitaryManager::NoteStructFire(CCircuitUnit* unit, CEnemyInfo* attacker, int weaponId, const AIFloat3& dir)
++{
++	if ((unit == nullptr) || unit->GetCircuitDef()->IsMobile()) {
++		return;
++	}
++	const int frame = circuit->GetLastFrame();
++	const int hold = FRAMES_PER_SEC * 20;
++	AIFloat3 at;
++	const bool seen = (attacker != nullptr);
++	if (seen) {
++		CCircuitDef* edef = attacker->GetCircuitDef();
++		if ((edef != nullptr) && (edef->IsAbleToFly() || !edef->IsMobile())) {
++			return;
++		}
++		shellerUntil[attacker->GetId()] = frame + hold;
++		at = attacker->GetPos();
++		++shellFireSeen;
++	} else {
++		CWeaponDef* wdef = circuit->GetWeaponDef(weaponId);
++		if ((wdef == nullptr) || (dir == ZeroVector)) {
++			return;
++		}
++		float range = wdef->GetRange();
++		at = CTerrainManager::CorrectPosition(unit->GetPos(frame), dir, range);
++		++shellFireBlind;
++	}
++	// every point, seen or not, for the script (spam thrown at what we cannot contest, his 11-07); the defenders'
++	// blind walk takes only the unseen ones
++	const float stake = unit->GetCircuitDef()->GetCostM();
++	bool merged = false;
++	for (SShellPoint& sp : shellPoints) {
++		if ((sp.seen == seen) && (sp.pos.SqDistance2D(at) < SQUARE(300.f))) {
++			sp.pos = at;
++			sp.until = frame + hold;
++			sp.stake = std::max(sp.stake, stake);
++			merged = true;
++			break;
++		}
++	}
++	if (!merged) {
++		if (shellPoints.size() >= 16) {
++			shellPoints.erase(shellPoints.begin());
++		}
++		shellPoints.push_back({at, frame + hold, stake, seen});
++	}
++	if (frame >= shellLogFrame) {
++		shellLogFrame = frame + FRAMES_PER_SEC * 60;
++		int live = 0;
++		for (const auto& kv : shellerUntil) {
++			live += (kv.second > frame) ? 1 : 0;
++		}
++		circuit->LOG("apex: shell-stat t=%i fireSeen=%i fireBlind=%i shellers=%i points=%i answeredSeen=%i walkedBlind=%i",
++				circuit->GetTeamId(), shellFireSeen, shellFireBlind, live, (int)shellPoints.size(), shellHitSeen,
++				shellHitBlind);
++	}
++}
++
++AIFloat3 CMilitaryManager::GetShellPointAt(int i) const
++{
++	if ((i < 0) || (i >= (int)shellPoints.size()) || (shellPoints[i].until <= circuit->GetLastFrame())) {
++		return -RgtVector;
++	}
++	return shellPoints[i].pos;
++}
++
++float CMilitaryManager::GetShellPointStake(int i) const
++{
++	if ((i < 0) || (i >= (int)shellPoints.size()) || (shellPoints[i].until <= circuit->GetLastFrame())) {
++		return 0.f;
++	}
++	return shellPoints[i].stake;
++}
++
++bool CMilitaryManager::IsSheller(int enemyId) const
++{
++	auto it = shellerUntil.find(enemyId);
++	return (it != shellerUntil.end()) && (it->second > circuit->GetLastFrame());
++}
++
++bool CMilitaryManager::ShellPointNear(const AIFloat3& from, AIFloat3& outPos) const
++{
++	const int frame = circuit->GetLastFrame();
++	float best = std::numeric_limits<float>::max();
++	for (const SShellPoint& sp : shellPoints) {
++		if ((sp.until <= frame) || sp.seen) {
++			continue;
++		}
++		const float d = sp.pos.SqDistance2D(from);
++		if (d < best) {
++			best = d;
++			outPos = sp.pos;
++		}
++	}
++	return best < std::numeric_limits<float>::max();
++}
++
 +void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 +{
 +	outPositions.clear();
@@ -9309,7 +9428,7 @@ index a44c20b0..546e2cfd 100644
  	const int frame = circuit->GetLastFrame();
  
  	const springai::AIFloat3& pos = unit->GetPos(frame);
-@@ -1335,6 +1841,112 @@ float CMilitaryManager::ClampMobileCostRatio() const
+@@ -1335,6 +1953,112 @@ float CMilitaryManager::ClampMobileCostRatio() const
  	return (enemyMobileCost > armyCost) ? (armyCost / enemyMobileCost) : 1.f;
  }
  
@@ -9422,7 +9541,7 @@ index a44c20b0..546e2cfd 100644
  void CMilitaryManager::UpdateDefenceTasks()
  {
  	/*
-@@ -1346,6 +1958,38 @@ void CMilitaryManager::UpdateDefenceTasks()
+@@ -1346,6 +2070,38 @@ void CMilitaryManager::UpdateDefenceTasks()
  		)
  	}
  
@@ -9461,7 +9580,7 @@ index a44c20b0..546e2cfd 100644
  	/*
  	 * Defend expansion
  	 */
-@@ -1394,7 +2038,7 @@ void CMilitaryManager::UpdateDefenceTasks()
+@@ -1394,7 +2150,7 @@ void CMilitaryManager::UpdateDefenceTasks()
  //		if (groupIdx >= 0) {
  //			dt->SetMaxPower(std::max(minAttackers, enemyGroups[groupIdx].threat));
  //		}
@@ -9470,7 +9589,7 @@ index a44c20b0..546e2cfd 100644
  	}
  
  	/*
-@@ -1429,8 +2073,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1429,8 +2185,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -9485,7 +9604,7 @@ index a44c20b0..546e2cfd 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,20 +2095,42 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,20 +2207,42 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -9540,7 +9659,7 @@ index a44c20b0..546e2cfd 100644
  }
  
  void CMilitaryManager::AddSensorDefs(const std::set<CCircuitDef*>& buildDefs)
-@@ -1574,7 +2245,25 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
+@@ -1574,7 +2357,25 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
  			targetCat = edef->GetCategory();
  			if (((targetCat & canTargetCat) == 0)
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
@@ -9567,7 +9686,7 @@ index a44c20b0..546e2cfd 100644
  			{
  				continue;
  			}
-@@ -1665,11 +2354,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1665,11 +2466,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  		if (it != types.end()) {
  			switch (it->second) {
  				case IFighterTask::FightType::RAID: {
@@ -9602,7 +9721,7 @@ index a44c20b0..546e2cfd 100644
  						}
  					}
  					if (task == nullptr) {
-@@ -1688,13 +2395,59 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1688,13 +2507,59 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  				case IFighterTask::FightType::DEFEND: {
  					const std::set<IFighterTask*>& guards = GetTasks(IFighterTask::FightType::GUARD);
  					for (IFighterTask* t : guards) {
@@ -9664,7 +9783,7 @@ index a44c20b0..546e2cfd 100644
  						task = Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, power));
  					}
  				} break;
-@@ -1717,18 +2470,619 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,18 +2582,619 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -10285,7 +10404,7 @@ index a44c20b0..546e2cfd 100644
  }
  
  void CMilitaryManager::AddArmyCost(CCircuitUnit* unit)
-@@ -1842,4 +3196,20 @@ CDefenceData::SDefPoint* CMilitaryManager::FindClosestDefPoint(int cluster, cons
+@@ -1842,4 +3308,20 @@ CDefenceData::SDefPoint* CMilitaryManager::FindClosestDefPoint(int cluster, cons
  	return closestPoint;
  }
  
@@ -10307,7 +10426,7 @@ index a44c20b0..546e2cfd 100644
 +
  } // namespace circuit
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603b..2ed823d6 100644
+index c167603b..6177dcc7 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
 @@ -16,12 +16,16 @@
@@ -10387,7 +10506,7 @@ index c167603b..2ed823d6 100644
  	void MarkPorc(CCircuitUnit* unit, int defPointId);
  	void UnmarkPorc(CCircuitUnit* unit);
  	void AbortDefence(const CBDefenceTask* task, int defPointId);
-@@ -129,7 +173,16 @@ public:
+@@ -129,7 +173,27 @@ public:
  	void ProcessHubDefence(CBDefenceTask* task);
  	springai::AIFloat3 GetScoutPosition(CCircuitUnit* unit);
  	void ClearScoutPosition(IUnitTask* task);
@@ -10399,12 +10518,23 @@ index c167603b..2ed823d6 100644
 +	bool GetGuardAnchor(const springai::AIFloat3& from, const std::vector<float>& assigned,
 +			springai::AIFloat3& outPos, int& outSpot) const;
  	void FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions);
++	// apex_shell_answer: whoever is shooting our structures is the defenders' business (his 11-07)
++	void NoteStructFire(CCircuitUnit* unit, CEnemyInfo* attacker, int weaponId, const springai::AIFloat3& dir);
++	bool IsSheller(int enemyId) const;
++	bool ShellPointNear(const springai::AIFloat3& from, springai::AIFloat3& outPos) const;
++	bool ShellAnswerOn();
++	void NoteShellAnswer(bool seen) { ++(seen ? shellHitSeen : shellHitBlind); }
++	// the live shell points for the script's air look (looks.as LOOK_SHELL): position and the dearest structure hit from it
++	int GetShellPointCount() const { return (int)shellPoints.size(); }
++	springai::AIFloat3 GetShellPointAt(int i) const;
++	float GetShellPointStake(int i) const;
++	bool GetShellPointSeen(int i) const { return (i >= 0) && (i < (int)shellPoints.size()) && shellPoints[i].seen; }
 +	void FillDefencePos(CCircuitUnit* unit, F3Vec& outPositions);
 +	springai::AIFloat3 GetDefenceStand();
  	void FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillStaticSafePos(CCircuitUnit* unit, F3Vec& outPositions);
  	void FillSafePos(CCircuitUnit* unit, F3Vec& outPositions);
-@@ -150,6 +203,20 @@ public:
+@@ -150,6 +214,20 @@ public:
  	void DiceBigGun();
  	float ClampMobileCostRatio() const;
  	void UpdateDefenceTasks();
@@ -10425,7 +10555,7 @@ index c167603b..2ed823d6 100644
  	void UpdateDefence();
  	void MakeBaseDefence(const springai::AIFloat3& pos);
  
-@@ -165,9 +232,114 @@ public:
+@@ -165,9 +243,114 @@ public:
  
  	void SetBaseDefRange(float range) { defence->SetBaseRange(range); }
  	float GetBaseDefRange() const { return defence->GetBaseRange(); }
@@ -10540,7 +10670,7 @@ index c167603b..2ed823d6 100644
  	unsigned int GetGuardsNum() const { return defence->GetGuardsNum(); }
  	int GetGuardFrame() const { return defence->GetGuardFrame(); }
  
-@@ -181,17 +353,92 @@ public:
+@@ -181,17 +364,99 @@ public:
  
  	float GetRangeUnitCountCompensatorScale();
  
@@ -10582,6 +10712,13 @@ index c167603b..2ed823d6 100644
 +	std::string StockArmyStat();
 +
  private:
++	std::unordered_map<int, int> shellerUntil;   // enemy -> frame its mark lapses
++	struct SShellPoint { springai::AIFloat3 pos; int until; float stake; bool seen; };
++	std::vector<SShellPoint> shellPoints;                   // where unseen fire on our structures came from
++	bool shellAnswer = false;
++	int shellReadFrame = -1;
++	int shellFireSeen = 0, shellFireBlind = 0, shellHitSeen = 0, shellHitBlind = 0, shellLogFrame = 0;
++
  	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
 +	IUnitTask* BirthDefendTask(CCircuitUnit* unit);
 +	void LogBirthStat();
@@ -10633,7 +10770,7 @@ index c167603b..2ed823d6 100644
  
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
-@@ -203,8 +450,31 @@ private:
+@@ -203,8 +468,31 @@ private:
  
  	CDefenceData* defence;
  	unsigned int defenceIdx;
@@ -10665,7 +10802,7 @@ index c167603b..2ed823d6 100644
  	struct SScoutPoint {
  		int spotNum;  // last used spot number in cluster
  		int scouted;  // times this point was scouted
-@@ -269,6 +539,8 @@ private:
+@@ -269,6 +557,8 @@ private:
  
  	std::shared_ptr<IMainJob> defend;
  	std::vector<std::pair<springai::AIFloat3, BuildVector>> buildDefence;  // pos: defences
@@ -15018,7 +15155,7 @@ index fe8097b2..931f945f 100644
  
  #endif // SRC_CIRCUIT_SCRIPT_INITSCRIPT_H_
 diff --git a/src/circuit/script/MilitaryScript.cpp b/src/circuit/script/MilitaryScript.cpp
-index d4ebeadd..ddba1b14 100644
+index d4ebeadd..9534fbf6 100644
 --- a/src/circuit/script/MilitaryScript.cpp
 +++ b/src/circuit/script/MilitaryScript.cpp
 @@ -8,6 +8,8 @@
@@ -15111,7 +15248,7 @@ index d4ebeadd..ddba1b14 100644
  CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
  		: ITaskModuleScript(scr, mgr)
  {
-@@ -33,10 +109,35 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
+@@ -33,10 +109,39 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
  	r = engine->RegisterObjectType("CMilitaryManager", 0, asOBJ_REF | asOBJ_NOHANDLE); ASSERT(r >= 0);
  	r = engine->RegisterGlobalProperty("CMilitaryManager aiMilitaryMgr", manager); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ DefaultMakeTask(CCircuitUnit@)", asMETHOD(CMilitaryManager, DefaultMakeTask), asCALL_THISCALL); ASSERT(r >= 0);
@@ -15145,10 +15282,14 @@ index d4ebeadd..ddba1b14 100644
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetEnemyInflNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetEnemyInflNear), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetSpotWantedCount()", asMETHOD(CMilitaryManager, GetSpotWantedCount), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "AIFloat3 GetSpotWantedAt(int) const", asMETHOD(CMilitaryManager, GetSpotWantedAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetShellPointCount() const", asMETHOD(CMilitaryManager, GetShellPointCount), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CMilitaryManager", "AIFloat3 GetShellPointAt(int) const", asMETHOD(CMilitaryManager, GetShellPointAt), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetShellPointStake(int) const", asMETHOD(CMilitaryManager, GetShellPointStake), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CMilitaryManager", "bool GetShellPointSeen(int) const", asMETHOD(CMilitaryManager, GetShellPointSeen), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CMilitaryManager", "const float armyCost", asOFFSET(CMilitaryManager, armyCost)); ASSERT(r >= 0);
  
  	// NOTE: Config's "quota" scattered across CMilitaryManager, CEnemyManager, CThreatMap, CFactoryManager, CSetupManager
-@@ -48,6 +149,8 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
+@@ -48,6 +153,8 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
  	r = engine->RegisterObjectProperty("SQuotaMilitary", "SRaidQuota raid", 0); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("SRaidQuota", "float min", asOFFSET(CMilitaryManager::SRaidQuota, min), asOFFSET(CMilitaryManager, raid), false); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("SRaidQuota", "float avg", asOFFSET(CMilitaryManager::SRaidQuota, avg), asOFFSET(CMilitaryManager, raid), false); ASSERT(r >= 0);
@@ -15157,7 +15298,7 @@ index d4ebeadd..ddba1b14 100644
  	// Alternative "quota" accessors:
  //	r = engine->RegisterObjectProperty("CMilitaryManager", "uint quotaScout", asOFFSET(CMilitaryManager, maxScouts)); ASSERT(r >= 0);
  //	r = engine->RegisterObjectProperty("CMilitaryManager", "float quotaAttack", asOFFSET(CMilitaryManager, minAttackers)); ASSERT(r >= 0);
-@@ -65,9 +168,28 @@ bool CMilitaryScript::Init()
+@@ -65,9 +172,28 @@ bool CMilitaryScript::Init()
  	int r = mod->SetDefaultNamespace("Military"); ASSERT(r >= 0);
  	InitModule(mod);
  	militaryInfo.makeDefence = script->GetFunc(mod, "void AiMakeDefence(int, const AIFloat3& in)");
@@ -27206,10 +27347,10 @@ index a058d598..1d61a9b3 100644
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/StockFight.inl b/src/circuit/task/fighter/StockFight.inl
 new file mode 100644
-index 00000000..e5bca780
+index 00000000..90324a9b
 --- /dev/null
 +++ b/src/circuit/task/fighter/StockFight.inl
-@@ -0,0 +1,1380 @@
+@@ -0,0 +1,1396 @@
 +/*
 + * StockFight.inl (included by SquadTask.cpp: a new .cpp needs a cmake re-glob)
 + *
@@ -27775,7 +27916,7 @@ index 00000000..e5bca780
 +
 +	const AIFloat3& startPos = leader->GetPos(frame);
 +	state = State::ROAM;
-+	if ((GetTarget() != nullptr) || isTargetsFound) {
++	if (GetTarget() != nullptr) {  // apex: a shell point is a walk, not a target (Attack dereferences it)
 +		const float slack = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 500.f : 300.f;
 +		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
 +			state = State::ENGAGE;
@@ -27826,6 +27967,8 @@ index 00000000..e5bca780
 +	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
 +	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
 +	const float sqBaseRange = SQUARE(baseRange);
++	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
++	const bool shellOn = militaryMgr->ShellAnswerOn();
 +
 +	CEnemyInfo* bestTarget = nullptr;
 +	float minSqDist = std::numeric_limits<float>::max();
@@ -27841,7 +27984,8 @@ index 00000000..e5bca780
 +		}
 +
 +		const AIFloat3& ePos = enemy->GetPos();
-+		if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
++		const bool sheller = shellOn && militaryMgr->IsSheller(enemy->GetId());
++		if ((!sheller && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
 +			|| !terrainMgr->CanMoveToPos(area, ePos))
 +		{
 +			continue;
@@ -27899,8 +28043,21 @@ index 00000000..e5bca780
 +	if (bestTarget != nullptr) {
 +		SetTarget(bestTarget);
 +		position = GetTarget()->GetPos();
++		if (shellOn && militaryMgr->IsSheller(bestTarget->GetId())) {
++			militaryMgr->NoteShellAnswer(true);
++		}
 +	}
 +	if (enemyPositions.empty()) {
++		// nothing to fight: walk to where unseen fire on our structures came from, if we outweigh its threat
++		AIFloat3 sp;
++		if (shellOn && militaryMgr->ShellPointNear(pos, sp) && terrainMgr->CanMoveToPos(area, sp)
++			&& (threatMap->GetThreatAt(sp) < maxPower))
++		{
++			position = sp;
++			enemyPositions.push_back(sp);
++			militaryMgr->NoteShellAnswer(false);
++			return true;
++		}
 +		return false;
 +	}
 +

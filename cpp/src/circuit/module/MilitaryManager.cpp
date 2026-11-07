@@ -1521,6 +1521,118 @@ bool CMilitaryManager::GetGuardAnchor(const AIFloat3& from, const std::vector<fl
 	return true;
 }
 
+// apex_shell_answer (his 11-07: "Humans will often sit under jammer with long-range units and just shell the AI,
+// and that's something we should stop them from being able to do"). Measured 11-07 at +50: 63% of what we lost
+// inside our own tower cover was killed from outside every covering tower's reach, and 84% of those killers lived
+// another minute -- the stock defend search takes only enemies standing in our defend influence, and never a
+// hidden one. A shooter of our structures is marked for the defenders; an unseen one leaves the point its shot
+// came from (the fake-enemy estimate), which a defend pool with nothing else to fight walks to and so lights up.
+bool CMilitaryManager::ShellAnswerOn()
+{
+	const int frame = circuit->GetLastFrame();
+	if (frame != shellReadFrame) {
+		shellReadFrame = frame;
+		shellAnswer = circuit->GetTunable("apex_shell_answer", 0.f) > 0.f;
+	}
+	return shellAnswer;
+}
+
+void CMilitaryManager::NoteStructFire(CCircuitUnit* unit, CEnemyInfo* attacker, int weaponId, const AIFloat3& dir)
+{
+	if ((unit == nullptr) || unit->GetCircuitDef()->IsMobile()) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	const int hold = FRAMES_PER_SEC * 20;
+	AIFloat3 at;
+	const bool seen = (attacker != nullptr);
+	if (seen) {
+		CCircuitDef* edef = attacker->GetCircuitDef();
+		if ((edef != nullptr) && (edef->IsAbleToFly() || !edef->IsMobile())) {
+			return;
+		}
+		shellerUntil[attacker->GetId()] = frame + hold;
+		at = attacker->GetPos();
+		++shellFireSeen;
+	} else {
+		CWeaponDef* wdef = circuit->GetWeaponDef(weaponId);
+		if ((wdef == nullptr) || (dir == ZeroVector)) {
+			return;
+		}
+		float range = wdef->GetRange();
+		at = CTerrainManager::CorrectPosition(unit->GetPos(frame), dir, range);
+		++shellFireBlind;
+	}
+	// every point, seen or not, for the script (spam thrown at what we cannot contest, his 11-07); the defenders'
+	// blind walk takes only the unseen ones
+	const float stake = unit->GetCircuitDef()->GetCostM();
+	bool merged = false;
+	for (SShellPoint& sp : shellPoints) {
+		if ((sp.seen == seen) && (sp.pos.SqDistance2D(at) < SQUARE(300.f))) {
+			sp.pos = at;
+			sp.until = frame + hold;
+			sp.stake = std::max(sp.stake, stake);
+			merged = true;
+			break;
+		}
+	}
+	if (!merged) {
+		if (shellPoints.size() >= 16) {
+			shellPoints.erase(shellPoints.begin());
+		}
+		shellPoints.push_back({at, frame + hold, stake, seen});
+	}
+	if (frame >= shellLogFrame) {
+		shellLogFrame = frame + FRAMES_PER_SEC * 60;
+		int live = 0;
+		for (const auto& kv : shellerUntil) {
+			live += (kv.second > frame) ? 1 : 0;
+		}
+		circuit->LOG("apex: shell-stat t=%i fireSeen=%i fireBlind=%i shellers=%i points=%i answeredSeen=%i walkedBlind=%i",
+				circuit->GetTeamId(), shellFireSeen, shellFireBlind, live, (int)shellPoints.size(), shellHitSeen,
+				shellHitBlind);
+	}
+}
+
+AIFloat3 CMilitaryManager::GetShellPointAt(int i) const
+{
+	if ((i < 0) || (i >= (int)shellPoints.size()) || (shellPoints[i].until <= circuit->GetLastFrame())) {
+		return -RgtVector;
+	}
+	return shellPoints[i].pos;
+}
+
+float CMilitaryManager::GetShellPointStake(int i) const
+{
+	if ((i < 0) || (i >= (int)shellPoints.size()) || (shellPoints[i].until <= circuit->GetLastFrame())) {
+		return 0.f;
+	}
+	return shellPoints[i].stake;
+}
+
+bool CMilitaryManager::IsSheller(int enemyId) const
+{
+	auto it = shellerUntil.find(enemyId);
+	return (it != shellerUntil.end()) && (it->second > circuit->GetLastFrame());
+}
+
+bool CMilitaryManager::ShellPointNear(const AIFloat3& from, AIFloat3& outPos) const
+{
+	const int frame = circuit->GetLastFrame();
+	float best = std::numeric_limits<float>::max();
+	for (const SShellPoint& sp : shellPoints) {
+		if ((sp.until <= frame) || sp.seen) {
+			continue;
+		}
+		const float d = sp.pos.SqDistance2D(from);
+		if (d < best) {
+			best = d;
+			outPos = sp.pos;
+		}
+	}
+	return best < std::numeric_limits<float>::max();
+}
+
 void CMilitaryManager::FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions)
 {
 	outPositions.clear();

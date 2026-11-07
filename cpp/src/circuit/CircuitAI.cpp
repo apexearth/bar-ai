@@ -1745,6 +1745,11 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
 	for (auto& module : modules) {
 		module->UnitDamaged(unit, attacker);
 	}
+	if ((militaryManager != nullptr) && IsValidWeaponDefId(weaponId)
+		&& ((attacker != nullptr) || (GetFriendlyUnit(attackerId) == nullptr)))
+	{
+		militaryManager->NoteStructFire(unit, attacker, weaponId, dir);
+	}
 
 	return 0;  // signaling: OK
 }

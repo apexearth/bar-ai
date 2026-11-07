@@ -138,6 +138,10 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetEnemyInflNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetEnemyInflNear), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetSpotWantedCount()", asMETHOD(CMilitaryManager, GetSpotWantedCount), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "AIFloat3 GetSpotWantedAt(int) const", asMETHOD(CMilitaryManager, GetSpotWantedAt), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetShellPointCount() const", asMETHOD(CMilitaryManager, GetShellPointCount), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "AIFloat3 GetShellPointAt(int) const", asMETHOD(CMilitaryManager, GetShellPointAt), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetShellPointStake(int) const", asMETHOD(CMilitaryManager, GetShellPointStake), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "bool GetShellPointSeen(int) const", asMETHOD(CMilitaryManager, GetShellPointSeen), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CMilitaryManager", "const float armyCost", asOFFSET(CMilitaryManager, armyCost)); ASSERT(r >= 0);
 
 	// NOTE: Config's "quota" scattered across CMilitaryManager, CEnemyManager, CThreatMap, CFactoryManager, CSetupManager

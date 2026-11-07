@@ -175,6 +175,8 @@ local NAMES = {
 	"apex_attack_share",
 	"apex_raid_first",
 	"apex_escort_share",
+	"apex_shell_answer",
+	"apex_spam_shell",
 	"apex_dup_bp_subst",
 	"apex_replant_discount",
 	"apex_replant_window_s",

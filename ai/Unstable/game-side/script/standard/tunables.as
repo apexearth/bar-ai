@@ -1950,6 +1950,7 @@ const float TUNE_RAIDER_MASSING = 0.f;
 const float TUNE_SPAM_RAIDERS = 1.f;
 
 const float TUNE_SPAM_SEND = 1.f;   // [toggle 0/1] hooks.as SpamSend: late fodder gets one fight order at their base and none after
+const float TUNE_SPAM_SHELL = 1.f;   // [toggle 0/1] hooks.as SpamShellPick: late fodder moves to where fire on our structures comes from (his 11-07)
 const float TUNE_SPAM_SUICIDAL = 1.f;
 
 // [seconds] -- A stuck unit already asked for unblocking is not re-asked for

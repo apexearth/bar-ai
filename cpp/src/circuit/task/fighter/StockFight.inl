@@ -563,7 +563,7 @@ void CDefendTask::StockUpdate()
 
 	const AIFloat3& startPos = leader->GetPos(frame);
 	state = State::ROAM;
-	if ((GetTarget() != nullptr) || isTargetsFound) {
+	if (GetTarget() != nullptr) {  // apex: a shell point is a walk, not a target (Attack dereferences it)
 		const float slack = (circuit->GetInflMap()->GetAllyDefendInflAt(position) > INFL_EPS) ? 500.f : 300.f;
 		if (position.SqDistance2D(startPos) < SQUARE(highestRange + slack)) {
 			state = State::ENGAGE;
@@ -614,6 +614,8 @@ bool CDefendTask::StockFindTarget()
 	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
 	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
 	const float sqBaseRange = SQUARE(baseRange);
+	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
+	const bool shellOn = militaryMgr->ShellAnswerOn();
 
 	CEnemyInfo* bestTarget = nullptr;
 	float minSqDist = std::numeric_limits<float>::max();
@@ -629,7 +631,8 @@ bool CDefendTask::StockFindTarget()
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
-		if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
+		const bool sheller = shellOn && militaryMgr->IsSheller(enemy->GetId());
+		if ((!sheller && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
 			|| !terrainMgr->CanMoveToPos(area, ePos))
 		{
 			continue;
@@ -687,8 +690,21 @@ bool CDefendTask::StockFindTarget()
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
+		if (shellOn && militaryMgr->IsSheller(bestTarget->GetId())) {
+			militaryMgr->NoteShellAnswer(true);
+		}
 	}
 	if (enemyPositions.empty()) {
+		// nothing to fight: walk to where unseen fire on our structures came from, if we outweigh its threat
+		AIFloat3 sp;
+		if (shellOn && militaryMgr->ShellPointNear(pos, sp) && terrainMgr->CanMoveToPos(area, sp)
+			&& (threatMap->GetThreatAt(sp) < maxPower))
+		{
+			position = sp;
+			enemyPositions.push_back(sp);
+			militaryMgr->NoteShellAnswer(false);
+			return true;
+		}
 		return false;
 	}
 

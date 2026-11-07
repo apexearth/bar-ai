@@ -2411,6 +2411,8 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				candV.insertLast(vB);
 				candGain.insertLast(gainB);
 				sumV += vB;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":wing=" + formatFloat(vB * 1000.f, "", 0, 2);
 			} else if (prankNow) {
 				prank += " " + Catalog::Def(d).GetName() + ":wing0(" + (ecoGrowing ? "eco-seat" : Air::StrikeWhy(d)) + ")";
 			}

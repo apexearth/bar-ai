@@ -181,6 +181,17 @@ public:
 	bool GetGuardAnchor(const springai::AIFloat3& from, const std::vector<float>& assigned,
 			springai::AIFloat3& outPos, int& outSpot) const;
 	void FillFrontPos(CCircuitUnit* unit, F3Vec& outPositions);
+	// apex_shell_answer: whoever is shooting our structures is the defenders' business (his 11-07)
+	void NoteStructFire(CCircuitUnit* unit, CEnemyInfo* attacker, int weaponId, const springai::AIFloat3& dir);
+	bool IsSheller(int enemyId) const;
+	bool ShellPointNear(const springai::AIFloat3& from, springai::AIFloat3& outPos) const;
+	bool ShellAnswerOn();
+	void NoteShellAnswer(bool seen) { ++(seen ? shellHitSeen : shellHitBlind); }
+	// the live shell points for the script's air look (looks.as LOOK_SHELL): position and the dearest structure hit from it
+	int GetShellPointCount() const { return (int)shellPoints.size(); }
+	springai::AIFloat3 GetShellPointAt(int i) const;
+	float GetShellPointStake(int i) const;
+	bool GetShellPointSeen(int i) const { return (i >= 0) && (i < (int)shellPoints.size()) && shellPoints[i].seen; }
 	void FillDefencePos(CCircuitUnit* unit, F3Vec& outPositions);
 	springai::AIFloat3 GetDefenceStand();
 	void FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions);
@@ -391,6 +402,13 @@ public:
 	std::string StockArmyStat();
 
 private:
+	std::unordered_map<int, int> shellerUntil;   // enemy -> frame its mark lapses
+	struct SShellPoint { springai::AIFloat3 pos; int until; float stake; bool seen; };
+	std::vector<SShellPoint> shellPoints;                   // where unseen fire on our structures came from
+	bool shellAnswer = false;
+	int shellReadFrame = -1;
+	int shellFireSeen = 0, shellFireBlind = 0, shellHitSeen = 0, shellHitBlind = 0, shellLogFrame = 0;
+
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
 	IUnitTask* BirthDefendTask(CCircuitUnit* unit);
 	void LogBirthStat();
