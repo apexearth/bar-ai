@@ -49,6 +49,22 @@ bool CpChance(CCircuitUnit@ unit)
 	const AIFloat3 at = NearestMex(unit.GetPos(ai.frame), near);
 	return OnMap(at) && MexUnguardedInReach(at, near);
 }
+// Stage 2 split: no ground-defence want proposed / proposed at value 0 with a displacement charge (the
+// do-nothing rule) / at value 0 otherwise / valued but dropped before ranking.
+array<int> gCpNw(4, 0);
+void CpNoWant(const array<Want@>@ wants)
+{
+	int k = 0;
+	for (uint i = 0; i < wants.length(); ++i) {
+		const Want@ c = wants[i];
+		if ((c is null) || (c.kind != WK_PROTECT) || (c.spotId != PROT_DEF))
+			continue;
+		k = (c.value > 0.f) ? 3 : ((c.pcDisp > 0.f) ? 1 : 2);
+		break;
+	}
+	++gCpNw[k];
+}
+
 int CpAt(int stage, int s)
 {
 	if ((stage >= 2) && (s > stage))
@@ -64,7 +80,8 @@ void CpNote(int stage)
 	if (ai.frame < gCpLogAt)
 		return;
 	gCpLogAt = ai.frame + 60 * SECOND;
-	string s = "apex: cpgate-stat t=" + ai.teamId + " chances=" + gCpChances + " light=" + gCpLightN + " |";
+	string s = "apex: cpgate-stat t=" + ai.teamId + " chances=" + gCpChances + " light=" + gCpLightN
+		+ " nowant=" + gCpNw[0] + "/" + gCpNw[1] + "/" + gCpNw[2] + "/" + gCpNw[3] + " |";
 	for (uint i = 0; i < gCpN.length(); ++i)
 		s += " " + gCpN[i];
 	AiLog(s);
@@ -1166,8 +1183,7 @@ bool StepSkip(int step, CCircuitUnit@ unit)
 	// executions mostly arrive through hoists (coverall, basefront) that never
 	// credit this step, so learning skipped the question it must keep asking.
 	if ((step == 14) && ((DefenceValue() <= 0.f) || (DefenceShortfall() > 0.f)))
-		return false;
-	if ((step == 17) && (Military::AirSeenEver() > 0.f) && !ProtAnyComing(PROT_AA))
+		return false;	if ((step == 17) && (Military::AirSeenEver() > 0.f) && !ProtAnyComing(PROT_AA))
 		return false;
 	++gStepSkipped;
 	return true;
@@ -2942,8 +2958,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		const float pushAff = ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
 		const float pushCap = EcoPowerM() * pushAff;
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
-		for (uint ri = 0; ri < ranked.length(); ++ri) {
-			Want@ cw = ranked[ri];
+		// THE PUSH TAKES THE DEFENCE WANT FROM THE PROPOSALS, not only from the ranked list: it re-sites the
+		// want on the mex and jumps the queue whatever its value, so a want dropped for its own site (refused
+		// there within the memo: "takeNull verdict=covered") or priced to zero there was still the gun the mex
+		// needed. 11-07, 24 games: of chances with no defence want ranked, 42% had one dropped and 33% one zeroed.
+		array<Want@> cands = ranked;
+		for (uint wi = 0; wi < wants.length(); ++wi) {
+			Want@ c = wants[wi];
+			if ((c !is null) && (c.kind == WK_PROTECT) && (c.spotId == PROT_DEF) && (c.def !is null)
+				&& (cands.findByRef(c) < 0))
+				cands.insertLast(c);
+		}
+		for (uint ri = 0; ri < cands.length(); ++ri) {
+			Want@ cw = cands[ri];
 			if ((cw.kind != WK_PROTECT) || (cw.spotId != PROT_DEF))
 				continue;
 			cpStage = CpAt(cpStage, 3);
@@ -3055,9 +3082,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				}
 			}
 			cpStage = CpAt(cpStage, 9);
-			if (ri > 0) {
-				ranked.removeAt(ri);
-				ranked.insertAt(0, cw);
+			{
+				const int at = ranked.findByRef(cw);
+				if (at != 0) {
+					if (at > 0)
+						ranked.removeAt(uint(at));
+					else if (cw.value <= 0.f)
+						cw.value = 0.001f;
+					ranked.insertAt(0, cw);
+				}
 			}
 			// EXEMPT FROM THE DRAW AGAIN, for the FIRST gun only. The jump
 			// was cut back to a hoist when it bought a tower on every claim
@@ -3082,6 +3115,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	if (cpStage == 2)
+		CpNoWant(wants);
 	CpNote(cpStage);
 	// OUT OF METAL THE COMMANDER GETS MORE (his 2026-10-05). His best-priced
 	// claim or reclaim is taken; its risk price and the first-gun rule stand.
