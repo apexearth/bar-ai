@@ -174,6 +174,7 @@ local NAMES = {
 	"apex_conv_afford_s",
 	"apex_attack_share",
 	"apex_raid_first",
+	"apex_escort_share",
 	"apex_dup_bp_subst",
 	"apex_replant_discount",
 	"apex_replant_window_s",

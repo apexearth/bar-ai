@@ -270,6 +270,7 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_LAB_NANO` = 1. His 10-16 watch: tons of towers, no con turrets at our labs (0 nano wins vs 6-19 defence wins a seat; lab lathe 10 m/s nameplate, 0.6-4.1 delivered). The count falls out: one turret once income feeds it, a second past 12.8 m/s per lab. On since v0.3.2; `apex: labnano-stat`.
 ## C++-only options (read through `GetTunable` in the DLL)
 
+- `apex_escort_share` = 0.34 (C++ `CFGuardTask::CanAssignTo`, no TUNE_ const): a unit joins escort duty only while all escorts hold at most this share of army metal. His 11-07: "cap the escorts while the army is small, all those escorts are potential raiders" (behaviour.json escort [12,1,100000] is his 08-21 rule; the share is his "a third of our army" from the attack-bar ruling). At +0 one game: GUARD 31 -> 3 unit-samples. 2v2 vs BARb at +50, 24 pairs: GUARD 8.3k -> 8.1k (a +50 army already holds escorts under a third), RAID +27%, ATTACK +27%, score +0.07 (t 0.21), no measured cost. On as his rule.
 - `TUNE_FIGHT_TRAVEL` = 1 (`apex_fight_travel`). His watch: a squad moved straight into a pack in our base. On since v0.3.2; forced 0 for stock-controlled units.
 - `TUNE_TARGET_VALUE` = 1 (`apex_target_value`). 43% of our kills were under 100 metal. On since v0.3.2; forced 0 for stock-controlled units.
 - `TUNE_UNIT_COVER` = 1 (`apex_unit_cover`). His ruling. Off, ~70% more defence stood and the abort rate did not move (54% -> 53%).

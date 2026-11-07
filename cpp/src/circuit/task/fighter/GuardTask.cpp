@@ -40,6 +40,22 @@ bool CFGuardTask::CanAssignTo(CCircuitUnit* unit) const
 	if (units.size() >= guardsNum) {
 		return false;
 	}
+	// apex: ESCORTS ARE A SHARE OF THE ARMY (his 11-07: "cap the escorts while the army is small, all those
+	// escorts are potential raiders"). Twelve standing escorts held most of a small army beside constructors:
+	// 11-07 task census, GUARD 4,338 unit-samples against RAID 766 and ATTACK 395.
+	const float share = circuit->GetTunable("apex_escort_share", 0.34f);
+	if (share < 1.f) {
+		CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
+		float guardCost = unit->GetCircuitDef()->GetCostM();
+		for (IFighterTask* t : militaryMgr->GetTasks(IFighterTask::FightType::GUARD)) {
+			for (CCircuitUnit* ass : t->GetAssignees()) {
+				guardCost += ass->GetCircuitDef()->GetCostM();
+			}
+		}
+		if (guardCost > share * militaryMgr->GetArmyCost()) {
+			return false;
+		}
+	}
 	CCircuitUnit* vip = circuit->GetTeamUnit(vipId);
 	if (vip == nullptr) {
 		return false;
