@@ -240,6 +240,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	isPlane           = !def->IsHoverAttack() && isAbleToFly;
 	isStealth         = def->IsStealth();
 	isSonarStealth    = def->IsSonarStealth();
+	turnRate          = def->GetTurnRate();  // apex: COB angle units a frame (65536 a full turn)
+	maxAcc            = def->GetMaxAcceleration();  // apex: elmos a frame squared
 	isTurnLarge       = (speed / (def->GetTurnRate() + DIV0_SLACK) > 0.09f);  // empirical magic number
 	isAbleToCloak     = def->IsAbleToCloak();
 	isAbleToRepair    = def->IsAbleToRepair();

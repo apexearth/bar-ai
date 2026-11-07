@@ -2690,8 +2690,10 @@ void CMilitaryManager::DodgeUpdate()
 			continue;
 		}
 		IUnitTask* task = unit->GetTask();
-		if ((task == nullptr) || (task->GetType() != IUnitTask::Type::FIGHTER)) {
-			continue;   // a retreat walks home; an idle unit is not in a fight
+		const bool jinkOn = circuit->GetTunable("apex_dodge", 0.f) >= 3.f;
+		const bool retreating = (task != nullptr) && (task->GetType() == IUnitTask::Type::RETREAT);
+		if ((task == nullptr) || ((task->GetType() != IUnitTask::Type::FIGHTER) && !(jinkOn && retreating))) {
+			continue;   // an idle unit is not in a fight; a retreat jinks only under mode 3
 		}
 		SDodge& st = dodgeState[unit->GetId()];
 		if (frame < st.nextFrame) {
@@ -2701,6 +2703,16 @@ void CMilitaryManager::DodgeUpdate()
 		const AIFloat3& pos = unit->GetPos(frame);
 		const float speed = cdef->GetSpeed();   // elmos per second
 		const float radius = cdef->GetRadius();
+		// mode 2 (his 11-06: "if we are shooting at the enemy we can try moving side to side a little to throw off
+		// their shots, since they try to lead targets"): a unit with an enemy inside its own reach weaves against
+		// any projectile shooter that reaches it, whether or not it could walk clear of the shell -- the shooter
+		// leads our motion, so a turn while the shell flies is a miss. A step of about its own width, one shell's
+		// flight long.
+		const bool weave = circuit->GetTunable("apex_dodge", 0.f) >= 2.f;
+		const float myReach = cdef->GetMaxRange(CCircuitDef::RangeType::LAND) + radius;
+		bool shooting = false;
+		AIFloat3 tgtPos;
+		float tgtD2 = -1.f;
 		const SEnemyData* best = nullptr;
 		float bestCost = 0.f, bestNeed = 0.f, bestTof = 0.f;
 		bool reached = false;
@@ -2708,12 +2720,19 @@ void CMilitaryManager::DodgeUpdate()
 			if (((e.losStatus & SEnemyData::LOS) == 0) || (e.cdef == nullptr) || e.cdef->IsAbleToFly()) {
 				continue;
 			}
+			const float d2 = pos.SqDistance2D(e.pos);
+			if (weave && (d2 <= myReach * myReach)) {
+				shooting = true;
+				if ((tgtD2 < 0.f) || (d2 < tgtD2)) {
+					tgtD2 = d2;
+					tgtPos = e.pos;
+				}
+			}
 			CWeaponDef* wd = e.cdef->GetWeaponDef();
 			if ((wd == nullptr) || !e.cdef->HasSurfToLand()) {
 				continue;
 			}
 			const float reach = wd->GetRange() + radius;
-			const float d2 = pos.SqDistance2D(e.pos);
 			if (d2 > reach * reach) {
 				continue;
 			}
@@ -2722,8 +2741,9 @@ void CMilitaryManager::DodgeUpdate()
 				continue;
 			}
 			const float tof = std::sqrt(d2) / wd->GetProjSpeed();
-			const float need = radius + 0.5f * wd->GetAoe() + 8.f;
-			if (speed * tof < need) {
+			const float need = weave ? std::max(12.f, std::min(radius, 40.f))
+					: (radius + 0.5f * wd->GetAoe() + 8.f);
+			if (!weave && (speed * tof < need)) {
 				continue;
 			}
 			if (e.cost > bestCost) {
@@ -2739,6 +2759,53 @@ void CMilitaryManager::DodgeUpdate()
 		if (best == nullptr) {
 			continue;
 		}
+		// MODE 3, A UNIT ON THE MOVE BENDS ITS HEADING (his 11-06: "say we are moving at 270deg we can alter to
+		// 290deg and avoid a shot"): the shooter leads our velocity, so a turn of a few degrees while the shell flies
+		// moves the impact off us, costs a tank no more than a bot (a 20 degree turn), and keeps the unit going
+		// where it was going -- the bend is a short waypoint ahead, then the queue resumes. Walking in and walking
+		// home (a retreat) alike.
+		if (jinkOn) {
+			springai::AIFloat3 vel;
+			try {
+				vel = unit->GetUnit()->GetVel();   // elmos / frame
+			} catch (const std::exception& e) {
+				continue;
+			}
+			const float vNow = std::sqrt(vel.x * vel.x + vel.z * vel.z);
+			const float vTopF = std::max(speed, 1.f) / FRAMES_PER_SEC;
+			if (vNow > 0.33f * vTopF) {
+				const float tof = std::max(0.4f, std::min(bestTof, 1.0f));
+				const float turnF = 3641.f / std::max(cdef->GetTurnRate(), 1.f);   // 20 degrees
+				if (turnF > tof * FRAMES_PER_SEC * 0.5f) {
+					++dodgeStat.slowTurn;
+					st.nextFrame = frame + int(FRAMES_PER_SEC * tof);
+					continue;
+				}
+				const float h = std::atan2(vel.z, vel.x) + st.side * 0.35f;
+				const float ahead = vNow * FRAMES_PER_SEC * tof + 16.f;
+				AIFloat3 to(pos.x + std::cos(h) * ahead, pos.y, pos.z + std::sin(h) * ahead);
+				to.x = std::max(16.f, std::min(to.x, float(AIFloat3::maxxpos) - 16.f));
+				to.z = std::max(16.f, std::min(to.z, float(AIFloat3::maxzpos) - 16.f));
+				st.side = -st.side;
+				st.nextFrame = frame + int(FRAMES_PER_SEC * tof) + 3;
+				std::vector<float> params = {0.f, float(CMD_MOVE), 0.f, to.x, to.y, to.z};
+				try {
+					unit->CountCmd(9);
+					unit->GetUnit()->ExecuteCustomCommand(CMD_INSERT, std::move(params), UNIT_COMMAND_OPTION_ALT_KEY);
+					++dodgeStat.ordered;
+					++dodgeStat.jinks;
+				} catch (const std::exception& e) {
+				}
+				continue;
+			}
+			// a unit standing to shoot is left alone: our own weapons lose accuracy on the move, and the standing
+			// weave (mode 2) cost more than it saved (24 pairs: damage efficiency 0.94-1.03 -> 0.83-0.89, kills
+			// -2.4k, t -2.2)
+			continue;
+		}
+		if (weave && !shooting) {
+			continue;
+		}
 		++dodgeStat.dodgeable;
 		AIFloat3 dir = pos - best->pos;
 		dir.y = 0.f;
@@ -2746,9 +2813,63 @@ void CMilitaryManager::DodgeUpdate()
 		if (len < 1.f) {
 			continue;
 		}
-		float step = 1.6f * bestNeed;
-		step = std::max(32.f, std::min(step, 120.f));
+		float step = weave ? bestNeed : (1.6f * bestNeed);
+		if (weave) {
+			bestTof = std::max(0.4f, std::min(bestTof, 1.0f));
+		} else {
+			step = std::max(32.f, std::min(step, 120.f));
+		}
+		// A hull that turns slowly cannot step aside in time (his 11-06: "tracked units cant easily dodge, bots can
+		// do it way better"): a unit weaves only if it turns a quarter circle within one step. Bots turn 885-1540
+		// a frame (0.35-0.6 s), vehicles 270-650 (0.8-2 s).
+		// ...and gets moving (his 11-06: "unit acceleration rate also matters"): from rest it covers the step at its
+		// max acceleration until top speed. A gun fixed to the hull ("turret aim speed") must face its target to
+		// fire, so a sideways step stops it shooting: such a unit does not weave.
+		{
+			CWeaponDef* myW = cdef->GetWeaponDef();
+			if ((myW != nullptr) && !myW->IsTurret()) {
+				++dodgeStat.slowTurn;
+				st.nextFrame = frame + FRAMES_PER_SEC * 5;
+				continue;
+			}
+			const float turn90S = 16384.f / std::max(cdef->GetTurnRate(), 1.f) / FRAMES_PER_SEC;
+			const float acc = std::max(cdef->GetMaxAcc(), 0.01f);       // elmos / frame^2
+			const float vTop = std::max(speed, 1.f) / FRAMES_PER_SEC;    // elmos / frame
+			const float dAcc = vTop * vTop / (2.f * acc);
+			const float moveF = (step <= dAcc) ? std::sqrt(2.f * step / acc) : (vTop / acc + (step - dAcc) / vTop);
+			const float stepS = weave ? bestTof : std::max(step / std::max(speed, 1.f), std::min(bestTof, 1.5f));
+			// a weave need not finish its step before the shell lands: the shooter led our old motion, so how far
+			// we drift aside in the flight left after turning is the miss; half our width throws it off
+			bool slow;
+			if (weave) {
+				const float leftF = (stepS - turn90S) * FRAMES_PER_SEC;
+				const float driftE = (leftF <= 0.f) ? 0.f
+						: ((leftF * vTop <= 2.f * dAcc) && (leftF <= vTop / acc)) ? 0.5f * acc * leftF * leftF
+						: (dAcc + (leftF - vTop / acc) * vTop);
+				slow = driftE < 0.5f * radius;
+			} else {
+				slow = turn90S + moveF / FRAMES_PER_SEC > stepS;
+			}
+			if (slow) {
+				++dodgeStat.slowTurn;
+				st.nextFrame = frame + FRAMES_PER_SEC;
+				continue;
+			}
+		}
 		AIFloat3 to(pos.x - dir.z / len * step * st.side, pos.y, pos.z + dir.x / len * step * st.side);
+		if (weave && (tgtD2 >= 0.f)) {
+			// a step that would leave our range of the nearest enemy we can shoot goes the other way, or not at all
+			const float keep = myReach - radius - 8.f;
+			if (to.SqDistance2D(tgtPos) > keep * keep) {
+				st.side = -st.side;
+				to = AIFloat3(pos.x - dir.z / len * step * st.side, pos.y, pos.z + dir.x / len * step * st.side);
+				if (to.SqDistance2D(tgtPos) > keep * keep) {
+					++dodgeStat.outOfRange;
+					st.nextFrame = frame + int(FRAMES_PER_SEC * bestTof);
+					continue;
+				}
+			}
+		}
 		to.x = std::max(16.f, std::min(to.x, float(AIFloat3::maxxpos) - 16.f));
 		to.z = std::max(16.f, std::min(to.z, float(AIFloat3::maxzpos) - 16.f));
 		st.side = -st.side;
@@ -2765,10 +2886,10 @@ void CMilitaryManager::DodgeUpdate()
 	}
 	if (frame >= dodgeStat.nextLog) {
 		dodgeStat.nextLog = frame + FRAMES_PER_SEC * 60;
-		circuit->LOG("apex: dodge-stat t=%i passes=%i checked=%i inReach=%i dodgeable=%i ordered=%i",
-				circuit->GetTeamId(), dodgeStat.passes, dodgeStat.units, dodgeStat.inReach, dodgeStat.dodgeable,
-				dodgeStat.ordered);
-		dodgeStat = SDodgeStat{0, 0, 0, 0, 0, dodgeStat.nextLog};
+		circuit->LOG("apex: dodge-stat t=%i passes=%i checked=%i inReach=%i dodgeable=%i slowTurn=%i ordered=%i jinks=%i outOfRange=%i",
+				circuit->GetTeamId(), dodgeStat.passes, dodgeStat.units, dodgeStat.inReach, dodgeStat.dodgeable, dodgeStat.slowTurn,
+				dodgeStat.ordered, dodgeStat.jinks, dodgeStat.outOfRange);
+		dodgeStat = SDodgeStat{0, 0, 0, 0, 0, dodgeStat.nextLog, 0, 0, 0};
 	}
 }
 

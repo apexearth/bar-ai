@@ -41,6 +41,7 @@ CWeaponDef::CWeaponDef(WeaponDef* def, Resource* resM, Resource* resE)
 			|| (wt == "AircraftBomb") || (wt == "StarburstLauncher")
 			|| ((wt == "MissileLauncher") && !def->IsTracks());
 	isDodgeable = kind && (projSpeed > 1.f);
+	isTurret = def->IsTurret();
 }
 
 CWeaponDef::~CWeaponDef()

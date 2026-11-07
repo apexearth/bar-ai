@@ -403,7 +403,7 @@ private:
 	};
 	std::unordered_map<int, SDodge> dodgeState;
 	struct SDodgeStat {
-		int passes = 0, units = 0, inReach = 0, dodgeable = 0, ordered = 0, nextLog = 0;
+		int passes = 0, units = 0, inReach = 0, dodgeable = 0, ordered = 0, nextLog = 0, slowTurn = 0, jinks = 0, outOfRange = 0;
 	} dodgeStat;
 	struct SBirthStat {
 		int born = 0, retask = 0, joined = 0, created = 0, released = 0, hopeless = 0;

@@ -8104,7 +8104,7 @@ index e56339eb..99c17e5f 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b0..ec91a09b 100644
+index a44c20b0..546e2cfd 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -14,28 +14,39 @@
@@ -8790,7 +8790,7 @@ index a44c20b0..ec91a09b 100644
  void CMilitaryManager::MarkPorc(CCircuitUnit* unit, int defPointId)
  {
  	porcToPoint[unit] = defPointId;
-@@ -1063,91 +1198,462 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
+@@ -1063,93 +1198,464 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
  	scoutTasks.erase(it);
  }
  
@@ -9029,7 +9029,8 @@ index a44c20b0..ec91a09b 100644
 +	}
 +	return best;
 +}
-+
+ 
+-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 +CAttackTask* CMilitaryManager::GetMainArmy()
 +{
 +	const int frame = circuit->GetLastFrame();
@@ -9303,9 +9304,11 @@ index a44c20b0..ec91a09b 100644
 +	if (circuit->HasFrontPos() && !circuit->IsStockCtl(unit)) {
 +		outPositions.push_back(circuit->GetFrontPos());
 +	}
- 
- 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
+ 
+ 	const springai::AIFloat3& pos = unit->GetPos(frame);
 @@ -1335,6 +1841,112 @@ float CMilitaryManager::ClampMobileCostRatio() const
  	return (enemyMobileCost > armyCost) ? (armyCost / enemyMobileCost) : 1.f;
  }
@@ -9661,7 +9664,7 @@ index a44c20b0..ec91a09b 100644
  						task = Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, power));
  					}
  				} break;
-@@ -1717,18 +2470,498 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,18 +2470,619 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -9885,8 +9888,10 @@ index a44c20b0..ec91a09b 100644
 +			continue;
 +		}
 +		IUnitTask* task = unit->GetTask();
-+		if ((task == nullptr) || (task->GetType() != IUnitTask::Type::FIGHTER)) {
-+			continue;   // a retreat walks home; an idle unit is not in a fight
++		const bool jinkOn = circuit->GetTunable("apex_dodge", 0.f) >= 3.f;
++		const bool retreating = (task != nullptr) && (task->GetType() == IUnitTask::Type::RETREAT);
++		if ((task == nullptr) || ((task->GetType() != IUnitTask::Type::FIGHTER) && !(jinkOn && retreating))) {
++			continue;   // an idle unit is not in a fight; a retreat jinks only under mode 3
 +		}
 +		SDodge& st = dodgeState[unit->GetId()];
 +		if (frame < st.nextFrame) {
@@ -9896,6 +9901,16 @@ index a44c20b0..ec91a09b 100644
 +		const AIFloat3& pos = unit->GetPos(frame);
 +		const float speed = cdef->GetSpeed();   // elmos per second
 +		const float radius = cdef->GetRadius();
++		// mode 2 (his 11-06: "if we are shooting at the enemy we can try moving side to side a little to throw off
++		// their shots, since they try to lead targets"): a unit with an enemy inside its own reach weaves against
++		// any projectile shooter that reaches it, whether or not it could walk clear of the shell -- the shooter
++		// leads our motion, so a turn while the shell flies is a miss. A step of about its own width, one shell's
++		// flight long.
++		const bool weave = circuit->GetTunable("apex_dodge", 0.f) >= 2.f;
++		const float myReach = cdef->GetMaxRange(CCircuitDef::RangeType::LAND) + radius;
++		bool shooting = false;
++		AIFloat3 tgtPos;
++		float tgtD2 = -1.f;
 +		const SEnemyData* best = nullptr;
 +		float bestCost = 0.f, bestNeed = 0.f, bestTof = 0.f;
 +		bool reached = false;
@@ -9903,12 +9918,19 @@ index a44c20b0..ec91a09b 100644
 +			if (((e.losStatus & SEnemyData::LOS) == 0) || (e.cdef == nullptr) || e.cdef->IsAbleToFly()) {
 +				continue;
 +			}
++			const float d2 = pos.SqDistance2D(e.pos);
++			if (weave && (d2 <= myReach * myReach)) {
++				shooting = true;
++				if ((tgtD2 < 0.f) || (d2 < tgtD2)) {
++					tgtD2 = d2;
++					tgtPos = e.pos;
++				}
++			}
 +			CWeaponDef* wd = e.cdef->GetWeaponDef();
 +			if ((wd == nullptr) || !e.cdef->HasSurfToLand()) {
 +				continue;
 +			}
 +			const float reach = wd->GetRange() + radius;
-+			const float d2 = pos.SqDistance2D(e.pos);
 +			if (d2 > reach * reach) {
 +				continue;
 +			}
@@ -9917,8 +9939,9 @@ index a44c20b0..ec91a09b 100644
 +				continue;
 +			}
 +			const float tof = std::sqrt(d2) / wd->GetProjSpeed();
-+			const float need = radius + 0.5f * wd->GetAoe() + 8.f;
-+			if (speed * tof < need) {
++			const float need = weave ? std::max(12.f, std::min(radius, 40.f))
++					: (radius + 0.5f * wd->GetAoe() + 8.f);
++			if (!weave && (speed * tof < need)) {
 +				continue;
 +			}
 +			if (e.cost > bestCost) {
@@ -9934,6 +9957,53 @@ index a44c20b0..ec91a09b 100644
 +		if (best == nullptr) {
 +			continue;
 +		}
++		// MODE 3, A UNIT ON THE MOVE BENDS ITS HEADING (his 11-06: "say we are moving at 270deg we can alter to
++		// 290deg and avoid a shot"): the shooter leads our velocity, so a turn of a few degrees while the shell flies
++		// moves the impact off us, costs a tank no more than a bot (a 20 degree turn), and keeps the unit going
++		// where it was going -- the bend is a short waypoint ahead, then the queue resumes. Walking in and walking
++		// home (a retreat) alike.
++		if (jinkOn) {
++			springai::AIFloat3 vel;
++			try {
++				vel = unit->GetUnit()->GetVel();   // elmos / frame
++			} catch (const std::exception& e) {
++				continue;
++			}
++			const float vNow = std::sqrt(vel.x * vel.x + vel.z * vel.z);
++			const float vTopF = std::max(speed, 1.f) / FRAMES_PER_SEC;
++			if (vNow > 0.33f * vTopF) {
++				const float tof = std::max(0.4f, std::min(bestTof, 1.0f));
++				const float turnF = 3641.f / std::max(cdef->GetTurnRate(), 1.f);   // 20 degrees
++				if (turnF > tof * FRAMES_PER_SEC * 0.5f) {
++					++dodgeStat.slowTurn;
++					st.nextFrame = frame + int(FRAMES_PER_SEC * tof);
++					continue;
++				}
++				const float h = std::atan2(vel.z, vel.x) + st.side * 0.35f;
++				const float ahead = vNow * FRAMES_PER_SEC * tof + 16.f;
++				AIFloat3 to(pos.x + std::cos(h) * ahead, pos.y, pos.z + std::sin(h) * ahead);
++				to.x = std::max(16.f, std::min(to.x, float(AIFloat3::maxxpos) - 16.f));
++				to.z = std::max(16.f, std::min(to.z, float(AIFloat3::maxzpos) - 16.f));
++				st.side = -st.side;
++				st.nextFrame = frame + int(FRAMES_PER_SEC * tof) + 3;
++				std::vector<float> params = {0.f, float(CMD_MOVE), 0.f, to.x, to.y, to.z};
++				try {
++					unit->CountCmd(9);
++					unit->GetUnit()->ExecuteCustomCommand(CMD_INSERT, std::move(params), UNIT_COMMAND_OPTION_ALT_KEY);
++					++dodgeStat.ordered;
++					++dodgeStat.jinks;
++				} catch (const std::exception& e) {
++				}
++				continue;
++			}
++			// a unit standing to shoot is left alone: our own weapons lose accuracy on the move, and the standing
++			// weave (mode 2) cost more than it saved (24 pairs: damage efficiency 0.94-1.03 -> 0.83-0.89, kills
++			// -2.4k, t -2.2)
++			continue;
++		}
++		if (weave && !shooting) {
++			continue;
++		}
 +		++dodgeStat.dodgeable;
 +		AIFloat3 dir = pos - best->pos;
 +		dir.y = 0.f;
@@ -9941,9 +10011,63 @@ index a44c20b0..ec91a09b 100644
 +		if (len < 1.f) {
 +			continue;
 +		}
-+		float step = 1.6f * bestNeed;
-+		step = std::max(32.f, std::min(step, 120.f));
++		float step = weave ? bestNeed : (1.6f * bestNeed);
++		if (weave) {
++			bestTof = std::max(0.4f, std::min(bestTof, 1.0f));
++		} else {
++			step = std::max(32.f, std::min(step, 120.f));
++		}
++		// A hull that turns slowly cannot step aside in time (his 11-06: "tracked units cant easily dodge, bots can
++		// do it way better"): a unit weaves only if it turns a quarter circle within one step. Bots turn 885-1540
++		// a frame (0.35-0.6 s), vehicles 270-650 (0.8-2 s).
++		// ...and gets moving (his 11-06: "unit acceleration rate also matters"): from rest it covers the step at its
++		// max acceleration until top speed. A gun fixed to the hull ("turret aim speed") must face its target to
++		// fire, so a sideways step stops it shooting: such a unit does not weave.
++		{
++			CWeaponDef* myW = cdef->GetWeaponDef();
++			if ((myW != nullptr) && !myW->IsTurret()) {
++				++dodgeStat.slowTurn;
++				st.nextFrame = frame + FRAMES_PER_SEC * 5;
++				continue;
++			}
++			const float turn90S = 16384.f / std::max(cdef->GetTurnRate(), 1.f) / FRAMES_PER_SEC;
++			const float acc = std::max(cdef->GetMaxAcc(), 0.01f);       // elmos / frame^2
++			const float vTop = std::max(speed, 1.f) / FRAMES_PER_SEC;    // elmos / frame
++			const float dAcc = vTop * vTop / (2.f * acc);
++			const float moveF = (step <= dAcc) ? std::sqrt(2.f * step / acc) : (vTop / acc + (step - dAcc) / vTop);
++			const float stepS = weave ? bestTof : std::max(step / std::max(speed, 1.f), std::min(bestTof, 1.5f));
++			// a weave need not finish its step before the shell lands: the shooter led our old motion, so how far
++			// we drift aside in the flight left after turning is the miss; half our width throws it off
++			bool slow;
++			if (weave) {
++				const float leftF = (stepS - turn90S) * FRAMES_PER_SEC;
++				const float driftE = (leftF <= 0.f) ? 0.f
++						: ((leftF * vTop <= 2.f * dAcc) && (leftF <= vTop / acc)) ? 0.5f * acc * leftF * leftF
++						: (dAcc + (leftF - vTop / acc) * vTop);
++				slow = driftE < 0.5f * radius;
++			} else {
++				slow = turn90S + moveF / FRAMES_PER_SEC > stepS;
++			}
++			if (slow) {
++				++dodgeStat.slowTurn;
++				st.nextFrame = frame + FRAMES_PER_SEC;
++				continue;
++			}
++		}
 +		AIFloat3 to(pos.x - dir.z / len * step * st.side, pos.y, pos.z + dir.x / len * step * st.side);
++		if (weave && (tgtD2 >= 0.f)) {
++			// a step that would leave our range of the nearest enemy we can shoot goes the other way, or not at all
++			const float keep = myReach - radius - 8.f;
++			if (to.SqDistance2D(tgtPos) > keep * keep) {
++				st.side = -st.side;
++				to = AIFloat3(pos.x - dir.z / len * step * st.side, pos.y, pos.z + dir.x / len * step * st.side);
++				if (to.SqDistance2D(tgtPos) > keep * keep) {
++					++dodgeStat.outOfRange;
++					st.nextFrame = frame + int(FRAMES_PER_SEC * bestTof);
++					continue;
++				}
++			}
++		}
 +		to.x = std::max(16.f, std::min(to.x, float(AIFloat3::maxxpos) - 16.f));
 +		to.z = std::max(16.f, std::min(to.z, float(AIFloat3::maxzpos) - 16.f));
 +		st.side = -st.side;
@@ -9960,10 +10084,10 @@ index a44c20b0..ec91a09b 100644
 +	}
 +	if (frame >= dodgeStat.nextLog) {
 +		dodgeStat.nextLog = frame + FRAMES_PER_SEC * 60;
-+		circuit->LOG("apex: dodge-stat t=%i passes=%i checked=%i inReach=%i dodgeable=%i ordered=%i",
-+				circuit->GetTeamId(), dodgeStat.passes, dodgeStat.units, dodgeStat.inReach, dodgeStat.dodgeable,
-+				dodgeStat.ordered);
-+		dodgeStat = SDodgeStat{0, 0, 0, 0, 0, dodgeStat.nextLog};
++		circuit->LOG("apex: dodge-stat t=%i passes=%i checked=%i inReach=%i dodgeable=%i slowTurn=%i ordered=%i jinks=%i outOfRange=%i",
++				circuit->GetTeamId(), dodgeStat.passes, dodgeStat.units, dodgeStat.inReach, dodgeStat.dodgeable, dodgeStat.slowTurn,
++				dodgeStat.ordered, dodgeStat.jinks, dodgeStat.outOfRange);
++		dodgeStat = SDodgeStat{0, 0, 0, 0, 0, dodgeStat.nextLog, 0, 0, 0};
 +	}
 +}
 +
@@ -10161,7 +10285,7 @@ index a44c20b0..ec91a09b 100644
  }
  
  void CMilitaryManager::AddArmyCost(CCircuitUnit* unit)
-@@ -1842,4 +3075,20 @@ CDefenceData::SDefPoint* CMilitaryManager::FindClosestDefPoint(int cluster, cons
+@@ -1842,4 +3196,20 @@ CDefenceData::SDefPoint* CMilitaryManager::FindClosestDefPoint(int cluster, cons
  	return closestPoint;
  }
  
@@ -10183,7 +10307,7 @@ index a44c20b0..ec91a09b 100644
 +
  } // namespace circuit
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603b..8b9b5085 100644
+index c167603b..2ed823d6 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
 @@ -16,12 +16,16 @@
@@ -10470,7 +10594,7 @@ index c167603b..8b9b5085 100644
 +	};
 +	std::unordered_map<int, SDodge> dodgeState;
 +	struct SDodgeStat {
-+		int passes = 0, units = 0, inReach = 0, dodgeable = 0, ordered = 0, nextLog = 0;
++		int passes = 0, units = 0, inReach = 0, dodgeable = 0, ordered = 0, nextLog = 0, slowTurn = 0, jinks = 0, outOfRange = 0;
 +	} dodgeStat;
 +	struct SBirthStat {
 +		int born = 0, retask = 0, joined = 0, created = 0, released = 0, hopeless = 0;
@@ -31043,7 +31167,7 @@ index 5eebb710..abf75fc5 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..8987bb3c 100644
+index a1ac882a..ab6d5099 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -31114,7 +31238,16 @@ index a1ac882a..8987bb3c 100644
  	buildTime    = def->GetBuildTime();
  	captureSpeed = def->IsAbleToCapture() ? def->GetCaptureSpeed() / TEAM_SLOWUPDATE_RATE : 0.f;
  //	altitude     = def->GetWantedHeight();
-@@ -240,9 +252,89 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -228,6 +240,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	isPlane           = !def->IsHoverAttack() && isAbleToFly;
+ 	isStealth         = def->IsStealth();
+ 	isSonarStealth    = def->IsSonarStealth();
++	turnRate          = def->GetTurnRate();  // apex: COB angle units a frame (65536 a full turn)
++	maxAcc            = def->GetMaxAcceleration();  // apex: elmos a frame squared
+ 	isTurnLarge       = (speed / (def->GetTurnRate() + DIV0_SLACK) > 0.09f);  // empirical magic number
+ 	isAbleToCloak     = def->IsAbleToCloak();
+ 	isAbleToRepair    = def->IsAbleToRepair();
+@@ -240,9 +254,89 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -31206,7 +31339,7 @@ index a1ac882a..8987bb3c 100644
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +344,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +346,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -31230,7 +31363,7 @@ index a1ac882a..8987bb3c 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -299,10 +406,34 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -299,10 +408,34 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	WeaponDef* stockDef = def->GetStockpileDef();
  	if (stockDef != nullptr) {
  		AddAttribute(ATTR_TYPE(STOCK));
@@ -31265,7 +31398,7 @@ index a1ac882a..8987bb3c 100644
  	if (!def->IsAbleToAttack()) {
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
-@@ -330,10 +461,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -330,10 +463,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	float bestWpRange = std::numeric_limits<float>::max();
  	float airDps = .0f;
  	float airDmg = .0f;
@@ -31287,7 +31420,7 @@ index a1ac882a..8987bb3c 100644
  	CWeaponDef* bestDGunDef = nullptr;
  	CWeaponDef* bestWpDef = nullptr;
  	WeaponMount* bestDGunMnt = nullptr;
-@@ -355,6 +497,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -355,6 +499,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			continue;
  		}
  
@@ -31305,7 +31438,7 @@ index a1ac882a..8987bb3c 100644
  		float dps = .0f;
  		float dmg = .0f;
  
-@@ -404,12 +557,51 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -404,12 +559,51 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		if (minReloadTime > reloadTime) {
  			minReloadTime = reloadTime;
  		}
@@ -31358,7 +31491,7 @@ index a1ac882a..8987bb3c 100644
  		targetCategory |= weaponCat;
  
  		const float wdAoe = wd->GetAreaOfEffect();
-@@ -420,11 +612,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -420,11 +614,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  //		it = customParams.find("truerange");
  		const float range = /*(it != customParams.end()) ? utils::string_to_float(it->second) : */wd->GetRange();
  
@@ -31383,7 +31516,7 @@ index a1ac882a..8987bb3c 100644
  		canSurfTargetAir |= isAirWeapon;
  
  		const bool isLandWeapon = ((wt != "TorpedoLauncher") || wd->IsSubMissile());
-@@ -460,16 +660,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -460,16 +662,41 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
  				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
  			};
@@ -31428,7 +31561,7 @@ index a1ac882a..8987bb3c 100644
  		airDmg += dmg;
  		airDps += dps;
  		surfDmg += dmg;
-@@ -477,20 +702,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -477,20 +704,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		waterDmg += dmg;
  		waterDps += dps;
  
@@ -31488,7 +31621,7 @@ index a1ac882a..8987bb3c 100644
  		}
  		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
  			float& mr = maxRange[static_cast<RangeT>(RangeType::WATER)];
-@@ -498,6 +760,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -498,6 +762,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
  				maxRangeType = RangeType::WATER;
  			}
@@ -31498,7 +31631,7 @@ index a1ac882a..8987bb3c 100644
  		}
  
  		// FIXME: hasDGun is actually "manual command to fire required". There's "DGun" weapon type,
-@@ -566,6 +831,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -566,6 +833,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		weaponMount = bestWpMnt;
  	}
  
@@ -31527,7 +31660,7 @@ index a1ac882a..8987bb3c 100644
  	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
  	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
  		WeaponDef* wd = def->GetDeathExplosion();
-@@ -618,6 +905,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -618,6 +907,21 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	//       health /= def->GetArmoredMultiple();
  	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
  	const float dps = std::max(std::max(waterDps, surfDps), airDps);
@@ -31549,7 +31682,7 @@ index a1ac882a..8987bb3c 100644
  	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
-@@ -629,6 +931,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -629,6 +933,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			surfThrDmg * sqrtf(health + maxShield * SHIELD_MOD),
  			waterThrDmg * sqrtf(health + maxShield * SHIELD_MOD));
  #endif
@@ -31567,7 +31700,7 @@ index a1ac882a..8987bb3c 100644
  }
  
  CCircuitDef::~CCircuitDef()
-@@ -764,6 +1077,7 @@ void CCircuitDef::SetRange(float range)
+@@ -764,6 +1079,7 @@ void CCircuitDef::SetRange(float range)
  	maxRangeType = RangeType::AIR;
  	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
  		maxRange[rt] = range;
@@ -31575,7 +31708,7 @@ index a1ac882a..8987bb3c 100644
  	}
  }
  
-@@ -772,6 +1086,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
+@@ -772,6 +1088,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
  	// TODO: Asserts >= 0?
  	minRange = std::min(minRange, range);
  	maxRange[static_cast<RangeT>(type)] = range;
@@ -31584,7 +31717,7 @@ index a1ac882a..8987bb3c 100644
  		maxRangeType = type;
  	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a9..a77a6db1 100644
+index cd0b54a9..36906baf 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -15,6 +15,8 @@
@@ -31732,8 +31865,12 @@ index cd0b54a9..a77a6db1 100644
  	void SetIsSonar(bool value) { isSonar = value ; }
  	bool IsSonar() const { return isSonar; }
  	void SetIsDecoy(bool value) { isDecoy = value; }
-@@ -339,6 +428,13 @@ public:
+@@ -337,8 +426,17 @@ public:
+ 
+ 	float GetHealth()       const { return health; }
  	float GetSpeed()        const { return speed; }
++	float GetTurnRate()     const { return turnRate; }  // apex: COB angle units a frame
++	float GetMaxAcc()       const { return maxAcc; }  // apex: elmos a frame squared
  	float GetLosRadius()    const { return losRadius; }
  	float GetSonarRadius()  const { return sonarRadius; }
 +	// CMilitaryManager sets isRadar/isJammer only inside the IMMOBILE branch of
@@ -31746,7 +31883,7 @@ index cd0b54a9..a77a6db1 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -346,13 +442,57 @@ public:
+@@ -346,13 +444,57 @@ public:
  	float GetExtractsM()    const { return extractsM; }
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
@@ -31804,7 +31941,7 @@ index cd0b54a9..a77a6db1 100644
  	void SetSelfDHP(float value) { selfDHP = value; }
  	float GetSelfDHP() const { return selfDHP; }
  
-@@ -405,17 +545,30 @@ private:
+@@ -405,17 +547,30 @@ private:
  	springai::WeaponMount* shieldMount;
  	springai::WeaponMount* weaponMount;
  	float pwrDmg, pwrMod;  // ally damage
@@ -31835,7 +31972,7 @@ index cd0b54a9..a77a6db1 100644
  	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
  	float shieldRadius;
  	float maxShield;
-@@ -435,6 +588,7 @@ private:
+@@ -435,6 +590,7 @@ private:
  
  	bool isAttacker : 1;
  	bool isAlwaysHit : 1;  // FIXME: calc per weapon
@@ -31843,7 +31980,7 @@ index cd0b54a9..a77a6db1 100644
  	bool hasDGun : 1;
  
  	// TODO: std::bitset<2>
-@@ -478,6 +632,7 @@ private:
+@@ -478,6 +634,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -31851,8 +31988,12 @@ index cd0b54a9..a77a6db1 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,18 +643,47 @@ private:
+@@ -486,20 +643,51 @@ private:
+ 
+ 	float health;
  	float speed;
++	float turnRate;
++	float maxAcc;
  	float losRadius;
  	float sonarRadius;
 +	float radarRadius;
@@ -33267,10 +33408,10 @@ index cfe59bcc..25cd03cb 100644
  
  	CCircuitDef::AttrM attr;
 diff --git a/src/circuit/unit/CircuitWDef.cpp b/src/circuit/unit/CircuitWDef.cpp
-index 8c1b10a2..a0d0ebf8 100644
+index 8c1b10a2..7c09f25c 100644
 --- a/src/circuit/unit/CircuitWDef.cpp
 +++ b/src/circuit/unit/CircuitWDef.cpp
-@@ -35,6 +35,12 @@ CWeaponDef::CWeaponDef(WeaponDef* def, Resource* resM, Resource* resE)
+@@ -35,6 +35,13 @@ CWeaponDef::CWeaponDef(WeaponDef* def, Resource* resM, Resource* resE)
  	isHigh = (wt == "StarburstLauncher")
  			|| ((wt == "MissileLauncher") && (def->GetTrajectoryHeight() > 0.5f))  // 1.0 ~ 45 deg
  			|| ((wt == "Cannon") && (def->GetHighTrajectory() >= 1));
@@ -33280,14 +33421,15 @@ index 8c1b10a2..a0d0ebf8 100644
 +			|| (wt == "AircraftBomb") || (wt == "StarburstLauncher")
 +			|| ((wt == "MissileLauncher") && !def->IsTracks());
 +	isDodgeable = kind && (projSpeed > 1.f);
++	isTurret = def->IsTurret();
  }
  
  CWeaponDef::~CWeaponDef()
 diff --git a/src/circuit/unit/CircuitWDef.h b/src/circuit/unit/CircuitWDef.h
-index 5efd730a..dfb8081b 100644
+index 5efd730a..1989d771 100644
 --- a/src/circuit/unit/CircuitWDef.h
 +++ b/src/circuit/unit/CircuitWDef.h
-@@ -32,6 +32,10 @@ public:
+@@ -32,6 +32,11 @@ public:
  	float GetFireTime() const { return fireTime; }
  	bool IsStockpile() const { return isStockpile; }
  	bool IsHighTrajectory() const { return isHigh; }
@@ -33295,14 +33437,16 @@ index 5efd730a..dfb8081b 100644
 +	// lightning bolt, a hitscan rifle or a homing missile cannot; a shell, a rocket, a bomb or a D-gun ball can)
 +	float GetProjSpeed() const { return projSpeed; }
 +	bool IsDodgeable() const { return isDodgeable; }
++	bool IsTurret() const { return isTurret; }  // apex: fires off its own facing (a fixed gun must face the target)
  
  private:
  	springai::WeaponDef* def;  // owner
-@@ -43,6 +47,8 @@ private:
+@@ -43,6 +48,9 @@ private:
  	float fireTime;
  	bool isStockpile : 1;
  	bool isHigh : 1;
 +	bool isDodgeable : 1;
++	bool isTurret : 1;
 +	float projSpeed;
  };
  

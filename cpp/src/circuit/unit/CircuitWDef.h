@@ -36,6 +36,7 @@ public:
 	// lightning bolt, a hitscan rifle or a homing missile cannot; a shell, a rocket, a bomb or a D-gun ball can)
 	float GetProjSpeed() const { return projSpeed; }
 	bool IsDodgeable() const { return isDodgeable; }
+	bool IsTurret() const { return isTurret; }  // apex: fires off its own facing (a fixed gun must face the target)
 
 private:
 	springai::WeaponDef* def;  // owner
@@ -48,6 +49,7 @@ private:
 	bool isStockpile : 1;
 	bool isHigh : 1;
 	bool isDodgeable : 1;
+	bool isTurret : 1;
 	float projSpeed;
 };
 

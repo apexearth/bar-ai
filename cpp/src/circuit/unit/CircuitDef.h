@@ -426,6 +426,8 @@ public:
 
 	float GetHealth()       const { return health; }
 	float GetSpeed()        const { return speed; }
+	float GetTurnRate()     const { return turnRate; }  // apex: COB angle units a frame
+	float GetMaxAcc()       const { return maxAcc; }  // apex: elmos a frame squared
 	float GetLosRadius()    const { return losRadius; }
 	float GetSonarRadius()  const { return sonarRadius; }
 	// CMilitaryManager sets isRadar/isJammer only inside the IMMOBILE branch of
@@ -641,6 +643,8 @@ private:
 
 	float health;
 	float speed;
+	float turnRate;
+	float maxAcc;
 	float losRadius;
 	float sonarRadius;
 	float radarRadius;
