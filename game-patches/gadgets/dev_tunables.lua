@@ -346,7 +346,6 @@ local NAMES = {
 	"apex_learned_risk",     -- risk.as: the learned job risk replaces the exposure charge and trip risk (0)
 	"apex_seat_plan",        -- plan.as: the seat plan steers builders (1) or only logs (0)
 	"apex_con_prio",         -- lift.as: constructors on over-share kinds work at low build priority
-	"apex_raid_caution",     -- posture.as: raid pack size from income (1) or the config (0)
 	"apex_plant_free",       -- want_plant.as CopyWaived: a plant copy is never refused (0)
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
 	"apex_open_race",        -- openrace.as + production.as con floor/e-stall + budget.as hold ledger + DefendTask/GuardTask.cpp catchability: con vs fighter on one clock (0)
@@ -506,8 +505,6 @@ local NAMES = {
 	"apex_assemble",          -- AttackTask.cpp: pre-contact assembly gate master switch (1)
 	"apex_assemble_secs",     -- AttackTask.cpp: max seconds to wait for stragglers (8)
 	"apex_siege_fear_frac",   -- SquadTask.cpp: siege row's fear radius as a share of its own range (0.9)
-	"apex_raid_pack",         -- posture.as: base raid-pack promotion power pre-T2 (8)
-	"apex_raid_per_income",   -- posture.as: raid pack grows by this per metal income (0.2)
 	"apex_stance",            -- stance.as: master switch for stance budget/scout effects (1)
 	"apex_retreat_cost_secs", -- posture.as: cost-vs-income no-retreat bar, 0 = off
 	"apex_bleed_engage",      -- deathledger.as: caution gain per forward-bleed fraction (2)

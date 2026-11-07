@@ -598,7 +598,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// RAID task per unit bypassed the pool (Defend(RAID, quota.raid.min)) that
 		// holds them until they add up to that power and promotes them together,
 		// so they trickled out alone instead of massing into a raid pack.
-		// UpdateRaidCaution raises the promotion floor further while still on T1.
 		return NoteElect("fodder.stock", aiMilitaryMgr.DefaultMakeTask(unit));
 	}
 	// T3 CHARGERS GO FOR THE BASE. In the massing pool they inherited the

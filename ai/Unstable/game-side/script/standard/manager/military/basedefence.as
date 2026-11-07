@@ -47,7 +47,6 @@ CCircuitDef@ JammerDef(const CCircuitDef@ by)
 // SkirmishAI.dll, which predates it.
 const float JAMMER_COVER = 900.f;
 float RAID_MIN_EARLY() { return ai.GetTunable("apex_raid_min_early", TUNE_RAID_MIN_EARLY); }
-float gRaidMinStock = -1.f;
 
 //------------------------------------------------------------------------------
 // THE APPROACH SENSOR. apexearth 2026-08-19, watching a heavy park outside his

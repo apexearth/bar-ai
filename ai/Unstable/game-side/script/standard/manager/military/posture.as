@@ -36,26 +36,6 @@ bool ForwardMostFence(AIFloat3& out at)
 }
 
 
-void UpdateRaidCaution()
-{
-	if (ai.GetTunable("apex_raid_caution", TUNE_RAID_CAUTION) <= 0.f)
-		return;   // the config's raid size stands (the stock-fight A/B, his 11-06)
-	if (gRaidMinStock < 0.f)
-		gRaidMinStock = aiMilitaryMgr.quota.raid.min;   // capture before overwriting
-	// RAID_MIN_EARLY=45 was "hold them home" made permanent: ~2,600 metal of
-	// raiders had to pool before ONE raid could leave pre-T2, so raiding was
-	// effectively abolished -- census f4 near-zero all day while the enemy
-	// raided us freely. apexearth 2026-08-20: "We can't let OUR constructors
-	// be harassed and killed if we aren't going to harass and kill theirs...
-	// tit for tat." A raid PACK is 4-6 raiders: base 8 power plus a fifth of
-	// income, so packs grow with the economy instead of never forming.
-	const float pack = ai.GetTunable("apex_raid_pack", TUNE_RAID_PACK)
-			+ Eco::MInc() * ai.GetTunable("apex_raid_per_income", TUNE_RAID_PER_INCOME);
-	const float want = Factory::gHaveT2 ? gRaidMinStock : pack;
-	if (aiMilitaryMgr.quota.raid.min != want)
-		aiMilitaryMgr.quota.raid.min = want;
-}
-
 // The engage margin each instance fights at, raised by the
 // caution learned from where our metal is dying. The team push that used to
 // override this (team army summed against the enemy we could SEE, entered at
@@ -616,7 +596,6 @@ void UpdatePosture()
 	if (StockQuiet("posture"))
 		return;   // what follows sets the army's bars, holds and pushes
 	{ double _t = Perf::T0(); UpdateGifts(); Perf::Add("post.gifts", _t); }
-	{ double _t = Perf::T0(); UpdateRaidCaution(); Perf::Add("post.raidcaution", _t); }
 	{ double _t = Perf::T0(); UpdateMassing(); Perf::Add("post.massing", _t); }
 	{ double _t = Perf::T0(); ReleaseHold(); Perf::Add("post.hold", _t); }
 	// Last, so it is the final word on the quota and the posture.
