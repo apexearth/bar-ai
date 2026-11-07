@@ -517,6 +517,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const double _tOr = Perf::T0();
 		IUnitTask@ orph0 = Requests::OrphanOf(w.def);
 		Perf::Add("xw.orph", _tOr);
+		if ((orph0 !is null) && !Requests::StandsInFor(w.def, w.pos, orph0.GetBuildPos()))
+			@orph0 = null;
 		const bool xfClaim = (orph0 !is null) && (w.kind == WK_MEX) && ExpandFarOn()
 				&& (orph0.target is null);
 		if ((orph0 !is null) && (xfClaim ? ExpandFarAdoptOrphan(unit, w, orph0)
@@ -533,7 +535,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const double _tPe = Perf::T0();
 		CCircuitUnit@ pf0 = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
 		Perf::Add("xw.pend", _tPe);
-		if ((pf0 !is null)
+		if ((pf0 !is null) && Requests::StandsInFor(w.def, w.pos, pf0.GetPos(ai.frame))
 			&& (Builder::ThreatFor(unit, pf0.GetPos(ai.frame))
 				<= Builder::CON_THREAT_VETO)
 			&& AdoptWorthDetour(unit, w, pf0.GetPos(ai.frame),

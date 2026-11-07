@@ -646,6 +646,20 @@ bool FrameStalled(IUnitTask@ t)
 
 // The crewless frame of this def nearest `spot`. The orphan register only
 // knows frames whose REQUEST died; a live task with no crew is not in it.
+// A gun guards its own ground: one of this def at `at` stands in for one ordered at `site` only within the
+// reach it covers there (11-07: 16-27% of mex-guard pushes were handed an unmanned tower order across the map).
+bool StandsInFor(const CCircuitDef@ d, const AIFloat3& in site, const AIFloat3& in at)
+{
+	if ((d is null) || !OnMap(site) || !OnMap(at))
+		return true;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id) || Catalog::gMobile[id] || (Catalog::gMaxRange[id] <= 0.f))
+		return true;
+	const float r = (Catalog::gLandRange[id] > 0.f) ? Market::MexCoverR(Catalog::gLandRange[id])
+			: Catalog::gMaxRange[id];
+	return site.distance2D(at) <= r;
+}
+
 IUnitTask@ EmptyFrameOf(const CCircuitDef@ want, const AIFloat3& in spot)
 {
 	if (want is null)
@@ -661,6 +675,8 @@ IUnitTask@ EmptyFrameOf(const CCircuitDef@ want, const AIFloat3& in spot)
 			continue;
 		if ((RingSeen(t) > 0.f) && !FrameStalled(t))
 			continue;   // the ring is on it and it is moving
+		if (!StandsInFor(want, spot, t.GetBuildPos()))
+			continue;
 		const float d = OnMap(spot) ? spot.distance2D(t.GetBuildPos()) : 0.f;
 		if ((best is null) || (d < bestD)) {
 			@best = t;

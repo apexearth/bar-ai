@@ -29,6 +29,11 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
 array<float> gIncWalk0(32001, 0.f);   // the walk the job started with (TUNE_HOIST_WAITS prices what is already paid)
+// The job is a gun an emergency ordered (cover, aa, defpanic). The market prices it far under the draw (a mex
+// guard at v=10 against a mex at 220), so the next ordinary election took the hand off it: 11-07, 22% of mex-guard
+// pushes were drawn off after a median 18-22 s, half of those never got a gun. Only another emergency moves it.
+array<bool> gIncGun(32001, false);
+int gGunHeldN = 0;
 
 // A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
 void DecideIdGone(int id)
@@ -38,6 +43,7 @@ void DecideIdGone(int id)
 	@gIncTask[id] = null;
 	gIncVal[id] = 0.f;
 	gIncWalk0[id] = 0.f;
+	gIncGun[id] = false;
 	gLastDecideAt[id] = -30000;
 	gYoungN[id] = 0;
 	gWkExpoAt[id] = -30000;
@@ -3388,7 +3394,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				if (hoistWaits) {
 					++gHoistWaitN;
 				}
-				const bool dropped = !onCrew && !hoistWaits;
+				const bool gunHeld = !hoistWaits && gIncGun[uidk] && OnMap(ip) && !Builder::SiteHot(ip);
+				if (gunHeld)
+					++gGunHeldN;
+				const bool dropped = !onCrew && !hoistWaits && !gunHeld;
 				if (dropped) {
 					if (Requests::OrderReleaseOn()) {
 						const int li = Requests::LiveIndex(inc);
@@ -3406,7 +3415,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						AiLog("apex: keep-job t=" + ai.teamId + " " + unit.circuitDef.GetName()
 							+ " #" + unit.id + " v=" + formatFloat(gIncVal[uidk] * 1000.f, "", 0, 2)
 							+ " over " + KindName(top.kind) + " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
-							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN + " sameType=" + gSameTypeKeep);
+							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN + " gunHeld=" + gGunHeldN
+							+ " sameType=" + gSameTypeKeep);
 					}
 					return inc;
 				}
@@ -3627,6 +3637,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
 				gIncGain[int(unit.id)] = ranked[i].gain;
+				gIncGun[int(unit.id)] = (depth == 0)
+						&& ((why == "cover") || (why == "aa") || (why == "defpanic"));
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
 				const AIFloat3 tp0 = t.GetBuildPos();
