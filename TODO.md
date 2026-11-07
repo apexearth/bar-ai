@@ -61,6 +61,7 @@ text: `git log -p TODO.md`.
 | Play | His date | In one line |
 |---|---|---|
 | [glacier-two-lanes](todo/glacier-two-lanes.md) | 11-03 | wall one approach, push down the other |
+| [walls-funnel](todo/walls-funnel.md) | 11-06 | walls that funnel their army into a gap and slow vehicle raiders |
 | [squad-judged-record](todo/squad-judged-record.md) | 09-16 | a squad's record against a unit |
 | [formation-spacing-by-type](todo/formation-spacing-by-type.md) | 10-11 | spacing and squad membership per type |
 | [metal-maps](todo/metal-maps.md) | 10-08 | an extractor farm on metal maps |
