@@ -35,6 +35,41 @@ array<float> gIncWalk0(32001, 0.f);   // the walk the job started with (TUNE_HOI
 array<bool> gIncGun(32001, false);
 int gGunHeldN = 0;
 
+// cpgate-stat: elections by a hand standing within tower reach of an unguarded mex, by how far the cover push
+// got: 0 another push, 1 no plant framed, 2 no defence want, 3 want not at a mex in reach, 4 interior site,
+// 5 floor, 6 covered, 7 ledger has a gun, 8 bill over the bar, 9 pushed.
+array<int> gCpN(10, 0);
+int gCpChances = 0;
+int gCpLogAt = 0;
+int gCpBillN = 0;
+int gCpLightN = 0;   // pushes that took the light tower in place of a heavy gun over the bar
+bool CpChance(CCircuitUnit@ unit)
+{
+	const float near = Brain::LightTowerRange();
+	const AIFloat3 at = NearestMex(unit.GetPos(ai.frame), near);
+	return OnMap(at) && MexUnguardedInReach(at, near);
+}
+int CpAt(int stage, int s)
+{
+	if ((stage >= 2) && (s > stage))
+		return s;
+	return stage;
+}
+void CpNote(int stage)
+{
+	if ((stage >= 0) && (stage < int(gCpN.length()))) {
+		++gCpChances;
+		++gCpN[stage];
+	}
+	if (ai.frame < gCpLogAt)
+		return;
+	gCpLogAt = ai.frame + 60 * SECOND;
+	string s = "apex: cpgate-stat t=" + ai.teamId + " chances=" + gCpChances + " light=" + gCpLightN + " |";
+	for (uint i = 0; i < gCpN.length(); ++i)
+		s += " " + gCpN[i];
+	AiLog(s);
+}
+
 // A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
 void DecideIdGone(int id)
 {
@@ -2888,6 +2923,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// it is asked first. Under apex_mex_basic the mex just built is guarded before the next is claimed: with the
 	// expansion head over 1 the next mex came first every time, and raiders took the last one (10-23, Comet: 15
 	// spots raided from minute 2.7, the first tower at 4.8, none inside cover of a raided spot).
+	int cpStage = CpChance(unit) ? 1 : -1;
+	if (cpStage > 0) {
+		if (aaPanic || superPush || convertPush || coverPush)
+			cpStage = 0;
+		else if (!PlantFramed())
+			cpStage = 1;
+		else
+			cpStage = 2;
+	}
 	if (!aaPanic && !superPush && !convertPush && !coverPush && (!mexOnList || MexBasicOn())
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f) && !StrikeHoldsDefence()
 		&& PlantFramed())
@@ -2902,6 +2946,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			Want@ cw = ranked[ri];
 			if ((cw.kind != WK_PROTECT) || (cw.spotId != PROT_DEF))
 				continue;
+			cpStage = CpAt(cpStage, 3);
 			// REVERTED. Retargeting the want to the nearest mex in reach was
 			// mine tonight and it was never shown to help -- mex coverage went
 			// 83% to 85%, inside the run-to-run spread -- while it demonstrably
@@ -2939,8 +2984,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				cw.pos = uAt;
 			if ((!SiteIsMex(cw.pos) && !scouted) || (uAt.distance2D(cw.pos) > near))
 				continue;
+			cpStage = CpAt(cpStage, 4);
 			if ((cw.def !is null) && InteriorGunSite(int(cw.def.id), cw.pos))
 				continue;
+			cpStage = CpAt(cpStage, 5);
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
 			// A mex's FIRST gun is the basic defence, not the gun-push head's to scale (apex_mex_basic): the
@@ -2951,9 +2998,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				floorHere *= DefMeasuredPressure(DefMeasuredAt(cw.pos));
 			if ((floorHere <= 1.f) || (!basic && (GunpCount(1) < 1)))
 				continue;
+			cpStage = CpAt(cpStage, 6);
 			const float coverHere = CoverAt(cw.pos);
 			if (coverHere >= floorHere)
 				continue;
+			cpStage = CpAt(cpStage, 7);
 			// THE LEDGER, NOT THE FINISHED FIELD. CoverAt reads standing guns,
 			// so while the first tower was a frame the jump fired again every
 			// election: the commander stacked seven light towers on one mex
@@ -2962,6 +3011,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// 7m"). A gun ordered within reach of the site's mex is its gun.
 			if (!MexUnguardedInReach(cw.pos, near))
 				continue;
+			cpStage = CpAt(cpStage, 8);
 			// ...AND ONLY ONCE THE BASE CAN AFFORD IT (apexearth 2026-08-27:
 			// "turrets aren't bad to have but usually thats made after we have
 			// our basic base set up. mexes/energy -> T1 lab -> more energy ->
@@ -2984,9 +3034,27 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const int cd = int(cw.def.id);
 				const float bill = Catalog::gCostM[cd] + Catalog::gCostE[cd]
 						* EPriceCostAt(cw.buildSec, Catalog::gCostE[cd]);
-				if (bill > pushCap)
-					continue;
+				// THE ASK IS A SENTRY. The site's best-priced gun is often a heavy one (11-07, sampled bar refusals:
+				// Dragon's Claw 340 m, Beamer 190, HLT 440 against caps of 76-348), and the bar refused the push
+				// whole: 41-47% of chances after minute 6. The light tower is the gun the push exists to buy.
+				if (bill > pushCap) {
+					CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+					float lBill = -1.f;
+					if ((light !is null) && (light !is cw.def) && unit.circuitDef.CanBuild(light)) {
+						const int ld = int(light.id);
+						lBill = Catalog::gCostM[ld] + Catalog::gCostE[ld] * EPriceCostAt(cw.buildSec, Catalog::gCostE[ld]);
+					}
+					if ((lBill < 0.f) || (lBill > pushCap)) {
+						if ((++gCpBillN % 8) == 1)
+							AiLog("apex: cpgate-bill t=" + ai.teamId + " " + cw.def.GetName() + " bill=" + int(bill)
+								+ " light=" + int(lBill) + " cap=" + int(pushCap));
+						continue;
+					}
+					@cw.def = light;
+					++gCpLightN;
+				}
 			}
+			cpStage = CpAt(cpStage, 9);
 			if (ri > 0) {
 				ranked.removeAt(ri);
 				ranked.insertAt(0, cw);
@@ -3014,6 +3082,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	CpNote(cpStage);
 	// OUT OF METAL THE COMMANDER GETS MORE (his 2026-10-05). His best-priced
 	// claim or reclaim is taken; its risk price and the first-gun rule stand.
 	if (!aaPanic && !superPush && !convertPush && !coverPush
