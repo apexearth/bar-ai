@@ -346,6 +346,7 @@ local NAMES = {
 	"apex_learned_risk",     -- risk.as: the learned job risk replaces the exposure charge and trip risk (0)
 	"apex_seat_plan",        -- plan.as: the seat plan steers builders (1) or only logs (0)
 	"apex_con_prio",         -- lift.as: constructors on over-share kinds work at low build priority
+	"apex_raid_caution",     -- posture.as: raid pack size from income (1) or the config (0)
 	"apex_plant_free",       -- want_plant.as CopyWaived: a plant copy is never refused (0)
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
 	"apex_open_race",        -- openrace.as + production.as con floor/e-stall + budget.as hold ledger + DefendTask/GuardTask.cpp catchability: con vs fighter on one clock (0)

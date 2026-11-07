@@ -17,6 +17,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <unordered_map>
 
 namespace circuit {
 
@@ -393,6 +394,17 @@ private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
 	IUnitTask* BirthDefendTask(CCircuitUnit* unit);
 	void LogBirthStat();
+	// apex_dodge (his 11-06: "dodges shots while fighting"): a fighting ground unit inside the reach of a seen
+	// enemy whose shot it can outrun sidesteps across the line of fire, then resumes its orders.
+	void DodgeUpdate();
+	struct SDodge {
+		int nextFrame = 0;
+		float side = 1.f;
+	};
+	std::unordered_map<int, SDodge> dodgeState;
+	struct SDodgeStat {
+		int passes = 0, units = 0, inReach = 0, dodgeable = 0, ordered = 0, nextLog = 0;
+	} dodgeStat;
 	struct SBirthStat {
 		int born = 0, retask = 0, joined = 0, created = 0, released = 0, hopeless = 0;
 		int pulled = 0, pulledRet = 0, wdSkip = 0, consSkip = 0, consRedir = 0, ansSkip = 0;

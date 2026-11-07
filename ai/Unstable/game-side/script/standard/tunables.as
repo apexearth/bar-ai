@@ -300,6 +300,7 @@ const float TUNE_INCOMING_NOTICE_R = 4500.f;
 // RAID_MIN_EARLY=45 was "hold them home" made permanent: ~2,600 metal of
 //   raiders had to pool before ONE raid could leave pre-T2,...
 const float TUNE_RAID_PACK = 8.f;
+const float TUNE_RAID_CAUTION = 1.f;   // [toggle 0/1] posture.as UpdateRaidCaution: the raid pack size before T2 is set from income (1) or the config's quota.raid stands (0)
 
 // [ratio] -- Raid packs grow with the economy: pack power is the base plus
 //   income times this, so packs form instead of never reaching a fixed bar.

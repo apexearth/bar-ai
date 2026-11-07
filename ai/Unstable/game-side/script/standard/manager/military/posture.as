@@ -38,6 +38,8 @@ bool ForwardMostFence(AIFloat3& out at)
 
 void UpdateRaidCaution()
 {
+	if (ai.GetTunable("apex_raid_caution", TUNE_RAID_CAUTION) <= 0.f)
+		return;   // the config's raid size stands (the stock-fight A/B, his 11-06)
 	if (gRaidMinStock < 0.f)
 		gRaidMinStock = aiMilitaryMgr.quota.raid.min;   // capture before overwriting
 	// RAID_MIN_EARLY=45 was "hold them home" made permanent: ~2,600 metal of

@@ -42,6 +42,8 @@
 #include "terrain/path/PathFinder.h"
 #include "terrain/path/QueryPathMulti.h"
 #include "unit/enemy/EnemyUnit.h"
+#include "unit/CircuitWDef.h"
+#include "Sim/Units/CommandAI/Command.h"  // CMD_INSERT, CMD_MOVE (DodgeUpdate)
 #include <algorithm>
 #include <map>
 #include <string>
@@ -616,6 +618,7 @@ void CMilitaryManager::Init()
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommHoldFire, this), FRAMES_PER_SEC, offset + 5, "comHold");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::LogBirthStat, this), FRAMES_PER_SEC * 60, offset + 6, "birthStat");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::JoinStatTick, this), FRAMES_PER_SEC, offset + 7, "joinWin");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::DodgeUpdate, this), 6, offset + 9, "dodge");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
@@ -2661,6 +2664,112 @@ std::string CMilitaryManager::StockArmyStat()
 		s += " our_air=on fliers=" + utils::int_to_string(fliers) + " air_tasks=[" + list(air) + "]";
 	}
 	return s + " " + circuit->TakeStockLeaks();
+}
+
+// DODGING (his 11-06: a friend's bully AI "dodges shots while fighting"). The AI interface shows no projectile,
+// so the shot is predicted, not seen: an enemy in LOS whose main weapon reaches us fires a shell that takes
+// distance / speed seconds to land, and a unit that can walk its own radius plus half the splash in that time
+// steps across the line of fire. The step goes in FRONT of the unit's orders (CMD_INSERT at 0), so the attack
+// resumes once it lands; the side alternates so the unit weaves about its spot instead of drifting off it.
+// Beams, lightning, rifles and homing missiles are never dodged; a unit gets one step per its own step time.
+void CMilitaryManager::DodgeUpdate()
+{
+	if (circuit->GetTunable("apex_dodge", 0.f) <= 0.f) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	++dodgeStat.passes;
+	const std::vector<SEnemyData>& foes = circuit->GetEnemyManager()->GetHostileDatas();
+	for (auto& kv : circuit->GetTeamUnits()) {
+		CCircuitUnit* unit = kv.second;
+		if ((unit == nullptr) || !unit->IsFinished() || !circuit->IsStockCtl(unit)) {
+			continue;
+		}
+		CCircuitDef* cdef = unit->GetCircuitDef();
+		if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsAbleToFly() || cdef->IsBuilder()) {
+			continue;
+		}
+		IUnitTask* task = unit->GetTask();
+		if ((task == nullptr) || (task->GetType() != IUnitTask::Type::FIGHTER)) {
+			continue;   // a retreat walks home; an idle unit is not in a fight
+		}
+		SDodge& st = dodgeState[unit->GetId()];
+		if (frame < st.nextFrame) {
+			continue;
+		}
+		++dodgeStat.units;
+		const AIFloat3& pos = unit->GetPos(frame);
+		const float speed = cdef->GetSpeed();   // elmos per second
+		const float radius = cdef->GetRadius();
+		const SEnemyData* best = nullptr;
+		float bestCost = 0.f, bestNeed = 0.f, bestTof = 0.f;
+		bool reached = false;
+		for (const SEnemyData& e : foes) {
+			if (((e.losStatus & SEnemyData::LOS) == 0) || (e.cdef == nullptr) || e.cdef->IsAbleToFly()) {
+				continue;
+			}
+			CWeaponDef* wd = e.cdef->GetWeaponDef();
+			if ((wd == nullptr) || !e.cdef->HasSurfToLand()) {
+				continue;
+			}
+			const float reach = wd->GetRange() + radius;
+			const float d2 = pos.SqDistance2D(e.pos);
+			if (d2 > reach * reach) {
+				continue;
+			}
+			reached = true;
+			if (!wd->IsDodgeable()) {
+				continue;
+			}
+			const float tof = std::sqrt(d2) / wd->GetProjSpeed();
+			const float need = radius + 0.5f * wd->GetAoe() + 8.f;
+			if (speed * tof < need) {
+				continue;
+			}
+			if (e.cost > bestCost) {
+				bestCost = e.cost;
+				best = &e;
+				bestNeed = need;
+				bestTof = tof;
+			}
+		}
+		if (reached) {
+			++dodgeStat.inReach;
+		}
+		if (best == nullptr) {
+			continue;
+		}
+		++dodgeStat.dodgeable;
+		AIFloat3 dir = pos - best->pos;
+		dir.y = 0.f;
+		const float len = std::sqrt(dir.x * dir.x + dir.z * dir.z);
+		if (len < 1.f) {
+			continue;
+		}
+		float step = 1.6f * bestNeed;
+		step = std::max(32.f, std::min(step, 120.f));
+		AIFloat3 to(pos.x - dir.z / len * step * st.side, pos.y, pos.z + dir.x / len * step * st.side);
+		to.x = std::max(16.f, std::min(to.x, float(AIFloat3::maxxpos) - 16.f));
+		to.z = std::max(16.f, std::min(to.z, float(AIFloat3::maxzpos) - 16.f));
+		st.side = -st.side;
+		// the next step once this one has landed: the walk, never quicker than the shot it answers
+		const float walkS = step / std::max(speed, 1.f);
+		st.nextFrame = frame + int(FRAMES_PER_SEC * std::max(walkS, std::min(bestTof, 1.5f))) + 3;
+		std::vector<float> params = {0.f, float(CMD_MOVE), 0.f, to.x, to.y, to.z};
+		try {
+			unit->CountCmd(9);
+			unit->GetUnit()->ExecuteCustomCommand(CMD_INSERT, std::move(params), UNIT_COMMAND_OPTION_ALT_KEY);
+			++dodgeStat.ordered;
+		} catch (const std::exception& e) {
+		}
+	}
+	if (frame >= dodgeStat.nextLog) {
+		dodgeStat.nextLog = frame + FRAMES_PER_SEC * 60;
+		circuit->LOG("apex: dodge-stat t=%i passes=%i checked=%i inReach=%i dodgeable=%i ordered=%i",
+				circuit->GetTeamId(), dodgeStat.passes, dodgeStat.units, dodgeStat.inReach, dodgeStat.dodgeable,
+				dodgeStat.ordered);
+		dodgeStat = SDodgeStat{0, 0, 0, 0, 0, dodgeStat.nextLog};
+	}
 }
 
 void CMilitaryManager::LogBirthStat()

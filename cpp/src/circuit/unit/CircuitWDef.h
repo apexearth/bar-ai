@@ -32,6 +32,10 @@ public:
 	float GetFireTime() const { return fireTime; }
 	bool IsStockpile() const { return isStockpile; }
 	bool IsHighTrajectory() const { return isHigh; }
+	// apex: the shot's speed in elmos per second, and whether its kind can ever be side-stepped (a beam, a
+	// lightning bolt, a hitscan rifle or a homing missile cannot; a shell, a rocket, a bomb or a D-gun ball can)
+	float GetProjSpeed() const { return projSpeed; }
+	bool IsDodgeable() const { return isDodgeable; }
 
 private:
 	springai::WeaponDef* def;  // owner
@@ -43,6 +47,8 @@ private:
 	float fireTime;
 	bool isStockpile : 1;
 	bool isHigh : 1;
+	bool isDodgeable : 1;
+	float projSpeed;
 };
 
 } // namespace circuit

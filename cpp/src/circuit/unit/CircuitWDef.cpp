@@ -35,6 +35,12 @@ CWeaponDef::CWeaponDef(WeaponDef* def, Resource* resM, Resource* resE)
 	isHigh = (wt == "StarburstLauncher")
 			|| ((wt == "MissileLauncher") && (def->GetTrajectoryHeight() > 0.5f))  // 1.0 ~ 45 deg
 			|| ((wt == "Cannon") && (def->GetHighTrajectory() >= 1));
+
+	projSpeed = def->GetProjectileSpeed() * FRAMES_PER_SEC;  // the engine keeps it per frame
+	const bool kind = (wt == "Cannon") || (wt == "EmgCannon") || (wt == "LaserCannon") || (wt == "DGun")
+			|| (wt == "AircraftBomb") || (wt == "StarburstLauncher")
+			|| ((wt == "MissileLauncher") && !def->IsTracks());
+	isDodgeable = kind && (projSpeed > 1.f);
 }
 
 CWeaponDef::~CWeaponDef()
