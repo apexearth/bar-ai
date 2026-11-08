@@ -150,6 +150,13 @@ void PlanSet(int plan, const string why)
 		Say("plan -> " + NgName(plan) + " (" + why + ")");
 }
 
+// Greed, deep greed and turtle are played only when a player sets them (his 11-08: never in a 1v1, "probably never
+// unless specifically chosen by a player"); a player's 1v1 against a greeding bot was "boring".
+bool PlanPassive(int p)
+{
+	return (p == NG_GREED) || (p == NG_GREED_DEEP) || (p == NG_TURTLE);
+}
+
 void PlanNetDecide()
 {
 	if (ai.frame < gPlanNextAt)
@@ -170,7 +177,9 @@ void PlanNetDecide()
 	NnExploreRoll();
 	// step 2: every seat plays the pricer leader's choice (planprice.as PpChoose), no lease
 	if (PlanFromPriceOn() && (ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE) < 0.f)) {
-		const int c = int(ai.GetTeamBoard(PP_CHOICE, -1.f));
+		int c = int(ai.GetTeamBoard(PP_CHOICE, -1.f));
+		if (PlanPassive(c))
+			c = NG_NORMAL;
 		if (c >= 0) {
 			if (c != gPlan)
 				AiLog("apex: plan t=" + ai.teamId + " priced " + NgName(c));
@@ -244,6 +253,19 @@ void PlanNetDecide()
 	const float flat = leads ? ((trust > 0.f) ? NG_EX_FLAT : 1.f) : 0.f;
 	array<float> p(NG_N);
 	gPlan = EcoDraw(ruleO, trust, w, p, flat);
+	if (PlanPassive(gPlan)) {
+		int best = NG_NORMAL;
+		for (int o = 0; o < NG_N; ++o) {
+			if (!PlanPassive(o) && (p[o] > p[best]))
+				best = o;
+		}
+		AiLog("apex: plan-passive t=" + ai.teamId + " drew " + NgName(gPlan) + " -> " + NgName(best));
+		for (int o = 0; o < NG_N; ++o) {
+			if (PlanPassive(o))
+				p[o] = 0.f;
+		}
+		gPlan = best;
+	}
 	if (PersOn() && (gStyle >= 0) && (ST_PLAN[gStyle] >= 0))
 		gPlan = ST_PLAN[gStyle];
 	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));

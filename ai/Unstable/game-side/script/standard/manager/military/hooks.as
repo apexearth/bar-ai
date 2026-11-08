@@ -539,8 +539,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		IUnitTask@ st = JwJoinable(Air::StrikeTask(unit), unit);
 		if (st !is null)
 			return NoteElect("air.strike", st);
-		if (Air::StrikeHolds(unit))
+		if (Air::StrikeHolds(unit)) {
+			Air::HoldHome(unit);
 			return null;   // it left its wave: held for the next one
+		}
 		return NoteElect("air.bomb",
 				aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::BOMB)));
 	}
@@ -555,8 +557,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			if (cg !is null)
 				return NoteElect("air.cover", cg);
 		}
-		if (AirGthOn() && Air::gStrike)
+		if (AirGthOn() && Air::gStrike) {
+			Air::HoldHome(unit);
 			return null;   // it left its wave's cover: held for the next one
+		}
 	}
 	// A ROLLING BOMB IS NEVER PACKED. It is roled `raider`, so the director
 	// would pull it into a pack and the pack would walk it in formation: one

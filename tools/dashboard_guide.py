@@ -1162,11 +1162,6 @@ GROUPS = [
                   "building may cost and still count as affordable. This is the "
                   "guard on the rule above: raise it and bigger guns count as "
                   "reachable sooner, lower it and we settle for what is cheap"),
-                 ("TUNE_AIR_ECO_BASE", "the economy needed before the bomber "
-                  "raid is worth mounting, in metal/s at no bonus -- the "
-                  "handicap multiplies it, so 100 here is 200 m/s in a +100% "
-                  "game. Below it bombers price at zero and the metal goes to "
-                  "the ground army. RAISE to delay air further"),
                  ("TUNE_ECO_TARGET_BASE", "the economy the REAR SPECIALIST "
                   "builds before it spends anything on war, in metal/s at no "
                   "bonus -- the game's own handicap multiplies it, so 250 here "

@@ -172,7 +172,6 @@
 			"legcluster": {
 				"role": ["static"],
 				"on": false,
-				"limit": 3,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
@@ -205,14 +204,11 @@
 			},
 			"legsd":{
 				"role":["static"],
-				"limit": 3,
 				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
-			// One EACH; three is the whole side's allowance. See behaviour.json.
 			"legtarg": {
-				"role": ["static"],
-				"limit": 1
+				"role": ["static"]
 			},
 			"legdeflector": {
 				"role": ["static"],
@@ -286,8 +282,7 @@
 			"legfmg": {
 				"role": ["static"],
 			 	"power": 1.0, 
-				"since": 360,
-				"limit": 3
+				"since": 360
 			},
 			"legfrl": {
 				"role": ["anti_air"],
@@ -350,8 +345,7 @@
 			},
 			"legmstor" : {
 				"role": ["static"],
-				"since": 300,
-				"limit": 1
+				"since": 300
 			},
 			"legwin": {
 				"role": ["static"]
@@ -367,8 +361,7 @@
 			},
 			"legestor" : {
 				"role": ["static"],
-				"since": 300,
-				"limit": 1
+				"since": 300
 			},
 			//Sea T1 Economy
 			"legfeconv" : {
@@ -383,8 +376,7 @@
 			},
 			"leguwestore" : {
 				"role": ["static"],
-				"since": 9999,
-				"limit": 1
+				"since": 9999
 			},
 			//Land T2 Economy
 			"legmoho" : {
@@ -395,7 +387,6 @@
 			},
 			"legamstor" : {
 				"role": ["static"],
-				"limit": 1,
 				"since": 1200
 			},
 			"legageo" : {
@@ -425,17 +416,14 @@
 			},
 			"coruwms" : {
 				"role": ["static"],
-				"since": 500,
-				"limit": 1
+				"since": 500
 			},
 			"coruwadvms" : {
-				"role": ["static"],
-				"limit": 1
+				"role": ["static"]
 			},
 			"coruwes" : {
 				"role": ["static"],
-				"since": 240,
-				"limit": 1
+				"since": 240
 			},*/
 	
 	
@@ -571,13 +559,11 @@
 
 			"legcen": {
 				"role": ["assault"],
-				"threat":{"vs":{"artillery": 4.0, "anti-heavy":3.0}},
-				"limit": 40
+				"threat":{"vs":{"artillery": 4.0, "anti-heavy":3.0}}
 			},
 			"legbal": {
 				"role": ["assault"],
 				"retreat": 0.6,
-				"limit": 10,
 				"threat": {"air": 0.0, "water": 0.0, "surf": 0.8,
 					"vs": {"artillery": 1.8, "anti_air": 1.8, "raiders":0.5}
 				}
@@ -604,7 +590,6 @@
 			},
 			"legaabot": {
 				"role": ["anti_air"],
-				"limit": 10,
 				"threat": {"air": 2.0, "water": 0.0, "surf":0.0}
 			},
 			"legrezbot": {
@@ -632,8 +617,7 @@
 			"legbart": {
 				"role": ["artillery"],
 				"threat": {"surf":0.5, "vs":{"static":2.0, "artillery":2.0}},
-				"retreat": 0.8,
-				"limit": 10
+				"retreat": 0.8
 			},
 			"legdecom": {
 				"role": ["builder"],
@@ -651,17 +635,14 @@
 				"role": ["artillery"],
 				"attribute":["siege"],
 				"threat": {"surf":0.5, "vs":{"static":2.0, "artillery":2.0}},
-				"retreat": 0.8,
-				"limit": 10
+				"retreat": 0.8
 			},
 			"legamph": {
-				"role": ["raider"],
-				"limit": 10
+				"role": ["raider"]
 			},
 			"legadvaabot": {
-				"role": ["anti_air"],
+				"role": ["anti_air"]
 				//"attribute": ["support"],
-				"limit": 10
 			},
 
 			"legaspy": {
@@ -670,12 +651,10 @@
 
 			"legaradk": {
 				"role": ["support"],
-				"retreat": 0.6,
-				"limit": 3
+				"retreat": 0.6
 			},
 			"legajamk": {
-				"role": ["support"],
-				"limit": 3
+				"role": ["support"]
 			},
 
 			// T3 LEGION EXPERIMENTAL - leggant
@@ -725,8 +704,7 @@
 			"leghades": {
 				"role": ["raider"],
 				"attribute": ["scout"],
-				"threat":{"vs":{"artillery": 2.0}},
-				"limit": 30
+				"threat":{"vs":{"artillery": 2.0}}
 			},
 			"legamphtank": {
 				"role": ["assault"]
@@ -765,7 +743,6 @@
 			},
 			"legvflak": {
 				"role": ["anti_air"],
-				"limit": 10,
 				"threat": {"air": 2.0, "water": 0.0, "surf": 0.0}
 			},
 			"legmrv": {
@@ -790,14 +767,12 @@
 				"retreat": 0.5
 			},
 			"legvcarry": {
-				"role":	["riot"],
-				"limit": 3
+				"role":	["riot"]
 			},
 			"leginf": {
 				"role": ["artillery"],
 				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}},
-				"retreat": 0.6,
-				"limit": 3
+				"retreat": 0.6
 			},
 			// Legion's vehicle-plant radar and jammer were the only two of the
 			// six mobile radar/jammer units with no entry here at all, so they
@@ -806,12 +781,10 @@
 			// lab pair, which do have entries.
 			"legavrad": {
 				"role": ["support"],
-				"retreat": 0.6,
-				"limit": 3
+				"retreat": 0.6
 			},
 			"legavjam": {
-				"role": ["support"],
-				"limit": 3
+				"role": ["support"]
 			},
 
 			// aircraft - legap
@@ -828,7 +801,6 @@
 			"legkam": {
 				"role": ["bomber", "air"],
 				"power": 0.5,
-				"limit": 30,
 				"retreat": 0.5
 			},
 			"legmos": {
@@ -922,8 +894,7 @@
 			},
 			"legmh": {
 				"role": ["artillery"],
-				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}},
-				"limit": 6
+				"threat": {"surf": 0.2, "vs":{"static":5.0, "artillery":5.0}}
 			},
 			"legah": {
 				"role": ["anti_air"],

@@ -42,7 +42,7 @@ bool Armed()
 {
 	if (!IsAirLead())
 		return false;
-	if ((ai.frame < AIR_FROM) || !AirEcoReady())
+	if (ai.frame < AIR_FROM)
 		return false;
 	// The absolute AA ceiling is GONE (it stood the assassin down against 2.5k
 	// of AA in a game we had already won). AA is priced instead: it raises the
@@ -81,12 +81,22 @@ bool WingShort(int d)
 	return false;
 }
 
+// The escort for the bombers we HOLD (the wing's 8 fighters per 12 bombers), not for the wing we want: sized on
+// ScaledFighters it outbid the bombers it was to escort -- 11-07, 40-minute games at +50: fighters built 87 -> 465,
+// Shadows 671 -> 443, Hurricanes 357 -> 167, the one advanced plant spent on escorts for bombers never built.
 float WingFighterWantM()
 {
 	if (!Armed())
 		return 0.f;
 	CCircuitDef@ f = ((gFighter !is null) && gFighter.IsAvailable(ai.frame)) ? gFighter : gFighter1;
-	return (f is null) ? 0.f : float(ScaledFighters()) * f.costM;
+	const float esc = float(Bombers()) * float(AIR_FIGHTERS) / float(AIR_BOMBERS);
+	return (f is null) ? 0.f : esc * f.costM;
+}
+
+// Planes the wing still waits for: a second advanced air plant may be wanted (want_plant.as AirLateCopy).
+bool WingShortAny()
+{
+	return Armed() && ((Bombers() < ScaledBombers()) || (Fighters() < ScaledFighters()));
 }
 
 bool Massed()

@@ -1075,7 +1075,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// starting T2 while our danger is very high"). Defence wants are not
 		// discounted -- their return is loss prevented NOW, the same exemption
 		// decide.as makes for the exposure charge.
-		techGain *= lineW;
+		techGain *= lineW * AirLineGroundMul(d);
 		techGain *= TechSurvival(d, Catalog::gBuildPower[uid]);
 		if (techGain <= 0.f)
 			continue;

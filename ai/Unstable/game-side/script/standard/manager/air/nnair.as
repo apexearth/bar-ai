@@ -30,6 +30,7 @@ int gNaPhase = 0;
 int gNaDecN = 0, gNaGoN = 0, gNaDevN = 0, gNaGoB = 0, gNaGoG = 0, gNaPullN = 0;
 int gNaWaitFrom = -1;          // the bombers' last launch, or their first decision
 int gNaLateN = 0;              // launches the cadence forced over a WAIT
+int gNaRuleHeldN = 0;          // bomber GOs the net asked over the rule's WAIT, held (apex_wing_rule)
 int gNaDeepN = 0;              // gunship decisions offered the unseen base
 int gNaDeepLookAt = -1;        // our gunships last stood over it
 bool gNaForced = false;        // this decision's GO was the cadence's, not the net's
@@ -58,6 +59,7 @@ array<float> gNaEcoV;
 array<AIFloat3> gNaAAP;         // their ground and static AA: where, reach, air dps
 array<float> gNaAAR;
 array<float> gNaAAV;
+array<int> gNaAAD;            // the def, for an AA strike's metal and hp
 array<AIFloat3> gNaFtP;         // their fighters: where, speed, air dps
 array<float> gNaFtS;
 array<float> gNaFtV;
@@ -161,7 +163,7 @@ void NaSnapEnemy(const AIFloat3& in foe)
 		return;
 	gNaSnapAt = ai.frame;
 	gNaEcoP.resize(0); gNaEcoD.resize(0); gNaEcoV.resize(0);
-	gNaAAP.resize(0); gNaAAR.resize(0); gNaAAV.resize(0);
+	gNaAAP.resize(0); gNaAAR.resize(0); gNaAAV.resize(0); gNaAAD.resize(0);
 	gNaFtP.resize(0); gNaFtS.resize(0); gNaFtV.resize(0);
 	gNaTurP.resize(0); gNaTurD.resize(0);
 	if (gNaSpotInc < 0.f) {
@@ -188,6 +190,7 @@ void NaSnapEnemy(const AIFloat3& in foe)
 				gNaAAP.insertLast(aiEnemyMgr.GetEnemyUnitPosAt(i));
 				gNaAAR.insertLast(Catalog::gAirRange[d]);
 				gNaAAV.insertLast(aDps);
+				gNaAAD.insertLast(d);
 			}
 		} else if (!Catalog::gMobile[d] && (Catalog::gMaxRange[d] > 0.f) && (Catalog::gSurfT[d] > 0.f)) {
 			gNaTurP.insertLast(aiEnemyMgr.GetEnemyUnitPosAt(i));
@@ -412,6 +415,89 @@ float NaPathAA(const AIFloat3& in from, const AIFloat3& in to)
 }
 
 // Their fighters that reach the cell before we finish there.
+// THEIR AA IS A TARGET (his 11-07: "if the enemy has lots of AA we can specifically target the AA. once we kill it
+// we are more free to dominate"; "strikes against anti-air can unlock much more valuable strikes later on"; "attack
+// aa when seen"). Each seen AA cluster is offered to the bomber wing as a cell worth its own metal plus what its
+// death unlocks: how much the best economy strike's priced net rises with that cluster gone, over the cell and
+// along the path (the same NaEval, run with and without it). AA guarding nothing worth having stays cheap.
+int gNaAAOffered = 0, gNaAAUnlockLogAt = 0;
+void NaAACands(array<NaCand@>& cs, float r, const AIFloat3& in ctr, int n, float h, float dps1, float cost1,
+	float spd, float obs)
+{
+	const uint na = gNaAAP.length();
+	if ((na == 0) || (cs.length() == 0) || (spd <= 0.f))
+		return;
+	// the prize: the richest candidate the wing is already offered
+	uint pz = 0;
+	for (uint i = 1; i < cs.length(); ++i)
+		if (cs[i].v > cs[pz].v)
+			pz = i;
+	const NaCand@ prize = cs[pz];
+	const float flyP = ctr.distance2D(prize.at) / spd;
+	const float fAP = NaFighterAA(prize.at, flyP);
+	NaPrice@ p0 = NaPrice();
+	NaEval(prize, NaPathAA(ctr, prize.at), fAP, n, h, dps1, cost1, spd, flyP, true, obs, p0);
+	const float net0 = (p0.netM > 0.f) ? p0.netM : 0.f;
+	array<bool> taken(na, false);
+	for (uint s = 0; s < na; ++s) {
+		if (taken[s] || Catalog::gMobile[gNaAAD[s]])
+			continue;
+		NaCand c;
+		c.at = gNaAAP[s];
+		array<uint> mem;
+		for (uint e = 0; e < na; ++e) {
+			if (!taken[e] && !Catalog::gMobile[gNaAAD[e]] && (gNaAAP[e].distance2D(c.at) <= r)) {
+				taken[e] = true;
+				mem.insertLast(e);
+				c.v += Catalog::gCostM[gNaAAD[e]];
+				c.hp += Catalog::gHealth[gNaAAD[e]];
+				++c.n;
+			}
+		}
+		for (uint e = 0; e < na; ++e) {
+			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f) {
+				c.aaT += gNaAAV[e];
+				if (gNaAAR[e] > c.aaR)
+					c.aaR = gNaAAR[e];
+			}
+		}
+		// the prize without this cluster: its guns silenced over the cell and along the path
+		NaCand q;
+		q.at = prize.at;
+		q.v = prize.v;
+		q.hp = prize.hp;
+		q.n = prize.n;
+		q.aaT = prize.aaT;
+		q.aaR = prize.aaR;
+		array<float> keep;
+		for (uint m = 0; m < mem.length(); ++m) {
+			const uint e = mem[m];
+			if (gNaAAP[e].distance2D(prize.at) <= gNaAAR[e] + r * 0.5f)
+				q.aaT -= gNaAAV[e];
+			keep.insertLast(gNaAAV[e]);
+			gNaAAV[e] = 0.f;
+		}
+		if (q.aaT < 0.f)
+			q.aaT = 0.f;
+		const float pathQ = NaPathAA(ctr, prize.at);
+		for (uint m = 0; m < mem.length(); ++m)
+			gNaAAV[mem[m]] = keep[m];
+		NaPrice@ p1 = NaPrice();
+		NaEval(q, pathQ, fAP, n, h, dps1, cost1, spd, flyP, true, obs, p1);
+		const float unlock = p1.netM - net0;
+		if (unlock > 0.f)
+			c.v += unlock;
+		cs.insertLast(c);
+		++gNaAAOffered;
+		if ((unlock > 0.f) && (ai.frame >= gNaAAUnlockLogAt)) {
+			gNaAAUnlockLogAt = ai.frame + 30 * SECOND;
+			AiLog("apex: air-aa-cell t=" + ai.teamId + " at=" + int(c.at.x) + "," + int(c.at.z) + " guns=" + c.n
+				+ " m=" + int(c.v - unlock) + " unlock=" + int(unlock) + " prize=" + int(prize.v) + " net0="
+				+ int(p0.netM) + " net1=" + int(p1.netM) + " offered=" + gNaAAOffered);
+		}
+	}
+}
+
 float NaFighterAA(const AIFloat3& in to, float flyS)
 {
 	float a = 0.f;
@@ -487,6 +573,13 @@ float NaEval(const NaCand@ c, float pathAAx, float ftrA, int n, float h, float d
 			lossN = floorN;
 	}
 	lossN = (lossN > N) ? N : lossN;
+	// THE WHOLE WING IS SPENT (his 11-07: "of course there will be unexpected AA, i typically just assume 100% loss,
+	// question is how much ill be able to kill"). Measured 11-07, 40-minute games at +50: priced loss shares
+	// 0.39-0.61 against realized 0.69-0.87 at every wing size -- the AA we never saw. A bomber run is priced at its
+	// whole cost; what it destroys is still the drop of the planes that reach the cell (lostIn and the cell's AA
+	// above), so a wing that loses a fixed few on the way in pays only when it is big enough to drop on what matters.
+	if (back && (ai.GetTunable("apex_air_full_loss", TUNE_AIR_FULL_LOSS) > 0.f))
+		lossN = N;
 	// a building half-shot is repaired: only the ones finished count
 	if ((killF < 1.f) && (c.n > 0))
 		killF = float(int(killF * float(c.n))) / float(c.n);
@@ -672,6 +765,8 @@ int NaDecide(int kind, const string why)
 	const float obs = (kind == 0) ? ObsSurv(DominantBomberDef()) : -1.f;
 	gNaObsDmg = (kind == 0) ? ObsDmg(DominantBomberDef()) : -1.f;
 	gNaObsLost = (kind == 0) ? ObsLost(DominantBomberDef()) : -1.f;
+	if ((kind == 0) && (ai.GetTunable("apex_air_aa_unlock", TUNE_AIR_AA_UNLOCK) > 0.f))
+		NaAACands(cs, r, ctr, n, h, dps1, cost1, spd, obs);
 	NaPrice@ best = NaPrice();
 	bool have = false;
 	uint bestI = 0;
@@ -750,6 +845,17 @@ int NaDecide(int kind, const string why)
 		chosen = (x < pr[NA_WAIT]) ? NA_WAIT : NA_GO;
 	} else if (trust > 0.f) {
 		chosen = Market::NnTop(pr, rule);
+		// THE BOMBER WING MASSES ON ITS OWN PRICE (his 11-07: late air "tends to disappear"; "we dont want to be in
+		// a situation where we are perpetually massing"). Measured 11-07, 40-minute games at +50: the net turned
+		// 162 of 518 WAITs into GO, the strikes that flew 1-3 bombers into heavy AA at a priced net of -150..-300 --
+		// a net trained by the pg loop stopped 11-04 for noise. The rule's WAIT stands for the bombers; the
+		// cadence below (AIR_CADENCE) still sends a wing at its bar, so the massing ends.
+		if ((kind == 0) && (rule == NA_WAIT) && (chosen == NA_GO)
+			&& (ai.GetTunable("apex_wing_rule", TUNE_WING_RULE) > 0.f))
+		{
+			chosen = NA_WAIT;
+			++gNaRuleHeldN;
+		}
 		Market::NnOneHot(pr, chosen);
 	}
 	// GO needs somewhere to go: with nothing known and no wing clock, WAIT stands
@@ -1299,7 +1405,7 @@ void NaUpdate()
 				need += " " + Catalog::Def(gNaNeedDef[k]).GetName() + ":" + gNaNeedN[k] + "/" + int(gNaNeedV[k]);
 		}
 		AiLog(Factory::T() + "apex: nnair-stat t=" + ai.teamId + " dec=" + gNaDecN + " go=" + gNaGoN
-			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " late=" + gNaLateN + " deep=" + gNaDeepN + " goG=" + gNaGoG + " pulled=" + gNaPullN
+			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " late=" + gNaLateN + " ruleHeld=" + gNaRuleHeldN + " deep=" + gNaDeepN + " goG=" + gNaGoG + " pulled=" + gNaPullN
 			+ " gun=" + gn + " home=" + home + " out=" + away + " gunNow=" + gNaGunNow + " refused=" + gNaRefusedN
 			+ " held=" + HeldBombers() + " need" + need + " flat=" + Market::NnF(gNaFlat, 2));
 	}

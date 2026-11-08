@@ -54,7 +54,7 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// is out keeps holding: joining a run already in progress arrives alone,
 	// after the surprise, into the AA the wave woke up.
 	if (gStrike)
-		return !InWave(unit.id);
+		return InWave(unit.id) ? false : HoldHome(unit);
 	if (IsAtomicDef(id))
 		return AtomicHold(unit);
 	if (TairOn())
@@ -70,8 +70,50 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// enemies behind the lines." Held aircraft hover at the plant, which is
 	// home; the wave release lives in Update().
 	if (IsAirLead())
+		return HoldHome(unit);
+	return (ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f) && HoldHome(unit);
+}
+
+// A held plane has no task, so it hovers wherever its last one ended: after a strike that is over their AA.
+int gHoldHomeN = 0;
+array<int> gHhId;
+array<int> gHhAt;
+bool HoldHome(CCircuitUnit@ unit)
+{
+	if ((ai.GetTunable("apex_air_hold_home", TUNE_AIR_HOLD_HOME) <= 0.f) || !Builder::gHomeSet)
 		return true;
-	return ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f;
+	const bool atRally = TairOn() && (TairPhase() != TA_PH_NONE);
+	const AIFloat3 at = atRally ? TairRally() : Builder::gHomePos;
+	float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R) * 1.5f;
+	if (!atRally && (aiMilitaryMgr.GetBaseDefRange() > r))
+		r = aiMilitaryMgr.GetBaseDefRange();
+	const AIFloat3 p = unit.GetPos(ai.frame);
+	if (!OnMap(at) || (p.distance2D(at) <= r))
+		return true;
+	int slot = -1;
+	for (uint i = 0; i < gHhId.length(); ++i) {
+		if (gHhId[i] == unit.id) {
+			slot = int(i);
+			break;
+		}
+	}
+	if ((slot >= 0) && (ai.frame - gHhAt[slot] < 10 * 30))
+		return true;
+	if (slot < 0) {
+		if (gHhId.length() >= 256) {
+			gHhId.resize(0);
+			gHhAt.resize(0);
+		}
+		slot = int(gHhId.length());
+		gHhId.insertLast(unit.id);
+		gHhAt.insertLast(0);
+	}
+	gHhAt[slot] = ai.frame;
+	unit.CmdMoveTo(at);
+	++gHoldHomeN;
+	AiLog(Factory::T() + "apex: air hold-home " + unit.circuitDef.GetName() + " #" + unit.id + " from "
+		+ int(p.x) + "," + int(p.z) + " d=" + int(p.distance2D(at)) + " n=" + gHoldHomeN);
+	return true;
 }
 
 // THE TEAM INTERCEPTOR POOL. Each player publishes the enemy AIR value over
@@ -82,6 +124,38 @@ bool HoldsUnit(CCircuitUnit@ unit)
 // and stock tasks drift them home. No cap: response scales with what we hold.
 // Under apex_gather the intercept is a launch: the fighters held when it starts go, and one finished
 // while it lasts waits for the next.
+// The raid's planes as they are now, not the place they hurt: the costliest seen armed flyer
+// within r of `at`, led by its velocity over the flight from `from`. `at` when none is seen.
+AIFloat3 FoeAirNow(const AIFloat3& in at, const AIFloat3& in from, float r, float spd)
+{
+	AIFloat3 best = at;
+	float bestM = 0.f;
+	const float r2 = r * r;
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if ((d <= 0) || (d > Catalog::gDefCount) || !Catalog::gFlyer[d] || !Catalog::gMobile[d]
+			|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+			continue;
+		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+		if ((p.x - at.x) * (p.x - at.x) + (p.z - at.z) * (p.z - at.z) > r2)
+			continue;
+		if (Catalog::gCostM[d] <= bestM)
+			continue;
+		bestM = Catalog::gCostM[d];
+		float lead = (spd > 0.f) ? (from.distance2D(p) / spd) : 0.f;
+		if (lead > 6.f)
+			lead = 6.f;
+		best = p + aiEnemyMgr.GetEnemyUnitVelAt(i) * lead;
+		if (!OnMap(best))
+			best = p;
+	}
+	return best;
+}
+
 array<Id> gInterceptRoster;
 int gAllyAirOn = -1;
 bool AllyAirOn()
@@ -93,7 +167,7 @@ bool AllyAirOn()
 void Intercept()
 {
 	if (Builder::gHomeSet && (ai.frame >= gNextRaidPub)) {
-		gNextRaidPub = ai.frame + 2 * SECOND;
+		gNextRaidPub = ai.frame + SECOND;
 		float raid = ai.GetEnemyAirCostNear(Builder::gHomePos, ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R));
 		AIFloat3 at = Builder::gHomePos;
 		if (AllyAirOn()) {
@@ -154,7 +228,7 @@ void Intercept()
 	}
 	if ((to.x < 0.f) || !OnMap(to))
 		return;
-	gNextInterceptCmd = ai.frame + 4 * SECOND;
+	gNextInterceptCmd = ai.frame + 2 * SECOND;
 	bool fixedRoster = (Military::AirGthOn() || EveryOn()) && (gInterceptTarget == worst);
 	if (fixedRoster) {
 		array<Id> alive;
@@ -175,6 +249,8 @@ void Intercept()
 		array<CCircuitUnit@>@ wings = ai.GetOwnUnitsOfDef(fd, to, 0.f);
 		if (wings is null)
 			continue;
+		AIFloat3 aim = to;
+		bool aimed = false;
 		for (uint i = 0; i < wings.length(); ++i) {
 			if ((wings[i] is null) || InWave(wings[i].id) || Covering(wings[i].id))
 				continue;
@@ -184,7 +260,18 @@ void Intercept()
 			}
 			if (!fixedRoster)
 				gInterceptRoster.insertLast(wings[i].id);
-			wings[i].CmdMoveTo(to);
+			if (!aimed) {
+				aimed = true;
+				aim = FoeAirNow(to, wings[i].GetPos(ai.frame),
+					ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R), Catalog::gSpeed[int(fd.id)]);
+				if (ai.frame >= gNextAimLog) {
+					gNextAimLog = ai.frame + 20 * SECOND;
+					AiLog(Factory::T() + "apex: intercept-aim t=" + ai.teamId + " ally=t" + worst
+						+ " place=" + int(to.x) + "," + int(to.z) + " aim=" + int(aim.x) + "," + int(aim.z)
+						+ " moved=" + int(aim.distance2D(to)));
+				}
+			}
+			wings[i].CmdPatrolTo(aim);
 			++sent;
 		}
 	}

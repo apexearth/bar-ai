@@ -39,7 +39,7 @@ void RunElection()
 {
 	if (ai.ReadTeamValue(ai.teamId, TV_AIRLEAD, -1.f) >= 0.f)
 		return;   // latched: the role is paid for in factories, so it never moves
-	if ((ai.frame < AIR_FROM) || !AirEcoReady())
+	if (ai.frame < AIR_FROM)
 		return;
 
 	array<Id>@ mates = ai.GetTeamIds();

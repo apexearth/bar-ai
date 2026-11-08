@@ -121,6 +121,15 @@ chmod 755 "$TARGET/libSkirmishAI.so"
 [ -f "$TARGET/libSkirmishAI.so" ] || fail "the copy is incomplete at $TARGET."
 say "AI files:   $TARGET"
 
+# A hosted game loads the highest installed version, so any other version folder can never be picked.
+for OLD in "$(dirname "$TARGET")"/v*; do
+    [ -d "$OLD" ] || continue
+    NAME="$(basename "$OLD")"
+    [ "$NAME" = "$VARIANT" ] && continue
+    echo "$NAME" | grep -Eq '^v[0-9]+(\.[0-9]+)+$' || continue
+    if rm -rf "$OLD"; then say "Removed old version $NAME."; else say "Could not remove old version $NAME."; fi
+done
+
 LISTED=0
 while true; do
     if ! bar_running; then

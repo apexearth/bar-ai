@@ -708,9 +708,36 @@ bool NanoBlockFull(int d)
 	return (ai.frame - gNanoDryAt[d]) < 120 * SECOND;
 }
 
+// MORE AIR LINES LATE (his 11-07: "at 40+ minutes definitely want more than one of the air labs"; "allow more air
+// labs late"). In 40-minute games at +50 each seat ran one basic and one advanced air plant all game, every bomber,
+// fighter, air con and scout queued on the one advanced line, with 15-20 nanos at it. A copy of the advanced air
+// plant while the wing waits on planes and every such line works -- the overflow bar the general waiver asks for
+// never stands in a late economy that spends everything.
+bool AirLateCopy(int d)
+{
+	if (ai.GetTunable("apex_air_late_copy", TUNE_AIR_LATE_COPY) <= 0.f)
+		return false;
+	if (!AirPlant(d) || (PlantTier(d) < 2))
+		return false;
+	// NOT NANOS FIRST HERE (his 11-07, after the first smoke: the block never read full -- 15-24 nanos against a need of
+	// 80+, none offered -- "Sometimes it's just not enough room to make enough nanos ... I'm not getting enough planes
+	// yet, I'll just make another air lab ... hope that you eventually get enough nanos"). The wing short of planes
+	// while every advanced air line already works is the ask.
+	const bool shortW = Air::WingShortAny();
+	const bool busy = LinesAllWorking(d);
+	if (ai.frame >= gAirLateLogAt) {
+		gAirLateLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: air-late-copy t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " nanoFull="
+			+ (NanoBlockFull(d) ? 1 : 0) + " wingShort=" + (shortW ? 1 : 0) + " linesBusy=" + (busy ? 1 : 0)
+			+ " armed=" + (Air::Armed() ? 1 : 0));
+	}
+	return shortW && busy;
+}
+int gAirLateLogAt = 0;
+
 bool CopyWaived(int d)
 {
-	if (AirPlantOwed(d) || (ai.GetTunable("apex_plant_free", TUNE_PLANT_FREE) > 0.f))
+	if (AirPlantOwed(d) || (ai.GetTunable("apex_plant_free", TUNE_PLANT_FREE) > 0.f) || AirLateCopy(d))
 		return true;
 	// NANOS FIRST, ALWAYS (his rule, restated 2026-09-30 after an overflow
 	// waiver skipped it: "make some nanoturrets around the factories before
@@ -1932,7 +1959,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				break;
 			}
 		}
-		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f)) {
+		const bool airLate = isCopy && AirLateCopy(d);
+		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f) && !airLate) {
 			if (ai.frame >= gNextPlantDupLog) {
 				gNextPlantDupLog = ai.frame + 30 * SECOND;
 				AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
@@ -1943,7 +1971,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// (No finished-factory guard: a copy of a lab still in its nanoframe
 		// is the earliest and cheapest moment to refuse the duplicate.)
 		float dupSubst = 1.f;
-		if (substOn) {
+		if (substOn && !airLate) {   // a full nano block substitutes nothing
 			AIFloat3 nlp;
 			if (isCopy || (NeediestLine(nlp) > 0.f))
 				dupSubst = DupBpSubstMul(d);
@@ -2030,7 +2058,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 					+ " plant=" + formatFloat(plantG, "", 0, 3)
 					+ " lift=" + formatFloat(liftG, "", 0, 3));
 		}
-		ValueOf(d, plantG + liftG,
+		ValueOf(d, (plantG + liftG) * AirLineGroundMul(d),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
 		if (evAir)
 			Air::EvNotePlant(d, c.value, evCaution);

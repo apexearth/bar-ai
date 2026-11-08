@@ -8,7 +8,7 @@ issues gets the next number. `python tools/trial_report.py` reads the trials aft
 
 | # | What he asked for | Change | Instrument | Status |
 |---|---|---|---|---|
-| 71 | Air bought on price, no income bar (10-23, "i do like things priced") | apex_air_eco_priced, shipped in v0.3.9 as a TRIAL (TUNE_TRIAL_AIR_ECO_PRICED, its own coin) | `python tools/trial_report.py` after his multiplayer games | TRIAL RUNNING -- 24 1v1 games vs v0.3.8: 12-10 (+2 cap); gunships 6.7 a seat vs 0.7, peak income 589 vs 520. Decide at 8+ paired games |
+| - | (none running; air_eco_priced decided 11-08 and made the code) | | | |
 
 ## Broken, inert or not confirmed: needs work
 

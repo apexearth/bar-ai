@@ -20,9 +20,9 @@ namespace Air {
 // our kill/loss ratio was 0.48 to their 0.93. We fielded the air force AND
 // skipped the answer to theirs. AIR_FROM was 11 game-minutes, a timer, which
 // is the one thing this AI is not allowed to gate progression on -- "late
-// game" here always means economy size. AirEcoReady() is the replacement; the
-// frame constant is kept only as the floor below which nothing has an economy
-// worth reading.
+// game" here always means economy size. The bomber's own price is the
+// replacement; the frame constant is kept only as the floor below which
+// nothing has an economy worth reading.
 const int   AIR_FROM       = 4 * MINUTE;
 
 // The candidate's OWN metal income, out of reach of the 4v4 benchmark and
@@ -328,6 +328,7 @@ const string TV_AIRRAIDX = "airraidx";
 const string TV_AIRRAIDZ = "airraidz";
 int gNextRaidPub = 0;
 int gNextInterceptCmd = 0;
+int gNextAimLog = 0;
 int gInterceptTarget = -1;
 array<Id>@ gMatesCache = null;
 
@@ -442,29 +443,6 @@ void ObsInit()
 			gObsLost[i] = -1.f;
 		}
 	}
-}
-
-// Is the economy big enough that air stops costing us the ground war?
-//
-// Stated at NO-BONUS scale and multiplied by the game's own handicap, the same
-// treatment EcoRoleTargetM gets and for the same reason he gave there: a flat
-// metal/s figure cannot travel between a bonused game and a plain one. His
-// "200 m/s" is read as a +100% game, so the base is 100.
-bool AirEcoReady()
-{
-	// PRICED, NOT A BAR (apex_air_eco_priced; his 10-23: "i do like things priced"). The bar zeroed every bomber
-	// below it (`wing0(eco)`); a bomber already pays for the ground war it costs -- its gain is the strike's metal
-	// against its own cost, and the target's gain carries the army gap -- so the market decides alone.
-	if (Trial::On("air_eco_priced", TUNE_AIR_ECO_PRICED, TUNE_TRIAL_AIR_ECO_PRICED))
-		return true;
-	return AirEcoBarMet();
-}
-
-bool AirEcoBarMet()
-{
-	const float need = ai.GetTunable("apex_air_eco_base", TUNE_AIR_ECO_BASE)
-			* Market::IncomeMult();
-	return Market::EcoPowerM() >= need;
 }
 
 // The type that actually flew, so the outcome is attributed to it.
@@ -595,27 +573,6 @@ bool AirRichOn()
 	return ai.GetTunable("apex_air_rich", TUNE_AIR_RICH) > 0.f;
 }
 
-// The trial's footprint, counted where planes and plants finish: every bomber, the ones that came in while the
-// held wing was already at the count (only the trial's arm buys those), and advanced air plants.
-void TrialNoteFinished(CCircuitUnit@ unit)
-{
-	if (unit.circuitDef is null)
-		return;
-	// apex_air_eco_priced's footprint: strike planes that came in while the old income bar was not met (only its
-	// arm buys those) and gunships, which the priced bar mostly bought (6.7 a seat vs 0.7, 10-23).
-	if (Trial::Running("air_eco_priced", TUNE_TRIAL_AIR_ECO_PRICED)) {
-		AirEcoReady();   // registers the coin before the first minute's line
-		const int d0 = int(unit.circuitDef.id);
-		const bool gun = unit.circuitDef.IsAbleToFly() && !IsBomberDef(d0) && (Catalog::gSurfDps[d0] > 0.f)
-				&& !unit.circuitDef.IsRoleAny(Unit::Role::AA.mask);
-		if (IsBomberDef(d0) || gun) {
-			Trial::Note("air_eco_priced", gun ? "gunships" : "bombers", 1.f);
-			if (!gun && !AirEcoBarMet())   // the bar gates strike planes only; gunships come through the army market
-				Trial::Note("air_eco_priced", "belowBar", 1.f);
-		}
-	}
-}
-
 // Which of StrikeGainFor's gates zeroed it -- the prodrank line's wing0 reason.
 string StrikeWhy(int d)
 {
@@ -742,7 +699,7 @@ float HuntFighterGainFor(int d, float fillSec)
 // started (the same gate the commitment waits behind).
 bool WingBuys()
 {
-	if ((ai.frame < AIR_FROM) || !AirEcoReady())
+	if (ai.frame < AIR_FROM)
 		return false;
 	// (The "losing the ground war" hold-off that stood here is gone: it kept
 	// a rich seat from buying a single bomber for the whole game -- seat seed

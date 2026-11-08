@@ -183,6 +183,18 @@ try {
 if (-not (Test-Path -LiteralPath (Join-Path $target "SkirmishAI.dll"))) { Fail "the copy is incomplete at $target." }
 Say "AI files:   $target"
 
+# A hosted game loads the highest installed version, so any other version folder can never be picked.
+$old = @(Get-ChildItem -LiteralPath (Split-Path -Parent $target) -Directory |
+    Where-Object { ($_.Name -ne $Variant) -and ($_.Name -match '^v\d+(\.\d+)+$') })
+foreach ($o in $old) {
+    try {
+        Remove-Item -LiteralPath $o.FullName -Recurse -Force
+        Say "Removed old version $($o.Name)."
+    } catch {
+        Say "Could not remove old version $($o.Name): $($_.Exception.Message)"
+    }
+}
+
 $listed = $false
 while ($true) {
     if ((BarProcesses $barRoot).Count -eq 0) {

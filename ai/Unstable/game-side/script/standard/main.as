@@ -315,7 +315,6 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	const double _t = Perf::T0();
 	if (unit !is null) {
 		Requests::RingFrameGone(int(unit.id));
-		Air::TrialNoteFinished(unit);
 	}
 	UnitFinishedInner(unit);
 	Perf::Add("hk.finished", _t);

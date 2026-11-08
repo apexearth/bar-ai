@@ -50,3 +50,8 @@ die, 80-86% over their half, 94-98% to a killer we never saw. Holding the net's 
 building the wing (apex_wing_build) together scored -0.49 (t -1.2): the rule itself approves small strikes because
 NaEval prices only the AA it has SEEN (cellAA). The strike price needs the AA it cannot see -- what stood there when
 last seen, where our strikes died, their AA spend we have not located.
+
+His 11-07: "it's complicated, sometimes the bombing might break a front line and unlock an army attack or an eco raid,
+it's never simple." A strike's worth is what it opens, not only what it kills: the AA unlock (NaAACands) is one
+case; a front line broken ahead of a team push (the existing air-breach cell, his 10-07) and an army or defence that
+blocks an eco raid are the others. The same with/without pricing on the follow-up (push, raid, next strike).

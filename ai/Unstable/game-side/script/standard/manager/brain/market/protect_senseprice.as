@@ -436,14 +436,33 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		const float measured = Military::TeamAirLossRate() * stopped;
 		gain = (measured > gainA) ? measured : gainA;
 	} else if (cls == PROT_TARGFAC) {
-		// apexearth's spec: three wanted, diminishing.
-		const int have = int(gProtPos[PROT_TARGFAC].length());
+		// apexearth's spec: three wanted per alliance, diminishing.
+		const int have = int(gProtPos[PROT_TARGFAC].length()) + AllyTargFacs();
 		const int want3 = int(ai.GetTunable("apex_targfac_want", TUNE_TARGFAC_WANT));
 		if (Gate(GATE_TF_ENOUGH, have >= want3))
 			return false;
 		gain = gAssetsM * rate * float(want3 - have) / float(want3);
 	}
 	return true;
+}
+
+int gAllyTfN = 0;
+int gAllyTfAt = -1000000;
+int AllyTargFacs()
+{
+	if (ai.frame - gAllyTfAt < 10 * SECOND)
+		return gAllyTfN;
+	gAllyTfAt = ai.frame;
+	gAllyTfN = 0;
+	const array<float>@ al = ai.GetAllyStatics();
+	if (al is null)
+		return 0;
+	for (uint i = 2; i < al.length(); i += 3) {
+		const int d = int(al[i]);
+		if ((d >= 0) && (d < int(Catalog::gTargFac.length())) && Catalog::gTargFac[d])
+			++gAllyTfN;
+	}
+	return gAllyTfN;
 }
 
 float AACoverFrac()

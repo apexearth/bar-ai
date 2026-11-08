@@ -1368,7 +1368,8 @@ const float TUNE_MOBILE_BP_EFF = 0.6f;
 //   one modeled risk quantity for eyes and turrets. See docs/tunables.md.
 const float TUNE_INSURE_RATE = 0.0003f;   // was 5e-5: radar lost to marginal solars until assets were huge (watched)
 
-// TARGFAC_WANT: pinpointers wanted (apexearth 2026-08-23: "3 wanted max").
+// TARGFAC_WANT: pinpointers wanted across the whole alliance, allies' included (apexearth 2026-08-23: "3 wanted
+//   max"; 11-08: "only need 3 total per alliance").
 const float TUNE_TARGFAC_WANT = 3.f;
 
 // ---------------------------------------------------------------------------
@@ -1716,8 +1717,6 @@ const float TUNE_DOOR_CLEAR = 1.f;   // [toggle 0/1] BuilderTask.cpp SitePredica
 const float TUNE_LRPC_FOCUS = 0.f;   // [toggle 0/1] brain/lrpc.as: every long-range gun in reach fires at one focus cell, switched whole
 const float TUNE_AA_DWELL = 1.f;   // [toggle 0/1] nnair.as NaEval: a strike pays the AA it crosses inside the cell (2 x its air reach at the wing's speed)
 const float TUNE_GUN_REFUSE = 1.f;   // [toggle 0/1] RaidTask.cpp + nnair.as: a gunship wing that takes nothing at its goal for 3 s is recalled and the cell remembered (pain point); the unseen-base cell from the enemy start box
-const float TUNE_AIR_ECO_PRICED = 1.f;
-const float TUNE_TRIAL_AIR_ECO_PRICED = 1.f;   // [toggle 0/1] trial.as: apex_air_eco_priced decided per seat by a coin (shipped in v0.3.9; end it when decided)   // [toggle 0/1] air/state.as AirEcoReady: no income bar on air (apex_air_eco_base), the bomber price decides
 const float TUNE_MEX_BASIC = 1.f;   // [toggle 0/1] protect_target.as: mex cover is tower reach less raider reach, guard sites cover several mexes, a mex's first gun not scaled by the gunp head
 const float TUNE_HOT_ROAD_MEMO = 1.f;   // [toggle 0/1] decide.as ChargeTrip: a want on a road C++ refused for heat, still hot, is worth 0 to that hand
 const float TUNE_AIR_OBS_EVIDENCE = 1.f;   // [toggle 0/1] state.as SettleStrike: a strike run weighs by bombers sent over the wing planned
@@ -1952,6 +1951,11 @@ const float TUNE_SPAM_RAIDERS = 1.f;
 const float TUNE_SPAM_SEND = 1.f;   // [toggle 0/1] hooks.as SpamSend: late fodder gets one fight order at their base and none after
 const float TUNE_SPAM_SHELL = 1.f;   // [toggle 0/1] hooks.as SpamShellPick: late fodder moves to where fire on our structures comes from (his 11-07)
 const float TUNE_WING_BUILD = 1.f;   // [toggle 0/1] air/wing.as WingShort: the armed wing's bombers/fighters unmuted on the basic plant and its escort in the fighter target (his 11-07)
+const float TUNE_AIR_AA_UNLOCK = 0.f; // [toggle 0/1] air/nnair.as NaAACands: seen AA clusters offered to the bombers at their metal plus the strike they unlock (his 11-07)
+const float TUNE_AIR_LATE_COPY = 0.f; // [toggle 0/1] want_plant.as AirLateCopy: a copy of the advanced air plant once its nano block is full while the wing waits (his 11-07)
+const float TUNE_AIR_FULL_LOSS = 0.f; // [toggle 0/1] air/nnair.as NaEval: a bomber run is priced at its whole wing's cost (his 11-07)
+const float TUNE_WING_RULE = 0.f;    // [toggle 0/1] air/nnair.as NaDecide: the net may not turn the bomber rule's WAIT into GO (his 11-07)
+const float TUNE_AIR_HOLD_HOME = 0.f; // [toggle 0/1] air/update.as HoldHome: a held strike plane away from home with no orders flies home
 const float TUNE_SPAM_SUICIDAL = 1.f;
 
 // [seconds] -- A stuck unit already asked for unblocking is not re-asked for
@@ -1984,11 +1988,6 @@ const float TUNE_ECO_TARGET_BASE = 250.f;
 //   it go full military and normal behavior at 1k metal instead of 2k" --
 //   500 x the +100% handicap is his 1k. See docs/tunables.md.
 const float TUNE_ECO_TARGET_BASE_8 = 500.f;
-
-// Economic power, at NO-BONUS scale, before the bomber raid is worth mounting
-//   at all -- the game's handicap multiplies it, so 100 here is apexearth's "200
-//   m/s" in a +100% game. See docs/tunables.md.
-const float TUNE_AIR_ECO_BASE = 100.f;
 
 // Weigh a production line by how much of the map its ARMY can move around in
 //   (ai.DefMapCoverage, the engine's own per-movement-type partition). See

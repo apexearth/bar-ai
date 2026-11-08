@@ -1498,6 +1498,43 @@ float CombatPerMetalMean()
 	return gCpmMean;
 }
 
+// A plant whose fighting units all fly holds no ground: while the team's ground army is short of
+// theirs, it is worth only the share of the ground war we are already holding (his 11-08: "you
+// can't just be air"; both seats raised advanced air and no advanced ground lab).
+int gAlgLogAt = 0;
+float AirLineGroundMul(int d)
+{
+	if (!Catalog::ValidId(d) || Catalog::gMobile[d])
+		return 1.f;
+	const array<int>@ prods = Catalog::gBuildsList[d];
+	int n = 0;
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int pd = prods[i];
+		if (!Catalog::gAvailable[pd] || !LineCombat(pd))
+			continue;
+		if (!Catalog::gFlyer[pd])
+			return 1.f;
+		++n;
+	}
+	if (n == 0)
+		return 1.f;
+	const float theirs = Military::FoeArmyM();
+	if (theirs <= 0.f)
+		return 1.f;
+	const float ours = Military::OurArmyM();
+	float m = ours / theirs;
+	if (m >= 1.f)
+		return 1.f;
+	if (m < 0.05f)
+		m = 0.05f;
+	if (ai.frame >= gAlgLogAt) {
+		gAlgLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: airline-ground t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+			+ " ours=" + int(ours) + " theirs=" + int(theirs) + " mul=" + formatFloat(m, "", 0, 2));
+	}
+	return m;
+}
+
 float PlantLineWorth(int d)
 {
 	const float ref = CombatPerMetalMean();

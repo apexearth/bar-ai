@@ -164,7 +164,6 @@ local NAMES = {
 	"apex_army_eco_s",
 	"apex_eco_target_base",
 	"apex_eco_target_base8",
-	"apex_air_eco_base",
 	"apex_line_terrain",
 	"apex_cover_leaves",
 	"apex_cover_by_raid",
@@ -178,6 +177,11 @@ local NAMES = {
 	"apex_shell_answer",
 	"apex_spam_shell",
 	"apex_wing_build",
+	"apex_air_aa_unlock",
+	"apex_air_late_copy",
+	"apex_air_full_loss",
+	"apex_wing_rule",
+	"apex_air_hold_home",
 	"apex_dup_bp_subst",
 	"apex_replant_discount",
 	"apex_replant_window_s",
@@ -417,8 +421,6 @@ local NAMES = {
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)
 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
-	"apex_air_eco_priced",
-	"apex_trial_air_eco_priced", -- trial.as: a coin per seat for apex_air_eco_priced (1) -- air/state.as: air bought on price, no income bar (1)
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
 	"apex_hot_road_memo", -- decide.as ChargeTrip: a still-hot refused road zeroes that hand's want (1)
 	"apex_air_obs_evidence", -- state.as SettleStrike: run weight by bombers sent over the planned wing (1)

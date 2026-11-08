@@ -21,7 +21,7 @@ local options = {
 		section = 'play',
 		def     = 'auto',
 		items   = {
-			{ key = 'auto', name = 'Let the AI choose', desc = 'Normal play: the strategy net decides.' },
+			{ key = 'auto', name = 'Let the AI choose', desc = 'Normal play: the strategy net decides. It never picks Greed, Deep greed or Turtle on its own.' },
 			{ key = '0', name = 'Normal', desc = 'Balanced economy and army, no special push.' },
 			{ key = '1', name = 'Mass T3', desc = 'Gantries and experimental units, then a team push.' },
 			{ key = '2', name = 'Nukes and missiles', desc = 'Nuke silos, tactical and EMP launchers, then a team push.' },
@@ -29,9 +29,9 @@ local options = {
 			{ key = '4', name = 'Mass and push', desc = 'Normal production; the army gathers and pushes together.' },
 			{ key = '5', name = 'Mass air', desc = 'Air plants early (the AI picks how many), air army, then a team push.' },
 			{ key = '6', name = 'Rush', desc = 'Twice the army, early attacks together.' },
-			{ key = '7', name = 'Greed', desc = 'Half the army while the enemy is seen sitting passive; the rest into economy.' },
-			{ key = '9', name = 'Deep greed', desc = 'A quarter of the army while the enemy is seen passive. Risky.' },
-			{ key = '8', name = 'Turtle', desc = 'Heavy defences and anti-air, no push.' },
+			{ key = '7', name = 'Greed', desc = 'Half the army while the enemy is seen sitting passive; the rest into economy. Only when chosen here.' },
+			{ key = '9', name = 'Deep greed', desc = 'A quarter of the army while the enemy is seen passive. Risky. Only when chosen here.' },
+			{ key = '8', name = 'Turtle', desc = 'Heavy defences and anti-air, no push. Only when chosen here.' },
 		},
 	},
 	{ -- list
