@@ -465,6 +465,8 @@ float EvHandsTerm(float bpGapTerm, float pipe)
 	return (over > bpGapTerm) ? over : bpGapTerm;
 }
 
+int gEvTurretAt = -1;
+float gEvTurretR = 0.f;
 // The air constructor's build power per metal against the best constructor a plant we stand can make.
 float EvConEff(int con)
 {
@@ -485,6 +487,31 @@ float EvConEff(int con)
 				best = r;
 		}
 	}
+	// ...and against the cheapest build power of all, a turret our constructors can raise (his 11-05: every spend
+	// against what it takes away from -- 7 of 8 seats bought an advanced air plant to spend overflowing metal on air
+	// constructors, at about a quarter of a turret's build power per metal before the plant's own bill).
+	if (gEvTurretAt != ai.frame) {
+		gEvTurretAt = ai.frame;
+		gEvTurretR = 0.f;
+		const array<int>@ own = Market::OwnedDefs();
+		for (uint ci = 0; ci < own.length(); ++ci) {
+			const int hd = own[ci];
+			if ((Market::gOwnCount[hd] <= 0) || !Catalog::gMobile[hd] || !Catalog::gBuilder[hd])
+				continue;
+			const array<int>@ opts = Catalog::gBuildsList[hd];
+			for (uint q = 0; q < opts.length(); ++q) {
+				const int p = opts[q];
+				if (!Catalog::gAvailable[p] || Catalog::gMobile[p] || (Catalog::gBuildPower[p] <= 0.f)
+					|| (Catalog::gBuildsList[p].length() > 0) || (Catalog::gCostM[p] <= 0.f))
+					continue;
+				const float r = Catalog::gBuildPower[p] / Catalog::gCostM[p];
+				if (r > gEvTurretR)
+					gEvTurretR = r;
+			}
+		}
+	}
+	if (gEvTurretR > best)
+		best = gEvTurretR;
 	return (best > 0.f) ? (Catalog::gBuildPower[con] / Catalog::gCostM[con]) / best : 1.f;
 }
 

@@ -13,7 +13,7 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	const int id = unit.circuitDef.id;
 	if (Market::LiftHolds(unit))
 		return true;
-	if (IsLookDef(id) && (AtomicLookHolds(unit) || LookDispatch(unit)))
+	if (IsLookDef(id) && (ShellLook(unit) || AtomicLookHolds(unit) || LookDispatch(unit)))
 		return true;
 	// A fighter on cover keeps its guard order; CoverWatch sends it home.
 	if (Covering(unit.id))
@@ -322,6 +322,82 @@ void ReArm()
 	AiLog(Factory::T() + "apex: air strike over -- " + have
 		+ " of the wave home, " + held + " built since; massing them together"
 		+ " for the next run");
+}
+
+// EYES ON WHAT SHELLS US (his 11-07: "Humans will often sit under jammer with long-range units and just shell
+// the AI"; "go ahead with the air scout vision on the shell points"). Fire on our structures from something we
+// cannot see leaves a shell point in the DLL (apex_shell_answer: the shot's direction at the weapon's range). One
+// air scout per live point flies there and hovers while the point lives, so the shooter is seen and the defenders'
+// marked-shooter search can take it; when the point lapses the scout returns to its other looks.
+array<int> gShId;
+array<AIFloat3> gShAt;
+array<int> gShUntil;
+int gShSent = 0, gShHeld = 0, gShLogAt = 0;
+
+bool ShellLiveNear(const AIFloat3& in at)
+{
+	const int n = aiMilitaryMgr.GetShellPointCount();
+	for (int i = 0; i < n; ++i) {
+		const AIFloat3 p = aiMilitaryMgr.GetShellPointAt(i);
+		if (OnMap(p) && (p.distance2D(at) < 300.f))
+			return true;
+	}
+	return false;
+}
+
+bool ShellLook(CCircuitUnit@ unit)
+{
+	const int n = aiMilitaryMgr.GetShellPointCount();
+	const int uid = int(unit.id);
+	for (uint c = 0; c < gShId.length(); ) {
+		if ((gShUntil[c] <= ai.frame) || !ShellLiveNear(gShAt[c])) {
+			gShId.removeAt(c);
+			gShAt.removeAt(c);
+			gShUntil.removeAt(c);
+			continue;
+		}
+		if (gShId[c] == uid) {
+			if (unit.GetPos(ai.frame).distance2D(gShAt[c]) > 200.f)
+				unit.CmdMoveTo(gShAt[c]);
+			++gShHeld;
+			return true;
+		}
+		++c;
+	}
+	if (n <= 0)
+		return false;
+	const AIFloat3 from = unit.GetPos(ai.frame);
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestD = -1.f;
+	for (int i = 0; i < n; ++i) {
+		const AIFloat3 p = aiMilitaryMgr.GetShellPointAt(i);
+		if (!OnMap(p) || aiMilitaryMgr.GetShellPointSeen(i) || (aiMilitaryMgr.GetShellPointStake(i) <= 0.f))
+			continue;
+		bool taken = false;
+		for (uint c = 0; (c < gShAt.length()) && !taken; ++c)
+			taken = gShAt[c].distance2D(p) < 300.f;
+		if (taken)
+			continue;
+		const float d = from.distance2D(p);
+		if ((bestD < 0.f) || (d < bestD)) {
+			bestD = d;
+			best = p;
+		}
+	}
+	if (bestD < 0.f)
+		return false;
+	unit.CmdMoveTo(best);
+	gShId.insertLast(uid);
+	gShAt.insertLast(best);
+	gShUntil.insertLast(ai.frame + 60 * SECOND);
+	++gShSent;
+	if (ai.frame >= gShLogAt) {
+		gShLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: shell-look t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + uid
+			+ " -> " + int(best.x) + "," + int(best.z) + " sent=" + gShSent + " held=" + gShHeld
+			+ " flying=" + gShId.length());
+	}
+	return true;
 }
 
 // The scout the look bought flies it: a raw move across their structures

@@ -90,6 +90,7 @@
 #include "market/safety.as"        // commander self-preservation, ahead of the auction
 #include "market/rehome.as"        // a lost base is left: home moves to the safest ground we can reach
 #include "market/eta.as"            // the economy-only ETA target and its ladder
+#include "market/plan.as"           // the seat plan: top-down jobs, builders as hands (todo/seat-plan.md)
 #include "market/roles.as"          // constructor roles: the split of need, who holds which
 #include "market/crew.as"           // the field crew and the home crew
 #include "market/defrole.as"        // advanced hands held on advanced guns while that gap is open

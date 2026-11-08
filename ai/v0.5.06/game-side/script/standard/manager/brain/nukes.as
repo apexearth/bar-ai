@@ -804,6 +804,18 @@ void UpdateNukes()
 			extra = 3;
 		needed += extra;
 	}
+	// BRUTE FORCE (his 11-05: "25 nuclear missile launchers ... just launch them all at one little area; you'll
+	// probably get them"; BARb builds one anti). Base ground assumed covered beyond what we have seen: once the free
+	// stockpile already beats the assumed antis, the whole of it goes in one volley. Short of that the lean volley
+	// above still fires -- never held for the bar (the 17-minute hold this sizing replaced).
+	bool brute = false;
+	if (!bestDef && !bestBreach && (bestAntis > AntisCovering(bestPos))) {
+		const int bar = 1 + bestAntis * int(ai.GetTunable("apex_nuke_per_anti", TUNE_NUKE_PER_ANTI));
+		if (stock >= bar) {
+			needed = stock;
+			brute = true;
+		}
+	}
 	if (stock < needed) {
 		if (ai.frame >= gNukeNextLog) {
 			gNukeNextLog = ai.frame + 60 * SECOND;
@@ -880,7 +892,7 @@ void UpdateNukes()
 		+ gVolleys.length() + " volleys live) at "
 		+ int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)
-		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : "") + " kind=" + bestKind + " ecoBest=" + formatFloat(ecoBest, "", 0, 0));
+		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : "") + " kind=" + bestKind + (brute ? " BRUTE" : "") + " ecoBest=" + formatFloat(ecoBest, "", 0, 0));
 }
 
 //------------------------------------------------------------------------------

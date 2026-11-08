@@ -200,6 +200,7 @@ array<int> gSpamWId;
 array<AIFloat3> gSpamWAt;
 array<int> gSpamWSince;
 array<int> gSpamWTry;
+array<AIFloat3> gSpamWShell;   // the shell point each sent unit was last sent to
 uint gSpamWNext = 0;
 int gSpamResent = 0;
 void SpamWatchAdd(int id, const AIFloat3& in at)
@@ -208,6 +209,7 @@ void SpamWatchAdd(int id, const AIFloat3& in at)
 	gSpamWAt.insertLast(at);
 	gSpamWSince.insertLast(ai.frame);
 	gSpamWTry.insertLast(0);
+	gSpamWShell.insertLast(AIFloat3(-1.f, 0.f, -1.f));
 }
 // the destination for this unit, the k-th try: the first base it can reach within its own weapon's range
 bool SpamPick(CCircuitUnit@ unit, const AIFloat3& in here, int k, AIFloat3& out to)
@@ -251,9 +253,25 @@ void SpamWatch()
 			gSpamWAt.removeAt(i);
 			gSpamWSince.removeAt(i);
 			gSpamWTry.removeAt(i);
+			gSpamWShell.removeAt(i);
 			continue;
 		}
 		++gSpamWNext;
+		// SPAM ALREADY OUT GOES TOO (his 11-07: "any existing spam we have to just be redirected at whatever artillery
+		// might be [shooting] us ... reusing what existing resources you have"): a sent unit within reach of a live
+		// shell point moves to it, once per point.
+		{
+			const AIFloat3 up = u.GetPos(ai.frame);
+			AIFloat3 st;
+			if (SpamShellPick(u, up, st) && (gSpamWShell[i].distance2D(st) > 300.f)) {
+				gSpamWShell[i] = st;
+				u.CmdMoveTo(st);
+				SpamShellLog(u, st, true);
+				gSpamWAt[i] = up;
+				gSpamWSince[i] = ai.frame;
+				continue;
+			}
+		}
 		if (ai.frame - gSpamWSince[i] < win)
 			continue;
 		const AIFloat3 p = u.GetPos(ai.frame);
@@ -341,6 +359,54 @@ void SpamDestBuild(const AIFloat3& in from)
 }
 
 // 0 not spam, 1 sent now, 2 sent before (held)
+// SPAM AT WHAT SHELLS US (his 11-07: "if you can't directly contest the thing that's shooting at you, ... send spam
+// at it ... I have maybe 2000 metal worth of things around here, I can toss a 50 metal unit at it repeatedly and then
+// I won't lose those structures"; "its really good for delaying and buying time"). Fodder moves to the
+// nearest live point fire on our structures came from (the DLL's shell points, seen shooter or estimated), when the
+// structure hit there is worth more than the fodder and it can get there. apex_spam_shell.
+// Spam buys time only if it gets there while the fire lasts: a point is taken within this much of the unit's travel.
+const float SPAM_SHELL_REACH_S = 30.f;
+int gSpamShellN = 0;
+int gSpamShellRedirN = 0;
+bool SpamShellPick(CCircuitUnit@ unit, const AIFloat3& in here, AIFloat3& out to)
+{
+	if (ai.GetTunable("apex_spam_shell", TUNE_SPAM_SHELL) <= 0.f)
+		return false;
+	const int n = aiMilitaryMgr.GetShellPointCount();
+	if (n <= 0)
+		return false;
+	CCircuitDef@ d = Catalog::Def(int(unit.circuitDef.id));
+	const float rng = (Catalog::gLandRange[int(d.id)] > 0.f) ? Catalog::gLandRange[int(d.id)] : 100.f;
+	const float reach = Catalog::gSpeed[int(d.id)] * SPAM_SHELL_REACH_S;
+	float bestD = -1.f;
+	for (int i = 0; i < n; ++i) {
+		const AIFloat3 p = aiMilitaryMgr.GetShellPointAt(i);
+		if (!OnMap(p) || (aiMilitaryMgr.GetShellPointStake(i) <= unit.circuitDef.costM))
+			continue;
+		const float dd = here.distance2D(p);
+		if ((dd > reach) || ((bestD >= 0.f) && (dd >= bestD)) || !ai.CanDefReachAt(d, here, p, rng))
+			continue;
+		bestD = dd;
+		to = p;
+	}
+	return bestD >= 0.f;
+}
+
+int gSpamShellLogAt = 0;
+void SpamShellLog(CCircuitUnit@ unit, const AIFloat3& in to, bool redirect)
+{
+	if (redirect)
+		++gSpamShellRedirN;
+	else
+		++gSpamShellN;
+	if (ai.frame < gSpamShellLogAt)
+		return;
+	gSpamShellLogAt = ai.frame + 30 * SECOND;
+	AiLog(Factory::T() + "apex: spam-shell t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
+		+ " -> " + int(to.x) + "," + int(to.z) + (redirect ? " redirected" : " new")
+		+ " new=" + gSpamShellN + " redirected=" + gSpamShellRedirN);
+}
+
 int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 {
 	// while the T1 lab is still the ground army (no T2 land plant), its Pawns and Grunts are the army, not spam
@@ -354,14 +420,19 @@ int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 	if (gSpamSentAt[uint(id)] > 0)
 		return 2;
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	SpamDestBuild(here);
 	AIFloat3 to;
-	if (!SpamPick(unit, here, 0, to))
-		return 0;
+	const bool shell = SpamShellPick(unit, here, to);
+	if (!shell) {
+		SpamDestBuild(here);
+		if (!SpamPick(unit, here, 0, to))
+			return 0;
+	}
 	NotePostureDef(cdef, true);
 	// Under the stock army a combat def's script orders are dropped (StockDropUnit): both first tests sent nothing.
 	unit.SetScriptFree(true);
 	unit.CmdMoveTo(to);
+	if (shell)
+		SpamShellLog(unit, to, false);
 	gSpamSentAt[uint(id)] = ai.frame + 1;
 	SpamWatchAdd(id, here);
 	++gSpamSent;
@@ -598,7 +669,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// RAID task per unit bypassed the pool (Defend(RAID, quota.raid.min)) that
 		// holds them until they add up to that power and promotes them together,
 		// so they trickled out alone instead of massing into a raid pack.
-		// UpdateRaidCaution raises the promotion floor further while still on T1.
 		return NoteElect("fodder.stock", aiMilitaryMgr.DefaultMakeTask(unit));
 	}
 	// T3 CHARGERS GO FOR THE BASE. In the massing pool they inherited the

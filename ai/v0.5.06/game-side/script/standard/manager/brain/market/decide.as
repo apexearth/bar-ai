@@ -29,6 +29,63 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
 array<float> gIncWalk0(32001, 0.f);   // the walk the job started with (TUNE_HOIST_WAITS prices what is already paid)
+// The job is a gun an emergency ordered (cover, aa, defpanic). The market prices it far under the draw (a mex
+// guard at v=10 against a mex at 220), so the next ordinary election took the hand off it: 11-07, 22% of mex-guard
+// pushes were drawn off after a median 18-22 s, half of those never got a gun. Only another emergency moves it.
+array<bool> gIncGun(32001, false);
+int gGunHeldN = 0;
+
+// cpgate-stat: elections by a hand standing within tower reach of an unguarded mex, by how far the cover push
+// got: 0 another push, 1 no plant framed, 2 no defence want, 3 want not at a mex in reach, 4 interior site,
+// 5 floor, 6 covered, 7 ledger has a gun, 8 bill over the bar, 9 pushed.
+array<int> gCpN(10, 0);
+int gCpChances = 0;
+int gCpLogAt = 0;
+int gCpBillN = 0;
+int gCpLightN = 0;   // pushes that took the light tower in place of a heavy gun over the bar
+bool CpChance(CCircuitUnit@ unit)
+{
+	const float near = Brain::LightTowerRange();
+	const AIFloat3 at = NearestMex(unit.GetPos(ai.frame), near);
+	return OnMap(at) && MexUnguardedInReach(at, near);
+}
+// Stage 2 split: no ground-defence want proposed / proposed at value 0 with a displacement charge (the
+// do-nothing rule) / at value 0 otherwise / valued but dropped before ranking.
+array<int> gCpNw(4, 0);
+void CpNoWant(const array<Want@>@ wants)
+{
+	int k = 0;
+	for (uint i = 0; i < wants.length(); ++i) {
+		const Want@ c = wants[i];
+		if ((c is null) || (c.kind != WK_PROTECT) || (c.spotId != PROT_DEF))
+			continue;
+		k = (c.value > 0.f) ? 3 : ((c.pcDisp > 0.f) ? 1 : 2);
+		break;
+	}
+	++gCpNw[k];
+}
+
+int CpAt(int stage, int s)
+{
+	if ((stage >= 2) && (s > stage))
+		return s;
+	return stage;
+}
+void CpNote(int stage)
+{
+	if ((stage >= 0) && (stage < int(gCpN.length()))) {
+		++gCpChances;
+		++gCpN[stage];
+	}
+	if (ai.frame < gCpLogAt)
+		return;
+	gCpLogAt = ai.frame + 60 * SECOND;
+	string s = "apex: cpgate-stat t=" + ai.teamId + " chances=" + gCpChances + " light=" + gCpLightN
+		+ " nowant=" + gCpNw[0] + "/" + gCpNw[1] + "/" + gCpNw[2] + "/" + gCpNw[3] + " |";
+	for (uint i = 0; i < gCpN.length(); ++i)
+		s += " " + gCpN[i];
+	AiLog(s);
+}
 
 // A dead unit's id comes back on a new unit: its rows start clean, and the dead job is let go.
 void DecideIdGone(int id)
@@ -38,6 +95,7 @@ void DecideIdGone(int id)
 	@gIncTask[id] = null;
 	gIncVal[id] = 0.f;
 	gIncWalk0[id] = 0.f;
+	gIncGun[id] = false;
 	gLastDecideAt[id] = -30000;
 	gYoungN[id] = 0;
 	gWkExpoAt[id] = -30000;
@@ -866,6 +924,41 @@ void ValItemLog()
 	if (s.length() > 0)
 		AiLog(Factory::T() + "apex: valitem t=" + ai.teamId + s);
 }
+// HELP BESIDE EVERY START (his 11-05: "is somebody else already doing this? Should I just help them?"). Per seat per
+// minute: elections a start won, how many had a help (assist) want on offer, and how it was priced against the winner.
+int gHsStarts = 0, gHsOffered = 0, gHsHelpHigher = 0, gHsHelpWon = 0, gHsAt = 0;
+float gHsLogRatio = 0.f;
+void HelpStatNote(const array<Want@>@ ranked, Want@ top)
+{
+	if (top is null)
+		return;
+	if (top.kind == WK_ASSIST) {
+		++gHsHelpWon;
+	} else if ((top.kind != WK_RECLAIM) && (top.def !is null)) {
+		++gHsStarts;
+		float hv = -1.f;
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if ((ranked[i] !is null) && (ranked[i].kind == WK_ASSIST) && (ranked[i].value > hv))
+				hv = ranked[i].value;
+		}
+		if (hv > 0.f) {
+			++gHsOffered;
+			if (hv > top.value)
+				++gHsHelpHigher;
+			if (top.value > 0.f)
+				gHsLogRatio += log(hv / top.value);
+		}
+	}
+	if (ai.frame < gHsAt)
+		return;
+	gHsAt = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: help-stat t=" + ai.teamId + " starts=" + gHsStarts + " helpOffered=" + gHsOffered
+		+ " helpPricedHigher=" + gHsHelpHigher + " helpWon=" + gHsHelpWon
+		+ " helpOverStart=" + formatFloat((gHsOffered > 0) ? pow(2.718282f, gHsLogRatio / float(gHsOffered)) : 0.f, "", 0, 3));
+	gHsStarts = 0; gHsOffered = 0; gHsHelpHigher = 0; gHsHelpWon = 0;
+	gHsLogRatio = 0.f;
+}
+
 void ValMixNote(const array<Want@>@ ranked, Want@ top)
 {
 	if ((ranked is null) || (top is null))
@@ -1090,8 +1183,7 @@ bool StepSkip(int step, CCircuitUnit@ unit)
 	// executions mostly arrive through hoists (coverall, basefront) that never
 	// credit this step, so learning skipped the question it must keep asking.
 	if ((step == 14) && ((DefenceValue() <= 0.f) || (DefenceShortfall() > 0.f)))
-		return false;
-	if ((step == 17) && (Military::AirSeenEver() > 0.f) && !ProtAnyComing(PROT_AA))
+		return false;	if ((step == 17) && (Military::AirSeenEver() > 0.f) && !ProtAnyComing(PROT_AA))
 		return false;
 	++gStepSkipped;
 	return true;
@@ -2847,6 +2939,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// it is asked first. Under apex_mex_basic the mex just built is guarded before the next is claimed: with the
 	// expansion head over 1 the next mex came first every time, and raiders took the last one (10-23, Comet: 15
 	// spots raided from minute 2.7, the first tower at 4.8, none inside cover of a raided spot).
+	int cpStage = CpChance(unit) ? 1 : -1;
+	if (cpStage > 0) {
+		if (aaPanic || superPush || convertPush || coverPush)
+			cpStage = 0;
+		else if (!PlantFramed())
+			cpStage = 1;
+		else
+			cpStage = 2;
+	}
 	if (!aaPanic && !superPush && !convertPush && !coverPush && (!mexOnList || MexBasicOn())
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f) && !StrikeHoldsDefence()
 		&& PlantFramed())
@@ -2857,10 +2958,22 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		const float pushAff = ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
 		const float pushCap = EcoPowerM() * pushAff;
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
-		for (uint ri = 0; ri < ranked.length(); ++ri) {
-			Want@ cw = ranked[ri];
+		// THE PUSH TAKES THE DEFENCE WANT FROM THE PROPOSALS, not only from the ranked list: it re-sites the
+		// want on the mex and jumps the queue whatever its value, so a want dropped for its own site (refused
+		// there within the memo: "takeNull verdict=covered") or priced to zero there was still the gun the mex
+		// needed. 11-07, 24 games: of chances with no defence want ranked, 42% had one dropped and 33% one zeroed.
+		array<Want@> cands = ranked;
+		for (uint wi = 0; wi < wants.length(); ++wi) {
+			Want@ c = wants[wi];
+			if ((c !is null) && (c.kind == WK_PROTECT) && (c.spotId == PROT_DEF) && (c.def !is null)
+				&& (cands.findByRef(c) < 0))
+				cands.insertLast(c);
+		}
+		for (uint ri = 0; ri < cands.length(); ++ri) {
+			Want@ cw = cands[ri];
 			if ((cw.kind != WK_PROTECT) || (cw.spotId != PROT_DEF))
 				continue;
+			cpStage = CpAt(cpStage, 3);
 			// REVERTED. Retargeting the want to the nearest mex in reach was
 			// mine tonight and it was never shown to help -- mex coverage went
 			// 83% to 85%, inside the run-to-run spread -- while it demonstrably
@@ -2898,8 +3011,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				cw.pos = uAt;
 			if ((!SiteIsMex(cw.pos) && !scouted) || (uAt.distance2D(cw.pos) > near))
 				continue;
+			cpStage = CpAt(cpStage, 4);
 			if ((cw.def !is null) && InteriorGunSite(int(cw.def.id), cw.pos))
 				continue;
+			cpStage = CpAt(cpStage, 5);
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
 			// A mex's FIRST gun is the basic defence, not the gun-push head's to scale (apex_mex_basic): the
@@ -2910,9 +3025,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				floorHere *= DefMeasuredPressure(DefMeasuredAt(cw.pos));
 			if ((floorHere <= 1.f) || (!basic && (GunpCount(1) < 1)))
 				continue;
+			cpStage = CpAt(cpStage, 6);
 			const float coverHere = CoverAt(cw.pos);
 			if (coverHere >= floorHere)
 				continue;
+			cpStage = CpAt(cpStage, 7);
 			// THE LEDGER, NOT THE FINISHED FIELD. CoverAt reads standing guns,
 			// so while the first tower was a frame the jump fired again every
 			// election: the commander stacked seven light towers on one mex
@@ -2921,6 +3038,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// 7m"). A gun ordered within reach of the site's mex is its gun.
 			if (!MexUnguardedInReach(cw.pos, near))
 				continue;
+			cpStage = CpAt(cpStage, 8);
 			// ...AND ONLY ONCE THE BASE CAN AFFORD IT (apexearth 2026-08-27:
 			// "turrets aren't bad to have but usually thats made after we have
 			// our basic base set up. mexes/energy -> T1 lab -> more energy ->
@@ -2943,12 +3061,36 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const int cd = int(cw.def.id);
 				const float bill = Catalog::gCostM[cd] + Catalog::gCostE[cd]
 						* EPriceCostAt(cw.buildSec, Catalog::gCostE[cd]);
-				if (bill > pushCap)
-					continue;
+				// THE ASK IS A SENTRY. The site's best-priced gun is often a heavy one (11-07, sampled bar refusals:
+				// Dragon's Claw 340 m, Beamer 190, HLT 440 against caps of 76-348), and the bar refused the push
+				// whole: 41-47% of chances after minute 6. The light tower is the gun the push exists to buy.
+				if (bill > pushCap) {
+					CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+					float lBill = -1.f;
+					if ((light !is null) && (light !is cw.def) && unit.circuitDef.CanBuild(light)) {
+						const int ld = int(light.id);
+						lBill = Catalog::gCostM[ld] + Catalog::gCostE[ld] * EPriceCostAt(cw.buildSec, Catalog::gCostE[ld]);
+					}
+					if ((lBill < 0.f) || (lBill > pushCap)) {
+						if ((++gCpBillN % 8) == 1)
+							AiLog("apex: cpgate-bill t=" + ai.teamId + " " + cw.def.GetName() + " bill=" + int(bill)
+								+ " light=" + int(lBill) + " cap=" + int(pushCap));
+						continue;
+					}
+					@cw.def = light;
+					++gCpLightN;
+				}
 			}
-			if (ri > 0) {
-				ranked.removeAt(ri);
-				ranked.insertAt(0, cw);
+			cpStage = CpAt(cpStage, 9);
+			{
+				const int at = ranked.findByRef(cw);
+				if (at != 0) {
+					if (at > 0)
+						ranked.removeAt(uint(at));
+					else if (cw.value <= 0.f)
+						cw.value = 0.001f;
+					ranked.insertAt(0, cw);
+				}
 			}
 			// EXEMPT FROM THE DRAW AGAIN, for the FIRST gun only. The jump
 			// was cut back to a hoist when it bought a tower on every claim
@@ -2973,6 +3115,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	if (cpStage == 2)
+		CpNoWant(wants);
+	CpNote(cpStage);
 	// OUT OF METAL THE COMMANDER GETS MORE (his 2026-10-05). His best-priced
 	// claim or reclaim is taken; its risk price and the first-gun rule stand.
 	if (!aaPanic && !superPush && !convertPush && !coverPush
@@ -3353,7 +3498,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				if (hoistWaits) {
 					++gHoistWaitN;
 				}
-				const bool dropped = !onCrew && !hoistWaits;
+				const bool gunHeld = !hoistWaits && gIncGun[uidk] && OnMap(ip) && !Builder::SiteHot(ip);
+				if (gunHeld)
+					++gGunHeldN;
+				const bool dropped = !onCrew && !hoistWaits && !gunHeld;
 				if (dropped) {
 					if (Requests::OrderReleaseOn()) {
 						const int li = Requests::LiveIndex(inc);
@@ -3371,7 +3519,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						AiLog("apex: keep-job t=" + ai.teamId + " " + unit.circuitDef.GetName()
 							+ " #" + unit.id + " v=" + formatFloat(gIncVal[uidk] * 1000.f, "", 0, 2)
 							+ " over " + KindName(top.kind) + " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
-							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN + " sameType=" + gSameTypeKeep);
+							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN + " gunHeld=" + gGunHeldN
+							+ " sameType=" + gSameTypeKeep);
 					}
 					return inc;
 				}
@@ -3401,6 +3550,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 			AiLog(ln);
 		}
+	}
+	// THE SEAT PLAN DECIDES (apex_seat_plan 1; todo/seat-plan.md): its job for this hand, unless an emergency or a
+	// defence kind under its share holds it; an economy start the plan did not admit is not taken.
+	if (SeatPlanOn() && !emergency) {
+		SeatPlanUpdate();
+		IUnitTask@ planT = SeatPlanDispatch(unit, ranked, top);
+		if (planT !is null)
+			return planT;
+		@top = SeatPlanFilterTop(ranked, top);
 	}
 	if (top is null) {
 		if (ai.frame >= gNextIdleLog) {
@@ -3435,6 +3593,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			(top.kind == WK_PLANT) && (top.def !is null) && AirPlant(int(top.def.id)));
 	}
 	ValMixNote(ranked, top);
+	HelpStatNote(ranked, top);
+	{ const double _tSp = Perf::T0(); SeatPlanUpdate(); SeatPlanNote(unit, top); Perf::Add("dec.seatplan", _tSp); }
 	if (PersOn())
 		PersNoteTop(top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
@@ -3581,6 +3741,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
 				gIncGain[int(unit.id)] = ranked[i].gain;
+				gIncGun[int(unit.id)] = (depth == 0)
+						&& ((why == "cover") || (why == "aa") || (why == "defpanic"));
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
 				const AIFloat3 tp0 = t.GetBuildPos();

@@ -36,6 +36,10 @@ void PeelSurplus()
 		int wantN = (IsBigEnergy(t.buildDef) || IsMetalUnlock(t.buildDef))
 				? int(SiteWorkerCap(t.buildDef))
 				: int(FeedableCrew(t.buildDef));
+		// the seat plan sized this crew (todo/seat-plan.md): peel to its number, or the two rungs cycle the hands
+		const int planN = Market::PlanCrewFor(t);
+		if (planN > 0)
+			wantN = planN;
 		// THE FOUNDER NEVER LEAVES. A ring seen lathing the frame trims the
 		// crew to one hand, never to none: turrets work their nearest target
 		// and an unattended frame decays (apexearth 2026-09-20: "those nano

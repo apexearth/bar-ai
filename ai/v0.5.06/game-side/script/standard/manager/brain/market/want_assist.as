@@ -9,6 +9,20 @@ int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assis
 // into a build the market already values at clearing rates; the bill is
 // the walk and the occupied time. That beats a marginal solar and loses to
 // a fresh mex -- the right ordering by construction.
+// THE TURRETS ACTUALLY WORKING A JOB, in metal/s (his 11-05: "should I just help them?"). Counting every turret in
+// reach as feeding the job (NanoLatheReaching) read a site inside the base as near-done, so helping it priced at a
+// median 0.001 of the start that won instead (bench focus1); a turret works its nearest target, so the ring is the
+// one SEEN lathing the frame (Requests::RingSeen, build power) at the job's own metal per build-power second.
+float HelpRingM(IUnitTask@ job)
+{
+	if ((job is null) || (job.buildDef is null))
+		return 0.f;
+	const int d = int(job.buildDef.id);
+	if (!Catalog::ValidId(d) || (Catalog::gBuildTime[d] <= 1.f))
+		return 0.f;
+	return Requests::RingSeen(job) * Catalog::gCostM[d] / Catalog::gBuildTime[d];
+}
+
 // Can this builder def raise a nano turret (a static lathe with no build list)?
 array<int> gHandNano;   // per def: 0 unknown, 1 yes, 2 no
 bool HandBuildsNano(int uid)
@@ -423,7 +437,7 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 		// included, or the fortieth guard prices like the first.
 		const uint hands = Requests::Workers(gBossJob) + uint(GuardsOnJob(gBossJob));
 		const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN
-				+ NanoLatheReaching(gBossJob.GetBuildPos());
+				+ HelpRingM(gBossJob);
 		float R = gBossJob.buildDef.costM
 				* (1.f - Requests::Progress(gBossJob));
 		if (R < 1.f)
@@ -460,6 +474,18 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// metal reactor is a ten-minute posting and has to be priced as one.
 	w.tCost = (walkSec + occupiedSec) * WageOf(unit);
 	w.value = w.gain / (w.mCost + w.tCost);
+	// HELPING A JOB IS BUYING MORE OF IT (his 11-06: "if you only have one constructor trying to make a heavy laser
+	// turret, it's probably not going to finish"). The value nets multiply every start (1.5-15x on towers) and no
+	// assist, so help on a tower read 1-10% of starting another: our towers took twice BARb's time, half the heavy
+	// lasers and Punishers never finished. An assist carries the multiplier its job was bought at. 2v2 vs BARb, 24
+	// pairs: income at 12 min +10 (t 2.9), at 20 +17 (t 2.4), army +2.6k (t 2.6), heavy lasers unfinished 55% -> 32%.
+	if (gBossJob !is null) {
+		const float jn = JobNn(gBossJob);
+		if (jn > 0.f) {
+			w.value *= jn;
+			w.nnMult *= jn;
+		}
+	}
 	@gAssistTarget = boss;
 	gAssistTargetId = (boss !is null) ? boss.id : -1;
 	gAssistGuardS = 60;
