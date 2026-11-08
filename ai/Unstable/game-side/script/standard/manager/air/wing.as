@@ -65,6 +65,30 @@ int Have(CCircuitDef@ def)
 int Bombers()  { return Have(gBomber) + Have(gBomber1) + Have(gBomberH) + Have(gBomberN); }
 int Fighters() { return Have(gFighter) + Have(gFighter1); }
 
+// THE WING THE AIR MODULE ASKS FOR IS BUILT (his 11-07: late air "tends to disappear"; "ensure we have enough
+// fighters too"). Measured 11-07 at +50 and in 60-minute games: it wanted 13-23 bombers and 8-15 fighters and held
+// 0-3 and 0-1 all game -- the basic air plant was muted beside an advanced one, and fighters stopped at the AA role's
+// "answer their air" target. While the armed wing is short, its own airframes are not muted, and the escort it asks
+// for is part of the fighter target.
+bool WingShort(int d)
+{
+	if (!Armed())
+		return false;
+	if (IsBomberDef(d))
+		return Bombers() < ScaledBombers();
+	if (IsFighterDef(d))
+		return Fighters() < ScaledFighters();
+	return false;
+}
+
+float WingFighterWantM()
+{
+	if (!Armed())
+		return 0.f;
+	CCircuitDef@ f = ((gFighter !is null) && gFighter.IsAvailable(ai.frame)) ? gFighter : gFighter1;
+	return (f is null) ? 0.f : float(ScaledFighters()) * f.costM;
+}
+
 bool Massed()
 {
 	// Finished planes: a count with frames in it released waves of none.

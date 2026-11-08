@@ -903,7 +903,8 @@ void AASplit(bool flyer, float tIn, float vIn, float& out rTarget, float& out rV
 			airPart = 0.f;
 		const float fTgt = airPart * fShare + escort;
 		if (flyer) {
-			rTarget = fTgt;
+			const float wingF = (ai.GetTunable("apex_wing_build", TUNE_WING_BUILD) > 0.f) ? Air::WingFighterWantM() : 0.f;
+			rTarget = (wingF > fTgt) ? wingF : fTgt;
 			rValue = Air::FighterMetalHeld();
 		} else {
 			rTarget -= fTgt;
@@ -2184,7 +2185,8 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		}
 		// Not lifted by a full bank (the spill exception below is for ground lines a tier behind): a basic air plant beside
 		// an advanced one ordered 147 T1 fighters in ten minutes of his 10-19 Odderon game, 926 standing at minute 48.
-		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
+		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f)
+			&& !((ai.GetTunable("apex_wing_build", TUNE_WING_BUILD) > 0.f) && Air::WingShort(d)))
 			continue;
 		// THE WING'S LOOK: an air scout bought for what seeing their economy
 		// adds to the first bomber's price (Air::LookGainFor). A second demand

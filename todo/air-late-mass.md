@@ -28,9 +28,25 @@ all, and the only option is to kill it.
 Fighters too (his 11-07: "ensure we have enough fighters too"): the same heartbeat reads fighters 0-1 held against
 8-15 wanted all game -- the same starved production, and the bombers' escort and air control depend on them.
 
+His 11-07: "strikes against anti-air can unlock much more valuable strikes later on." The strike price today
+(nnair.as NaEval: kill of what is in the cell, loss on the path) is one strike deep: killing AA earns only the AA's
+own metal, never the cheaper path it opens to the prize behind it. An AA cell's worth should carry the later
+strikes it unlocks -- the drop in path AA to the best cells behind it, times what those strikes then net.
+
+His 11-07: "killing enemy eco is a win far greater than just what that eco cost". NaPrizeOf already prices a
+dead eco building at its metal plus its output until a constructor walks out and rebuilds it; it misses the
+compounding our own eco pricing charges (the growth premium apex_mex_growth / apex_energy_growth on the same
+stream). Their eco should be priced with the premium we put on ours.
+
 What it wants:
 - the wing sized to beat their AA where it strikes (mass until the wave saturates it), and production that grows
   with income rather than falling;
 - their AA as a target in its own right when it is what stands between the wing and the base -- bombers on the AA
   first, or EMP launchers / tactical missiles / artillery on it -- then the wing has the sky;
 - ties to [frontline-hold](frontline-hold.md) (the coordinated break uses the same strike pieces).
+
+Measured 11-07 (40-minute games at +50, scratchpad bomberfate.py): ~58 bombers built a game to minute 40, ~52
+die, 80-86% over their half, 94-98% to a killer we never saw. Holding the net's early GOs (apex_wing_rule) and
+building the wing (apex_wing_build) together scored -0.49 (t -1.2): the rule itself approves small strikes because
+NaEval prices only the AA it has SEEN (cellAA). The strike price needs the AA it cannot see -- what stood there when
+last seen, where our strikes died, their AA spend we have not located.

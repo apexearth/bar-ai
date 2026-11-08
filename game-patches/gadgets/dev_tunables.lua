@@ -177,6 +177,7 @@ local NAMES = {
 	"apex_escort_share",
 	"apex_shell_answer",
 	"apex_spam_shell",
+	"apex_wing_build",
 	"apex_dup_bp_subst",
 	"apex_replant_discount",
 	"apex_replant_window_s",

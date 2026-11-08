@@ -1951,6 +1951,7 @@ const float TUNE_SPAM_RAIDERS = 1.f;
 
 const float TUNE_SPAM_SEND = 1.f;   // [toggle 0/1] hooks.as SpamSend: late fodder gets one fight order at their base and none after
 const float TUNE_SPAM_SHELL = 1.f;   // [toggle 0/1] hooks.as SpamShellPick: late fodder moves to where fire on our structures comes from (his 11-07)
+const float TUNE_WING_BUILD = 1.f;   // [toggle 0/1] air/wing.as WingShort: the armed wing's bombers/fighters unmuted on the basic plant and its escort in the fighter target (his 11-07)
 const float TUNE_SPAM_SUICIDAL = 1.f;
 
 // [seconds] -- A stuck unit already asked for unblocking is not re-asked for
