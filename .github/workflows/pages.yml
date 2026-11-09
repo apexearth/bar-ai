@@ -1,0 +1,45 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: [README.md, .github/workflows/pages.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+      - name: Stage the README alone
+        run: |
+          mkdir site
+          sed -E 's#\]\(\.?/?([^):#][^):]*)\)#](https://github.com/apexearth/bar-ai/blob/main/\1)#g' README.md > site/README.md
+          printf 'title: Apex\ndescription: A skirmish AI for Beyond All Reason\ntheme: jekyll-theme-primer\n' > site/_config.yml
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
