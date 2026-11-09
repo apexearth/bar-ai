@@ -5,7 +5,49 @@ the Recoil engine. It started as a fork of BARb, the AI that ships with the game
 replaced most of how BARb decides what to build and when. This repo is its source, its test
 harness and its notes.
 
-If you only want to play against it, skip to [Play against it](#play-against-it).
+## Play against it
+
+You need BAR, started at least once so it has downloaded its engine. These steps are for Windows;
+on Linux, download **`Apex-AI-<version>-LINUX.tar.gz`** instead and run
+`tar xzf Apex-AI-<version>-LINUX.tar.gz && bash install.sh` (the Linux build is new and lightly tested).
+
+1. Open the [latest release](https://github.com/apexearth/bar-ai/releases/latest) and download the
+   file named **`Apex-AI-<version>-INSTALL.zip`** (a few MB). Not "Source code (zip)" or "(tar.gz)":
+   GitHub adds those to every release, they are this whole repository, very large, and have no installer.
+2. Close BAR.
+3. Right-click the zip, **Extract All**, and double-click `Install.bat` in the extracted folder.
+   It finds your BAR install, copies the AI into the engine folder, and turns off the lobby's
+   "Simple AI list", which would otherwise hide it.
+4. Start BAR. In a skirmish or a hosted lobby, **Add AI** and pick **Apex** with its version.
+
+Only the player hosting the game needs it installed. Everyone else just joins.
+
+Some things to know:
+
+- **Engine version.** Each zip is built for one BAR engine, named in the zip and on the release
+  page (for example `recoil_2026.07.04`). On a different engine the AI fails to load without a
+  useful error. The installer warns you if yours does not match.
+- **BAR updates.** An engine update wipes the AI folder. Run `Install.bat` again, or get the
+  release built for the new engine.
+- **Keep one version installed.** A hosted lobby does not send which version you picked, so the
+  engine loads the highest Apex version installed. Delete old ones from
+  `<BAR install>\data\engine\<engine>\AI\Skirmish\Apex\`.
+- **Manual install.** `INSTALL.txt` in the zip has the steps if the installer cannot find BAR.
+- **Uninstall.** Delete the `Apex` folder above.
+
+### Lobby options
+
+Each Apex bot in a lobby has its own options. The defaults are what gets tested. The forced team
+strategies, the economy player and "Try strategies" are experimental, so expect odd games when you
+change them.
+
+| Option | What it does |
+|---|---|
+| Team strategy | Let the AI choose (default), or force one: Normal, Mass T3, Nukes and missiles, Long-range artillery, Mass and push, Mass air, Rush, Greed, Deep greed, Turtle. |
+| Economy player | Makes this bot its team's economy player: economy first, army and defence once its base is threatened. 0 is off, 1 is a full economy phase. |
+| Neural net influence | 1 lets the trained nets steer (default). 0 plays the hand-written rules alone, if the nets misbehave. |
+| Try strategies | Picks the team strategy at random instead of letting the AI choose. Use on one bot per team. |
+| Advanced | Map-wide vision (a cheat), keeping out of allied bases, units this bot never builds, and a few more. |
 
 ## What is different about it
 
@@ -92,48 +134,6 @@ nuke salvos, long-range plasma.
 Changes are tested in headless AI-vs-AI games, mostly against stock BARb, and judged on what the
 games show rather than on whether the new code ran. Each release tag
 records what it measured, including the changes that made it worse ([`docs/versions.md`](docs/versions.md)).
-
-## Play against it
-
-You need Windows and BAR, started at least once so it has downloaded its engine.
-
-1. Open the [latest release](https://github.com/apexearth/bar-ai/releases/latest) and download the
-   file named **`Apex-AI-<version>-INSTALL.zip`** (a few MB). Not "Source code (zip)" or "(tar.gz)":
-   GitHub adds those to every release, they are this whole repository, very large, and have no installer.
-2. Close BAR.
-3. Right-click the zip, **Extract All**, and double-click `Install.bat` in the extracted folder.
-   It finds your BAR install, copies the AI into the engine folder, and turns off the lobby's
-   "Simple AI list", which would otherwise hide it.
-4. Start BAR. In a skirmish or a hosted lobby, **Add AI** and pick **Apex** with its version.
-
-Only the player hosting the game needs it installed. Everyone else just joins.
-
-Some things to know:
-
-- **Engine version.** Each zip is built for one BAR engine, named in the zip and on the release
-  page (for example `recoil_2026.07.04`). On a different engine the AI fails to load without a
-  useful error. The installer warns you if yours does not match.
-- **BAR updates.** An engine update wipes the AI folder. Run `Install.bat` again, or get the
-  release built for the new engine.
-- **Keep one version installed.** A hosted lobby does not send which version you picked, so the
-  engine loads the highest Apex version installed. Delete old ones from
-  `<BAR install>\data\engine\<engine>\AI\Skirmish\Apex\`.
-- **Manual install.** `INSTALL.txt` in the zip has the steps if the installer cannot find BAR.
-- **Uninstall.** Delete the `Apex` folder above.
-
-### Lobby options
-
-Each Apex bot in a lobby has its own options. The defaults are what gets tested. The forced team
-strategies, the economy player and "Try strategies" are experimental, so expect odd games when you
-change them.
-
-| Option | What it does |
-|---|---|
-| Team strategy | Let the AI choose (default), or force one: Normal, Mass T3, Nukes and missiles, Long-range artillery, Mass and push, Mass air, Rush, Greed, Deep greed, Turtle. |
-| Economy player | Makes this bot its team's economy player: economy first, army and defence once its base is threatened. 0 is off, 1 is a full economy phase. |
-| Neural net influence | 1 lets the trained nets steer (default). 0 plays the hand-written rules alone, if the nets misbehave. |
-| Try strategies | Picks the team strategy at random instead of letting the AI choose. Use on one bot per team. |
-| Advanced | Map-wide vision (a cheat), keeping out of allied bases, units this bot never builds, and a few more. |
 
 ## Run it from source
 
