@@ -129,6 +129,62 @@ void Vanguard()
 		+ " at=" + int(at.x) + "," + int(at.z));
 }
 
+// THE FIGHTERS ARRIVE WITH THE BOMBERS (his 11-09: sent at the launch at twice the bombers' speed they got there
+// first and told the enemy bombers were coming). Under apex_air_vanguard_late they guard the wave's bombers on the
+// way (hooks.as air.cover) and break ahead when the nearest bomber is within the cell plus its AA reach.
+bool gVanguardDue = false;
+int gVanguardLate = -1;
+bool VanguardLateOn()
+{
+	if (gVanguardLate < 0)
+		gVanguardLate = (ai.GetTunable("apex_air_vanguard_late", TUNE_AIR_VANGUARD_LATE) > 0.f) ? 1 : 0;
+	return gVanguardLate > 0;
+}
+
+void VanguardWatch()
+{
+	if (!gVanguardDue)
+		return;
+	if (!gStrike || !gStrikeHas || !OnMap(gStrikeAt)) {
+		gVanguardDue = false;
+		return;
+	}
+	const float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
+	float reach = 0.f;
+	for (uint e = 0; e < gNaAAP.length(); ++e)
+		if ((gNaAAR[e] > reach) && (gNaAAP[e].distance2D(gStrikeAt) <= gNaAAR[e] + r))
+			reach = gNaAAR[e];
+	const float trig = r + ((reach > 0.f) ? reach : r);
+	float near = -1.f;
+	int nb = 0;
+	for (int i = 0; i < 4; ++i) {
+		CCircuitDef@ d = StrikeDef(i);
+		if (d is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(d, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] is null) || !InWave(us[k].id))
+				continue;
+			++nb;
+			const float dd = us[k].GetPos(ai.frame).distance2D(gStrikeAt);
+			if ((near < 0.f) || (dd < near))
+				near = dd;
+		}
+	}
+	if (nb == 0) {
+		gVanguardDue = false;
+		return;
+	}
+	if (near > trig)
+		return;
+	gVanguardDue = false;
+	AiLog(Factory::T() + "apex: air vanguard due near=" + int(near) + " trig=" + int(trig) + " aaReach=" + int(reach)
+		+ " bombers=" + nb);
+	Vanguard();
+}
+
 bool IsFlightDef(int d)
 {
 	if (IsLookDef(d))

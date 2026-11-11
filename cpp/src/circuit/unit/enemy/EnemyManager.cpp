@@ -783,18 +783,22 @@ void CEnemyManager::AddEnemyCost(CEnemyUnit* e)
 	e->SetCounted();
 }
 
+// The fresh share leaves with the unit whether or not it was counted: the freshness pass flags anything in sight, and
+// a unit flagged fresh but never counted kept its cost in the fresh totals forever once DyingEnemy deleted it (his
+// 11-10 online game vs scavengers: fresh enemy air 779k against 128k ever seen; the AA role target followed it to 2-3x
+// the whole army target).
 void CEnemyManager::DelEnemyCost(CEnemyUnit* e)
 {
+	if (e->IsFresh()) {
+		ModFresh(e, -1);
+		e->ClearFresh();
+	}
 	if (!e->IsCounted()) {
 		return;
 	}
 
 	ModCost(e, -1, enemyInfos.data(), enemyMobileCost, mobileThreat);
 	ModStatic(e, -1);
-	if (e->IsFresh()) {
-		ModFresh(e, -1);
-		e->ClearFresh();
-	}
 	e->ClearCounted();
 }
 

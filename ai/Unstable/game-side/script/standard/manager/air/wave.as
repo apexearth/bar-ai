@@ -277,7 +277,9 @@ int ReadyFighters()
 int EscortWant()
 {
 	const int f = ScaledFighters();
-	return EvEscortCap(IsAirLead() ? f : ((f + 1) / 2));
+	const int w = EvEscortCap(IsAirLead() ? f : ((f + 1) / 2));
+	const int need = NaEscortNeedN();
+	return (need > w) ? need : w;
 }
 
 // The run is over -- bring the survivors back so they mass with what was built

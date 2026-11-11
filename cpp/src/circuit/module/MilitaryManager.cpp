@@ -1973,6 +1973,51 @@ unsigned int CMilitaryManager::ReleaseHoldPools()
 	return n;
 }
 
+// THE STRIKE LEAVES TOGETHER (strike.as STRIKE phase, his 11-09: "a rush can decide a game within 5 minutes"): every
+// pool (attack, held or raider) and every escort hands its units to ONE attack squad. Under the stock army the strike
+// otherwise only moved the threat modifier: the army stood home on DEFEND and GUARD. Once an attack task exists, stock
+// pools promote on their own, so what the labs make next follows.
+unsigned int CMilitaryManager::LaunchPools()
+{
+	std::vector<CCircuitUnit*> go;
+	int pools = 0, guards = 0;
+	for (IFighterTask* task : GetTasks(IFighterTask::FightType::DEFEND)) {
+		const IFighterTask::FightType p = static_cast<CDefendTask*>(task)->GetPromote();
+		if ((p != IFighterTask::FightType::ATTACK) && (p != IFighterTask::FightType::MELEE)
+			&& (p != IFighterTask::FightType::RAID))
+		{
+			continue;
+		}
+		pools += task->GetAssignees().empty() ? 0 : 1;
+		go.insert(go.end(), task->GetAssignees().begin(), task->GetAssignees().end());
+	}
+	for (IFighterTask* task : GetTasks(IFighterTask::FightType::GUARD)) {
+		guards += task->GetAssignees().empty() ? 0 : 1;
+		go.insert(go.end(), task->GetAssignees().begin(), task->GetAssignees().end());
+	}
+	// ...and the attack squads already out: each weighed only itself against their group at mid, found it too weak
+	// and fell back to our front (StockFindTarget/StockPressPos), so 20+ units stood at mid as several squads
+	int squads = 0;
+	for (IFighterTask* task : GetTasks(IFighterTask::FightType::ATTACK)) {
+		squads += task->GetAssignees().empty() ? 0 : 1;
+		go.insert(go.end(), task->GetAssignees().begin(), task->GetAssignees().end());
+	}
+	if (go.empty()) {
+		return 0;
+	}
+	float power = 0.f;
+	for (CCircuitUnit* u : go) {
+		power += u->GetCircuitDef()->GetPower();
+	}
+	circuit->LOG("apex: launch t=%i units=%i pools=%i guards=%i squads=%i power=%.1f", circuit->GetTeamId(),
+			(int)go.size(), pools, guards, squads, power);
+	IFighterTask* attack = Enqueue(TaskF::Common(IFighterTask::FightType::ATTACK));
+	for (CCircuitUnit* u : go) {
+		AssignTask(u, attack);
+	}
+	return (unsigned int)go.size();
+}
+
 // The inverse: while the script says home cannot answer what is standing on it,
 // a pool that would leave on its next promotion tick stays a defence instead.
 unsigned int CMilitaryManager::HoldPools()

@@ -275,6 +275,8 @@ void PlanNetDecide()
 		for (int o = 0; o < NG_N; ++o)
 			p[o] = (o == force) ? 1.f : 0.f;
 	}
+	if ((gPlan == NG_RUSH) && RushQuit())
+		gPlan = NG_NORMAL;
 	PlanBoardWrite(leads);
 	AiLog(EcoLine("nnplan", NgName(ruleO), (flat > 0.f) && !forced, trust, st, f, NG_NAMES, w, p, gPlan, why));
 	if (!leads)

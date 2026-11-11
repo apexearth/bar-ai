@@ -336,7 +336,10 @@ void Release(const string& in why)
 		ai.PublishTeamValue("strike_s", Throughput(gWaveBombers));
 		ai.PublishTeamValue("strike_r",
 				ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
-		Vanguard();
+		if (VanguardLateOn())
+			gVanguardDue = true;
+		else
+			Vanguard();
 		NaJoinStrike(gStrikeAt, ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
 	}
 	AiLog(Factory::T() + "apex: air strike -- " + why
@@ -761,6 +764,7 @@ void Update()
 	{ double _tA = Perf::T0(); AtomicLookWatch(); Perf::Add("air.AtomicLookWatch", _tA); }
 	{ double _tA = Perf::T0(); LookWatch(); Perf::Add("air.LookWatch", _tA); }
 	{ double _tA = Perf::T0(); FlightWatch(); Perf::Add("air.FlightWatch", _tA); }
+	{ double _tA = Perf::T0(); VanguardWatch(); Perf::Add("air.VanguardWatch", _tA); }
 	{ double _tA = Perf::T0(); ShareWing(); Perf::Add("air.ShareWing", _tA); }
 	}
 	{ double _tA = Perf::T0(); Market::EnemyWetCount(); Perf::Add("air.EnemyWetCount", _tA); }

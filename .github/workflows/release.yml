@@ -143,7 +143,6 @@ jobs:
 
           **Linux:** download **Apex-AI-${GITHUB_REF_NAME}-LINUX.tar.gz** instead, then in a terminal
           \`tar xzf Apex-AI-${GITHUB_REF_NAME}-LINUX.tar.gz && bash install.sh\` (pass BAR's data folder if it is not found).
-          The Linux build is new and untested by us; please report whether it loads.
 
           Only the player hosting the game needs it. Built for BAR engine \`${ENGINE_NAME}\`; after a BAR engine
           update, run Install.bat again. If Apex still does not show in the AI list, see INSTALL.txt in the zip.

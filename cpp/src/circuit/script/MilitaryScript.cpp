@@ -52,6 +52,12 @@ static unsigned int CMilitaryManager_HoldPools(CMilitaryManager* mgr)
 	return StockDrop(mgr, "holdpools") ? 0 : mgr->HoldPools();
 }
 
+// not dropped under the stock army: it moves stock's own pools on stock's own promotion path
+static unsigned int CMilitaryManager_LaunchPools(CMilitaryManager* mgr)
+{
+	return mgr->LaunchPools();
+}
+
 static float CMilitaryManager_HoldPoolsUpTo(CMilitaryManager* mgr, float needM)
 {
 	return StockDrop(mgr, "holdpools") ? 0.f : mgr->HoldPoolsUpTo(needM);
@@ -116,6 +122,7 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "uint GetGuardTaskNum() const", asMETHOD(CMilitaryManager, GetGuardTaskNum), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "uint ReleaseHoldPools()", asFUNCTION(CMilitaryManager_ReleaseHoldPools), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "uint HoldPools()", asFUNCTION(CMilitaryManager_HoldPools), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "uint LaunchPools()", asFUNCTION(CMilitaryManager_LaunchPools), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float HoldPoolsUpTo(float)", asFUNCTION(CMilitaryManager_HoldPoolsUpTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "bool IsBirthDefender(CCircuitUnit@) const", asMETHOD(CMilitaryManager, IsBirthDefender), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float AssetHold(CCircuitUnit@, float, AIFloat3& out)", asMETHOD(CMilitaryManager, AssetHold), asCALL_THISCALL); ASSERT(r >= 0);

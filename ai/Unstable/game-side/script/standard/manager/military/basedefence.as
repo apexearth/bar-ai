@@ -119,6 +119,18 @@ float FoeReach()
 }
 
 
+// WHERE THEIR ARMY COMES IN FROM (his 11-09: "We build our T2 lab in the path that the enemy attacks us in"): the
+// cost-weighted mean position of the enemy groups seen within notice range of home, fading over five minutes. The
+// lab flank (InteriorSite) reads it; the bearing to their base is not the path their army takes.
+float gApprX = 0.f, gApprZ = 0.f, gApprW = 0.f;
+bool ApproachPoint(AIFloat3 &out at)
+{
+	if (gApprW < 300.f)
+		return false;
+	at = AIFloat3(gApprX / gApprW, 0.f, gApprZ / gApprW);
+	return true;
+}
+
 void UpdateApproach()
 {
 	if ((ai.frame < gNextApproach) || !Builder::gHomeSet)
@@ -129,6 +141,9 @@ void UpdateApproach()
 	const float minCost = ai.GetTunable("apex_incoming_cost", TUNE_INCOMING_COST);
 	const float closingBar = ai.GetTunable("apex_incoming_closing", TUNE_INCOMING_CLOSING);
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	gApprX *= 0.9835f;   // 5 s of a 300 s fade
+	gApprZ *= 0.9835f;
+	gApprW *= 0.9835f;
 	for (int i = 0; i < nG; ++i) {
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
 		if (!OnMap(p))
@@ -137,6 +152,9 @@ void UpdateApproach()
 		const float d = p.distance2D(Builder::gHomePos);
 		if (d > notice)
 			continue;
+		gApprX += cost * p.x;
+		gApprZ += cost * p.z;
+		gApprW += cost;
 		// DANGER BY REACH, NOT ONLY BY MOTION. A group standing still is
 		// dangerous the moment our base edge is inside ITS longest weapon
 		// range plus a margin -- apexearth: "some artillery has close to 1500

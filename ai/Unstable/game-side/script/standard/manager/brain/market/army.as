@@ -725,7 +725,13 @@ float RoleTarget(int role, float armyTarget)
 		const float share = (team > mine && team > 1.f) ? (mine / team) : 1.f;
 		// Plus the fighters our own mission aircraft need beside them
 		// (apexearth 2026-09-16: scouts flew out alone and died).
-		return aiEnemyMgr.GetEnemyCostFresh(RT::AIR)
+		// never above all the air we have ever seen: the fresh total leaked dead uncounted planes (C++ DelEnemyCost,
+		// fixed 11-10) and read 779k against 128k seen in his scavenger game -- AA 2-3x the whole army target
+		float airM = aiEnemyMgr.GetEnemyCostFresh(RT::AIR);
+		const float airEver = aiEnemyMgr.GetEnemyCost(RT::AIR);
+		if (airM > airEver)
+			airM = airEver;
+		return airM
 				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share * gAAMul
 				+ Air::CoverDemandM();
 	}
@@ -767,6 +773,50 @@ float RoleTarget(int role, float armyTarget)
 // absorb, and what an assist bid against it can earn. (Watched: a lab
 // killed by artillery never rebuilt -- the plant want only priced open
 // spots; and hot lines ran on one nano with no help.)
+// The seconds the lab has to close the army gap: apex_army_fill_s, or less when their army (where it stands, not
+// their base) reaches our base and beats what holds it sooner (his 11-09: the closer they are, the harder we
+// make units). Military::DangerBreachS is binned 5 s, refreshed every 5 s.
+int gDzfLogAt = 0, gDzfShort = 0, gDzfAsked = 0;
+float ArmyUrgency()
+{
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float base = (fill > 1.f) ? fill : 180.f;
+	const float t = ArmyFillS();
+	return (t > 0.f) ? base / t : 1.f;
+}
+
+// their army reaches our base and beats what holds it sooner than the lab closes the gap at its normal pace
+int gDaOn = -1;
+bool DangerAssistNow()
+{
+	if (gDaOn < 0)
+		gDaOn = (ai.GetTunable("apex_danger_assist", TUNE_DANGER_ASSIST) > 0.f) ? 1 : 0;
+	if (gDaOn == 0)
+		return false;
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float b = Military::DangerBreachS();
+	return (b >= 0.f) && (b < ((fill > 1.f) ? fill : 180.f));
+}
+
+float ArmyFillS()
+{
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float base = (fill > 1.f) ? fill : 180.f;
+	++gDzfAsked;
+	const float b = Military::DangerBreachS();
+	if ((b < 0.f) || (b >= base))
+		return base;
+	const float t = (b > Military::DG_BIN_S) ? b : Military::DG_BIN_S;
+	++gDzfShort;
+	if (ai.frame >= gDzfLogAt) {
+		gDzfLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: danger-fill t=" + ai.teamId + " breach=" + int(b) + " fill=" + int(t)
+			+ " gap=" + int(ArmyTarget() - ArmyValue()) + " near=" + int(Military::NearestFoeEtaS())
+			+ " short=" + gDzfShort + "/" + gDzfAsked);
+	}
+	return t;
+}
+
 float LineSpend()
 {
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
@@ -1531,6 +1581,34 @@ float AirLineGroundMul(int d)
 		gAlgLogAt = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: airline-ground t=" + ai.teamId + " " + Catalog::Def(d).GetName()
 			+ " ours=" + int(ours) + " theirs=" + int(theirs) + " mul=" + formatFloat(m, "", 0, 2));
+	}
+	return m;
+}
+
+// A NEW PLANT OR TIER-UP UNDER A GROUND PUSH PAYS ONLY WHAT CAN ARRIVE IN TIME (apex_breach_plant; his 11-09, watching
+// +0 vs hard_aggressive: "They're pushing us and we try to make an air lab. What does an air lab gonna do when a ground
+// army is on our doorstep?"). AirLineGroundMul weighs our army against their army as we believe it, which read 0.83-0.88
+// while they stood at 4-5x ours; the danger model saw the breach (15-35 s). While their army reaches and beats our base
+// in b seconds, a plant that takes s seconds to stand is worth b / (b + s) of its price: the share of its return that
+// is not spent defending a base it may not keep. No breach, no change.
+int gBpmLogAt = 0;
+float BreachPlantMul(int d, float builderBP)
+{
+	if (ai.GetTunable("apex_breach_plant", TUNE_BREACH_PLANT) <= 0.f)
+		return 1.f;
+	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float base = (fill > 1.f) ? fill : 180.f;
+	float b = Military::DangerBreachS();
+	if ((b < 0.f) || (b >= base))
+		return 1.f;
+	if (b < Military::DG_BIN_S)
+		b = Military::DG_BIN_S;
+	const float s = Catalog::BuildSecondsAt(d, EffBP(builderBP));
+	const float m = b / (b + ((s > 1.f) ? s : 1.f));
+	if (ai.frame >= gBpmLogAt) {
+		gBpmLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: breach-plant t=" + ai.teamId + " " + Catalog::Def(d).GetName() + " breach=" + int(b)
+			+ " build=" + int(s) + " mul=" + formatFloat(m, "", 0, 2));
 	}
 	return m;
 }

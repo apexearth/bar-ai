@@ -80,6 +80,73 @@ AIFloat3 DefOutward(int d, const AIFloat3& in at, const AIFloat3& in ask)
 	return none;
 }
 int gDefOutwardOffMap = 0;
+
+// TOWERS STAND APART (apex_def_spread; his 11-09, watching +0 vs hard_aggressive: "all the defenses kind of all put
+// right next to each other ... when one defense gets hit, they all get hit. You need to properly spread things out a
+// bit, cover more area as well" -- and "if we run out of room then fine you can make them close together"). Half of
+// ours stood within 96 elmos of another (BARb 1 in 8). A gun keeps half its reach from every tower of the team and
+// every tower frame in flight -- their circles still overlap, so they cover each other, over twice the ground, and one
+// splash takes one. The nearest such site that still reaches its post and passes the site checks; none, it stays.
+int gDfsMoved = 0, gDfsKept = 0, gDfsOk = 0, gDfsLogAt = 0;
+float DefNearestTowerD(const AIFloat3& in p)
+{
+	float best = 1e30f;
+	for (uint i = 0; i < gPfTwPos.length(); ++i) {
+		const float dd = gPfTwPos[i].distance2D(p);
+		if (dd < best)
+			best = dd;
+	}
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int bd = int(t.buildDef.id);
+		if (Catalog::gMobile[bd] || (Catalog::gMaxRange[bd] <= 0.f))
+			continue;
+		const float dd = t.GetBuildPos().distance2D(p);
+		if (dd < best)
+			best = dd;
+	}
+	return best;
+}
+AIFloat3 DefSpread(int d, const AIFloat3& in at, const AIFloat3& in ask)
+{
+	float gap = 0.5f * Catalog::gMaxRange[d];
+	if (gap < 96.f)
+		gap = 96.f;
+	if (DefNearestTowerD(at) >= gap) {
+		++gDfsOk;
+		return at;
+	}
+	AIFloat3 best = at;
+	float bestD = 1e30f;
+	for (int ring = 1; ring <= 3; ++ring) {
+		const float r = 0.5f * gap * float(ring);
+		for (int k = 0; k < 12; ++k) {
+			const float a = 6.2831853f * (float(k) + 0.5f * float(ring % 2)) / 12.f;
+			const AIFloat3 p = at + AIFloat3(cos(a) * r, 0.f, sin(a) * r);
+			if (!DefSiteOk(d, p, ask) || InteriorGunSite(d, p) || (DefNearestTowerD(p) < gap))
+				continue;
+			const float dd = p.distance2D(at);
+			if (dd < bestD) {
+				bestD = dd;
+				best = p;
+			}
+		}
+		if (bestD < 1e29f)
+			break;
+	}
+	if (bestD < 1e29f)
+		++gDfsMoved;
+	else
+		++gDfsKept;
+	if (ai.frame >= gDfsLogAt) {
+		gDfsLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: def-spread t=" + ai.teamId + " ok=" + gDfsOk + " moved=" + gDfsMoved
+			+ " kept=" + gDfsKept + " gap=" + int(gap));
+	}
+	return best;
+}
 // A grave: back toward the base a half-mark at a time (his "pull back or build
 // further away"), while the gun still reaches the post.
 AIFloat3 DefGraveBack(int d, const AIFloat3& in at, const AIFloat3& in ask)
@@ -753,6 +820,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			sAt = b;
 			++gGunRelocGrave;
 		}
+		if (groundDef && (ai.GetTunable("apex_def_spread", TUNE_DEF_SPREAD) > 0.f))
+			sAt = DefSpread(int(w.def.id), sAt, askAt);
 		const bool soleCover = groundDef && InteriorGunGeom(int(w.def.id), sAt)
 				&& SoleMexCover(int(w.def.id), sAt);
 		if (NearBlockedDef(sAt, int(w.def.id))) {

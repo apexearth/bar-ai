@@ -708,8 +708,147 @@ void ConPriorityPass()
 		NpSend(u, low);
 	}
 }
+// INCOME HANDED DOWN THE LIST OF WHAT MATTERS MOST (apex_prio_rank; his 11-09: "You just have your wants ... what is
+// the most important thing right now. The top things in that list should be a higher priority than the other things
+// ... I've got a thousand income. If I split my build power like the following, then I'll apply that to the following
+// things in the right proportion"). Every working lathe -- each factory, each constructor on a build, each turret --
+// is ranked: first by how far its kind of spending stands below its target share (his 11-05 shares; the army's
+// scaled by the danger urgency while their push is coming), then by the value its job was bought at. Walking down that
+// list, each takes its full draw of metal and energy from what income and a 30 s slice of the bank feed, the last one
+// the remainder; those work at high priority, the rest at low and take what is left. Spilling metal: all draw in full.
+int gPrAt = -999999, gPrLogAt = 0;
+bool PrioRankOn() { return ai.GetTunable("apex_prio_rank", TUNE_PRIO_RANK) > 0.f; }
+float PrKindNeed(int c)
+{
+	const float t = Brain::TargetShare(Brain::Cat(c));
+	const float a = Brain::ShareOf(Brain::Cat(c));
+	float n = t / ((a > 0.01f) ? a : 0.01f);
+	if (c == int(Brain::ARMY))
+		n *= ArmyUrgency();
+	return n;
+}
+void PrioRankPass()
+{
+	if (ai.frame - gPrAt < 2 * SECOND)
+		return;
+	gPrAt = ai.frame;
+	array<CCircuitUnit@> us;
+	array<float> key, dm, de;
+	array<int> kind;
+	array<float> need(int(Brain::CATS));
+	for (int c = 0; c < int(Brain::CATS); ++c)
+		need[c] = PrKindNeed(c);
+	const bool wasting = MetalWasting();
+	// factories: the army's lathe; first within their kind
+	for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
+		CCircuitUnit@ u = Factory::gFacUnits[f];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const float m = Catalog::gBuildPower[int(u.circuitDef.id)] * (7.f / 80.f);
+		float r = 12.f;
+		if ((u.task !is null) && (u.task.buildDef !is null) && (u.task.buildDef.costM > 1.f))
+			r = u.task.buildDef.costE / u.task.buildDef.costM;
+		us.insertLast(u);
+		kind.insertLast(int(Brain::ARMY));
+		key.insertLast(need[int(Brain::ARMY)] * 1e6f + 1e5f);
+		dm.insertLast(m);
+		de.insertLast(m * r);
+	}
+	// constructors on a build: its job's kind and the value the market bought it at
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		IUnitTask@ t = u.task;
+		if ((t is null) || t.IsDead() || (t.buildDef is null) || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		const int d = int(t.buildDef.id);
+		const int k = NpKindOf(d);
+		float v = JobValue(t);
+		if (v < 0.f)
+			v = 0.f;
+		if (v > 9e4f)
+			v = 9e4f;
+		const float m = Catalog::gBuildPower[int(u.circuitDef.id)] * (7.f / 80.f);
+		us.insertLast(u);
+		kind.insertLast(k);
+		key.insertLast(need[k] * 1e6f + v);
+		dm.insertLast(m);
+		de.insertLast((t.buildDef.costM > 1.f) ? m * t.buildDef.costE / t.buildDef.costM : m * 12.f);
+	}
+	// turrets: the army's when a factory is in reach, else the kind of the work in reach
+	for (uint i = 0; i < gOwnNano.length(); ++i) {
+		CCircuitUnit@ u = gOwnNano[i];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const AIFloat3 p = u.GetPos(ai.frame);
+		const float reach = Catalog::gBuildDist[int(u.circuitDef.id)] + 64.f;
+		int k = int(Brain::ECONOMY);
+		for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
+			if ((Factory::gFacUnits[f] !is null) && (Factory::gFacUnits[f].GetPos(ai.frame).distance2D(p) < reach)) {
+				k = int(Brain::ARMY);
+				break;
+			}
+		}
+		const float m = Catalog::gBuildPower[int(u.circuitDef.id)] * (7.f / 80.f);
+		us.insertLast(u);
+		kind.insertLast(k);
+		key.insertLast(need[k] * 1e6f + ((k == int(Brain::ARMY)) ? 5e4f : 0.f));
+		dm.insertLast(m);
+		de.insertLast(m * 12.f);
+	}
+	// rank: most-needed kind first, then the job's value
+	const uint n = us.length();
+	array<uint> ord(n);
+	for (uint i = 0; i < n; ++i)
+		ord[i] = i;
+	for (uint i = 1; i < n; ++i) {
+		const uint x = ord[i];
+		int j = int(i) - 1;
+		while ((j >= 0) && (key[ord[uint(j)]] < key[x])) {
+			ord[uint(j + 1)] = ord[uint(j)];
+			--j;
+		}
+		ord[uint(j + 1)] = x;
+	}
+	float mLeft = Eco::MInc() + Eco::MCur() / 30.f;
+	float eLeft = Eco::EInc() + Eco::ECur() / 30.f;
+	int hi = 0, lo = 0;
+	array<int> hiK(int(Brain::CATS), 0), loK(int(Brain::CATS), 0);
+	for (uint r = 0; r < n; ++r) {
+		const uint i = ord[r];
+		// the list fills from the top: a lathe is high while anything is left, the last one taking the remainder
+		bool high = wasting;
+		if (!high && (mLeft > 0.f) && (eLeft > 0.f)) {
+			high = true;
+			mLeft -= dm[i];
+			eLeft -= de[i];
+		}
+		NpSend(us[i], !high);
+		if (high) {
+			++hi;
+			++hiK[kind[i]];
+		} else {
+			++lo;
+			++loK[kind[i]];
+		}
+	}
+	if (ai.frame >= gPrLogAt) {
+		gPrLogAt = ai.frame + 30 * SECOND;
+		string ks = "";
+		for (int c = 0; c < int(Brain::CATS); ++c)
+			ks += " k" + c + "=" + hiK[c] + "/" + (hiK[c] + loK[c]) + "@" + NnF(need[c], 2);
+		AiLog(Factory::T() + "apex: prio-rank t=" + ai.teamId + " high=" + hi + " low=" + lo + " wasting="
+			+ (wasting ? 1 : 0) + " mInc=" + NnF(Eco::MInc(), 1) + " eInc=" + int(Eco::EInc()) + ks);
+	}
+}
+
 void NanoPriorityPass()
 {
+	if (PrioRankOn()) {
+		PrioRankPass();
+		return;
+	}
 	if (ai.frame - gNpAt < SECOND)
 		return;
 	gNpAt = ai.frame;

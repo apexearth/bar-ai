@@ -321,8 +321,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	{
 		const float gap = ArmyTarget() - ArmyValue();
 		if (gap > 0.f) {
-			const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-			float wantRate = gap / ((fillS > 1.f) ? fillS : 180.f);
+			float wantRate = gap / ArmyFillS();
 			const float free4 = FreeMetalFlow();
 			if (wantRate > free4)
 				wantRate = free4;
@@ -508,7 +507,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
-			+ " lab=" + formatFloat(labNeed, "", 0, 1)
+			+ " lab=" + formatFloat(labNeed, "", 0, 1) + " urg=" + formatFloat(ArmyUrgency(), "", 0, 1)
 			+ " floor=" + floorShort
 			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
 				+ "/" + gFloorYardAssist
@@ -595,7 +594,15 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 				if (askE > 1.f) {
 					const float full = gainN;
 					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
-					NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));
+					// Metal spilling for minutes (his 11-10 Full Metal Plate: energy won 142 of 155 elections and
+					// the turrets still waited): the generator carries every turret the spill could feed, at the
+					// lathe's metal per E, so a fusion outbids one more solar.
+					if ((MFullTrust() < 0.5f) && (full > 0.f) && (over > full)) {
+						const float lostAll = over - gainN;
+						NanoEBlockNote(lostAll, lostAll * askE / full);
+					} else {
+						NanoEBlockNote(full - gainN, askE - ((nanoSpareE > 0.f) ? nanoSpareE : 0.f));
+					}
 				}
 			}
 			// ...and no more than the metal feed has left over: while what is asked
@@ -608,6 +615,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// what the turrets we stand deliver: a seat whose nanos sit idle does not get the full absorb from the next one
 		if (ai.GetTunable("apex_nano_payback", TUNE_NANO_PAYBACK) > 0.f)
 			gainN *= 1.f - gNanoIdleShare;
+		if ((src == NS_LAB) || (src == NS_ARMY))
+			gainN *= ArmyUrgency();
 		Want c;
 		ValueOf(d, gainN, WalkSecTo(unit, dSite),
 				Catalog::gBuildPower[uid], c);

@@ -189,7 +189,13 @@ void EcoMexPush(array<Want@>@ ranked)
 {
 	if (gMexMul == 1.f)
 		return;
-	const float m = (gMexMul > 0.001f) ? gMexMul : 0.001f;
+	float m = (gMexMul > 0.001f) ? gMexMul : 0.001f;
+	// THE PUSH ONLY LIFTS METAL WE CAN SPEND (apex_mex_push_real; his 11-10 metal maps: both sides spilled 300k+ by
+	// minute 20, and with every spot open we built extractors that spilled 921k while our army fell to half theirs).
+	// The realize share already priced a spilling extractor at 2-20%; this head multiplied it back 10-17x. Only the
+	// share we can spend is pushed; with room in the bank the share is 1 and nothing changes.
+	if ((m > 1.f) && (ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f))
+		m = 1.f + (m - 1.f) * MRealizeShare(2.f, 30.f);
 	bool any = false;
 	for (uint r = 0; r < ranked.length(); ++r) {
 		if (ranked[r].kind != WK_MEX)

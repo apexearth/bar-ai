@@ -344,6 +344,7 @@ public:
 	unsigned int GetGuardTaskNum() const { return defence->GetGuardTaskNum(); }
 	unsigned int ReleaseHoldPools();
 	unsigned int HoldPools();
+	unsigned int LaunchPools();
 	float HoldPoolsUpTo(float needM);
 	// apex: RECALL ONLY WHAT HOME NEEDS (his 10-12). An attack squad that turns for a threat to our base
 	// claims its power against that enemy group; a squad ranked after the claimants (rank: T3 last, then

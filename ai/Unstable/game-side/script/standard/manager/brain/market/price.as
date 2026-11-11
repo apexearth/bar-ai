@@ -262,6 +262,28 @@ void TrackMPull()
 // samples. Over ~25 s; a bank that has sat full also shows the held peak and the spend in flight are stale.
 float MFullW() { return gMFullEma; }
 
+int gMFullSince = -1, gMFullAt = -1, gMPushRealOn = -1;
+float gMFullTrustVal = 1.f;
+float MFullTrust()
+{
+	if (gMFullAt == ai.frame)
+		return gMFullTrustVal;
+	gMFullAt = ai.frame;
+	if (gMPushRealOn < 0)
+		gMPushRealOn = (ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f) ? 1 : 0;
+	const float st = Eco::MStor();
+	if ((st <= 1.f) || (Eco::MCur() < 0.95f * st))
+		gMFullSince = -1;
+	else if (gMFullSince < 0)
+		gMFullSince = ai.frame;
+	gMFullTrustVal = 1.f;
+	if ((gMPushRealOn > 0) && (gMFullSince >= 0)) {
+		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
+		gMFullTrustVal = look / (look + float(ai.frame - gMFullSince) / float(SECOND));
+	}
+	return gMFullTrustVal;
+}
+
 // A conversion ratio is not a price until a converter stands (apexearth:
 // "we have to have a converter for that to even be true"). Per 1 E/s of
 // throughput we own 1/cap of a converter, so its metal, its own energy bill
@@ -670,6 +692,9 @@ float MRealizeShare(float addM, float buildSec)
 			float follow = BpSpendInFlightM() / wasteM;
 			if (follow > 1.f)
 				follow = 1.f;
+			// Orders are spend on its way only while the bank drains; full for minutes, they are not
+			// (his 11-10 Full Metal Plate: bank 99% from minute 6, extractors kept 14-35% of their worth).
+			follow *= MFullTrust();
 			float wasteFloor = gPrMWasteWorth * follow;
 			if (wasteFloor < 0.02f)
 				wasteFloor = 0.02f;
@@ -718,6 +743,44 @@ float EStretch(float costE, float buildSec)
 	if ((have <= 0.01f) || (need <= have))
 		return 1.f;
 	return need / have;
+}
+
+// The metal-work a start postpones by deepening the energy stall: every job runs at have/need, so the extra share
+// slowed (stall after minus stall before) times the metal the economy is converting, for the build's own duration.
+int gEhOn = -1, gEhN = 0, gEhHit = 0, gEhLogAt = 0;
+float gEhSum = 0.f;
+float EHoldM(int defId, float buildSec)
+{
+	if (gEhOn < 0)
+		gEhOn = (ai.GetTunable("apex_e_hold", TUNE_E_HOLD) > 0.f) ? 1 : 0;
+	const float costE = Catalog::gCostE[defId];
+	if ((gEhOn == 0) || (costE <= 1.f) || (buildSec <= 1.f))
+		return 0.f;
+	++gEhN;
+	const float have = Eco::EInc() + Eco::ECur() / buildSec;
+	if (have <= 0.01f)
+		return 0.f;
+	const float before = Eco::EPull() + EDrainInFlight();
+	const float after = before + costE / buildSec;
+	const float sBefore = (before > have) ? (1.f - have / before) : 0.f;
+	const float sAfter = (after > have) ? (1.f - have / after) : 0.f;
+	float m = 0.f;
+	if (sAfter > sBefore) {
+		// for as long as the stall holds it: the build itself runs at have/after, so it stands after/have times longer
+		m = (sAfter - sBefore) * Eco::MPull() * buildSec * (after / have);
+		++gEhHit;
+		gEhSum += m;
+	}
+	if (ai.frame >= gEhLogAt) {
+		gEhLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: e-hold t=" + ai.teamId + " priced=" + gEhN + " charged=" + gEhHit
+			+ " meanM=" + int((gEhHit > 0) ? gEhSum / float(gEhHit) : 0.f) + " have=" + int(have)
+			+ " pull=" + int(before) + " mPull=" + NnF(Eco::MPull(), 1));
+		gEhN = 0;
+		gEhHit = 0;
+		gEhSum = 0.f;
+	}
+	return m;
 }
 
 float EPriceAt(float buildSec)
@@ -935,7 +998,12 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// saying so. (The size of that gap is NOT settled: see CHANGES.md; a
 	// compounding argument for it was checked and does not hold at fixed build
 	// power, where the small-step route is lathe-bound and grows linearly.)
-	// The stall's throttle, on the build's own energy bill.
+	// "IF I DO THIS, WILL I HAVE ENOUGH ENERGY?" (apex_e_hold; his 11-09). The stretch below is only this build's own
+	// wait; a start that pushes the pull past what income and bank feed slows EVERY job by the deepened stall share --
+	// the lab first (at +0 vs hard_aggressive our pull ran 179/263/400 over income 144/241/358 at 4/6/8 min while
+	// BARb's matched theirs, and our labs made 50-80% of theirs per lab). The metal-work it postpones is its bill.
+	// Generators pay it too: an advanced solar costs 5,000 E, more than a nano turret; its gain credits what it makes.
+	const float eHoldM = EHoldM(defId, buildSec);
 	buildSec *= EStretch(Catalog::gCostE[defId], buildSec);
 	w.gain = gain;
 	w.buildSec = buildSec;
@@ -962,8 +1030,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 		if (ePriceE < fl)
 			ePriceE = fl;
 	}
-	w.mCost = Catalog::gCostM[defId] * MCostScale() * (makesM ? 1.f : MStallPremium())
-			+ Catalog::gCostE[defId] * ePriceE * gVwECost
+	w.mCost = Catalog::gCostM[defId] * MCostScale() * (makesM ? 1.f : MStallPremium())			+ Catalog::gCostE[defId] * ePriceE * gVwECost
 			+ float(Catalog::gAreaCells[defId])
 				* gPrSpaceM;
 	const float wageNow = Wage();
@@ -978,7 +1045,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	gPrLastLockC = 0.f;
 	gPrLastHzShare = 1.f;
 	w.tCost = gPrLastWalkC + gPrLastBuildC
-			+ displacedM * gVwDisp
+			+ (displacedM + eHoldM) * gVwDisp
 			+ riskM;   // the builder's expected loss on the trip, see TripRisk
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
 	// sec is ALSO the amount of metal you'd have lost from all that walk time

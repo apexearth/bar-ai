@@ -31,6 +31,32 @@ void StrikeNoteKill(float m)
 	gSkKill += m;
 }
 
+// THE RUSH GIVES UP WHEN IT KEEPS LOSING (his 11-09: "eventually you need to change your mindset though, like if you
+// keep losing all your army"). Each strike is scored from its go: metal it destroyed against combat metal we lost. A
+// strike that lost more than it killed, or came home under 40% of its launch, is a failure; the second failure ends
+// the play for the team and every seat plays NORMAL from then on (once may be luck, twice is the play).
+const int BOARD_SK_LOST = 8900, BOARD_SK_KILLGO = 8807, BOARD_SK_LOSTGO = 8808, BOARD_SK_FAILS = 8809;
+const int BOARD_SK_QUIT = 8810;
+float gSkLost = 0.f;
+void StrikeNoteLoss(int defId)
+{
+	if (Catalog::gMobile[defId] && !Catalog::gBuilder[defId] && (Catalog::gPower[defId] > 1.f))
+		gSkLost += Catalog::gCostM[defId];
+}
+bool RushQuit()
+{
+	return ai.GetTeamBoard(BOARD_SK_QUIT, 0.f) > 0.f;
+}
+float SkTeamSum(int board)
+{
+	float s = 0.f;
+	for (int t = 0; t < 64; ++t) {
+		if (PpFresh(t))
+			s += ai.GetTeamBoard(board + t, 0.f);
+	}
+	return s;
+}
+
 // the army's walk to their nearest box: the cost-weighted speed of our ground combat units, 1.3x the straight line
 float gSkEta = -1.f;
 int gSkEtaAt = -1;
@@ -83,7 +109,7 @@ float SchedMod(float minute)
 
 int StrikePhase()
 {
-	if (!StrikeOn() || (gPlan != NG_RUSH))
+	if (!StrikeOn() || (gPlan != NG_RUSH) || RushQuit())
 		return SK_NONE;
 	if (ScheduleOn()) {
 		const float minute = float(ai.frame) / 1800.f;
@@ -214,6 +240,12 @@ void StrikeTick()
 	if (ai.frame < gSkNextAt)
 		return;
 	gSkNextAt = ai.frame + 5 * SECOND;
+	ai.SetTeamBoard(BOARD_SK_LOST + ai.teamId, gSkLost);
+	if (RushQuit() && (gPlan == NG_RUSH)) {
+		gPlan = NG_NORMAL;
+		AiLog(Factory::T() + "apex: rush-quit t=" + ai.teamId + " fails=" + int(ai.GetTeamBoard(BOARD_SK_FAILS, 0.f))
+			+ " plan=NORMAL");
+	}
 	const float army = Military::OurArmyM();
 	if (!StrikeOn() || (gPlan != NG_RUSH)) {
 		if (StrikeOn() && (int(ai.GetTeamBoard(BOARD_SK_PHASE, float(SK_NONE))) != SK_NONE))
@@ -228,8 +260,9 @@ void StrikeTick()
 		Military::AttackModSet(SchedMod(float(ai.frame) / 1800.f));
 		if (sp != gSkLogPhase) {
 			gSkLogPhase = sp;
+			const uint launched = (sp == SK_STRIKE) ? aiMilitaryMgr.LaunchPools() : 0;
 			AiLog(Factory::T() + "apex: strike-phase t=" + ai.teamId + " " + SK_NAMES[uint(sp)] + " (schedule) army="
-				+ int(army) + " defHeld=" + gSkDefHeld);
+				+ int(army) + " defHeld=" + gSkDefHeld + " launched=" + launched);
 		}
 		return;
 	}
@@ -342,6 +375,8 @@ void StrikeTick()
 				ai.SetTeamBoard(BOARD_SK_ARMY, army);
 				ai.SetTeamBoard(BOARD_SK_KILL0, killed);
 				ai.SetTeamBoard(BOARD_SK_KILL0AT, float(ai.frame));
+				ai.SetTeamBoard(BOARD_SK_KILLGO, killed);
+				ai.SetTeamBoard(BOARD_SK_LOSTGO, SkTeamSum(BOARD_SK_LOST));
 				Say("STRIKE (" + why + "): army " + int(army) + " vs theirs " + int(gPpArmy) + " + turrets " + int(gPpDef)
 					+ ", ETA " + int(eta / 30.f) + "s; tier-up and factories open");
 				AiLog(Factory::T() + "apex: strike-go t=" + ai.teamId + " why=" + why + " army=" + int(army)
@@ -367,6 +402,17 @@ void StrikeTick()
 			if (stalled || outweighed || (army < 0.4f * launch)) {
 				ph = SK_AFTER;
 				ai.SetTeamBoard(BOARD_SK_AT, float(ai.frame));
+				const float kGo = killed - ai.GetTeamBoard(BOARD_SK_KILLGO, 0.f);
+				const float lGo = SkTeamSum(BOARD_SK_LOST) - ai.GetTeamBoard(BOARD_SK_LOSTGO, 0.f);
+				const bool failed = (lGo > kGo) || (army < 0.4f * launch);
+				const float fails = ai.GetTeamBoard(BOARD_SK_FAILS, 0.f) + (failed ? 1.f : 0.f);
+				ai.SetTeamBoard(BOARD_SK_FAILS, fails);
+				AiLog(Factory::T() + "apex: strike-score t=" + ai.teamId + " killed=" + int(kGo) + " lost=" + int(lGo)
+					+ " failed=" + (failed ? 1 : 0) + " fails=" + int(fails));
+				if (fails >= 2.f) {
+					ai.SetTeamBoard(BOARD_SK_QUIT, 1.f);
+					Say("the rush keeps losing (" + int(fails) + " strikes traded down): back to the economy");
+				}
 				Say("strike over (" + (outweighed ? "outweighed" : (stalled ? "stalled" : "spent")) + "): " + int(army) + " of " + int(launch)
 					+ " left, killed " + int(killed));
 				AiLog(Factory::T() + "apex: strike-end t=" + ai.teamId + " why=" + (outweighed ? "outweighed" : (stalled ? "stalled" : "spent")) + " army="
@@ -385,10 +431,13 @@ void StrikeTick()
 	else if (ph == SK_BUILD)
 		mod = ai.GetTunable("apex_sched_hold_mod", TUNE_SCHED_HOLD_MOD);
 	Military::AttackModSet(mod);
+	if (ph == SK_STRIKE)
+		AiLog(Factory::T() + "apex: strike-army t=" + ai.teamId + " army=" + int(army) + " " + aiMilitaryMgr.StockArmyStat());
 	if (ph != gSkLogPhase) {
 		gSkLogPhase = ph;
+		const uint launched = (ph == SK_STRIKE) ? aiMilitaryMgr.LaunchPools() : 0;
 		AiLog(Factory::T() + "apex: strike-phase t=" + ai.teamId + " " + SK_NAMES[uint(ph)] + " army=" + int(army)
-			+ " mod=" + NnF(mod, 2) + " defHeld=" + gSkDefHeld);
+			+ " mod=" + NnF(mod, 2) + " defHeld=" + gSkDefHeld + " launched=" + launched);
 	}
 }
 

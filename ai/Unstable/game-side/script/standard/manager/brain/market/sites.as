@@ -90,7 +90,7 @@ void CacheSpots()
 	if (gSpotsCached)
 		return;
 	gSpotsCached = true;
-	for (int i = 0; i < 1024; ++i) {
+	for (int i = 0; i < 4096; ++i) {   // a metal map keeps its whole tiling (C++ apex_metal_full, up to 3000)
 		const AIFloat3 sp = aiEconomyMgr.GetMexSpotPos(i);
 		if (sp.x < 0.f)
 			break;
@@ -1377,6 +1377,15 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 		const bool okA = OnMap(pA) && ReachableBy(mover, pA);
 		const bool okB = OnMap(pB) && ReachableBy(mover, pB);
 		if (okA && okB) {
+			// the flank away from where their army has been coming in (apex_plant_lee; his 11-09: "We build our T2
+			// lab in the path that the enemy attacks us in"), when it has come; else the rearward one by their bearing
+			AIFloat3 ap;
+			// a clear margin only: the point drifts every 5 s and a flank that flips between price checks never gets built
+			if ((ai.GetTunable("apex_plant_lee", TUNE_PLANT_LEE) > 0.f) && Military::ApproachPoint(ap)) {
+				const float dA = pA.distance2D(ap), dB = pB.distance2D(ap);
+				if (abs(dA - dB) > 300.f)
+					return (dB > dA) ? pB : pA;
+			}
 			return (Military::ForwardFraction(pB) < Military::ForwardFraction(pA))
 					? pB : pA;
 		}

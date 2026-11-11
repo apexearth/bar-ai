@@ -125,6 +125,70 @@ float NaAirDps(int d)
 	return (t > 0.f) ? Catalog::gDps[d] * Catalog::gAirT[d] / t : 0.f;
 }
 
+// OUR ESCORT MEETS THEIR FIGHTERS (his 11-09: "we often didn't have enough fighters when we would send in the
+// bombers"). Under apex_air_escort_priced the fighters that would fly with the wave take their air dps off the
+// fighters of theirs that reach the cell, so a strike with too few escorts prices lower and waits; the escort the
+// wing asks the plant for (EscortWant) covers their fighters at the chosen cell.
+int gNaEscOn = -1;
+float gNaFtrNeed = 0.f;     // their fighters' air dps at the last bomber decision's best cell
+bool NaEscortOn()
+{
+	if (gNaEscOn < 0)
+	{
+		gNaEscOn = (ai.GetTunable("apex_air_escort_priced", TUNE_AIR_ESCORT_PRICED) > 0.f) ? 1 : 0;
+		AiLog("apex: escort-on t=" + ai.teamId + " on=" + gNaEscOn + " f=" + ai.frame);
+	}
+	return gNaEscOn > 0;
+}
+
+float NaEscortDps()
+{
+	if (!NaEscortOn())
+		return 0.f;
+	float a = 0.f;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(fd, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		const float per = NaAirDps(int(fd.id));
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] !is null) && !Covering(us[k].id) && (FlightOutIdx(us[k].id) < 0)
+				&& !InList(gHunters, us[k].id))
+				a += per;
+		}
+	}
+	return a;
+}
+
+float NaEscorted(int kind, float ftrA, float escD)
+{
+	if ((kind != 0) || (escD <= 0.f))
+		return ftrA;
+	return (ftrA > escD) ? (ftrA - escD) : 0.f;
+}
+
+int NaEscortNeedN()
+{
+	if (!NaEscortOn() || (gNaFtrNeed <= 0.f))
+		return 0;
+	CCircuitDef@ fd = ((gFighter !is null) && (Have(gPlant2) > 0)) ? gFighter : gFighter1;
+	if (fd is null)
+		return 0;
+	const float per = NaAirDps(int(fd.id));
+	const int n = (per > 0.f) ? int(gNaFtrNeed / per) + 1 : 0;
+	if (ai.frame >= gNaEscLogAt) {
+		gNaEscLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: escort-price t=" + ai.teamId + " theirDps=" + int(gNaFtrNeed)
+			+ " oursDps=" + int(NaEscortDps()) + " needN=" + n + " def=" + fd.GetName()
+			+ " fighters=" + Fighters() + " scaled=" + ScaledFighters());
+	}
+	return n;
+}
+int gNaEscLogAt = 0, gNaEscSetLogAt = 0;
+
 // What a dead economy building costs them: its metal, and its output until one
 // of their constructors walks out from their base and builds it again.
 float NaPrizeOf(int d, const AIFloat3& in at, const AIFloat3& in foe, float spotInc)
@@ -770,10 +834,11 @@ int NaDecide(int kind, const string why)
 	NaPrice@ best = NaPrice();
 	bool have = false;
 	uint bestI = 0;
+	const float escD = (kind == 0) ? NaEscortDps() : 0.f;
 	for (uint i = 0; i < cs.length(); ++i) {
 		const float flyS = ctr.distance2D(cs[i].at) / spd;
 		const float pAA = NaPathAA(ctr, cs[i].at);
-		const float fAA = NaFighterAA(cs[i].at, flyS);
+		const float fAA = NaEscorted(kind, NaFighterAA(cs[i].at, flyS), escD);
 		NaPrice@ p = NaPrice();
 		const float pain = (kind == 1) ? NaPainFade(cs[i].at, r) : 1.f;
 		if (pain < 1.f) {
@@ -787,6 +852,16 @@ int NaDecide(int kind, const string why)
 			@best = p;
 			have = true;
 			bestI = i;
+		}
+	}
+	if (have && (kind == 0) && NaEscortOn()) {
+		EvSnapFoeAir();
+		const float live = NaFighterAA(cs[bestI].at, ctr.distance2D(cs[bestI].at) / spd);
+		gNaFtrNeed = (gEvFoeFtrDps > live) ? gEvFoeFtrDps : live;
+		if (ai.frame >= gNaEscSetLogAt) {
+			gNaEscSetLogAt = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: escort-need t=" + ai.teamId + " live=" + int(live) + " mem=" + int(gEvFoeFtrDps)
+				+ " wingBuys=" + (WingBuys() ? 1 : 0) + " lead=" + (IsAirLead() ? 1 : 0) + " held=" + int(StandingHeldMass()));
 		}
 	}
 	int rule;

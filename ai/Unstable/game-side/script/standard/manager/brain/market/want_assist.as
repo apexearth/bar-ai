@@ -902,7 +902,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	// ...but only for a hand that cannot raise a lathe itself: one that can is
 	// worth more raising the nano that turns the waste into builds after it
 	// leaves (a guard's stint adds nothing that stays).
-	float over = HandBuildsNano(uid) ? 0.f : OverflowM();
+	float over = (HandBuildsNano(uid) && (MFullTrust() >= 0.5f)) ? 0.f : OverflowM();
 	if (over > drain)
 		over = drain;
 	Want g;
@@ -958,7 +958,7 @@ Want@ LabAssistGuard(CCircuitUnit@ unit, const Want& in priced)
 	const float speed = Catalog::gSpeed[uid];
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	const float wage = WageOf(unit);
-	const float over0 = HandBuildsNano(uid) ? 0.f : OverflowM();
+	const float over0 = (HandBuildsNano(uid) && (MFullTrust() >= 0.5f)) ? 0.f : OverflowM();
 	Want best;
 	CCircuitUnit@ bestFac = null;
 	float bestOcc = 0.f, bestG = 0.f;

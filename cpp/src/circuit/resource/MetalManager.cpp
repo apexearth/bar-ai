@@ -6,6 +6,9 @@
  */
 
 #include "resource/MetalManager.h"
+
+#include <algorithm>
+#include <regex>
 #include "map/ThreatMap.h"
 #include "module/EconomyManager.h"
 #include "setup/SetupManager.h"  // Only for json
@@ -157,6 +160,103 @@ void CMetalManager::ParseMetalSpots()
 		//  8x8  ~  80 spots +-25
 		// 24x24 ~ 240 spots +-25
 		unsigned mCount = (240.f - 80.f) / (SQUARE(24.f) - SQUARE(8.f)) * (mapSize - SQUARE(8.f)) + 80.f + offset;
+		// apex: AN EXTRACTOR GOES ANYWHERE THE GROUND HOLDS METAL (apex_metal_full; his 11-10: "on the metal maps ... you
+		// can make a metal extractor anywhere. But we always just put them in whatever the designated spots are"). The
+		// finder tiles the whole map (147,712 spots on Full Metal Plate, reach 24), then the thinning below keeps ~80-240
+		// spread evenly, so the ground beside our base stood empty. Keeping 3,000 of them doubled income at 15 min (464
+		// vs 190) and cost 4x the AI frame time. A player packs the ground AROUND HIS BASE: each start box gets a lattice
+		// one extractor apart (a lane between, so units still pass), up to apex_metal_box_n spots; the thinned sample
+		// stays for the rest of the map.
+		const size_t found = spotsPos.size();
+		const auto& boxes = circuit->GetGameAttribute()->GetSetupData().GetStartBoxes();
+		if ((circuit->GetTunable("apex_metal_full", 0.f) > 0.f) && !boxes.empty() && (found > 0)) {
+			std::vector<float> incs;
+			incs.reserve(found);
+			for (const AIFloat3& p : spotsPos) {
+				incs.push_back(p.y);
+			}
+			std::nth_element(incs.begin(), incs.begin() + incs.size() / 2, incs.end());
+			const float medInc = incs[incs.size() / 2];
+			ShortVec mm;
+			map->GetResourceMap(metalRes, mm);
+			const int mw = width / 2, mh = height / 2;
+			CCircuitDef* mdef = circuit->GetEconomyManager()->GetSideInfo().mexDef;
+			const float foot = std::max(mdef->GetDef()->GetXSize(), mdef->GetDef()->GetZSize()) * SQUARE_SIZE;
+			const float pitch = std::max(2.f * map->GetExtractorRadius(metalRes), foot + 32.f);
+			const float boxN = std::max(circuit->GetTunable("apex_metal_box_n", 400.f), 16.f);
+			const float budget = 2.f * boxN;   // lattice spots in all, shared by every base: the elections walk the list
+			const float mapW = width * SQUARE_SIZE, mapH = height * SQUARE_SIZE;
+			// where the bases are: the script's fixed start positions when it names them (a square round each); else
+			// every start box whole, at a pitch wide enough to keep its count (positions are picked after this runs)
+			std::vector<utils::SBox> dense;
+			std::vector<float> pitches;
+			{
+				const std::string script = circuit->GetGame()->GetSetupScript();
+				std::regex px("startposx=([0-9.]+);", std::regex::ECMAScript | std::regex::icase);
+				std::regex pz("startposz=([0-9.]+);", std::regex::ECMAScript | std::regex::icase);
+				std::vector<float> xs, zs;
+				for (std::sregex_iterator it(script.begin(), script.end(), px), e; it != e; ++it) {
+					xs.push_back(std::stof((*it)[1].str()));
+				}
+				for (std::sregex_iterator it(script.begin(), script.end(), pz), e; it != e; ++it) {
+					zs.push_back(std::stof((*it)[1].str()));
+				}
+				if (!xs.empty() && (xs.size() == zs.size())) {
+					for (size_t i = 0; i < xs.size(); ++i) {
+						const float side = std::sqrt(std::max(budget / float(xs.size()), 16.f)) * pitch;
+						dense.push_back(utils::SBox(xs[i] - 0.5f * side, xs[i] + 0.5f * side, zs[i] - 0.5f * side, zs[i] + 0.5f * side));
+						pitches.push_back(pitch);
+					}
+				} else {
+					for (const auto& kv : boxes) {
+						const utils::SBox& b = kv.second.GetBox();
+						const float m = 4.f * pitch;
+						const utils::SBox sq(b.left - m, b.right + m, b.top - m, b.bottom + m);
+						const float area = (sq.right - sq.left) * (sq.bottom - sq.top);
+						dense.push_back(sq);
+						pitches.push_back(std::max(pitch, std::sqrt(std::max(area, 1.f) * float(boxes.size()) / budget)));
+					}
+				}
+			}
+			int lattice = 0;
+			for (size_t di = 0; di < dense.size(); ++di) {
+				const utils::SBox& sq = dense[di];
+				const float pt = pitches[di];
+				for (float z = sq.top; z <= sq.bottom; z += pt) {
+					for (float x = sq.left; x <= sq.right; x += pt) {
+						if ((x < foot) || (z < foot) || (x > mapW - foot) || (z > mapH - foot)) {
+							continue;
+						}
+						const int ix = int(x) / (SQUARE_SIZE * 2), iz = int(z) / (SQUARE_SIZE * 2);
+						if ((ix < 0) || (iz < 0) || (ix >= mw) || (iz >= mh) || (mm[iz * mw + ix] <= 0)) {
+							continue;
+						}
+						spots.push_back({medInc, AIFloat3(x, map->GetElevationAt(x, z), z)});
+						++lattice;
+					}
+				}
+			}
+			// the thinned sample, outside the lattices
+			std::vector<AIFloat3> rest;
+			for (const AIFloat3& p : spotsPos) {
+				bool in = false;
+				for (const utils::SBox& sq : dense) {
+					if ((p.x >= sq.left - pitch) && (p.x <= sq.right + pitch) && (p.z >= sq.top - pitch) && (p.z <= sq.bottom + pitch)) {
+						in = true;
+						break;
+					}
+				}
+				if (!in) {
+					rest.push_back(p);
+				}
+			}
+			spotsPos.swap(rest);
+			circuit->LOG("apex: metal-spots found=%i lattice=%i bases=%i pitch=%.0f rest=%i reach=%.0f", (int)found,
+					lattice, (int)dense.size(), pitch, (int)spotsPos.size(), map->GetExtractorRadius(metalRes));
+		} else {
+			circuit->LOG("apex: metal-spots found=%i kept~%u reach=%.0f", (int)found, mCount,
+					map->GetExtractorRadius(metalRes));
+		}
 		unsigned inc;
 		if (spotsPos.size() > mCount) {
 			inc = spotsPos.size() / mCount;

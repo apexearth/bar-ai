@@ -26,6 +26,10 @@ Built: every plan priced and logged (576ceb60, `plan-price`); one team plan (pla
 (apex_strike_phases, off); the team op MASS -> GO (plannet.as).
 
 Not built:
+- **The commander leads the rush** (11-09): *"Send the commander in, have him destroy the army, have him support his
+  own army, repair his own units ... It can be a team together."* The rush as built (11-09: strike launches every
+  pool, escort and squad as one; commander and hands assist the lab in the build-up; two strikes traded down end it)
+  keeps the commander home.
 - **The timing.** A plan is build-up (quiet, gathered out of sight) -> strike (every seat on one signal, when the
   gathered force beats what we have seen of theirs) -> follow-up (their answer, e.g. the AA they buy after an air
   strike, raises the counter-plan's value and the team switches whole and sudden). Each plan priced from the seen

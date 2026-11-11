@@ -1754,6 +1754,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			coverShare = 1.f;
 	}
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float armyFillS = ArmyFillS();
 	// METAL WE FAIL TO SPEND IS ARMY DEMAND (his standing law: the economy
 	// is for spending; waste is free army) -- see RichArmyGapM for why the
 	// signal is free flow and not the storage-gated overflow.
@@ -2178,7 +2179,8 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		// against their raid, 0 owned, armfig refused "metalpath" while the T2 lab went up).
 		if (metalPath && !Catalog::gBuilder[d] && !Air::IsLookDef(d)
 			&& !((Catalog::gFloater[d] || Catalog::gSub[d]) && LandLocked())
-			&& !(Air::IsFighterDef(d) && (Air::EveryFighterGainFor(d, 180.f) > 0.f))) {
+			&& !(Air::IsFighterDef(d) && (Air::EveryFighterGainFor(d, 180.f) > 0.f))
+			&& !(Air::IsFighterDef(d) && Air::NaEscortOn() && (Air::EscortFighterGainFor(d, 180.f) > 0.f))) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
 			continue;
@@ -2825,7 +2827,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			// fades, so this is an economy term, never a clock.
 			if (incA > 0.1f) {
 				const float fieldSec = Catalog::gCostM[d] / incA;
-				const float hA = (fillS > 1.f) ? fillS : 60.f;
+				const float hA = armyFillS;
 				ppc *= hA / (hA + fieldSec);
 			}
 			// MASS FIRST, T3 FROM SURPLUS (his ruling, after 267,850 metal
@@ -2936,7 +2938,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				roleW = sW + (1.f - sW) * roleW;
 			}
 			roleW = covR + (1.f - covR) * roleW;
-			float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
+			float gainA = (effGap / armyFillS)
 					* (ppc / linePPC) * roleW * stakeMul
 					/ (1.f + have * 0.05f) * eFeedA;
 			// The quiet rear's fighters ignore the suppressed army gap and
@@ -2945,7 +2947,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			const bool gainViaRole = !((roleMul < 1.f) && airGuard);
 			if (!gainViaRole) {
 				gainA = ((rGap > 0.f) ? rGap : 0.f)
-						/ ((fillS > 1.f) ? fillS : 60.f)
+						/ armyFillS
 						* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
 			}
 			// TUNE_ARMY_ONE_CURRENCY (his 10-18/10-19: get the valuations balanced). One unit closes at most its own

@@ -1652,7 +1652,7 @@ void ElecLog()
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
-		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comHomeAssist=" + gComHomeAssist + "/" + gComHomeAssistAsk + " comHomeNone=" + gComHomeNone + " comEscMetalSkip=" + gComEscMetalSkip + " comEscStallSkip=" + gComEscStallSkip + " comLabLeft=" + gComLabLeft + " comLabIdle=" + gComLabIdle + " comFlips=" + gComFlips + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
+		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comHomeAssist=" + gComHomeAssist + "/" + gComHomeAssistAsk + " comHomeNone=" + gComHomeNone + " ladderSpill=" + gLadderSpillSkip + " comRush=" + gComRushAssist + "/" + gComRushAsk + " conRush=" + gConRushAssist + "/" + gConRushAsk + " comEscMetalSkip=" + gComEscMetalSkip + " comEscStallSkip=" + gComEscStallSkip + " comLabLeft=" + gComLabLeft + " comLabIdle=" + gComLabIdle + " comFlips=" + gComFlips + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
@@ -1685,7 +1685,7 @@ const int REFUSAL_MEMO_S = 45;
 
 int gPlantRefLogAt = 0;
 const float COM_HOME_REACH = 1400.f;   // WRDistilled's COMMANDER_WALK
-int gComHomeAssistAsk = 0, gComHomeAssist = 0, gComHomeNone = 0;
+int gComHomeAssistAsk = 0, gComHomeAssist = 0, gComHomeNone = 0, gComRushAsk = 0, gComRushAssist = 0, gConRushAsk = 0, gConRushAssist = 0;
 void NoteRefused(CCircuitUnit@ unit, Want@ w)
 {
 	const int did = (w.def is null) ? -1 : int(w.def.id);
@@ -2023,6 +2023,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 }
 
 int gDrawLadderMex = -1;    // the ranked index the ladder chose as a spot claim, this draw
+int gLadderSpillSkip = 0;   // ladder spot claims not forced because the bank spills (apex_mex_push_real)
 bool gDrawLadderTaken = false;
 Want@ gDrawDefJoin = null;   // this election's priced tower join, which the ladder yields to like a tower
 int gLadderYieldN = 0;
@@ -2036,6 +2037,16 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	const float sumV2 = DrawWeights(ranked, catBest, wt);
 	NnNoteDraw(unit, ranked, catBest, wt, sumV2, "draw");
 	gDrawLadderTaken = false;
+	// A SPILLING BANK IS NOT A RUNG (apex_mex_push_real; his 11-10 metal maps): the ladder hands every hand an open
+	// spot as the economy's first move, and on a metal map a spot is always open -- 36% of all builder decisions went to
+	// extractors while 74-920k metal spilled. When the metal it adds cannot be spent the claim is not forced; it still
+	// stands in the draw at its own (realize-discounted) price.
+	if ((gDrawLadderMex >= 0) && (ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f)
+		&& (MRealizeShare(2.f, 30.f) < 0.5f))
+	{
+		++gLadderSpillSkip;
+		gDrawLadderMex = -1;
+	}
 	// AN OPEN SPOT IS NOT SAMPLED EITHER (the plan: a rung is reached when
 	// the cheaper growth beneath it is exhausted -- spots taken). The ladder
 	// named the claim as the economy's first move and the draw then handed
@@ -3431,6 +3442,53 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			ranked = nearW;
 		else
 			++gComHomeNone;
+	}
+	// THE RUSH BUILD-UP: the commander's lathe is the lab's (his 11-09: "assist the first more, or use your commander
+	// to assist factory"). One lab stood at full build power while 700-1000 metal banked per seat by minute 6-8, and
+	// the commander spent minutes 2-7 on 293 extractor and 144 solar trips against 8 assists. The constructors too ("have
+	// the constructors assist the factory too ... you naturally aren't expanding as much"): a hand near home joins while
+	// the lab is short of what it could spend and free metal can feed the hand -- the lab is the first claim on metal,
+	// expansion takes what it leaves.
+	// UNDER THEIR PUSH TOO (apex_danger_assist; his 11-09: "the whole goal here was to simply not die from an enemy
+	// rush"): while their army reaches and beats ours sooner than the lab fills the gap (danger.as breach), the same
+	// hands make army -- at +0 vs hard_aggressive our labs made 50-80% of theirs per lab, metal banked 700-1000.
+	const bool rushCom = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	if ((ranked.length() > 0) && !aaPanic && (why != "estall") && ((StrikePhase() == SK_BUILD) || DangerAssistNow())
+		&& (rushCom || (Builder::gHomeSet
+			&& (unit.GetPos(ai.frame).distance2D(Builder::gHomePos) <= COM_HOME_REACH)
+			&& (UnservedLineSpend() > 0.5f)
+			&& (FreeMetalFlow() >= Catalog::gBuildPower[int(unit.circuitDef.id)] * (7.f / 80.f)))))
+	{
+		CCircuitUnit@ lab = null;
+		float labD = 1e30f;
+		const AIFloat3 cp = unit.GetPos(ai.frame);
+		for (uint fi = 0; fi < Brain::gFQFac.length(); ++fi) {
+			CCircuitUnit@ f = Brain::gFQFac[fi];
+			if ((f is null) || (f.CountQueued(null) <= 0))
+				continue;
+			const float fd = cp.distance2D(f.GetPos(ai.frame));
+			if (fd < labD) {
+				labD = fd;
+				@lab = f;
+			}
+		}
+		if (rushCom) ++gComRushAsk; else ++gConRushAsk;
+		if (lab !is null) {
+			Want@ aw = Want();
+			aw.kind = WK_ASSIST;
+			aw.pos = lab.GetPos(ai.frame);
+			aw.spotId = int(lab.id);
+			aw.gain = 1.f;
+			aw.mCost = 1.f;
+			aw.tCost = 1.f;
+			aw.value = (ranked[0].value > 0.5f) ? ranked[0].value : 0.5f;
+			@gAssistTarget = lab;
+			gAssistTargetId = lab.id;
+			gAssistGuardS = 60;
+			ranked.insertAt(0, aw);
+			if (rushCom) ++gComRushAssist; else ++gConRushAssist;
+			why = "rushlab";
+		}
 	}
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;

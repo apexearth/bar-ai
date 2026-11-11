@@ -114,6 +114,8 @@ local mexAt = {}          -- team -> {n -> frame the nth finished}
 local commLost = {}       -- team -> frame its commander died (-1 if alive)
 local builtTop = {}       -- team -> {unitName -> metal built}
 local cheapBuilt = {}     -- team -> {unitName -> metal built}, BELOW SPAM_COST
+LOSTBY = {}               -- global, not an upvalue (the periodic dump is at Lua's 60-upvalue limit); team -> {unitName -> metal lost, nanoframes at their build progress}
+FRAMELOST = {}            -- global, same reason; team -> metal sunk in nanoframes that died
 -- WHERE THE METAL WENT, as exclusive buckets summing to everything finished.
 -- mBuiltReal/defSpend/facSpend each answer one question and overlap or omit:
 -- army production had no counter at all, and cheap units were outside every
@@ -277,6 +279,17 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 	end
 	local cost = ud.metalCost or 0
 	local cheap = cost < SPAM_COST
+	do
+		local beingBuilt, progress = Spring.GetUnitIsBeingBuilt(unitID)
+		local sunk = cost
+		if beingBuilt then
+			sunk = cost * (progress or 0)
+			bump(FRAMELOST, unitTeam, sunk)
+		end
+		LOSTBY[unitTeam] = LOSTBY[unitTeam] or {}
+		local key = ud.name .. (beingBuilt and "*" or "")
+		LOSTBY[unitTeam][key] = (LOSTBY[unitTeam][key] or 0) + sunk
+	end
 
 	if cheap then
 		bump(lostCheap, unitTeam, cost)
@@ -908,6 +921,20 @@ local function dump(reason, onlyTeam, atFrame)
 				table.sort(out)
 				if #out > 0 then
 					parts[#parts + 1] = "cheapBuilt=" .. table.concat(out, ",")
+				end
+			end
+			parts[#parts + 1] = string.format("mFrameLost=%.0f", FRAMELOST[teamID] or 0)
+			local lb = LOSTBY[teamID]
+			if lb ~= nil then
+				local out = {}
+				for name, metal in pairs(lb) do
+					if metal >= 1 then
+						out[#out + 1] = string.format("%s:%d", name, metal)
+					end
+				end
+				table.sort(out)
+				if #out > 0 then
+					parts[#parts + 1] = "lostBy=" .. table.concat(out, ",")
 				end
 			end
 			cmdWindow[teamID] = 0

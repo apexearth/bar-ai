@@ -629,8 +629,97 @@ int gNextYardHoldLog = 0;
 int gYardLostAt = -999999;
 
 float gDupNanoBp = -1.f;   // the catalog's best lathe per metal, found once
+// A COPY OR A NANO, PRICED (his 11-10, replacing nanos-before-a-second-plant: "consider where your wealth is ...
+// space, build-power, and cost ... each unit does take some time to get off the platform ... eventually you hit
+// terminal velocity on a factory and just need to build more of them"). A line delivers R / (bt/B + x) metal/s of
+// its order: R the order's metal, bt its build time, B the lathe on it, x the seconds a unit takes to clear the pad.
+// A nano adds to the standing line's B (worth less as the pad binds); a copy is a new line with its own pad. Each
+// gain is over its cost at today's prices (metal forgiven while it spills, energy at its spot price, the build time
+// at the wage). No room for another nano at the line leaves the copy.
+int gPchNanoId = -2;
+int gPchAt = -1, gPchD = -1;
+float gPchVal = 1.f;
+float PlantChoiceMul(int d)
+{
+	if ((gPchAt == ai.frame) && (gPchD == d))
+		return gPchVal;
+	gPchAt = ai.frame;
+	gPchD = d;
+	gPchVal = 1.f;
+	if (NanoBlockFull(d))
+		return gPchVal;
+	if (gPchNanoId == -2) {
+		gPchNanoId = -1;
+		float bestR = 0.f;
+		for (int n = 1; n <= Catalog::gDefCount; ++n) {
+			if (!Catalog::gAvailable[n] || Catalog::gMobile[n] || (Catalog::gBuildPower[n] <= 0.f)
+				|| (Catalog::gCostM[n] <= 1.f) || (Catalog::gBuildsList[n].length() > 0) || !CanBuildEver(n))
+				continue;
+			const float r = Catalog::gBuildPower[n] / Catalog::gCostM[n];
+			if (r > bestR) {
+				bestR = r;
+				gPchNanoId = n;
+			}
+		}
+	}
+	const int nd = gPchNanoId;
+	if (nd <= 0)
+		return gPchVal;
+	CCircuitUnit@ line = null;
+	float lineBp = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (int(f.circuitDef.id) != d))
+			continue;
+		const float b = Catalog::gBuildPower[d] + NanoLatheReaching(f.GetPos(ai.frame)) * (80.f / 7.f);
+		if ((line is null) || (b < lineBp)) {
+			@line = f;
+			lineBp = b;
+		}
+	}
+	if (line is null)
+		return gPchVal;
+	const int p = LabOrderOf(line);
+	if ((p <= 0) || (Catalog::gBuildTime[p] <= 1.f) || (Catalog::gCostM[p] <= 1.f))
+		return gPchVal;
+	const float R = Catalog::gCostM[p];
+	const float bt = Catalog::gBuildTime[p];
+	const float sp = (Catalog::gSpeed[p] > 10.f) ? Catalog::gSpeed[p] : 10.f;
+	const int foot = (Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d];
+	const float x = (float(foot) * 16.f * 0.5f + 16.f) / sp + 1.f;
+	const float tNow = R / (bt / lineBp + x);
+	const float gNano = R / (bt / (lineBp + Catalog::gBuildPower[nd]) + x) - tNow;
+	const float gCopy = R / (bt / Catalog::gBuildPower[d] + x);
+	const float wage = Wage();
+	const float ePx = ECostSpot();
+	const float bp = EffBP(0.f);
+	const float mcs = MCostScale();
+	const float cNano = Catalog::gCostM[nd] * mcs + Catalog::gCostE[nd] * ePx
+			+ Catalog::BuildSecondsAt(nd, bp) * wage;
+	const float cCopy = Catalog::gCostM[d] * mcs + Catalog::gCostE[d] * ePx
+			+ Catalog::BuildSecondsAt(d, bp) * wage;
+	if ((gNano <= 0.f) || (cNano <= 0.f) || (cCopy <= 0.f)) {
+		gPchVal = 1.f;
+	} else {
+		const float ratio = (gCopy / cCopy) / (gNano / cNano);
+		gPchVal = (ratio < 1.f) ? ratio : 1.f;
+	}
+	if (ai.frame >= gPchLogAt) {
+		gPchLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: plant-choice t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+			+ " order=" + Catalog::Def(p).GetName() + " B=" + int(lineBp) + " x=" + formatFloat(x, "", 0, 1)
+			+ " gNano=" + formatFloat(gNano, "", 0, 2) + " gCopy=" + formatFloat(gCopy, "", 0, 2)
+			+ " cNano=" + int(cNano) + " cCopy=" + int(cCopy) + " mcs=" + formatFloat(mcs, "", 0, 2)
+			+ " mul=" + formatFloat(gPchVal, "", 0, 2));
+	}
+	return gPchVal;
+}
+int gPchLogAt = 0;
+
 float DupBpSubstMul(int d)
 {
+	if (ai.GetTunable("apex_plant_choice", TUNE_PLANT_CHOICE) > 0.f)
+		return PlantChoiceMul(d);
 	const float pm = Catalog::gCostM[d];
 	if (pm <= 1.f)
 		return 1.f;
@@ -2058,7 +2147,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 					+ " plant=" + formatFloat(plantG, "", 0, 3)
 					+ " lift=" + formatFloat(liftG, "", 0, 3));
 		}
-		ValueOf(d, (plantG + liftG) * AirLineGroundMul(d),
+		ValueOf(d, (plantG + liftG) * AirLineGroundMul(d) * BreachPlantMul(d, Catalog::gBuildPower[uid]),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
 		if (evAir)
 			Air::EvNotePlant(d, c.value, evCaution);

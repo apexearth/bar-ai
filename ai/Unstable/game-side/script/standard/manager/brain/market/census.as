@@ -642,6 +642,7 @@ void NoteDead(CCircuitUnit@ unit)
 	}
 	Lattice::NoteDead(unit.id);
 	LossNote(int(unit.circuitDef.id));
+	StrikeNoteLoss(int(unit.circuitDef.id));
 	for (uint gi = 0; gi < gOwnGenIds.length(); ++gi) {
 		if (gOwnGenIds[gi] == unit.id) {
 			gOwnGen.removeAt(gi);
