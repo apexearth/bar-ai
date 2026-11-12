@@ -29,3 +29,33 @@ Related: [one-target-late-game](one-target-late-game.md) (everything on one targ
 [air-late-mass](air-late-mass.md) (kill their AA first; EMP), [lrpc-volley](lrpc-volley.md),
 [break-enemy-walls](break-enemy-walls.md), [frontline-hold](frontline-hold.md),
 [team-strategies](team-strategies.md); memory `goal-fun`, `one-opponent-is-not-strength`.
+
+## Measured before building (11-12, turtle pilot)
+
+Turtle opponent: v0.5.11 with `apex_share_army=2 apex_share_defence=12 apex_share_airdef=4` per AI. 2v2, +50, 45 min,
+4 games (`matches/turtle-base-s700*`, scratchpad `turtleread.py`).
+
+- 1 lost at minute 10 (Red Comet); 3 timed out.
+- In s7004 we held 3x their army and 2-4x their income from minute 25, and still lost metal on the trade in almost
+  every 5-minute window (up to -41k). Their defences reached 180k. We built no EMP launchers, no Junos and no super
+  artillery. We had one LRPC. The nukes went at armies.
+- Their spare metal still becomes army, so in s7001 and s7003 the "turtle" outgrew us late.
+
+## Plan (v0.5.12), each step with its counter
+
+1. **Siege state with memory.** From the death ledger (losses to static guns vs kills where they die), a front is
+   "not breaking" when attacks into it lose. Record each breach site (`TurretTarget`) and what was tried there;
+   log `apex: siege`. Counter: metal lost to static guns per minute.
+2. **Stop feeding the wall.** While a site is not breaking, the army does not walk into its reach. It holds outside
+   it until the site is softened. Counter: losses to static guns drop.
+3. **Break tools priced by the siege.** LRPC (exists), EMP launchers, Junos against their jammers, and super
+   artillery with the energy storage it needs, all valued by the defence metal in reach of the breach site.
+   Counter: defence metal killed at the site.
+4. **One target.** Nukes, LRPC, tactical missiles and bombers (AA at the site first) all on the breach site. The
+   army goes in when the site's standing defence has fallen, or right after an EMP volley.
+5. **Pivot.** A site that does not fall after a full try gets marked as failed, and the next try picks another
+   site or another tool.
+6. **Vehicles** in the mix (separate change).
+
+Gate: the turtle opponent, both factions, plus the usual v0.5.11 head-to-head and BARb, judged by the worst
+matchup.
