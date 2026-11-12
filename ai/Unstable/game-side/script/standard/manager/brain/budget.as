@@ -54,6 +54,22 @@ void BudgetDecay()
 		gBdhOrd[i] *= k;
 	}
 	gSpentTotal *= k;
+	gLabBuilderSpent *= k;
+}
+
+// What the labs spend on constructors per second, from the same faded ledger. A lab's lines make the army AND the
+// economy's hands: sized from the army's flow alone, Armada's air lab (its constructor plant) lost a third of its
+// nanos and a quarter of its air constructors (11-12, arm510c vs arm510m).
+float gLabBuilderSpent = 0.f;
+float LabBuilderFlow()
+{
+	BudgetDecay();
+	const float tau = ai.GetTunable("apex_budget_tau", TUNE_BUDGET_TAU);
+	const float t = float(ai.frame) / float(SECOND);
+	if ((tau <= 1.f) || (t <= 1.f))
+		return 0.f;
+	const float window = tau * (1.f - pow(2.718282f, -t / tau));   // a young game has not filled the fade yet
+	return gLabBuilderSpent / window;
 }
 
 // The target split of METAL SPENT. Deliberately one table in one place, so the
@@ -186,6 +202,9 @@ void NoteSpend(CCircuitUnit@ unit, Unit::UseAs usage)
 	const Cat cat = CatOf(unit.circuitDef, usage);
 	gSpent[cat] += m;
 	gSpentTotal += m;
+	const int did = int(unit.circuitDef.id);
+	if (Catalog::gMobile[did] && Catalog::gBuilder[did])
+		gLabBuilderSpent += m;
 	if (cat == ARMY)
 		gBdhArmyM += m;
 	gBdhOrd[cat] = (gBdhOrd[cat] > m) ? (gBdhOrd[cat] - m) : 0.f;

@@ -30,6 +30,7 @@ text: `git log -p TODO.md`.
 | [lrpc-volley](todo/lrpc-volley.md) | 10-18, 10-23 | the LRPC volley priced, not each gun alone |
 | [dont-let-them-mass-lrpcs](todo/dont-let-them-mass-lrpcs.md) | 10-23 | their LRPCs and frames as top targets |
 | [one-target-late-game](todo/one-target-late-game.md) | 10-23 | LRPC, nukes, air and T3 on one target |
+| [break-the-front](todo/break-the-front.md) | 11-12 | when attacks stop paying, pivot: one coordinated breakthrough (defences opposite theirs, EMP launchers, Junos, bombing the front, LRPC, Starfall with storage); remember what failed; more vehicles |
 
 ## Next big job
 

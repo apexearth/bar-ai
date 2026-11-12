@@ -10,7 +10,6 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
-| [armada-level-with-507](issues/armada-level-with-507.md) | 11-12 | v0.5.10 Armada 2v2 only level with v0.5.07 (13-14/72); Cortex and metal maps ahead; cause not in the five bisected changes |
 | [v0510-review-deferred](issues/v0510-review-deferred.md) | 11-12 | five findings left for the next version (metal-field site check, army-target readers, race end, perf) |
 | [cons-flee-to-map-edge](issues/cons-flee-to-map-edge.md) | 11-04 | constructors run to the map edge when threat covers the whole map, and idle there |
 | [off-switches](issues/off-switches.md) | 11-03 | 56 deleted 11-04; left: 26 of his asks awaiting his test-or-delete call |
