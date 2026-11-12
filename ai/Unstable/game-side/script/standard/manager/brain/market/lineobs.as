@@ -164,4 +164,28 @@ void LineObsLog()
 		+ " last=" + gLoLast);
 }
 
+
+// A plant whose every combat product a higher plant of ours outclasses (his 11-11: "T1 labs should become obsolete
+// eventually"): a copy adds no throughput worth buying, and a duplicate is reclaimed (want_reclaim.as retire law).
+bool PlantOutclassed(int fd)
+{
+	if (!Catalog::ValidId(fd))
+		return false;
+	// T1 plants only, as he named them: a gantry's units beating a T2 line is not a reason to eat T2 production.
+	const int tier = PlantTier(fd);
+	if (tier != 1)
+		return false;
+	bool any = false;
+	const array<int>@ bl = Catalog::gBuildsList[fd];
+	for (uint i = 0; i < bl.length(); ++i) {
+		const int p = bl[i];
+		if (!Catalog::ValidId(p) || !Catalog::gMobile[p] || !LineCombat(p))
+			continue;
+		any = true;
+		if (LineObsShare(p, tier) >= 1.f)
+			return false;
+	}
+	return any;
+}
+
 }  // namespace Market

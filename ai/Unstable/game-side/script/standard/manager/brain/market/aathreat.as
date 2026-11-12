@@ -363,6 +363,30 @@ void AatCoverRefresh()
 	}
 }
 
+// THE TOWER STANDS ON THE BOMBERS' APPROACH, not on what they bomb (his 2026-09-18: "enemy bombers have to be killed
+// before they reach inside our base"; 11-11 Red Comet: the AA stood among the stake and never fired before the drop).
+// Half a range toward their base keeps the stake inside its reach and meets the run half a range sooner.
+AIFloat3 AaTowardFoe(const AIFloat3& in place, int d)
+{
+	const float rng = Catalog::gAirRange[d];
+	const AIFloat3 foe = Front::FoeAnchor();
+	if ((rng <= 1.f) || !OnMap(foe))
+		return place;
+	AIFloat3 dir = foe - place;
+	if (dir.SqLength2D() < 1.f)
+		return place;
+	dir.SafeNormalize2D();
+	const AIFloat3 to = place + dir * (rng * 0.5f);
+	if (!OnMap(to))
+		return place;
+	// ...on our half: a long-reach battery (Mercury, Screamer) half its range forward stood out on the front, the
+	// ground army's target instead of the bombers'.
+	const float fTo = Military::ForwardFraction(to);
+	if ((fTo > 0.5f) && (fTo > Military::ForwardFraction(place)))   // 0 = our territory centre, 1 = theirs
+		return place;
+	return to;
+}
+
 // The best place for one more static AA of `d`: their air there not yet answered, times
 // the rate it is costing us there (measured, or the stake at risk while it flies there).
 bool AatStaticPrice(int d, AIFloat3& out at, float& out gain)
@@ -401,7 +425,7 @@ bool AatStaticPrice(int d, AIFloat3& out at, float& out gain)
 	}
 	if (best < 0)
 		return false;
-	at = gAatPos[best];
+	at = AaTowardFoe(gAatPos[best], d);
 	++gAatPriceN;
 	AansNoteStatic(d, at, bestStop, bestSat);
 	return true;

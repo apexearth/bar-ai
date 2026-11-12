@@ -130,7 +130,7 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_RECORD_BITE` = 1. Nearly inert in practice (0.9-1.0 for a handful of units); removing the cap is his call.
 - `TUNE_EVIDENCE_SHRINK` = 0. Scavenger Epic Tumbleweed read 19.3 power per metal against 0.05-0.13 and zeroed the real T3 line. A/B not run.
 - `TUNE_LINE_ABS` = 1. Off made a Thud tankier than a Tzar.
-- `TUNE_LINE_ALLOC` = 0. On: reach share 0.06 -> 0.12 but army metal 544k -> 60k, k/l 0.81 -> 0.12 (T1 labs yield forever to a plant that never pays the debt). Off until yielding waits on a debt actually being paid.
+- `TUNE_LINE_ALLOC` = 0 (off for v0.5.10, his call; work continues). First on: reach 0.06 -> 0.12 but army 544k -> 60k (T1 labs yielded to a plant that never paid). 11-11 per-lab version, 12 Cortex 2v2 pairs: reach 0.12 -> 0.28 but army @20 x1.09 -> x0.38, k/l 0.73 -> 0.59 -- the extra losses were Shadow bombers (69k vs 27k) filling the reach debt, because the line classes counted air. Air is now out of the ground line (army.as LineMeans/TrackLine, production pull); re-measured, 11 Cortex 2v2 pairs, ground only (on vs off): reach 0.33 vs 0.06, decided W-L 2-2 vs 0-1, ahead on both income and army at the 30-min cap 3-2 vs 7-2, end army vs v0.5.07 x0.87 vs x1.72. The ranged share costs us until the ranged line is used well (stand-off, siege targets) -- the next version's work.
 - `TUNE_LOCKUP` = 0.5. His "little bit extra of a penalty on top of time". Chosen.
 - `TUNE_LATE_BUILD` = 1. His: the walk's cost is also the metal you would have made. An Epic at v=10.9 over an AFUS at 5.8 reads ~1.5 vs ~4.3.
 - `TUNE_FARM_ROW_W` = 320. Halved from 640 on his report that the winds stood too far out.

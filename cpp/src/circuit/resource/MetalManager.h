@@ -32,6 +32,8 @@ private:
 
 public:
 	bool HasMetalSpots() const { return (metalData->IsInitialized() && !metalData->IsEmpty()); }
+	bool IsMetalField() const { return isMetalField; }
+	float GetMetalFieldIncome() const { return fieldIncome; }
 	bool HasMetalClusters() const { return !metalData->GetClusters().empty(); }
 	bool IsClusterizing() const { return metalData->IsClusterizing(); }
 	// Init() is deferred via RunOnInit; GetSpotToBuild/Upgrade dereference
@@ -110,6 +112,9 @@ private:
 			std::function<CMetalData::ClusterGraph::Node (ShortPath* shortPath)>&& doGoal);
 
 	CCircuitAI* circuit;
+	bool isMetalField = false;
+	float fieldIncome = 0.f;
+	void DetectMetalField();
 	CMetalData* metalData;
 
 	struct SMetalInfo {

@@ -646,6 +646,13 @@ float PlantChoiceMul(int d)
 	gPchAt = ai.frame;
 	gPchD = d;
 	gPchVal = 1.f;
+	// A copy adds throughput only past lines that are all working: an idle line, or a copy already ordered, has the
+	// capacity it would bring (his 11-11 watch: nine T2 labs and nine hover plants ordered in a minute, most then idle).
+	// Asked first: an idle lab has no order to price, and the price below returned before reaching this.
+	if (!LinesAllWorking(d) || (ComCountManned(d, CS_FRAMED | CS_ORDERED) >= 1) || PlantOutclassed(d)) {
+		gPchVal = 0.f;
+		return gPchVal;
+	}
 	if (NanoBlockFull(d))
 		return gPchVal;
 	if (gPchNanoId == -2) {
@@ -806,7 +813,7 @@ bool AirLateCopy(int d)
 {
 	if (ai.GetTunable("apex_air_late_copy", TUNE_AIR_LATE_COPY) <= 0.f)
 		return false;
-	if (!AirPlant(d) || (PlantTier(d) < 2))
+	if (!AirPlant(d) || (PlantTier(d) < 2) || PlantOutclassed(d))
 		return false;
 	// NOT NANOS FIRST HERE (his 11-07, after the first smoke: the block never read full -- 15-24 nanos against a need of
 	// 80+, none offered -- "Sometimes it's just not enough room to make enough nanos ... I'm not getting enough planes
@@ -820,12 +827,28 @@ bool AirLateCopy(int d)
 			+ (NanoBlockFull(d) ? 1 : 0) + " wingShort=" + (shortW ? 1 : 0) + " linesBusy=" + (busy ? 1 : 0)
 			+ " armed=" + (Air::Armed() ? 1 : 0));
 	}
-	return shortW && busy;
+	// ...and only on an income that feeds another line: the marginal-line test ProposePlant skips under air-every
+	// (his 11-11 watch: a second T2 air lab at 47 m/s, "we don't even have 60 metal per second income").
+	return shortW && busy && MarginalLineFed();
 }
 int gAirLateLogAt = 0;
 
+// THE MARGINAL LINE IS FED: income (plus what spills) supports one more plant than we hold or have ordered, at
+// apex_plant_income_per a line (ProposePlant's overLine, the same arithmetic).
+bool MarginalLineFed()
+{
+	TrackIncome();
+	const float per = ai.GetTunable("apex_plant_income_per", TUNE_PLANT_INCOME_PER);
+	const float structInc = ((gIncEma > 0.f) ? gIncEma : Eco::MInc()) + OverflowM();
+	const int supported = 1 + int(structInc / ((per > 1.f) ? per : 50.f));
+	return (Factory::gFactoryCount + Requests::LiveCountOf(int(Task::BuildType::FACTORY))) < supported;
+}
+
 bool CopyWaived(int d)
 {
+	// No waiver buys a copy of an outclassed plant: the retire law reclaims those for their ground (want_reclaim.as).
+	if (PlantOutclassed(d))
+		return false;
 	if (AirPlantOwed(d) || (ai.GetTunable("apex_plant_free", TUNE_PLANT_FREE) > 0.f) || AirLateCopy(d))
 		return true;
 	// NANOS FIRST, ALWAYS (his rule, restated 2026-09-30 after an overflow
@@ -1727,6 +1750,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	string cand = "";
 	// his 10-13 test of the opening lab: 1 vehicles first, 2 bots first, 3 air first (his 10-20), 0 the market
 	const int firstLab = (Factory::gFactoryCount == 0) ? int(ai.GetTunable("apex_first_lab", TUNE_FIRST_LAB)) : 0;
+	const bool advHeld = AdvPlantInFlight() && !WealthWaiver();   // asked once, not per candidate
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
@@ -1788,6 +1812,14 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		}
 		if (!evAir && DuelAirTechHeld(d))
 			continue;
+		// ONE ADVANCED PLANT AT A TIME, the tech lane's rule (want_tech.as): AnyPlantInFlight above skips a crewless
+		// frame, so a T2 bot lab whose order was released let a T2 air lab start beside it (11-11 Red Comet watch).
+		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+			&& advHeld)
+		{
+			AdvDeferLog("plant:" + Catalog::Def(d).GetName());
+			continue;
+		}
 		// FOCUS: ONE T1 LINE UNTIL T2 (apexearth 2026-10-03: "focusing on the
 		// factories is good. Later on in the game, you can have multiple types"
 		// -- 5-7 plants a seat against BARb's 4-5). Before our first advanced

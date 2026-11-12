@@ -3103,6 +3103,27 @@ bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
 	// walking around cloaked on an empty bank -- that half still holds.
 	const float share = circuit->GetTunable("apex_comm_cloak_share",
 			COMM_CLOAK_SHARE_DEF);
+	// apex: NOT WITH A FIGHT HE CAN TAKE IN REACH. Cloaked he holds fire (UpdateCommHoldFire), so the
+	// rich cloak kept a late commander out of every fight beside him (his 11-11 evocom game: a levelled
+	// commander, one of our strongest units, cloaked and silent). Enemies engaging near him drop it --
+	// only while our side holds the ground there (the withdraw pass's own odds), so a commander whose
+	// death ends the game stays hidden from an army he cannot beat. Once uncloaked he keeps fighting
+	// out to a quarter past his reach, so the answer does not flap at the range edge. The comm-ship
+	// trap above keeps its own rule, and a retreating commander keeps the hiding a retreat is for.
+	const AIFloat3& cpos = unit->GetPos(circuit->GetLastFrame());
+	IUnitTask* ctask = unit->GetTask();
+	const bool fleeing = (ctask != nullptr) && (ctask->GetType() == IUnitTask::Type::RETREAT);
+	if (!fleeing && utils::is_valid(cpos)) {
+		const float reach = cdef->GetMaxRange() * (unit->GetUnit()->IsCloaked() ? 1.f : 1.25f);
+		if (circuit->GetEnemyManager()->GetEnemyEngagingCostNear(cpos, reach) > 0.f) {
+			CInfluenceMap* inflMap = circuit->GetInflMap();
+			const float foe = inflMap->GetEnemyInflAt(cpos);
+			const float ours = inflMap->GetAllyInflAt(cpos);   // already holds him
+			if (foe <= ours * circuit->GetTunable("apex_withdraw_odds", 1.5f)) {
+				return false;
+			}
+		}
+	}
 	// apex: HYSTERESIS ON BOTH TERMS. An economy running used==produced sits
 	// exactly on the stall boundary and flapped this answer 23 times in two
 	// minutes (commCloakFlips 6->29, watched live) -- each flap re-issued by

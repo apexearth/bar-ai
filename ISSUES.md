@@ -10,6 +10,7 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
+| [v0510-review-deferred](issues/v0510-review-deferred.md) | 11-12 | five findings left for the next version (metal-field site check, army-target readers, race end, perf) |
 | [cons-flee-to-map-edge](issues/cons-flee-to-map-edge.md) | 11-04 | constructors run to the map edge when threat covers the whole map, and idle there |
 | [off-switches](issues/off-switches.md) | 11-03 | 56 deleted 11-04; left: 26 of his asks awaiting his test-or-delete call |
 | [glacier-pass-plus0](issues/glacier-pass-plus0.md) | 11-03 | too many sites at once; energy short after the opening; slow to finish |

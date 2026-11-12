@@ -654,6 +654,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			+ " overflow=" + int(OverflowM()));
 		NoteCopyWaived(int(w.def.id));
 	}
+	// A metal-field extractor (want_mex.as ProposeFieldMex) executes as a converter: no spot, placed where a converter
+	// is. Every reader after it sees a converter, which keeps the shared extractor offer open to the other hands (kept
+	// as an extractor, 11-10 release, the hands lost it: 18 vs 34 extractors at 12 min); the opening reads it as its
+	// extractor step (decide.as fieldMexDone).
+	if ((w.kind == WK_MEX) && (w.spotId < 0) && (w.def !is null) && FieldMexOn())
+		w.kind = WK_CONVERT;
 	if (w.kind == WK_MEX) {
 		// Help the one already going before opening another, exactly as every
 		// other build type does -- the metal path used to skip this rung.

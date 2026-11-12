@@ -357,19 +357,8 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			// be killed before they reach inside our base"): one of its own
 			// ranges beyond the rim gap on that bearing.
 			AIFloat3 aat;
-			if (RimGapSite(PROT_AA, aat)) {
-				at = aat;
-				const float rng = Catalog::gMaxRange[d];
-				if ((rng > 1.f) && gPfRimOk) {
-					AIFloat3 outw = aat - gPfMid;
-					if (outw.SqLength2D() > 1.f) {
-						outw.SafeNormalize2D();
-						const AIFloat3 far = aat + outw * (rng * 0.8f);
-						if (OnMap(far))
-							at = far;
-					}
-				}
-			}
+			if (RimGapSite(PROT_AA, aat))
+				at = AaTowardFoe(aat, d);   // toward their base, not outward from ours: a rear gap pushed it further back
 			// ...and the held line before the rim, once air has been seen
 			// (the gate below), while nothing that shoots up covers it.
 			if (lineUp && (Catalog::gMaxRange[d] > 1.f)

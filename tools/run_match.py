@@ -606,53 +606,44 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
     return result
 
 
-def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
-    return str(pid) in out
+_HELD_LOCKS: dict = {}
 
 
 def claim_write_dir(d: Path) -> bool:
-    """Atomically claim an engine write dir: create engine.lock exclusively, holding our pid. A lock whose process is
-    dead is cleared and the claim retried; a live one means the dir is taken (False)."""
-    lock = d / "engine.lock"
-    for _ in range(3):
-        try:
-            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode())
-            os.close(fd)
-            return True
-        except FileExistsError:
-            try:
-                other = int(lock.read_text().strip() or "0")
-            except (OSError, ValueError):
-                other = 0
-            if other and _pid_alive(other):
-                return False
-            # An empty lock is a claim between its create and its write, not a dead one (crowd7, 10-30: two launches in
-            # one instant -- the second read it empty, unlinked it, and both engines ran in one write dir, so both
-            # matches got one merged infolog). Only an empty lock older than a few seconds is stale.
-            if not other:
-                try:
-                    if time.time() - lock.stat().st_mtime < 10.0:
-                        return False
-                except OSError:
-                    pass
-            try:
-                lock.unlink()
-            except OSError:
-                time.sleep(0.2)
-    return False
+    """Claim an engine write dir with an OS lock on engine.lock, held open until release or process death. The OS
+    drops it when we die, so there is no stale lock to clear: the old pid-file claim cleared "dead" locks by unlink,
+    and two launches clearing one stale lock at once both ran in one dir (11-12: bisect arms 0 and 1 shared an infolog)."""
+    try:
+        fd = os.open(str(d / "engine.lock"), os.O_CREAT | os.O_RDWR)
+    except OSError:
+        return False
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return False
+    _HELD_LOCKS[str(d)] = fd
+    return True
 
 
 def release_write_dir(d: Path) -> None:
-    lock = d / "engine.lock"
+    fd = _HELD_LOCKS.pop(str(d), None)
+    if fd is None:
+        return
     try:
-        if lock.read_text().strip() == str(os.getpid()):
-            lock.unlink()
+        os.lseek(fd, 0, os.SEEK_SET)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
     except OSError:
         pass
+    os.close(fd)
 
 
 def _free_memory_gb() -> float:

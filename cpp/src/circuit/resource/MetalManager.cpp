@@ -112,6 +112,37 @@ CMetalManager::CMetalManager(CCircuitAI* circuit, CMetalData* metalData)
 		ParseMetalSpots();
 	}
 	metalInfos.resize(metalData->GetSpots().size(), {true, -1});
+	DetectMetalField();
+}
+
+// A METAL FIELD (his 11-10: "you should treat the metal extractors almost in the same way you treat building any energy
+// building ... It's just a building"): most of the ground holds metal, so an extractor stands wherever a building fits
+// and yields what the median spot does. The script places it like a converter (want_mex.as).
+void CMetalManager::DetectMetalField()
+{
+	ShortVec fm;
+	circuit->GetMap()->GetResourceMap(circuit->GetEconomyManager()->GetMetalRes(), fm);
+	size_t rich = 0;
+	for (short v : fm) {
+		if (v > 0) {
+			++rich;
+		}
+	}
+	// normal maps read 0-1% (metal only at spots), metal maps 48-100% (SpeedMetal 0.48, FMP and Nine Metal Islands 1.00):
+	// a fifth sits in the gap
+	isMetalField = !fm.empty() && (rich * 5 > fm.size());
+	const CMetalData::Metals& spots = metalData->GetSpots();
+	if (isMetalField && !spots.empty()) {
+		std::vector<float> fi;
+		fi.reserve(spots.size());
+		for (const CMetalData::SMetal& s : spots) {
+			fi.push_back(s.income);
+		}
+		std::nth_element(fi.begin(), fi.begin() + fi.size() / 2, fi.end());
+		fieldIncome = fi[fi.size() / 2];
+	}
+	circuit->LOG("apex: metal-field rich=%.2f field=%i inc=%.4f", fm.empty() ? 0.f : float(rich) / float(fm.size()),
+			isMetalField ? 1 : 0, fieldIncome);
 }
 
 CMetalManager::~CMetalManager()
@@ -182,7 +213,7 @@ void CMetalManager::ParseMetalSpots()
 			const int mw = width / 2, mh = height / 2;
 			CCircuitDef* mdef = circuit->GetEconomyManager()->GetSideInfo().mexDef;
 			const float foot = std::max(mdef->GetDef()->GetXSize(), mdef->GetDef()->GetZSize()) * SQUARE_SIZE;
-			const float pitch = std::max(2.f * map->GetExtractorRadius(metalRes), foot + 32.f);
+			const float pitch = std::max(2.f * map->GetExtractorRadius(metalRes), foot);   // edge to edge (his 11-10: "right next to each other")
 			const float boxN = std::max(circuit->GetTunable("apex_metal_box_n", 400.f), 16.f);
 			const float budget = 2.f * boxN;   // lattice spots in all, shared by every base: the elections walk the list
 			const float mapW = width * SQUARE_SIZE, mapH = height * SQUARE_SIZE;

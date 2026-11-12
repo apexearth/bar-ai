@@ -494,7 +494,10 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	// is the stampede and a recompute is the ~1 ms the AI could not afford
 	// (memo cores were a third of all AI time, his-settings 8v8). The asker
 	// takes another of its wants; the next frame recomputes.
-	if ((gMemoAt[slot][r] <= -30000) && (gMemoW[slot][r] !is null) && MemoBusy(slot)) {
+	// A want with no spot (a metal-field extractor, placed beside its own builder) has no stampede to stop: served.
+	if ((gMemoAt[slot][r] <= -30000) && (gMemoW[slot][r] !is null) && MemoBusy(slot)
+		&& !((slot == 8) && FieldMexOn() && (gMemoW[slot][r].spotId < 0)))
+	{
 		Perf::Note("memo.embargo");
 		if (slot == 8)
 			gMexOpen = gMemoMexOpen[r];
@@ -2041,7 +2044,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	// spot as the economy's first move, and on a metal map a spot is always open -- 36% of all builder decisions went to
 	// extractors while 74-920k metal spilled. When the metal it adds cannot be spent the claim is not forced; it still
 	// stands in the draw at its own (realize-discounted) price.
-	if ((gDrawLadderMex >= 0) && (ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f)
+	if ((gDrawLadderMex >= 0) && (ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f) && FieldMexOn()
 		&& (MRealizeShare(2.f, 30.f) < 0.5f))
 	{
 		++gLadderSpillSkip;
@@ -2959,9 +2962,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		else
 			cpStage = 2;
 	}
+	// The sentry per extractor guards a claim out on the map; a metal field's extractors are buildings (his 11-10), and
+	// the push put every hand on a tower for the packed ones (11-11 watch: 61 pushes by minute 8 while metal ran out).
 	if (!aaPanic && !superPush && !convertPush && !coverPush && (!mexOnList || MexBasicOn())
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f) && !StrikeHoldsDefence()
-		&& PlantFramed())
+		&& PlantFramed() && !FieldMexOn())
 	{
 		const float floorWave = MexCoverFloorM()
 				* ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
@@ -3774,7 +3779,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if ((depth == 0) && (why == "comself"))
 				++gComSelfExec;
 			EdExecNote(ranked[i], edDj, edCov, edBf, edFieldDraw, edBfSlot);
-			OpenNoteExec(isComm, ranked[i].kind);
+			// A metal-field extractor executes as a converter (execute.as) but is the opening's extractor step: read as a
+			// converter, a MEX2 opening never reached its lab (11-11 gate: commander only, 52 extractors at minute 12).
+			const bool fieldMexDone = (ranked[i].kind == WK_CONVERT) && (ranked[i].spotId < 0) && (ranked[i].def !is null)
+				&& (Catalog::gExtractsM[int(ranked[i].def.id)] > 0.f);
+			OpenNoteExec(isComm, fieldMexDone ? WK_MEX : ranked[i].kind);
 			ComFlipNote(unit, ranked[i], t, (depth == 0) ? why : "fall");
 			// What was EXECUTED, not what was drawn -- the decide line above
 			// prints ranked[0] even when the executor refuses it, so audits

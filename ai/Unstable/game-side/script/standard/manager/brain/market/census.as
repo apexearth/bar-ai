@@ -500,6 +500,10 @@ void NoteFinished(CCircuitUnit@ unit)
 			}
 		}
 	}
+	if ((i < 0) && FieldMexOn()) {
+		gFieldMexId.insertLast(int(unit.id));
+		gFieldMexPos.insertLast(mp);
+	}
 	if ((i >= 0) && (gLExtract[i] <= 0.f))
 		ExpandFarNoteBuilt();
 	if (i >= 0)
@@ -507,6 +511,9 @@ void NoteFinished(CCircuitUnit@ unit)
 	if (Catalog::gExtractsM[defId] >= BestExtract())
 		++gMuTopDone;
 }
+// Our finished extractors off the spot lattice (a metal field): the ledger keeps spots only.
+array<int> gFieldMexId;
+array<AIFloat3> gFieldMexPos;
 // Fallback anchor: the first finished nano, only if no plan latched first.
 array<AIFloat3> gOwnNanoPos;
 array<Id> gOwnNanoIds;
@@ -724,6 +731,11 @@ void NoteDead(CCircuitUnit@ unit)
 		OwnAdd(int(unit.circuitDef.id), -1);
 	if (Catalog::gExtractsM[int(unit.circuitDef.id)] <= 0.f)
 		return;
+	const int fi = gFieldMexId.find(int(unit.id));
+	if (fi >= 0) {
+		gFieldMexId.removeAt(fi);
+		gFieldMexPos.removeAt(fi);
+	}
 	const int i = LedgerNearest(unit.GetPos(ai.frame));
 	// The moho's finish is what kills the mex under it (BAR's
 	// mex_upgrade_reclaimer), so a row already carrying more is an upgrade.

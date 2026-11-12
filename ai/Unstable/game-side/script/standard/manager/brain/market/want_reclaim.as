@@ -1874,7 +1874,11 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				const bool squeezed = (st3 > 1.f)
 					&& (Eco::MCur() < 0.5f * st3)
 					&& (Eco::MInc() <= Eco::MPull());
-				if (!squeezed || RecentCopyWaiver(fd))
+				// ...unless what it makes is outclassed: an old duplicate goes whatever the bank says (his 11-11:
+				// five T1 air labs standing at minute 29, "make sure old T1 buildings get reclaimed").
+				// ...spill or not: the ground it stands on is worth more than what the bank spills into it (his 11-11),
+				// and no waiver re-buys an outclassed copy (want_plant.as CopyWaived).
+				if ((!squeezed && !PlantOutclassed(fd)) || RecentCopyWaiver(fd))
 					covered = false;
 			}
 			if (covered) {

@@ -507,8 +507,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
-			+ " lab=" + formatFloat(labNeed, "", 0, 1) + " urg=" + formatFloat(ArmyUrgency(), "", 0, 1)
-			+ " floor=" + floorShort
+			+ " lab=" + formatFloat(labNeed, "", 0, 1)			+ " floor=" + floorShort
 			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
 				+ "/" + gFloorYardAssist
 			+ " over=" + formatFloat(over, "", 0, 1)
@@ -615,8 +614,6 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// what the turrets we stand deliver: a seat whose nanos sit idle does not get the full absorb from the next one
 		if (ai.GetTunable("apex_nano_payback", TUNE_NANO_PAYBACK) > 0.f)
 			gainN *= 1.f - gNanoIdleShare;
-		if ((src == NS_LAB) || (src == NS_ARMY))
-			gainN *= ArmyUrgency();
 		Want c;
 		ValueOf(d, gainN, WalkSecTo(unit, dSite),
 				Catalog::gBuildPower[uid], c);

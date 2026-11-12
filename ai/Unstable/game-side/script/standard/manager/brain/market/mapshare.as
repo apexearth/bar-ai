@@ -62,6 +62,30 @@ int MsSpotOf(const AIFloat3& in p)
 	return best;
 }
 
+// On a metal field the spots are a lattice and an extractor stands anywhere: it holds the lattice cell it is in.
+dictionary gMsCellOf;
+int MsCellOf(const AIFloat3& in p)
+{
+	const int s0 = MsSpotOf(p);
+	if ((s0 >= 0) || !FieldMexOn())
+		return s0;
+	const string key = formatInt(int(p.x) * 65536 + int(p.z));
+	int64 got;
+	if (gMsCellOf.get(key, got))
+		return int(got);
+	int best = -1;
+	float bestD = 1e9f;
+	for (uint s = 0; s < gAllSpots.length(); ++s) {
+		const float dd = gAllSpots[s].distance2D(p);
+		if (dd < bestD) {
+			bestD = dd;
+			best = int(s);
+		}
+	}
+	gMsCellOf.set(key, int64(best));
+	return best;
+}
+
 void MsBegin()
 {
 	const uint n = gAllSpots.length();
@@ -100,7 +124,7 @@ void MsStep()
 		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
 		if (!OnMap(p))
 			continue;
-		const int s = MsSpotOf(p);
+		const int s = MsCellOf(p);
 		if ((s < 0) || (uint(s) >= gMsMark.length()) || (gMsMark[s] == 1))
 			continue;
 		gMsMark[s] = 2;
@@ -114,7 +138,7 @@ void MsStep()
 	for (int i = gMsAIdx; i < aEnd; ++i) {
 		if (Catalog::gExtractsM[gAllyStDef[i]] <= 0.f)
 			continue;
-		const int s = MsSpotOf(gAllyStPos[i]);
+		const int s = MsCellOf(gAllyStPos[i]);
 		if ((s >= 0) && (uint(s) < gMsMark.length()))
 			gMsMark[s] = 1;
 	}
@@ -175,6 +199,11 @@ void MsFinish()
 	for (uint li = 0; li < gLSpot.length(); ++li) {
 		const int s = gLSpot[li];
 		if ((gLExtract[li] > 0.f) && (s >= 0) && (uint(s) < n))
+			gMsMark[s] = 1;
+	}
+	for (uint fi = 0; fi < gFieldMexPos.length(); ++fi) {
+		const int s = MsCellOf(gFieldMexPos[fi]);
+		if ((s >= 0) && (uint(s) < n))
 			gMsMark[s] = 1;
 	}
 	int ours = 0, foe = 0;

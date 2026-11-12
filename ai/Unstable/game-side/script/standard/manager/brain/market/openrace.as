@@ -24,7 +24,7 @@ int gOrcGroundAt = -999999;
 float gOrcOpenN = 0.f;
 float gOrcSpotD = 0.f;
 int gOrcAt = -1, gOrcFid = -1, gOrcSlot = -1, gOrcPick = -1;
-int gOrcAsk = 0, gOrcFighterN = 0, gOrcStallN = 0, gOrcStallFacN = 0, gOrcNoWalk = 0;
+int gOrcAsk = 0, gOrcFighterN = 0, gOrcStallN = 0, gOrcStallFacN = 0, gOrcNoWalk = 0, gOrcOverN = 0;
 float gOrcCostUs = 0.f;
 int gOrcStatAt = 0;
 int gOrcHAt = -1;
@@ -277,6 +277,19 @@ int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef
 	const float lineBp = Brain::LineBuildPower(fac);
 	float H, tR, A, arrive, hold0;
 	OpenRaceClock(fid, H, tR, A, arrive, hold0);
+	// THE RACE IS OVER once their raid has been MET: they are here (tR 0) and our team's army stands at least what we
+	// have seen of theirs. From then the army's own pricing -- role counters, the line mix -- picks the military, and
+	// the floor's order is a constructor (11-11, his hosted 4v4 at 12 min: every seat's lab on the race, 43-51 of 60
+	// orders the cheapest raider, no tank or reach). A raid that outweighs us is still answered by the race: ending it
+	// at the first sighting stopped every opening fighter exactly when the raid arrived (11-12 gate, Red Comet 2v2: 0
+	// race fighters on our seats, the lab lost to bots by minute 6). Past the race's own horizon from the lab's start it
+	// is over for good: a lost fight at minute 25 must not put every lab back on the cheapest raider, and human allies'
+	// armies are not in A at all.
+	const bool pastRace = (gOrcLabAt >= 0) && (float(ai.frame - gOrcLabAt) > H * float(SECOND));
+	if ((tR <= 0.f) && ((A >= gSmhSeen) || pastRace)) {
+		++gOrcOverN;
+		return -1;
+	}
 	array<Id>@ mates = ai.GetTeamIds();
 	const int ours = ((mates is null) || (mates.length() < 1)) ? 1 : int(mates.length());
 	const float iTeam = Eco::MInc() * float(ours);
@@ -372,7 +385,7 @@ void OpenRaceUpdate()
 	if (ai.frame < gOrcStatAt)
 		return;
 	gOrcStatAt = ai.frame + 60 * SECOND;
-	AiLog(Factory::T() + "apex: openrace-sum t=" + ai.teamId + " asked=" + gOrcAsk + " fighter=" + gOrcFighterN
+	AiLog(Factory::T() + "apex: openrace-sum t=" + ai.teamId + " asked=" + gOrcAsk + " fighter=" + gOrcFighterN + " over=" + gOrcOverN
 		+ " estallPriced=" + gOrcStallN + "/" + gOrcStallFacN + " noWalk=" + gOrcNoWalk
 		+ " open=" + NnF(gOrcOpenN, 1) + " spotD=" + int(gOrcSpotD)
 		+ " us=" + int(gOrcCostUs) + " usPer=" + int((gOrcAsk > 0) ? gOrcCostUs / float(gOrcAsk) : 0.f));
@@ -381,6 +394,7 @@ void OpenRaceUpdate()
 	gOrcStallN = 0;
 	gOrcStallFacN = 0;
 	gOrcNoWalk = 0;
+	gOrcOverN = 0;
 	gOrcCostUs = 0.f;
 }
 

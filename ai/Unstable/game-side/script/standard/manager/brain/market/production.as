@@ -2713,7 +2713,10 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			// AND THE STANDING COMPOSITION TARGET: tank / middle / reach / dps
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
-			ppc *= (1.f + tLineBite * LineShortfall(LineClassOf(d))) * PersClassMul(LineClassOf(d));
+			// The ground line's shares price ground units only: a bomber is not the ground line's reach (his 11-11,
+			// "completely separate air from ground"; the air line prices its own).
+			if (!Catalog::gFlyer[d])
+				ppc *= (1.f + tLineBite * LineShortfall(LineClassOf(d))) * PersClassMul(LineClassOf(d));
 			if (ebLogNow)
 				ebS += EbF("ls", ppc);
 			float aoeH = 0.f;
@@ -3458,14 +3461,36 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		float lineTot = 0.f;
 		for (int lc = 0; lc < LC_N; ++lc)
 			lineTot += gLineM[lc];
+		// THE MOST-OWED CLASS THIS FACTORY CAN BUILD. The team's single most-owed class idled every lab that
+		// could not build it (the yield below: army 544k -> 60k when the plant that could pay never did; his
+		// 11-11 hosted game, reach 0.02 of a 0.35 target with the weighting alone). A lab now pays the
+		// largest debt among its own classes; the yield is left for a lab that can pay none of them.
+		array<bool> canCls(LC_N, false);
+		for (uint ci0 = 0; ci0 < candDef.length(); ++ci0) {
+			if (LineCombat(candDef[ci0]) && !Catalog::gFlyer[candDef[ci0]] && (candV[ci0] > 0.f))
+				canCls[LineClassOf(candDef[ci0])] = true;
+		}
+		bool anyGround = false;
+		for (int lc3 = 0; lc3 < LC_N; ++lc3)
+			anyGround = anyGround || canCls[lc3];
 		int owedCls = -1;
 		float owedM = 0.f;
+		int teamCls = -1;
+		float teamM = 0.f;
 		for (int lc2 = 0; lc2 < LC_N; ++lc2) {
 			const float owe = LineTarget(lc2) * lineTot - gLineM[lc2];
-			if (owe > owedM) {
+			if (owe > teamM) {
+				teamM = owe;
+				teamCls = lc2;
+			}
+			if (canCls[lc2] && (owe > owedM)) {
 				owedM = owe;
 				owedCls = lc2;
 			}
+		}
+		if (owedCls < 0) {
+			owedCls = teamCls;
+			owedM = teamM;
 		}
 		if (owedCls >= 0) {
 			array<int> aDef;
@@ -3475,7 +3500,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			bool anyCombat = false;
 			for (uint ai2 = 0; ai2 < candDef.length(); ++ai2) {
 				const int cd = candDef[ai2];
-				const bool combat = LineCombat(cd);
+				const bool combat = LineCombat(cd) && !Catalog::gFlyer[cd];   // ground only: air keeps its own list
 				if (combat && (LineClassOf(cd) != owedCls))
 					continue;
 				if (combat)
@@ -3507,7 +3532,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			// plants can build, so it is read off the unit table rather than
 			// chosen.
 			bool yield = false;
-			if (!applied) {
+			if (!applied && anyGround) {   // a lab with no ground fighter (an air plant) is outside the ground line: never yields to it
 				const float cheapest = ClassCheapestOwned(owedCls);
 				yield = (cheapest > 0.f) && (owedM >= cheapest);
 			}
@@ -3553,12 +3578,18 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	// The share a dominated unit loses stays in sumV as the better line's
 	// ticket: drawn, this line orders nothing and the better line spends it.
 	// Off, the shares are still taken so lineobs-stat reads the shadow.
+	// ...only while the better line can spend it: a spilling bank is metal no line is drawing, and the dominated unit
+	// beats wasting it (his 11-11 watch: twenty idle labs on line-obsolete while metal overflowed).
 	float obsM = 0.f;
 	{
 		const bool loOn = LineObsOn();
 		const int askTier = PlantTier(fid);
+		const float mStore = aiEconomyMgr.metal.storage;
+		const float mFill = (mStore > 1.f) ? Eco::MCur() / mStore : 0.f;
+		const float obsSpill = (Eco::MInc() > Eco::MPull()) ? ((mFill < 1.f) ? mFill : 1.f) : 0.f;
 		for (uint ci = 0; ci < candV.length(); ++ci) {
-			const float s = LineObsShare(candDef[ci], askTier);
+			const float s0 = LineObsShare(candDef[ci], askTier);
+			const float s = s0 + (1.f - s0) * obsSpill;
 			if (loOn && (s < 1.f)) {
 				obsM += candV[ci] * (1.f - s);
 				candV[ci] *= s;

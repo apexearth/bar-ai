@@ -270,7 +270,7 @@ float MFullTrust()
 		return gMFullTrustVal;
 	gMFullAt = ai.frame;
 	if (gMPushRealOn < 0)
-		gMPushRealOn = (ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f) ? 1 : 0;
+		gMPushRealOn = ((ai.GetTunable("apex_mex_push_real", TUNE_MEX_PUSH_REAL) > 0.f) && FieldMexOn()) ? 1 : 0;
 	const float st = Eco::MStor();
 	if ((st <= 1.f) || (Eco::MCur() < 0.95f * st))
 		gMFullSince = -1;

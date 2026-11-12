@@ -54,8 +54,10 @@ void LabNanoScan()
 	gLnNeed = 0.f;
 	gLnPos = AIFloat3(-1.f, 0.f, -1.f);
 	gLnLabs = 0;
-	TrackIncome();
-	gLnInc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
+	// The lines spend the ARMY's flow -- its share of income plus what nothing else draws (army.as ArmySpendFlow, his
+	// 11-10 ruling) -- not all of it: income per lab sized the lathe to spend everything on production (11-11 Comet
+	// Catcher watch: 441 turrets, lines 0.62 of spend against a 0.31 share, economy 0.14).
+	gLnInc = ArmySpendFlow();
 	const uint nF = Factory::gFacUnits.length();
 	for (uint fi = 0; fi < nF; ++fi) {
 		if (LabNanoServes(Factory::gFacUnits[fi]))
@@ -199,7 +201,7 @@ void LabNanoLog()
 	AiLog(Factory::T() + "apex: labnano-stat t=" + ai.teamId + " on=" + (LabNanoOn() ? 1 : 0)
 		+ " labs=" + gLnLabs
 		+ " turrets/lab=" + formatFloat(gLnTurrets, "", 0, 1) + " min=" + gLnTurretsMin
-		+ " inc/lab=" + formatFloat(per, "", 0, 1)
+		+ " flow/lab=" + formatFloat(per, "", 0, 1)
 		+ " need=" + formatFloat(gLnNeed, "", 0, 1)
 		+ " dens=" + formatFloat(gLnDens, "", 0, 3)
 		+ " run=" + formatFloat(LabNanoRun(200.f * gLnDens, 200.f * gLnEDens), "", 0, 2)

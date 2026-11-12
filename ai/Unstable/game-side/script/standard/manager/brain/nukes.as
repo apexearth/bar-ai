@@ -360,6 +360,30 @@ float GroupKilledM(int g, const AIFloat3 &in at)
 	return m;
 }
 
+// OUR OWN METAL UNDER THE BLAST (units at the warhead's falloff, buildings at their whole stake): a strike is worth
+// what it kills of theirs less what it kills of ours
+// (11-11 Comet Catcher watch: two defensive warheads on a 4.6k army took ~16k of our own -- AA bots, mohos, towers).
+float OwnKilledM(const AIFloat3 &in at)
+{
+	if (gWarheadR <= 0.f)
+		return 0.f;
+	float m = Market::StakeAt(at, gWarheadR);
+	const array<int>@ own = Market::OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		const int d = own[i];
+		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || (Market::gOwnCount[d] <= 0))
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d), at, gWarheadR);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if (us[k] !is null)
+				m += KilledM(d, us[k].GetPos(ai.frame).distance2D(at));
+		}
+	}
+	return m;
+}
+
 // Their economy as we last saw it, sighted or remembered: buildings do not
 // move, so out of sight is where the economy most likely still is. Ground a
 // volley already spent is hidden until re-sighted and drops out here.
@@ -605,7 +629,9 @@ void UpdateNukes()
 		const float rawCost = aiEnemyMgr.GetEnemyGroupCost(i);
 		if (rawCost < (defensive ? defMin : minValue))
 			continue;
-		const float cost = GroupKilledM(i, p);
+		// ...except the army that would end the game (his 08-21, the emergency below): losing ours beats losing the base.
+		const bool emergency = defensive && (rawCost >= ai.GetTunable("apex_nuke_emergency", TUNE_NUKE_EMERGENCY));
+		const float cost = GroupKilledM(i, p) - (emergency ? 0.f : OwnKilledM(p));
 		if (cost < (defensive ? defMin : minValue))
 			continue;
 		// WHO OWNS THIS GROUND, not "is any of ours near". GetAllyInflAt is
@@ -723,10 +749,18 @@ void UpdateNukes()
 	// sits at our own start mirrored across the map; it enters the ranking at
 	// a standing value and the same assume/decay rules as any base ground.
 	{
-		AIFloat3 mirror(AiTerrainWidth() - Builder::gHomePos.x, 0.f,
-				AiTerrainHeight() - Builder::gHomePos.z);
+		// Where their base is believed to be when nothing of it is in sight. One enemy: the centre of what we have
+		// seen of theirs, else their box (Front::FoeAnchor). A team: their start box -- the centroid of every
+		// structure seen is the ground between their bases. Not our start mirrored through the centre, the empty far
+		// corner on a side-by-side map (his 11-11 Full Metal Plate watch), unless nothing else is known.
+		AIFloat3 mirror = (ai.GetEnemyTeamSize() <= 1) ? Front::FoeAnchor() : aiSetupMgr.GetEnemyBoxCentre();
+		if (!OnMap(mirror))
+			mirror = Front::FoeAnchor();
+		if (!OnMap(mirror) && Builder::gHomeSet)
+			mirror = AIFloat3(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
 		if (OnMap(mirror) && !VolleyServes(mirror)) {
-			const float cost = NukeMirrorWorth(mirror, ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE));
+			const float cost = NukeMirrorWorth(mirror, ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE))
+					- OwnKilledM(mirror);
 			int antis = AntisCovering(mirror);
 			const int assumeFrom2 = int(ai.GetTunable("apex_nuke_assume_from", TUNE_NUKE_ASSUME_FROM)
 					* 60.f) * SECOND;

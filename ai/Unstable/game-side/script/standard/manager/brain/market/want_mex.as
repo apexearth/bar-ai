@@ -1213,8 +1213,74 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	return -1;
 }
 
+// ON A METAL FIELD AN EXTRACTOR IS JUST A BUILDING (his 11-10: "treat the metal extractors almost in the same way you
+// treat building any energy building or the energy converters. It's just a building"). Priced as a converter is --
+// its yield over its cost, only the metal we can spend -- and placed where converters go (execute.as: spotId -1
+// takes the converter's farm slot), not on a spot.
+int gFieldMexOn = -1;
+bool FieldMexOn()
+{
+	if (gFieldMexOn < 0)
+		gFieldMexOn = ai.IsMetalField() ? 1 : 0;
+	return gFieldMexOn > 0;
+}
+int gFieldMexLogAt = 0;
+int gFmAsk = 0, gFmNoSite = 0, gFmNoVal = 0;
+Want@ ProposeFieldMex(CCircuitUnit@ unit)
+{
+	Want w;
+	const int uid = int(unit.circuitDef.id);
+	++gFmAsk;
+	const AIFloat3 site = EcoSiteFor(unit);
+	if (!OnMap(site)) {
+		++gFmNoSite;
+		return w;
+	}
+	const float walkSec = WalkSecTo(unit, site);
+	const float inc = ai.MetalFieldIncome() * IncomeMult();
+	const float mxPower = EcoPowerM();
+	const float mxGrowK = ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH);
+	const float mxBP = EffBP(Catalog::gBuildPower[uid]);
+	const array<int>@ builds = Catalog::BuildsOf(uid);
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
+			continue;
+		const float rawAddM = inc * Catalog::gExtractsM[d];
+		if (rawAddM <= 0.f)
+			continue;
+		float gain = rawAddM * (1.f + mxGrowK * rawAddM / ((mxPower > rawAddM) ? mxPower : rawAddM));
+		const float real = MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
+		gain *= real;
+		const float accel = IncomeAccelM(rawAddM) * real;
+		gain += accel;
+		gain *= MapShareMul();
+		Want c;
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, 0.f, EcoReturnOn());
+		c.accelM = accel * MapShareMul();
+		if (c.value > w.value) {
+			w = c;
+			w.kind = WK_MEX;
+			@w.def = Catalog::Def(d);
+			w.pos = site;
+			w.spotId = -1;
+		}
+	}
+	if (w.def is null)
+		++gFmNoVal;
+	if (ai.frame >= gFieldMexLogAt) {
+		gFieldMexLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: field-mex t=" + ai.teamId + " " + ((w.def !is null) ? w.def.GetName() : "-")
+			+ " inc=" + formatFloat(inc, "", 0, 2) + " v=" + formatFloat(w.value, "", 0, 3) + " gain=" + formatFloat(w.gain, "", 0, 2)
+			+ " ask=" + gFmAsk + " noSite=" + gFmNoSite + " noVal=" + gFmNoVal);
+	}
+	return w;
+}
+
 Want@ ProposeMex(CCircuitUnit@ unit)
 {
+	if (FieldMexOn())
+		return ProposeFieldMex(unit);
 	Want w;
 	MexDiag();
 	MexUpStat();

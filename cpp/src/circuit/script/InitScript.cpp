@@ -5,6 +5,7 @@
  *      Author: rlcevg
  */
 
+#include "resource/MetalManager.h"
 #include "script/InitScript.h"
 #include "task/static/ReclaimTask.h"
 #include "script/SetupScript.h"
@@ -2408,6 +2409,15 @@ static double CCircuitAI_ClockUs(CCircuitAI* circuit)
 			std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
+static bool CCircuitAI_IsMetalField(CCircuitAI* circuit)
+{
+	return circuit->GetMetalManager()->IsMetalField();
+}
+static float CCircuitAI_MetalFieldIncome(CCircuitAI* circuit)
+{
+	return circuit->GetMetalManager()->GetMetalFieldIncome();
+}
+
 static float CCircuitAI_GetDefBuildProgress(CCircuitAI* circuit, CCircuitDef* def)
 {
 	return circuit->GetDefBuildProgress(def);
@@ -3037,6 +3047,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// A hosted multiplayer game cannot carry synced Lua, but every AI the host
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsMetalField() const", asFUNCTION(CCircuitAI_IsMetalField), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float MetalFieldIncome() const", asFUNCTION(CCircuitAI_MetalFieldIncome), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetOwnTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetOwnTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int LoadOptionFloats(const string &in)", asFUNCTION(CCircuitAI_LoadOptionFloats), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

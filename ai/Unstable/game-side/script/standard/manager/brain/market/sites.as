@@ -156,9 +156,62 @@ bool NearSpot(const AIFloat3& in p)
 // anywhere -- marginal BP at a fed site is worth zero.
 float FreeMetalFlow()
 {
-	const float free = (Eco::MInc() - Eco::MPull())
+	const float free = (Eco::MInc() - Eco::MPull() - WalkingDrainM())
 			+ Eco::MCur() / 60.f + TeamTechInflow();
 	return (free > 0.f) ? free : 0.f;
+}
+
+// The drain of hands still walking to their job: not in the pull yet, drawn the moment they arrive (his 11-11 watch:
+// every hand sent to two T2 labs the bank could not feed, while the extractors that would have fed them sat unbuilt).
+int gWalkDrainAt = -1;
+float gWalkDrain = 0.f;
+float WalkingDrainM()
+{
+	if (gWalkDrainAt == ai.frame)
+		return gWalkDrain;
+	gWalkDrainAt = ai.frame;
+	float d = 0.f;
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ t = Requests::gLive[li];
+		if ((t is null) || (t.buildDef is null))
+			continue;
+		array<CCircuitUnit@>@ crew = t.GetUnits();
+		if (crew is null)
+			continue;
+		const AIFloat3 at = t.GetBuildPos();
+		// The job's own metal per build-power second: an extractor draws a fraction of what a fusion does.
+		const int jd = int(t.buildDef.id);
+		const float dens = (Catalog::gBuildTime[jd] > 1.f) ? (Catalog::gCostM[jd] / Catalog::gBuildTime[jd]) : (7.f / 80.f);
+		// A hand building a big frame stands its reach plus the footprint off the centre, not inside its reach.
+		const float half = float((Catalog::gFootX[jd] > Catalog::gFootZ[jd]) ? Catalog::gFootX[jd] : Catalog::gFootZ[jd]) * 8.f;
+		for (uint c = 0; c < crew.length(); ++c) {
+			CCircuitUnit@ u = crew[c];
+			if (u is null)
+				continue;
+			const int ud = int(u.circuitDef.id);
+			if (u.GetPos(ai.frame).distance2D(at) > Catalog::gBuildDist[ud] + half)
+				d += Catalog::gBuildPower[ud] * dens;
+		}
+	}
+	for (uint g = 0; g < gGuardUnit.length(); ++g) {
+		CCircuitUnit@ u = gGuardUnit[g];
+		CCircuitUnit@ b = gGuardBoss[g];
+		if ((u is null) || (b is null))
+			continue;
+		// A guard draws only while its boss builds something: one following a walking commander draws nothing.
+		IUnitTask@ bt = b.task;
+		if ((bt is null) || (bt.GetType() != Task::Type::BUILDER) || (bt.buildDef is null))
+			continue;
+		const int bd = int(bt.buildDef.id);
+		const int ud = int(u.circuitDef.id);
+		const float bHalf = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 8.f;
+		if (u.GetPos(ai.frame).distance2D(b.GetPos(ai.frame)) <= Catalog::gBuildDist[ud] + bHalf)
+			continue;
+		const float gDens = (Catalog::gBuildTime[bd] > 1.f) ? (Catalog::gCostM[bd] / Catalog::gBuildTime[bd]) : (7.f / 80.f);
+		d += Catalog::gBuildPower[ud] * gDens;
+	}
+	gWalkDrain = d;
+	return d;
 }
 
 // Where a fusion-tier generator belongs: beside standing or building kin,

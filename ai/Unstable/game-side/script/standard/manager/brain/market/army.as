@@ -773,18 +773,6 @@ float RoleTarget(int role, float armyTarget)
 // absorb, and what an assist bid against it can earn. (Watched: a lab
 // killed by artillery never rebuilt -- the plant want only priced open
 // spots; and hot lines ran on one nano with no help.)
-// The seconds the lab has to close the army gap: apex_army_fill_s, or less when their army (where it stands, not
-// their base) reaches our base and beats what holds it sooner (his 11-09: the closer they are, the harder we
-// make units). Military::DangerBreachS is binned 5 s, refreshed every 5 s.
-int gDzfLogAt = 0, gDzfShort = 0, gDzfAsked = 0;
-float ArmyUrgency()
-{
-	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-	const float base = (fill > 1.f) ? fill : 180.f;
-	const float t = ArmyFillS();
-	return (t > 0.f) ? base / t : 1.f;
-}
-
 // their army reaches our base and beats what holds it sooner than the lab closes the gap at its normal pace
 int gDaOn = -1;
 bool DangerAssistNow()
@@ -798,23 +786,12 @@ bool DangerAssistNow()
 	return (b >= 0.f) && (b < ((fill > 1.f) ? fill : 180.f));
 }
 
+// The seconds the lab has to close the army gap. Shortening it while their army could breach us (11-09 danger-fill)
+// starved the T2 constructors in every mirror game and lost head-to-head to v0.5.07 (11-11 gate509 vs bis509).
 float ArmyFillS()
 {
 	const float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-	const float base = (fill > 1.f) ? fill : 180.f;
-	++gDzfAsked;
-	const float b = Military::DangerBreachS();
-	if ((b < 0.f) || (b >= base))
-		return base;
-	const float t = (b > Military::DG_BIN_S) ? b : Military::DG_BIN_S;
-	++gDzfShort;
-	if (ai.frame >= gDzfLogAt) {
-		gDzfLogAt = ai.frame + 30 * SECOND;
-		AiLog(Factory::T() + "apex: danger-fill t=" + ai.teamId + " breach=" + int(b) + " fill=" + int(t)
-			+ " gap=" + int(ArmyTarget() - ArmyValue()) + " near=" + int(Military::NearestFoeEtaS())
-			+ " short=" + gDzfShort + "/" + gDzfAsked);
-	}
-	return t;
+	return (fill > 1.f) ? fill : 180.f;
 }
 
 float LineSpend()
@@ -1097,7 +1074,7 @@ void LineMeans()
 		return;
 	array<float> hpV, dpV, rrV, spV;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::gAvailable[d] || !LineCombat(d))
+		if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d])   // the ground line: air is its own (his 11-11)
 			continue;
 		hpV.insertLast(LineHpAxis(d));
 		dpV.insertLast(LineDpsAxis(d));
@@ -1123,7 +1100,7 @@ void LineClassDiag()
 	gLineDiagDone = true;
 	array<int> cnt(LC_N, 0);
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::gAvailable[d] || !LineCombat(d))
+		if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d])
 			continue;
 		++cnt[LineClassOf(d)];
 	}
@@ -1188,7 +1165,7 @@ void TrackLine()
 	for (uint _oi7 = 0; _oi7 < _own7.length(); ++_oi7) {
 		const uint d = uint(_own7[_oi7]);
 		const int di = int(d);
-		if ((gOwnCount[d] <= 0) || !LineCombat(di))
+		if ((gOwnCount[d] <= 0) || !LineCombat(di) || Catalog::gFlyer[di])
 			continue;
 		gLineM[LineClassOf(di)] += float(gOwnCount[d]) * Catalog::gCostM[di];
 		gLineHp[LineClassOf(di)] += float(gOwnCount[d]) * Catalog::gHealth[di];
@@ -2444,13 +2421,19 @@ float ArmyTarget()
 	// is simply not part of the state this player is trying to reach.
 	// No ArmyFloor here: the seat is sheltered by the team's armies, and
 	// EcoDangerNear ends the growth if the war reaches it.
-	if (EcoRoleGrowing())
-		return ArmyTargetFull() * EcoRoleRamp();
+	// The ramp and the plan scale the army still to BUILD, not the army standing: the target holds what we own plus the
+	// flow still owed (ArmyTargetFull), so a multiplier on the whole made greed a size cap again and rush unbounded.
+	const float ownA = ArmyValue();
+	if (EcoRoleGrowing()) {
+		const float fullE = ArmyTargetFull();
+		return ownA + ((fullE > ownA) ? (fullE - ownA) : 0.f) * EcoRoleRamp();
+	}
 	// No T2-switch branch: the army keeps its share through the switch (his
 	// 2026-10-05, replacing 09-21) -- halved, the lab stood idle and we lost ground.
 	const float fullD = ArmyTargetFull();
 	const float floorD = ArmyFloor(fullD);
-	float t = ((floorD > fullD) ? floorD : fullD) * PlanArmyMult();
+	const float baseD = (floorD > fullD) ? floorD : fullD;
+	float t = ownA + ((baseD > ownA) ? (baseD - ownA) : 0.f) * PlanArmyMult();
 	// THE RUSH BUILD-UP NEVER REACHES ITS ARMY (his 10-24 watch: "we don't truly go big on making army"): the gap stays a
 	// full fill of the army's share of income, so the labs keep producing until the strike (strike.as ends the phase).
 	if (StrikeBuilding()) {
@@ -2460,6 +2443,25 @@ float ArmyTarget()
 			t = open;
 	}
 	return t;
+}
+
+// Military metal/s: its share of income plus the income nothing draws, by how full the bank it spills into is.
+// (Income less the eco draw fed itself: the lines' own draw counted as army, so the labs made army instead of the
+// constructors that would have drawn it -- 11-11 gates, half the extractors at minute 8 on Full Metal Plate.)
+int gArmySpendAt = -1;
+float gArmySpendVal = 0.f;
+float ArmySpendFlow()
+{
+	if (gArmySpendAt == ai.frame)
+		return gArmySpendVal;
+	gArmySpendAt = ai.frame;
+	const float inc = Eco::MInc();
+	const float store = aiEconomyMgr.metal.storage;
+	const float fill = (store > 1.f) ? Eco::MCur() / store : 1.f;
+	const float spare = inc - Eco::MPull();
+	gArmySpendVal = Brain::TargetShare(Brain::ARMY) * inc
+		+ ((spare > 0.f) ? spare * ((fill < 1.f) ? fill : 1.f) : 0.f);
+	return gArmySpendVal;
 }
 
 // The defensive army a sheltered seat holds before it jumps to the T2 lab
@@ -2516,7 +2518,12 @@ float ArmyTargetFull()
 		return gArmyTgtFull;
 	gArmyTgtAt = ai.frame;
 	gArmyTgtStamp = gOwnStamp;
-	gArmyTgtFull = ArmyTargetBase() * (1.f + MapShareGap());
+	// THE ARMY IS A SHARE OF SPEND (his 11-10: "it should be based on spend, not on what you have ... all the excess
+	// metal, it better be going into military"): not a size held against the economy, which read "met" with seven of
+	// eight labs idle and 750 m/s spilling. The lines keep one fill of the military's flow ahead of the army standing:
+	// its share of income, or everything the economy leaves unspent, whichever is more.
+	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	gArmyTgtFull = ArmyValue() + ArmySpendFlow() * ((fillS > 1.f) ? fillS : 180.f) * (1.f + MapShareGap());
 	return gArmyTgtFull;
 }
 

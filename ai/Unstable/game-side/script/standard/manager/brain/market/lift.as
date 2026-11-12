@@ -723,8 +723,6 @@ float PrKindNeed(int c)
 	const float t = Brain::TargetShare(Brain::Cat(c));
 	const float a = Brain::ShareOf(Brain::Cat(c));
 	float n = t / ((a > 0.01f) ? a : 0.01f);
-	if (c == int(Brain::ARMY))
-		n *= ArmyUrgency();
 	return n;
 }
 void PrioRankPass()

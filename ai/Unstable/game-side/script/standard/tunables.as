@@ -926,8 +926,8 @@ const float TUNE_PRIO_RANK = 0.f;   // [toggle 0/1] lift.as PrioRankPass: every 
 const float TUNE_BREACH_PLANT = 0.f;   // [toggle 0/1] army.as BreachPlantMul: while their army breaches us in b s, a new plant or tier-up that takes s s to stand is worth b/(b+s) (want_plant, want_tech; his 11-09 air lab under a ground push)
 const float TUNE_PLANT_LEE = 0.f;   // [toggle 0/1] sites.as InteriorSite: a new plant takes the base flank farther from where their army has come in (basedefence.as ApproachPoint, 300 s fade), not the rearward flank by their base bearing (his 11-09)
 const float TUNE_DEF_SPREAD = 0.f;   // [toggle 0/1] execute.as DefSpread: a ground gun keeps half its reach from every team tower and tower frame, nearest site that still reaches its post; none, it stays (his 11-09: spread them, close only when out of room)
-const float TUNE_MEX_PUSH_REAL = 0.f;   // [toggle 0/1] econet.as EcoMexPush: the expansion head lifts an extractor only by the share of its metal we can spend (MRealizeShare); a spilling bank is not pushed back into extractors (his 11-10 metal maps)
-const float TUNE_PLANT_CHOICE = 0.f;   // [toggle 0/1] want_plant.as PlantChoiceMul: a copy of a plant vs a nano at the standing line, priced by throughput (pad-limited) per cost at today's prices; replaces the nanos-first copy price (his 11-10)
+const float TUNE_MEX_PUSH_REAL = 1.f;   // [toggle 0/1] econet.as EcoMexPush: the expansion head lifts an extractor only by the share of its metal we can spend (MRealizeShare); a spilling bank is not pushed back into extractors (his 11-10 metal maps); metal-field maps only (FieldMexOn)
+const float TUNE_PLANT_CHOICE = 1.f;   // [toggle 0/1] want_plant.as PlantChoiceMul: a copy of a plant vs a nano at the standing line, priced by throughput (pad-limited) per cost at today's prices; replaces the nanos-first copy price (his 11-10)
 const float TUNE_COM_HOME_ASSIST = 0.f;   // [toggle 0/1] past the first plant the commander's best job farther than 1,400 from home sends him to assist the lab instead (decide.as, comescort; his 11-03 vs WRDistilled)
 const float TUNE_TEAM_AIR = 0.f;   // [toggle 0/1] the team leader prices the AIR plan against NORMAL every 30 s (square-law ground fight with and without the hold's army spend, plus one air sortie through the AA we have seen); under AIR every seat builds an air plant, bombers and gunships priced on the team target's shortfall, fighters only against seen fighters, holds them at one rally behind our lines, and all launch together when the gathered wing finishes the target; the scored strikes reprice the plan (his 2026-10-16)
 const float TUNE_BUDGET_HOLD = 1.f;   // [toggle 0/1] while army is under its budget share, the orders that skip the budget's draw price -- constructor floors, priced builders at the lab, and the hoisted nano, defence and defence-assist wants -- keep budget mult(row)/mult(army) of their odds or value when their row is over its share (his 2026-10-16, small maps)
@@ -1017,8 +1017,8 @@ const float TUNE_LINE_RANGE_EXP = 1.f;
 //   as that class rather than as middle.
 const float TUNE_LINE_EDGE = 1.15f;
 
-// [0/1] -- 1 = the factory draw runs among the LINE CLASS the team owes the
-//   most metal to, instead of over every candidate weighted by apex_line_bite.
+// [0/1] -- 1 = the factory draw runs among the GROUND line class the team owes
+//   the most metal to, instead of over every candidate weighted by apex_line_bite.
 //   See docs/tunables.md.
 const float TUNE_LINE_ALLOC = 0.f;
 

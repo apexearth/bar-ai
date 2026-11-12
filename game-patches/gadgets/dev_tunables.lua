@@ -240,6 +240,7 @@ local NAMES = {
 	"apex_brawl_pass",       -- SquadTask.cpp: 1 = rows without a range edge hand the brawl to engine auto-fight
 	"apex_arc_span",         -- SquadTask.cpp: ring arc width as a fraction of pi; small = the squad fights as a fist (0.9)
 	"apex_line_adapt",       -- army.as: enemy static share bends the reach composition target up (1)
+	"apex_line_alloc",       -- production.as: 1 = draw within the ground line class the lab owes most metal (0)
 	"apex_mex_expose",       -- want_protect.as: per-mex floor grows with forwardness, floor*(1+fwd*this) (1.5)
 	"apex_rezzer_fwd",       -- rules_rezzer.as: idle rezzer past this forward fraction retires to the haven (0.25)
 	"apex_consolidate_r",    -- withdraw.as: tracked-pack distance that starts pre-contact consolidation (2000)
@@ -564,7 +565,6 @@ local NAMES = {
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
 	"apex_t1_def_late",
 	"apex_def_dps_linear",   -- protect_field.as: 1 = tower cover priced on linear surface DPS, 0 = the engine's sqrt(dps) threat (1)
-	"apex_line_alloc",       -- production.as: 1 = draw within the line class the team owes most metal (1)
 	"apex_wall_efficient",   -- want_protect.as: 1 = wall slots rank towers by cover per metal, not absolute power (1)
 	"apex_raider_massing",   -- hooks.as: 1 = raiders become line army at T2, 0 = they raid all game like stock (0)
 	"apex_spam_raiders",     -- hooks.as: 1 = cheap raiders spot as solo scouts after T2, 0 = they keep raiding (0)
