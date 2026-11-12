@@ -1,0 +1,116 @@
+diff --git a/cpp/src/circuit/CircuitAI.cpp b/cpp/src/circuit/CircuitAI.cpp
+index daee85e4..ebfadc4e 100644
+--- a/cpp/src/circuit/CircuitAI.cpp
++++ b/cpp/src/circuit/CircuitAI.cpp
+@@ -78,6 +78,9 @@
+ #include <chrono>
+ #include <algorithm>
+ #include <cstring>
++#include <map>
++#include <regex>
++#include <set>
+ 
+ namespace circuit {
+ 
+@@ -1021,6 +1024,75 @@ void CCircuitAI::DrainDeferredReleases()
+ 	}
+ }
+ 
++// apex: TAKING OVER A DEAD AI SLOT (his 11-12: a lobby clone of Apex on a player without it, or an AI whose host left,
++// leaves commanders standing with nothing running them). The engine's /aicontrol starts an AI on a team with no leader
++// without cheats when the issuing player is allied with it; a command from an AI runs as the local player, so the
++// engine's own rule picks the teams (the host's side, or team 0's side while he spectates). Every Apex in this
++// process shares one record, so each slot gets one attempt at a time.
++void CCircuitAI::TakeOverDeadSlots(int frame)
++{
++	struct SSlot { int tries = 0; int next = 0; };
++	static std::map<int, SSlot> slots;  // runtime team id of every [aiN] slot in the start script
++	static bool parsed = false;
++	static std::string shortName;
++	if (!parsed) {
++		parsed = true;
++		std::unique_ptr<Info> info(skirmishAI->GetInfo());
++		const char* sn = info->GetValueByKey("shortName");
++		shortName = (sn != nullptr) ? sn : "Apex";
++		const std::string script = game->GetSetupScript();
++		const auto icase = std::regex::ECMAScript | std::regex::icase;
++		// the engine numbers teams by the sorted order of their [teamN] sections (CSetupData does the same)
++		std::set<int> scriptTeams;
++		const std::regex pTeam("\\[team(\\d+)\\]", icase);
++		for (std::sregex_iterator it(script.begin(), script.end(), pTeam), e; it != e; ++it) {
++			scriptTeams.insert(utils::string_to_int((*it)[1]));
++		}
++		const std::regex pAi("\\[ai\\d+\\]", icase);
++		const std::regex pAiTeam("team=(\\d+);", icase);
++		std::smatch section;
++		std::string::const_iterator start = script.begin();
++		const std::string::const_iterator end = script.end();
++		while (std::regex_search(start, end, section, pAi)) {
++			start = section[0].second;
++			const std::string::const_iterator bodyEnd = utils::EndInBraces(start, end);
++			std::smatch m;
++			if (std::regex_search(start, bodyEnd, m, pAiTeam)) {
++				const auto f = scriptTeams.find(utils::string_to_int(m[1]));
++				if (f != scriptTeams.end()) {
++					slots[(int)std::distance(scriptTeams.begin(), f)];
++				}
++			}
++			start = bodyEnd;
++		}
++	}
++	const int nTeams = game->GetTeams();
++	for (auto& kv : slots) {
++		const int t = kv.first;
++		if ((t == teamId) || (t >= nTeams)) {
++			continue;
++		}
++		std::unique_ptr<Team> other(WrappTeam::GetInstance(skirmishAIId, t));
++		if (other == nullptr) {
++			continue;
++		}
++		SSlot& s = kv.second;
++		if (other->HasAIController() || (other->GetRulesParamFloat("numActivePlayers", 0.f) > 0.f)) {
++			s.tries = 0;  // controlled now: losing it later is a new loss to answer
++			continue;
++		}
++		if ((s.tries >= 3) || (frame < s.next)) {
++			continue;
++		}
++		++s.tries;
++		s.next = frame + FRAMES_PER_SEC * 10;
++		const std::string cmd = "/aicontrol " + std::to_string(t) + " " + shortName + " " + aiVersion + " "
++				+ shortName + "-takeover" + std::to_string(t);
++		game->SendTextMessage(cmd.c_str(), 0);
++		LOG("apex: takeover team=%i try=%i (AI slot with no controller) -> %s", t, s.tries, cmd.c_str());
++	}
++}
++
+ int CCircuitAI::Update(int frame)
+ {
+ 	const auto perfT0 = std::chrono::steady_clock::now();
+@@ -1084,6 +1156,11 @@ int CCircuitAI::Update(int frame)
+ 	// enemy cluster -- the mass that actually arrives, whatever their AI calls it.
+ 	// apex: purge stale enemy ghosts, once per ally team (the registry is
+ 	// shared) on a slow cadence. See CEnemyManager::PurgeStaleGhosts.
++	if (frame >= takeOverNext) {
++		takeOverNext = frame + FRAMES_PER_SEC;
++		TakeOverDeadSlots(frame);
++	}
++
+ 	if ((frame >= ghostPurgeNext) && (enemyManager != nullptr) && (allyTeam != nullptr)
+ 		&& (allyTeam->GetLeaderId() == skirmishAIId))
+ 	{
+diff --git a/cpp/src/circuit/CircuitAI.h b/cpp/src/circuit/CircuitAI.h
+index 5d0bbe67..30f7fc78 100644
+--- a/cpp/src/circuit/CircuitAI.h
++++ b/cpp/src/circuit/CircuitAI.h
+@@ -944,6 +944,9 @@ private:
+ 	int reachCacheFrame = -1;
+ 	int squadDiagNextLog = 0;
+ 	int ghostPurgeNext = 0;
++	// apex: an AI slot left with no controller (a clone whose host lacks the library, or a host who left) is taken over
++	void TakeOverDeadSlots(int frame);
++	int takeOverNext = 0;
+ 	std::array<int, static_cast<int>(CCircuitDef::SniperOrder::_SIZE_)> sniperOrders{};
+ 	int sniperOrderNextLog = 0;
+ 	int skirmishAIId;

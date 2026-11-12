@@ -63,6 +63,7 @@ text: `git log -p TODO.md`.
 | [glacier-two-lanes](todo/glacier-two-lanes.md) | 11-03 | wall one approach, push down the other |
 | [walls-funnel](todo/walls-funnel.md) | 11-06 | walls that funnel their army into a gap and slow vehicle raiders |
 | [break-enemy-walls](todo/break-enemy-walls.md) | 11-11 | rez bots reclaim their walls when they can live through it; shoot walls from outside tower range |
+| [take-over-dead-ai-slots](todo/take-over-dead-ai-slots.md) | 11-12 | an AI slot left with nothing running it (a clone on a machine without Apex, or a host who left) gets taken over by our AI; blocked in multiplayer: the server refuses /aicontrol unless it grants /aictrl |
 | [air-routes-through-stale-aa](todo/air-routes-through-stale-aa.md) | 11-11 | bombers avoid the middle because seen-once mobile AA never fades; fade it and scout the route |
 | [frontline-hold](todo/frontline-hold.md) | 11-07 | a frontline strong enough that their army dies on it; costs real defence focus |
 | [air-late-mass](todo/air-late-mass.md) | 11-07 | late air grows with wealth to 100-bomber strikes; kill their AA first (bombers, EMP, missiles) |
