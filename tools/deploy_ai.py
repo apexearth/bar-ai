@@ -94,7 +94,7 @@ def _tree_digest(root: Path) -> str:
     h = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         # the deployed net is the trainer's to write (nntrain.py) and the stamp the deploy's: not drift
-        if path.is_file() and path.name not in ("nnweights.as", "stamp.as"):
+        if path.is_file() and path.name not in ("nnweights.as", "stamp.as", "provenance.json"):
             h.update(path.relative_to(root).as_posix().encode())
             h.update(path.read_bytes())
     return h.hexdigest()[:12]
@@ -438,7 +438,13 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
     stamp = _stamp_scripts(variant, (target / "script", game_target / "script"))
     print(f"  scripts      {stamp}")
     print(f"  game-side    {game_target}")
-    print(f"               digest {_tree_digest(game_target)}")
+    digest = _tree_digest(game_target)
+    print(f"               digest {digest}")
+    import provenance
+    prov = provenance.write([target, game_target], ai=f"{short}:{variant}", game_digest=digest,
+                            dll_sha=hashlib.sha256((target / "SkirmishAI.dll").read_bytes()).hexdigest()[:12]
+                            if (target / "SkirmishAI.dll").is_file() else "")
+    print(f"  provenance   {provenance.label(prov)}" + (f"  ({prov['patch']})" if prov.get("patch") else ""))
     # the deployed copy must play tunables.as as committed (tools/settings_check.py)
     chk = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "settings_check.py"),
                           f"{short}:{variant}"], capture_output=True, text=True)
@@ -737,6 +743,26 @@ def main() -> int:
                     print("deploy: refused -- run `python tools/gate.py run` on a lane, "
                           "or `--allow-red` if he says so", file=sys.stderr)
                     return 1
+        elif re.match(r"v\d", v) and not getattr(args, "allow_red", False):
+            # A RELEASE SHIPS ONLY WHAT THE BEHAVIOUR CONTRACT CLEARED (his 11-14: "find a way to validate our games
+            # so that we don't allow ourselves to create this sort of problem ... I keep seeing regressions").
+            # tools/contract.py --record on a >= 12-game batch of this exact script tree, PASS against the release.
+            import contract as _contract
+            rec = _contract.release_cleared(v)
+            # A release already committed shipped before; re-installing it (the bar a gate batch plays against) is
+            # not a new release. The gate is on what is not yet in git.
+            shipped = subprocess.run(["git", "ls-files", "--error-unmatch", "ai/%s/game-side" % v], cwd=str(REPO),
+                                     capture_output=True).returncode == 0 and not subprocess.run(
+                ["git", "status", "--porcelain", "ai/%s" % v], cwd=str(REPO), capture_output=True,
+                text=True).stdout.strip()
+            if rec is None and shipped:
+                rec = {"key": "committed release", "games": 0}
+            if rec is None:
+                print("deploy: refused -- no behaviour-contract PASS for ai/%s's scripts. Run the release batch on a "
+                      "lane, then `python tools/contract.py <games> --record`; or `--allow-red` if he says so" % v,
+                      file=sys.stderr)
+                return 1
+            print("deploy: contract PASS %s (%d games)" % (rec["key"], rec["games"]))
         elif v.startswith("lane-"):
             # A lane NAMED on the command line is materialised too. Without
             # this it shipped the snapshot from the last unnamed deploy and

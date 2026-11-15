@@ -357,6 +357,82 @@ float LossArmyMult()
 	return m;
 }
 
+// AM I PROTECTED (his 11-14: "an army that is capable of fighting ... comprehension of what is a strong army and am I
+// going to be protected with it"). The ground power they have shown against our team's army and guns, in fighting
+// power (gPower), not metal; commanders count on both sides. While theirs is the stronger the ARMY row grows by the
+// ratio and the other rows pay in the normalisation, so the economy keeps a share (his 11-05 and 11-10 rulings).
+const string TV_PROTPOW = "protpow";
+int gProtAt = -999999;
+int gProtLogAt = 0;
+float gProtMult = 1.f;
+
+bool ProtectCounts(int d)
+{
+	if (!Catalog::ValidId(d) || Catalog::gFlyer[d] || Catalog::gKamikaze[d] || (Catalog::gPower[d] <= 1.f)
+		|| (Catalog::gSurfT[d] <= 0.01f))
+		return false;
+	return !Catalog::gBuilder[d] || Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask);
+}
+
+float ProtectMult()
+{
+	if (ai.GetTunable("apex_protect", TUNE_PROTECT) <= 0.f)
+		return 1.f;
+	if (ai.frame < gProtAt + 10 * SECOND)
+		return gProtMult;
+	gProtAt = ai.frame;
+	float own = 0.f, guns = 0.f;
+	const array<int>@ owned = Market::OwnedDefs();
+	for (uint k = 0; k < owned.length(); ++k) {
+		const int d = owned[k];
+		const int n = Market::gOwnCount[d];
+		if ((n <= 0) || !ProtectCounts(d))
+			continue;
+		if (Catalog::gMobile[d])
+			own += float(n) * Catalog::gPower[d];
+		else
+			guns += float(n) * Catalog::gPower[d];
+	}
+	ai.PublishTeamValue(TV_PROTPOW, own + guns);
+	float team = own + guns;
+	// Only our AI seats publish their power; a human ally reads 0. Their army is shared over every ally, so the AI
+	// seats answer their share of it: with 6 humans beside 2 of ours the whole enemy over our two read 3x+ all game.
+	float share = 1.f;
+	array<Id>@ mates = ai.GetTeamIds();
+	if ((mates !is null) && (mates.length() > 0)) {
+		float t = 0.f;
+		int pubN = 0;
+		for (uint i = 0; i < mates.length(); ++i) {
+			const float p = ai.ReadTeamValue(int(mates[i]), TV_PROTPOW, 0.f);
+			t += p;
+			if ((p > 0.f) || (int(mates[i]) == ai.teamId))
+				++pubN;
+		}
+		team = (t > team) ? t : team;
+		share = float(pubN) / float(mates.length());
+	}
+	const float ghost = ai.GetTunable("apex_ghost_weight", TUNE_GHOST_WEIGHT);
+	float thr = 0.f;
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if (!ProtectCounts(d) || !Catalog::gMobile[d] || (aiEnemyMgr.GetEnemyUnitLosAt(i) < 0))
+			continue;
+		const bool fresh = (ai.frame - aiEnemyMgr.GetEnemyUnitSeenAt(i)) <= 60 * SECOND;
+		thr += Catalog::gPower[d] * (fresh ? 1.f : ghost);
+	}
+	thr *= share;
+	const float ratio = thr / ((team > 1.f) ? team : 1.f);
+	const float cap = ai.GetTunable("apex_protect_cap", TUNE_PROTECT_CAP);
+	gProtMult = (ratio > 1.f) ? ((ratio < cap) ? ratio : cap) : 1.f;
+	if (ai.frame >= gProtLogAt) {
+		gProtLogAt = ai.frame + 30 * SECOND;
+		AiLog("apex: protect t=" + ai.teamId + " theirs=" + int(thr) + " share=" + formatFloat(share, "", 0, 2) + " team=" + int(team) + " army=" + int(own)
+			+ " guns=" + int(guns) + " ratio=" + formatFloat(ratio, "", 0, 2) + " mult=" + formatFloat(gProtMult, "", 0, 2));
+	}
+	return gProtMult;
+}
+
 void UpdateDeathLedger()
 {
 	const int step = ai.frame - gBleedLast;

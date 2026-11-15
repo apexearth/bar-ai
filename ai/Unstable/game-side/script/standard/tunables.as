@@ -238,6 +238,8 @@ const float TUNE_LOSS_ARMY = 2.f;
 // [ratio] -- Cap on the loss-pressure army tilt, so a massacre cannot starve
 //   the economy that pays for the rebuild.
 const float TUNE_LOSS_ARMY_CAP = 1.7f;
+const float TUNE_PROTECT = 1.f;       // [toggle 0/1] deathledger.as ProtectMult: the army row grows while the ground power they have shown beats our team's (his 11-14; TEST switch)
+const float TUNE_PROTECT_CAP = 3.f;   // deathledger.as ProtectMult: the most the army row grows by (docs/tunables.md)
 
 // [ratio] -- The ceiling scales with the floor: a flat MASS_CAP of 48 sits
 //   BELOW the army-scaled floor past ~14k of standing army, which...
@@ -948,8 +950,7 @@ const float TUNE_AIR_EVERY = 1.f;   // [toggle 0/1] every seat's air plant is pr
 const float TUNE_UNIT_LIFE = 1.f;   // [toggle 0/1] a scout or support plane is worth the work over the life it is expected to have, read from our own losses of that def (the window as the prior life), not the whole window (329 scout planes, ~28 a minute dying, in a 1v1, 2026-10-17)
 const float TUNE_NANO_EARLY = 1.f;   // [toggle 0/1] a T2/T3 plant under construction (its frame, or its manned order whose site has not moved) takes the nanos its finished plant would, at its own ground: a gantry's income-derived ring takes the batch, a T2 lab or air plant its floor of 4 (his 2026-10-17: "the nano turrets should get built while the gantry is being built too")
 const float TUNE_FLOW_E_BILL = 1.f;   // [toggle 0/1] with metal spilling, a factory order still pays its energy bill out of its gain (the line floor read per E bill), so a near-worthless energy-heavy unit is not built just because the line would idle (2026-10-17: armpeep at gain 0.00 built ~28 a minute)
-const float TUNE_GANTRY_OWN_SLOT = 1.f;   // [toggle 0/1] the gantry does not take or wait for the one-at-a-time strategic slot (a production line, not a gun) -- his 10-17 ruling: "let the gantry go up alongside them"
-const float TUNE_T2_ECO = 0.f;   // [toggle 0/1] the next-tier rule also says NOW when the ETA ladder took the plant over the best economy rung (each such election counted at the plant's funded share, NOW at one whole), and the super push and next-tier hoist yield a ceiling hand to the upgrades its list offers, an anti-nuke against a seen silo excepted (his 2026-10-17: "focus on getting the fusions and upgrading the mexes")
+const float TUNE_T2_ECO = 0.f;   // [toggle 0/1] the next-tier rule also says NOW when the ETA ladder took the plant over the best economy rung (each such election counted at the plant's funded share, NOW at one whole); the super push yielding to upgrades is no longer under it (always on since 11-15) (his 2026-10-17: "focus on getting the fusions and upgrading the mexes")
 const float TUNE_INFLIGHT_HOLD = 1.f;   // [toggle 0/1] every build pays for the returns of the projects in progress it holds up, for the share of its metal free flow cannot pay (price.as displacedM; his 2026-10-18: every simultaneous build slows the ones in progress)
 const float TUNE_INCOME_ACCEL = 1.f;   // [toggle 0/1] the hold's other half: an extractor, upgrade or converter is credited the share of income it adds times the gain of the projects in flight it speeds up (floor.as IncomeAccelM; his 2026-10-18)
 const float TUNE_LAB_ASSIST = 1.f;   // [toggle 0/1] a lab's order is a priced project in flight (the hold charges for delaying it, the income credit counts it) and a guard on the lab is priced by the seconds it brings that order forward (want_assist.as LabAssistGuard; his 2026-10-18)
@@ -1405,11 +1406,6 @@ const float TUNE_SUPER_PER_INCOME = 150.f;
 // SUPER_SHARE: the slice of total economic power the strategic market may
 //   claim as a want's gain. See docs/tunables.md.
 const float TUNE_SUPER_SHARE = 0.25f;
-
-// SUPER_FLIGHT_PER [metal/s of overflow] -- one strategic frame may stand
-//   half-built per this much structural overflow, on top of the base one. See
-//   docs/tunables.md.
-const float TUNE_SUPER_FLIGHT_PER = 140.f;
 
 // COPY_OVERFLOW_M [metal/s] -- the wealth waiver: overflow above this lifts
 //   the plant-copy ban and the one-advanced-plant-at-a-time serialization ("make
@@ -1965,7 +1961,7 @@ const float TUNE_AIR_AA_UNLOCK = 0.f; // [toggle 0/1] air/nnair.as NaAACands: se
 const float TUNE_AIR_LATE_COPY = 0.f; // [toggle 0/1] want_plant.as AirLateCopy: a copy of the advanced air plant once its nano block is full while the wing waits (his 11-07)
 const float TUNE_AIR_FULL_LOSS = 0.f; // [toggle 0/1] air/nnair.as NaEval: a bomber run is priced at its whole wing's cost (his 11-07)
 const float TUNE_WING_RULE = 0.f;    // [toggle 0/1] air/nnair.as NaDecide: the net may not turn the bomber rule's WAIT into GO (his 11-07)
-const float TUNE_AIR_HOLD_HOME = 0.f; // [toggle 0/1] air/update.as HoldHome: a held strike plane away from home with no orders flies home
+const float TUNE_AIR_HOLD_HOME = 1.f; // [toggle 0/1] air/update.as HoldHome: a held strike plane away from home with no orders flies home
 const float TUNE_SPAM_SUICIDAL = 1.f;
 
 // [seconds] -- A stuck unit already asked for unblocking is not re-asked for

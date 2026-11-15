@@ -66,6 +66,23 @@ array<int> gAbortAt;
 // (NoteBuildBlocked), and two minutes without a T2 lab ask cost more than
 // the doomed-converter loop this guards against (three fast aborts at 8.0
 // min held the lab while its site was re-probed, his Isthmus game).
+// A plant whose orders keep dying before a frame stands is priced at its odds of starting, 1/(1+n-2), n the run of
+// such deaths each within 30 s x (1+n) of the last, the same window after which it is offered at full price again;
+// a finished one ends the run. Held by
+// nothing: it competes at that price (T3-rolled randomizer games re-elected an experimental plant with no fitting
+// site ~1,000 times and built nothing for 25 minutes).
+array<int> gPlantNoSite;
+array<int> gPlantNoSiteAt;
+float PlantSiteOdds(int d)
+{
+	if ((d <= 0) || (d >= int(gPlantNoSite.length())) || (ai.GetTunable("apex_plant_site_odds", 1.f) <= 0.f))
+		return 1.f;
+	if (ai.frame >= gPlantNoSiteAt[d] + 30 * SECOND * (1 + gPlantNoSite[d]))
+		return 1.f;
+	const int n = gPlantNoSite[d] - 2;
+	return (n > 0) ? 1.f / (1.f + float(n)) : 1.f;
+}
+
 bool AbortBackoff(int d)
 {
 	if ((d <= 0) || (d >= int(gAbortStreak.length())) || Market::LiveNotBan())
@@ -189,6 +206,8 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 		gGoneBadNoPos.resize(Catalog::gDefCount + 1);
 		gAbortStreak.resize(Catalog::gDefCount + 1);
 		gAbortAt.resize(Catalog::gDefCount + 1);
+		gPlantNoSite.resize(Catalog::gDefCount + 1);
+		gPlantNoSiteAt.resize(Catalog::gDefCount + 1);
 	}
 	const int d = (task.buildDef !is null) ? int(task.buildDef.id) : 0;
 	if ((d > 0) && Market::LiveNotBan() && !Requests::gReleasing)
@@ -196,8 +215,10 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 	if ((d >= 0) && (d < int(gGoneOk.length()))) {
 		if (done) {
 			++gGoneOk[d];
-			if (d > 0)
+			if (d > 0) {
 				gAbortStreak[d] = 0;
+				gPlantNoSite[d] = 0;
+			}
 		} else {
 			// d==0 is a builder task with NO buildDef (reclaim, repair):
 			// those removals are normal churn, and Catalog::Def(0) is null
@@ -216,6 +237,17 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 			++gGoneBad[d];
 			if (!OnMap(task.GetBuildPos()))
 				++gGoneBadNoPos[d];
+			// a plant order that died before its frame stood never started, whatever refused it
+			if ((d > 0) && (task.target is null) && !Requests::gReleasing && !Catalog::gMobile[d]
+				&& (Catalog::gBuildsList[d].length() > 0))
+			{
+				gPlantNoSite[d] = (ai.frame < gPlantNoSiteAt[d] + 30 * SECOND * (1 + gPlantNoSite[d]))
+						? (gPlantNoSite[d] + 1) : 1;
+				gPlantNoSiteAt[d] = ai.frame;
+				if ((gPlantNoSite[d] <= 5) || (gPlantNoSite[d] % 50 == 0))
+					AiLog("apex: plant-nosite t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+						+ " n=" + gPlantNoSite[d] + " odds=" + formatFloat(PlantSiteOdds(d), "", 0, 3));
+			}
 			// DID ANYONE ACTUALLY GO? apexearth: "can you tell me that team five
 			// really did try to make one... I just see team five sitting there
 			// doing nothing at all". A valid buildPos only proves Execute ran once.

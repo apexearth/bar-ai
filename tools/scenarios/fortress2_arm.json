@@ -1,0 +1,222 @@
+{
+  "about": "The fortress our plain army cannot take (his 11-12: even more defence, no T3 army, we just crack the defence; fortress_arm fell to plain attacks on 11-13). Two gun lines, pop-up artillery behind them, heavy AA, no army, only economy behind. Resources topped up, LOS global. Wall gun metal 74070.",
+  "passes": "half the wall's gun metal dies before the time is up, and we lose less metal than we kill",
+  "map": "Comet Catcher Remake 1.8",
+  "seconds": 1500,
+  "commanders": "remove",
+  "enemy": "none",
+  "units": [
+    {
+      "side": 0,
+      "def": "armack",
+      "n": 6,
+      "at": [
+        "s0",
+        200,
+        0
+      ],
+      "spacing": 60,
+      "order": "ai"
+    },
+    {
+      "side": 0,
+      "def": "armalab",
+      "n": 1,
+      "at": [
+        "s0",
+        -200,
+        0
+      ],
+      "order": "ai"
+    },
+    {
+      "side": 0,
+      "def": "armavp",
+      "n": 1,
+      "at": [
+        "s0",
+        -200,
+        300
+      ],
+      "order": "ai"
+    },
+    {
+      "side": 0,
+      "def": "armap",
+      "n": 1,
+      "at": [
+        "s0",
+        -200,
+        -300
+      ],
+      "order": "ai"
+    },
+    {
+      "side": 0,
+      "def": "armfus",
+      "n": 2,
+      "at": [
+        "s0",
+        -500,
+        0
+      ],
+      "spacing": 160,
+      "order": "ai"
+    },
+    {
+      "side": 1,
+      "def": "cordoom",
+      "n": 6,
+      "at": [
+        "s1",
+        -1400,
+        0
+      ],
+      "spacing": 220,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corvipe",
+      "n": 8,
+      "at": [
+        "s1",
+        -1550,
+        0
+      ],
+      "spacing": 160,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corhlt",
+      "n": 12,
+      "at": [
+        "s1",
+        -1650,
+        0
+      ],
+      "spacing": 110,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "cordoom",
+      "n": 4,
+      "at": [
+        "s1",
+        -1050,
+        0
+      ],
+      "spacing": 300,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corhlt",
+      "n": 8,
+      "at": [
+        "s1",
+        -1150,
+        0
+      ],
+      "spacing": 160,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "cortoast",
+      "n": 4,
+      "at": [
+        "s1",
+        -850,
+        0
+      ],
+      "spacing": 350,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corflak",
+      "n": 8,
+      "at": [
+        "s1",
+        -1250,
+        0
+      ],
+      "spacing": 180,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "cormadsam",
+      "n": 6,
+      "at": [
+        "s1",
+        -950,
+        0
+      ],
+      "spacing": 240,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corgate",
+      "n": 3,
+      "at": [
+        "s1",
+        -1000,
+        0
+      ],
+      "spacing": 450,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corshroud",
+      "n": 1,
+      "at": [
+        "s1",
+        -800,
+        0
+      ],
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "corfus",
+      "n": 2,
+      "at": [
+        "s1",
+        -300,
+        0
+      ],
+      "spacing": 200,
+      "order": "hold"
+    },
+    {
+      "side": 1,
+      "def": "cormoho",
+      "n": 4,
+      "at": [
+        "s1",
+        -200,
+        300
+      ],
+      "spacing": 150,
+      "order": "hold"
+    }
+  ],
+  "expect": [
+    {
+      "lost_m1": [
+        ">=",
+        37035
+      ],
+      "lost_m0": [
+        "<=",
+        37035
+      ]
+    }
+  ]
+}

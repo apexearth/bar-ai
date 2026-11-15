@@ -46,6 +46,7 @@ import os.path as _osp
 sys.path.insert(0, _osp.dirname(_osp.abspath(__file__)))
 import lane as _lane
 import apexlog
+import barandom as _barandom
 ENGINE_WRITE_DIR = _lane.write_dir()
 
 # Faction names as they appear in BAR's sidedata.
@@ -102,6 +103,20 @@ class AISpec:
         if self.profile:
             bits.append(self.profile)
         return "-".join(bits)
+
+
+def _provenance(env, specs) -> dict:
+    """The code each AI ran (tools/provenance.py): a lane's deploy record, or the release folder's name."""
+    import provenance
+    out = {}
+    for s in specs:
+        if s.is_lua or s.label() in out:
+            continue
+        p = provenance.read(env.skirmish_dir(s.short_name, s.version))
+        if p is None and re.match(r"v\d", s.version or ""):
+            p = {"release": s.version}
+        out[s.label()] = p
+    return out
 
 
 @dataclass
@@ -809,7 +824,8 @@ def run(args) -> int:
         boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
         map_starts=map_starts, map_size=map_size_elmos,
         drop_ai_version=args.drop_ai_version,
-        extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
+        extra_modoptions={**(_barandom.modoptions(args.randomizer) if args.randomizer else {}),
+                          **dict(kv.split('=', 1) for kv in args.modoption)},
         extras=extras,
         restrictions={k: int(v) for k, v in (r.split('=', 1) for r in args.restrict)} or None,
         ai_options={**(json.loads(Path(args.ai_options_file).read_text(encoding="utf-8")) if args.ai_options_file else {}),
@@ -1016,6 +1032,9 @@ def run(args) -> int:
         },
         "replay": demo.name if demo else None,
         "stats": stats,
+        "provenance": _provenance(env, list(ais) + [s for s, _ in extras]),
+        "argv": sys.argv[1:],
+        "randomizer": args.randomizer,
     }
     (outdir / "result.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -1233,6 +1252,9 @@ def main() -> int:
                          "--restrict-mex N limits every extractor def to N")
     ap.add_argument("--restrict-mex", type=int, default=None, metavar="N",
                     help="limit every metal extractor (T1 and T2, all factions) to N per team")
+    ap.add_argument("--randomizer", nargs="?", const=_barandom.PINNED, default=None, metavar="SHA",
+                    help="play BaRandom's randomized unit defs (tools/barandom.py; his 11-14), "
+                         "at the pinned commit or SHA; each game rolls its own units")
     ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
                     help="extra start-script modoption, repeatable. The one that "
                          "matters for reproducing a hosted game is "

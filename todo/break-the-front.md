@@ -59,3 +59,30 @@ Turtle opponent: v0.5.11 with `apex_share_army=2 apex_share_defence=12 apex_shar
 
 Gate: the turtle opponent, both factions, plus the usual v0.5.11 head-to-head and BARb, judged by the worst
 matchup.
+
+## Built 11-12/13, measured, removed (results/release-gate/2026-11-13-*, results/README.md; code in results/patches/c494a6f08c-f1deeac46b34.patch)
+
+Steps 1, 2, 3, a part of 4 (warheads at the site) and 5 were built as `military/breach.as` and deleted on 11-13.
+
+- **No trigger told a fortress from a few towers.** Four were tried; each either fired in ordinary games or never
+  fired against a real wall. Losing on their ground: on in 34 of 48 seats vs v0.5.11 (a lost army fight named the
+  nearest tower a wall). Wall seen bigger than our army: on before any try. Wall bigger than the army we build: never
+  on against a live turtle (rich income makes that army huge). Paid the wall's worth to its guns: on in 29% of
+  ordinary-game readings. The site is the gun cluster where our units died: median 1.4k metal in ordinary games,
+  3.5k inside a 74-138k fortress, so its size cannot separate them either.
+- **Holding the army out of the wall's reach (step 2) is wrong.** Against the live turtle the army is what broke the
+  wall when it broke (seed 22: 46k and 38k of wall killed with the breach off; 2k with the keep-out holding 7-18
+  attack groups out).
+- **The tools did not do the cracking.** Against the live turtle both arms built 1-3 LRPCs, Junos, EMP launchers and
+  4-6 nuke silos (income topped up); wall killed by minute 25 stayed 1-12k in most games either way. Silos make one
+  warhead at a time, and the warheads went to the biggest building cluster, not the gun line.
+- **Ordinary games paid for it:** vs v0.5.11 at +50, same seeds: breach on 4 W 9 L; off 10 W 8 L; later versions
+  6 W 10 L and 6 W 13 L.
+
+What stays: the live-turtle test (`tools/scenarios/fortress3_{arm,cor}.json`: the wall belongs to the test turtle,
+which rebuilds and adds guns; `apex_test_turtle=1` makes a seat's plants build constructors only; deathmode
+neverend; scored by wall killed by minute 25). Its outcome is all-or-nothing (the same seed killed 46k of wall in one
+run, 660 in the next), so a change needs many seeds there.
+
+Next attempt, if any: start from the army (mass and commit at one weak point, which is what broke the wall), not from
+the tools; the trigger needs a measure of the whole fortification, not the cluster where units died.

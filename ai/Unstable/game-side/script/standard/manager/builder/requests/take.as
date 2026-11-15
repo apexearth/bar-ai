@@ -255,7 +255,7 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			Log(want, "nano-fed");
 			return null;
 		}
-		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < SiteWorkerCap(want))) {
+		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < CrewCapFor(cover, SiteWorkerCap(want)))) {
 			if ((unit !is null) && !WorthJoiningSite(cover,
 					unit.GetPos(ai.frame).distance2D(cover.GetBuildPos()),
 					Catalog::gSpeed[int(unit.circuitDef.id)],
@@ -447,7 +447,7 @@ IUnitTask@ JoinAny(CCircuitUnit@ unit)
 		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP)))
 			continue;
 		const uint busy = Workers(cand);
-		if (busy >= SiteWorkerCap(cand.buildDef))
+		if (busy >= CrewCapFor(cand, SiteWorkerCap(cand.buildDef)))
 			continue;
 		if (!unit.circuitDef.CanBuild(cand.buildDef) && (cand.target is null))
 			continue;

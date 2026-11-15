@@ -1,0 +1,2511 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/air/nnair.as b/ai/Unstable/game-side/script/standard/manager/air/nnair.as
+index b44cd379..5c401638 100644
+--- a/ai/Unstable/game-side/script/standard/manager/air/nnair.as
++++ b/ai/Unstable/game-side/script/standard/manager/air/nnair.as
+@@ -940,12 +940,13 @@ int NaDecide(int kind, const string why)
+ 		pr[NA_WAIT] = 1.f;
+ 		pr[NA_GO] = 0.f;
+ 	}
+-	// THE WING ALWAYS FLIES (his 2026-10-12): a wing held a whole cadence since its last launch goes at
+-	// the best cell it knows, even when heavy AA prices every cell below zero.
++	// A wing held a whole cadence since its last launch goes at the best cell it knows (his 2026-10-12, "the wing
++	// always flies") -- but not into a run its own price says loses (his 11-13, watching 9 bombers fly at a priced
++	// -1,510 into 1,453 metal of AA with one fighter, after a run that lost all 5: "yes do it").
+ 	if (kind == 0) {
+ 		if (gNaWaitFrom < 0)
+ 			gNaWaitFrom = ai.frame;
+-		if (have && (chosen == NA_WAIT) && (ai.frame - gNaWaitFrom >= AIR_CADENCE)
++		if (have && (chosen == NA_WAIT) && (best.netM >= 0.f) && (ai.frame - gNaWaitFrom >= AIR_CADENCE)
+ 			&& (BomberMass() >= DeadlineBombBar()) && (BomberMass() >= NaFinishBar()))
+ 		{
+ 			chosen = NA_GO;
+diff --git a/ai/Unstable/game-side/script/standard/manager/air/state.as b/ai/Unstable/game-side/script/standard/manager/air/state.as
+index 810fa0ac..75a0bed3 100644
+--- a/ai/Unstable/game-side/script/standard/manager/air/state.as
++++ b/ai/Unstable/game-side/script/standard/manager/air/state.as
+@@ -648,8 +648,16 @@ bool Hunts(CCircuitUnit@ unit)
+ 	if (!IsFighterDef(int(unit.circuitDef.id)) || InWave(unit.id) || Covering(unit.id)
+ 		|| (FlightOutIdx(unit.id) >= 0))
+ 		return false;
+-	if (InList(gHunters, unit.id))
+-		return true;
++	// A hunter is SURPLUS over the escort, every time it asks, not for life: with the count fallen a hunter kept
++	// hunting while the bombers flew bare (his 11-13 game: air.hunt=14, air.cover=1, 0 of 12 fighters home, a 9-bomber
++	// run with 1 fighter).
++	if (InList(gHunters, unit.id)) {
++		HuntPrune();
++		if (Fighters() - gWaveFighters - int(gHunters.length()) >= ScaledFighters())
++			return true;
++		gHunters.removeAt(uint(gHunters.find(unit.id)));
++		return false;
++	}
+ 	if (EveryOn())
+ 		return EvHuntLaunch(unit);
+ 	if (aiEnemyMgr.GetEnemyCostFresh(RT::AIR) <= 0.f)
+diff --git a/ai/Unstable/game-side/script/standard/manager/air/update.as b/ai/Unstable/game-side/script/standard/manager/air/update.as
+index d0390ebc..f7e2ec69 100644
+--- a/ai/Unstable/game-side/script/standard/manager/air/update.as
++++ b/ai/Unstable/game-side/script/standard/manager/air/update.as
+@@ -78,6 +78,15 @@ bool HoldsUnit(CCircuitUnit@ unit)
+ int gHoldHomeN = 0;
+ array<int> gHhId;
+ array<int> gHhAt;
++array<int> gHoldPosId;   // flown home on hold position; given back its own move state with its next task
++void HoldPosRelease(CCircuitUnit@ unit)
++{
++	const int i = gHoldPosId.find(unit.id);
++	if (i < 0)
++		return;
++	unit.CmdHoldPos(false);
++	gHoldPosId.removeAt(uint(i));
++}
+ bool HoldHome(CCircuitUnit@ unit)
+ {
+ 	if ((ai.GetTunable("apex_air_hold_home", TUNE_AIR_HOLD_HOME) <= 0.f) || !Builder::gHomeSet)
+@@ -109,6 +118,14 @@ bool HoldHome(CCircuitUnit@ unit)
+ 		gHhAt.insertLast(0);
+ 	}
+ 	gHhAt[slot] = ai.frame;
++	// ...on HOLD POSITION: on its default (maneuver) a fighter sent home broke off after every plane it met and died
++	// in their AA (11-14: 221 of 221 traced idle deaths came ~9 s after a fly-home order, still over their half).
++	if (gHoldPosId.find(unit.id) < 0) {
++		if (gHoldPosId.length() >= 2048)   // the dead are never removed (no death hook here); a rare reset
++			gHoldPosId.resize(0);
++		unit.CmdHoldPos(true);
++		gHoldPosId.insertLast(unit.id);
++	}
+ 	unit.CmdMoveTo(at);
+ 	++gHoldHomeN;
+ 	AiLog(Factory::T() + "apex: air hold-home " + unit.circuitDef.GetName() + " #" + unit.id + " from "
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/facqueue.as b/ai/Unstable/game-side/script/standard/manager/brain/facqueue.as
+index 14038dcf..39cddd19 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/facqueue.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/facqueue.as
+@@ -400,6 +400,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
+ 			stop = redraw ? "slice" : ("null:" + Market::gNoOrder);
+ 			break;
+ 		}
++		if (Market::TestTurtleSkips(o))
++			continue;
+ 		batch.insertLast(o);
+ 		if (slot == 0)
+ 			Market::LabOrderNote(fac, o);
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/army.as b/ai/Unstable/game-side/script/standard/manager/brain/market/army.as
+index 3ff916f6..586304c0 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/army.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/army.as
+@@ -2459,8 +2459,9 @@ float ArmySpendFlow()
+ 	const float store = aiEconomyMgr.metal.storage;
+ 	const float fill = (store > 1.f) ? Eco::MCur() / store : 1.f;
+ 	const float spare = inc - Eco::MPull();
++	// apex_army_spare: the test turtle (todo/break-the-front.md) sets 0 so its spare metal does not become an army
+ 	gArmySpendVal = Brain::TargetShare(Brain::ARMY) * inc
+-		+ ((spare > 0.f) ? spare * ((fill < 1.f) ? fill : 1.f) : 0.f);
++		+ ((spare > 0.f) ? spare * ((fill < 1.f) ? fill : 1.f) * ai.GetTunable("apex_army_spare", 1.f) : 0.f);
+ 	return gArmySpendVal;
+ }
+ 
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as b/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as
+index d71b78be..bf5db901 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as
+@@ -628,8 +628,10 @@ int TeamGoOp()
+ // 8v8 when you can notice one of your allies is making one and if it isn't far
+ // away you can help them make it and then support what they build"). "Not far"
+ // is the walk against the time our whole build power would take to raise one.
+-array<float> gAllyGant;   // x, z, defId, unitId, progress
++array<float> gAllyGant;   // x, z, defId, unitId, progress: ally gantries, and every strategic frame still rising
+ int gAllyGantAt = -1;
++int gAllyKeyAsks = 0;      // hands sent to an ally's important frame since the last log
++int gAllyKeyLogAt = 0;
+ float gOwnBpRaw = 0.f;
+ 
+ void AllyGantScan()
+@@ -640,11 +642,20 @@ void AllyGantScan()
+ 	gAllyGant.resize(0);
+ 	const array<float>@ ab = ai.GetAllyBuilds();
+ 	for (uint i = 0; (ab !is null) && (i + 4 < ab.length()); i += 5) {
+-		if (!IsGantryDef(int(ab[i + 2])))
++		const int ad = int(ab[i + 2]);
++		// the gantry (its frame and its production), and since his 11-12 every strategic frame: "allies help each
++		// other with important buildings" -- silos, anti-nukes, guns, launchers, Junos, advanced air plants
++		if (!IsGantryDef(ad) && !((SuperClassOf(ad) >= 0) && (ab[i + 4] < 1.f)))
+ 			continue;
+ 		for (uint k = 0; k < 5; ++k)
+ 			gAllyGant.insertLast(ab[i + k]);
+ 	}
++	if (ai.frame >= gAllyKeyLogAt) {
++		gAllyKeyLogAt = ai.frame + 60 * SECOND;
++		if ((gAllyGant.length() > 0) || (gAllyKeyAsks > 0))
++			AiLog("apex: ally-key t=" + ai.teamId + " frames=" + (gAllyGant.length() / 5) + " asks=" + gAllyKeyAsks);
++		gAllyKeyAsks = 0;
++	}
+ 	gOwnBpRaw = 0.f;
+ 	const array<int>@ own = OwnedDefs();
+ 	for (uint oi = 0; oi < own.length(); ++oi) {
+@@ -682,8 +693,8 @@ int AllyGuardsOn(int allyId)
+ 	return n;
+ }
+ 
+-// The ally gantry this hand should serve, or -1.
+-int AllyGantryFor(CCircuitUnit@ unit, AIFloat3 &out at, int &out def, float &out progress)
++// The ally gantry this hand should serve, or -1 (gantry); else the nearest other important ally frame (his 11-12).
++int AllyGantryFor(CCircuitUnit@ unit, AIFloat3 &out at, int &out def, float &out progress, bool gantry = true)
+ {
+ 	if ((unit is null) || (unit.circuitDef is null))
+ 		return -1;
+@@ -697,6 +708,8 @@ int AllyGantryFor(CCircuitUnit@ unit, AIFloat3 &out at, int &out def, float &out
+ 		AIFloat3 p(gAllyGant[i], 0.f, gAllyGant[i + 1]);
+ 		p.y = ai.GetElevationAt(p);
+ 		const int gd = int(gAllyGant[i + 2]);
++		if (IsGantryDef(gd) != gantry)
++			continue;
+ 		const float d = here.distance2D(p);
+ 		const float ownS = (gOwnBpRaw > 0.f) ? (Catalog::gBuildTime[gd] / gOwnBpRaw) : 1e9f;
+ 		if ((speed <= 0.f) || (d / speed > ownS))
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/production.as b/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
+index 46b1bc90..13f425af 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
+@@ -1,5 +1,11 @@
+ namespace Market {
+ 
++// The TEST turtle (apex_test_turtle; todo/break-the-front.md): its plants make constructors and nothing that fights.
++bool TestTurtleSkips(const CCircuitDef@ o)
++{
++	return (ai.GetTunable("apex_test_turtle", 0.f) > 0.f) && (Catalog::BuildsOf(int(o.id)).length() == 0);
++}
++
+ // apex: flowe-stat each minute: the picks the free-metal E bill held and passed, by def.
+ array<int> gFlowEHeldDef;
+ array<int> gFlowEHeldN;
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/want_assist.as b/ai/Unstable/game-side/script/standard/manager/brain/market/want_assist.as
+index 6b434bc7..607ee2ea 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/want_assist.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/want_assist.as
+@@ -192,6 +192,36 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
+ 			return w;
+ 		}
+ 	}
++	// ...an ally's important frame in reach (his 11-12: "allies help each other with important buildings"): a silo,
++	// anti-nuke, gun, launcher, Juno or advanced air plant still rising, on the same reach, crew cap and arrival test.
++	if ((best is null) && !defence && (ai.GetTunable("apex_ally_key", 1.f) > 0.f)) {
++		AIFloat3 akAt;
++		int akDef = -1;
++		float akDone = 0.f;
++		const int ak = AllyGantryFor(unit, akAt, akDef, akDone, false);
++		if ((ak >= 0) && (akDone < 1.f)
++			&& (uint(AllyGuardsOn(ak)) < Requests::SiteWorkerCap(Catalog::Def(akDef)))
++			&& (!Requests::JoinArriveOn()
++				|| Requests::JoinOk(jaPath, unit, akAt, Requests::JoinArriveSec(unit, akAt),
++					Catalog::gBuildTime[akDef] * (1.f - akDone),
++					float(AllyGuardsOn(ak) + 1) * myBP, myBP, -1.f)))
++		{
++			w.kind = WK_ASSIST;
++			w.pos = akAt;
++			w.spotId = ak;
++			w.gain = 1.f;
++			w.mCost = 1.f;
++			w.tCost = 1.f;
++			w.value = 1.f;
++			@w.def = Catalog::Def(akDef);
++			@gAssistTarget = null;
++			gAssistTargetId = -1;
++			gAssistAllyId = ak;
++			gAssistGuardS = int(Catalog::gCostM[akDef] * (1.f - akDone) / Requests::DRAIN) + 10;
++			++gAllyKeyAsks;
++			return w;
++		}
++	}
+ 	// ...and an advanced plant frame whose request died with its builder: it
+ 	// still holds every other advanced plant ask (AdvPlantInFlight), its own
+ 	// def included, so this is the only way back to it.
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/want_super.as b/ai/Unstable/game-side/script/standard/manager/brain/market/want_super.as
+index 99210f79..c676ce54 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/want_super.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/want_super.as
+@@ -241,15 +241,12 @@ int SuperTarget(int sc)
+ // the classifier walks the whole def table, and this is asked once per
+ // candidate per election.
+ array<int> gSuperHave(8, 0);
++// NO STRATEGIC SLOT (his 11-12: "we don't want that one at a time thing on, just go on our pricing logic"). Each
++// super is priced against the budget that remains; how many stand at once is the pricing's answer. The slot it
++// replaced held breach tools behind silos in 36 of 51 readings. gSuperFlight is a count for the log only.
+ int gSuperFlight = 0;
+ int gSuperCensusAt = -1;
+ 
+-// His 10-17 ruling: the gantry goes up alongside a gun, neither taking nor waiting for the slot.
+-bool GantryOwnSlot()
+-{
+-	return ai.GetTunable("apex_gantry_own_slot", TUNE_GANTRY_OWN_SLOT) > 0.f;
+-}
+-
+ void SuperCensus()
+ {
+ 	if (gSuperCensusAt == ai.frame)
+@@ -260,7 +257,6 @@ void SuperCensus()
+ 		gSuperHave[c] = 0;
+ 	// One source: standing, half-built, orphaned frame and outstanding order
+ 	// are all rows of the commitment ledger.
+-	const bool ownSlot = GantryOwnSlot();
+ 	for (uint ci = 0; ci < ComLen(); ++ci) {
+ 		const int sc = SuperClassOf(gComDef[ci]);
+ 		if (sc < 0)
+@@ -270,7 +266,7 @@ void SuperCensus()
+ 			continue;
+ 		}
+ 		++gSuperHave[sc];
+-		if ((gComState[ci] != CS_FINISHED) && !(ownSlot && (sc == SC_GANTRY)))
++		if (gComState[ci] != CS_FINISHED)
+ 			++gSuperFlight;
+ 	}
+ 	gSuperHave[SC_SILO] += Brain::SiloCountAdjust();
+@@ -284,21 +280,6 @@ int SuperHave(int sc)
+ 	return ((sc >= 0) && (sc < int(gSuperHave.length()))) ? gSuperHave[sc] : 0;
+ }
+ 
+-// STRATEGIC FRAMES AT ONCE: one, plus one per apex_super_flight_per m/s of
+-// structural overflow. The single-frame law is the focus rule for an economy
+-// that must choose; overflow is the economy saying it has nothing to focus
+-// FROM ("gotta go somewhere - gotta do something").
+-int SuperFlightCap()
+-{
+-	const float per = ai.GetTunable("apex_super_flight_per", TUNE_SUPER_FLIGHT_PER);
+-	return 1 + int(OverflowM() / ((per > 1.f) ? per : 140.f));
+-}
+-
+-bool SuperInFlight()
+-{
+-	SuperCensus();
+-	return gSuperFlight >= SuperFlightCap();
+-}
+ 
+ // Whether decide.as's super-push will jump the queue for this def. An
+ // anti-nuke against no silo seen is insurance, priced in the draw, except:
+@@ -821,7 +802,10 @@ float TacticalGain(int d)
+ 	if (stake <= 0.f)
+ 		return 0.f;
+ 	float cap = Catalog::gSurfDps[d] * StructMetalPerHp();
+-	if ((cap <= 0.01f * stake) || (cap > stake))
++	// A stockpiled missile fires once per reload, so its dps reads near zero too, yet each shot erases a tower
++	// cluster: it answers the loss at its spot like the paralyzer (11-12 turtle: cortron capped at 0.42 m/s against
++	// 13 m/s lost to their guns, never built).
++	if ((cap <= 0.01f * stake) || (cap > stake) || Catalog::gStock[d])
+ 		cap = stake;
+ 	float left = stake - float(SuperHave(SC_TACTICAL)) * cap;
+ 	return (left < cap) ? ((left > 0.f) ? left : 0.f) : cap;
+@@ -905,25 +889,36 @@ bool SiegeSite(CCircuitUnit@ unit, int d, AIFloat3 &out at)
+ 	AIFloat3 foe;
+ 	float foeR = 0.f, foeM = 0.f;
+ 	if (!Military::TurretTarget(foe, foeR, foeM))
+-		return false;
++		{ gSiegeSiteWhy = "no-target"; return false; }
++	// Outrange the line's guns, not their super weapon: one LRPC behind a turtle's wall (reach 4,650) refused every
++	// EMP launcher (3,650) against towers of 1,380 (11-12 turtle pilot).
++	foeR = Military::TurretLineReach();
+ 	const float reach = Catalog::gMaxRange[d];
+ 	if (reach <= foeR)
+-		return false;
++		{ gSiegeSiteWhy = "outranged(r" + int(reach) + "<=line" + int(foeR) + ")"; return false; }
+ 	const AIFloat3 back = home - foe;
+ 	const float len = sqrt(back.x * back.x + back.z * back.z);
+ 	if (len < 1.f)
+-		return false;
++		{ gSiegeSiteWhy = "at-home"; return false; }
+ 	float stand = (reach + foeR) * 0.5f;
+ 	if (stand > len)
+ 		stand = len;
+ 	at = foe + back * (stand / len);
++	gSiegeSiteWhy = OnMap(at) ? "ok" : "offmap";
+ 	return OnMap(at);
+ }
++string gSiegeSiteWhy = "-";
+ 
+ string gGantryWhy = "";
+ float gGantryV = 0.f;
+ int gNextGantryWhyLog = 0;
+ 
++// A nuke threat we know of: one of their silos seen, or a warhead that reached us.
++bool AntiThreatKnown(int sc)
++{
++	return (sc == SC_ANTINUKE) && ((Brain::NukeShotsRecent() > 0) || (Brain::EnemyNukeSilos() > 0));
++}
++
+ void GantryWhy(int sc, const string &in why)
+ {
+ 	if (sc == SC_GANTRY)
+@@ -949,7 +944,7 @@ void GantryWhyLog(CCircuitUnit@ unit, const string &in why, float v, const Want@
+ 		+ " bestV=" + formatFloat(w.value * 1000.f, "", 0, 2)
+ 		+ " inc=" + int((gIncEma > 0.f) ? gIncEma : Eco::MInc())
+ 		+ " over=" + int(OverflowM())
+-		+ " flight=" + gSuperFlight + "/" + SuperFlightCap());
++		+ " flight=" + gSuperFlight);
+ }
+ 
+ Want@ ProposeSuper(CCircuitUnit@ unit)
+@@ -958,9 +953,6 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
+ 	Want wIns;
+ 	if (ai.GetTunable("apex_super_want", TUNE_SUPER_WANT) <= 0.f)
+ 		return w;
+-	const bool slotFull = SuperInFlight();
+-	if (slotFull && !GantryOwnSlot())
+-		{ GantryWhyLog(unit, "super-in-flight", 0.f, w); return w; }
+ 	const float budget = SuperBudget();
+ 	if (budget <= 0.f)
+ 		{ GantryWhyLog(unit, "no-budget", 0.f, w); return w; }
+@@ -982,8 +974,6 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
+ 		const int sc = SuperClassOf(d);
+ 		if (sc < 0)
+ 			continue;
+-		if (slotFull && (sc != SC_GANTRY))
+-			continue;
+ 		if ((sc == SC_GANTRY) && StrikeBuilding())
+ 			continue;   // a tier-up waits for the strike (strike.as)
+ 		// ...and no big gun or heavy turret either: they are the military
+@@ -1001,8 +991,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
+ 		// below, taken first for every class whose budget IS the plain one --
+ 		// the gantry's team purse is computed further down and keeps its
+ 		// place.
+-		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && (SuperBill(d) >= budget * PlanMul(sc)))
+-			continue;
++		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && !AntiThreatKnown(sc) && (SuperBill(d) >= budget * PlanMul(sc)))
++			{ GantryWhy(sc, "afford"); continue; }
+ 		if (Requests::LiveOfDef(Catalog::Def(d)))
+ 			{ GantryWhy(sc, "live-request"); continue; }
+ 		if ((sc != SC_LRPC) && (sc != SC_TACTICAL) && (sc != SC_JUNO)
+@@ -1071,6 +1061,13 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
+ 					TUNE_GANTRY_AFFORD_S);
+ 			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f) * PlanMul(sc);
+ 		}
++		// A SEEN SILO OR A LANDED WARHEAD: the anti covers every clustered ally, so the team's purse affords it (his
++		// 11-12 game: five seats started on top of each other, warheads landed at 16.6 and 20.3 min, the first anti
++		// was ordered at 21.7; no single seat's minute of income covered the bill). Allies help raise it (ally-key).
++		if (AntiThreatKnown(sc)) {
++			const float asec = ai.GetTunable("apex_super_afford_s", TUNE_SUPER_AFFORD_S);
++			classBudget = (teamInc + TgPayersInc()) * ((asec > 1.f) ? asec : 60.f);
++		}
+ 		// A cannon's price is its time to afford (ValueOf), not this cut.
+ 		if ((sc != SC_LRPC) && (bill >= classBudget))
+ 			{ GantryWhy(sc, "afford"); continue; }   // cannot afford it; nothing else about it matters
+@@ -1093,7 +1090,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
+ 				continue;
+ 		} else if (sc == SC_TACTICAL) {
+ 			if (!SiegeSite(unit, d, at))
+-				continue;
++				{ GantryWhy(sc, "no-site:" + gSiegeSiteWhy); continue; }
+ 		} else {
+ 			const double _tSs = Perf::T0();
+ 			const int sKey = -(d * 16 + sc + 1);
+@@ -1268,7 +1265,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
+ 	// Priced here as what it is, a strategic line the economy can carry, on
+ 	// the same affordability shape as the rest of this market.
+ 	{
+-		CCircuitDef@ ap = (slotFull || StrikeBuilding()) ? null : Air::IntelPlantToBuild();
++		CCircuitDef@ ap = StrikeBuilding() ? null : Air::IntelPlantToBuild();
+ 		// An ADVANCED air plant waits its turn behind any advanced plant
+ 		// already in flight -- see AdvPlantInFlight above (Purple's
+ 		// simultaneous T2 vehicle + T2 air, "a huge 'no no'").
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/hooks.as b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+index 639c4cd6..68848f91 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/hooks.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+@@ -75,6 +75,8 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
+ 	// One wrapper so every return below is recorded -- see NoteFightElection.
+ 	const double _mt = Perf::T0();
+ 	IUnitTask@ elected = MakeTaskInner(unit);
++	if (elected !is null)
++		Air::HoldPosRelease(unit);
+ 	Perf::Add("hk.maketask.military", _mt);
+ 	NoteFightElection(unit, elected);
+ 	return elected;
+@@ -557,7 +559,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+ 			if (cg !is null)
+ 				return NoteElect("air.cover", cg);
+ 		}
+-		if (AirGthOn() && Air::gStrike) {
++		// ...with no bomber left to guard it comes home for the next wave: left to stock tasks or a hold where it stood,
++		// the escort hovered over their base until their AA found it (11-13: of 4,543 fighters lost in 48 games, ~2,900
++		// died idle or retreating, mostly deep on their side; ~120 died fighting).
++		if ((AirGthOn() || (ai.GetTunable("apex_air_hold_home", TUNE_AIR_HOLD_HOME) > 0.f)) && Air::gStrike) {
+ 			Air::HoldHome(unit);
+ 			return null;   // it left its wave's cover: held for the next one
+ 		}
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index f5d410c6..75192f3a 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -948,7 +948,6 @@ const float TUNE_AIR_EVERY = 1.f;   // [toggle 0/1] every seat's air plant is pr
+ const float TUNE_UNIT_LIFE = 1.f;   // [toggle 0/1] a scout or support plane is worth the work over the life it is expected to have, read from our own losses of that def (the window as the prior life), not the whole window (329 scout planes, ~28 a minute dying, in a 1v1, 2026-10-17)
+ const float TUNE_NANO_EARLY = 1.f;   // [toggle 0/1] a T2/T3 plant under construction (its frame, or its manned order whose site has not moved) takes the nanos its finished plant would, at its own ground: a gantry's income-derived ring takes the batch, a T2 lab or air plant its floor of 4 (his 2026-10-17: "the nano turrets should get built while the gantry is being built too")
+ const float TUNE_FLOW_E_BILL = 1.f;   // [toggle 0/1] with metal spilling, a factory order still pays its energy bill out of its gain (the line floor read per E bill), so a near-worthless energy-heavy unit is not built just because the line would idle (2026-10-17: armpeep at gain 0.00 built ~28 a minute)
+-const float TUNE_GANTRY_OWN_SLOT = 1.f;   // [toggle 0/1] the gantry does not take or wait for the one-at-a-time strategic slot (a production line, not a gun) -- his 10-17 ruling: "let the gantry go up alongside them"
+ const float TUNE_T2_ECO = 0.f;   // [toggle 0/1] the next-tier rule also says NOW when the ETA ladder took the plant over the best economy rung (each such election counted at the plant's funded share, NOW at one whole), and the super push and next-tier hoist yield a ceiling hand to the upgrades its list offers, an anti-nuke against a seen silo excepted (his 2026-10-17: "focus on getting the fusions and upgrading the mexes")
+ const float TUNE_INFLIGHT_HOLD = 1.f;   // [toggle 0/1] every build pays for the returns of the projects in progress it holds up, for the share of its metal free flow cannot pay (price.as displacedM; his 2026-10-18: every simultaneous build slows the ones in progress)
+ const float TUNE_INCOME_ACCEL = 1.f;   // [toggle 0/1] the hold's other half: an extractor, upgrade or converter is credited the share of income it adds times the gain of the projects in flight it speeds up (floor.as IncomeAccelM; his 2026-10-18)
+@@ -1406,11 +1405,6 @@ const float TUNE_SUPER_PER_INCOME = 150.f;
+ //   claim as a want's gain. See docs/tunables.md.
+ const float TUNE_SUPER_SHARE = 0.25f;
+ 
+-// SUPER_FLIGHT_PER [metal/s of overflow] -- one strategic frame may stand
+-//   half-built per this much structural overflow, on top of the base one. See
+-//   docs/tunables.md.
+-const float TUNE_SUPER_FLIGHT_PER = 140.f;
+-
+ // COPY_OVERFLOW_M [metal/s] -- the wealth waiver: overflow above this lifts
+ //   the plant-copy ban and the one-advanced-plant-at-a-time serialization ("make
+ //   more nanos around our gantry and if we can't do that then make another
+@@ -1965,7 +1959,7 @@ const float TUNE_AIR_AA_UNLOCK = 0.f; // [toggle 0/1] air/nnair.as NaAACands: se
+ const float TUNE_AIR_LATE_COPY = 0.f; // [toggle 0/1] want_plant.as AirLateCopy: a copy of the advanced air plant once its nano block is full while the wing waits (his 11-07)
+ const float TUNE_AIR_FULL_LOSS = 0.f; // [toggle 0/1] air/nnair.as NaEval: a bomber run is priced at its whole wing's cost (his 11-07)
+ const float TUNE_WING_RULE = 0.f;    // [toggle 0/1] air/nnair.as NaDecide: the net may not turn the bomber rule's WAIT into GO (his 11-07)
+-const float TUNE_AIR_HOLD_HOME = 0.f; // [toggle 0/1] air/update.as HoldHome: a held strike plane away from home with no orders flies home
++const float TUNE_AIR_HOLD_HOME = 1.f; // [toggle 0/1] air/update.as HoldHome: a held strike plane away from home with no orders flies home
+ const float TUNE_SPAM_SUICIDAL = 1.f;
+ 
+ // [seconds] -- A stuck unit already asked for unblocking is not re-asked for
+diff --git a/cpp/src/circuit/script/InitScript.cpp b/cpp/src/circuit/script/InitScript.cpp
+index ab019887..f86e4942 100644
+--- a/cpp/src/circuit/script/InitScript.cpp
++++ b/cpp/src/circuit/script/InitScript.cpp
+@@ -491,6 +491,19 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
+ 	}
+ }
+ 
++// apex: hold position (true) or the def's own move state (false). A held fighter flying home on "maneuver" broke
++// off to chase every plane it met and died in their AA (11-14: 221 idle deaths ~9 s after a fly-home order).
++static void CCircuitUnit_CmdHoldPos(CCircuitUnit* unit, bool hold)
++{
++	if ((unit == nullptr) || unit->IsDead()) {
++		return;
++	}
++	try {
++		unit->CmdSetMoveState(hold ? CCircuitDef::MoveType::HOLD_POS : unit->GetCircuitDef()->GetMoveState());
++	} catch (const std::exception&) {
++	}
++}
++
+ static void CCircuitUnit_CmdFightTo(CCircuitUnit* unit, const AIFloat3& pos)
+ {
+ 	if (StockDropUnit(unit, "fight")) {
+@@ -3334,6 +3347,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	// command moves the unit without consuming its task slot.
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdGuard(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdGuard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdHoldPos(bool)", asFUNCTION(CCircuitUnit_CmdHoldPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdFightTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdFightTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetSquadOwned(bool)", asFUNCTION(CCircuitUnit_SetSquadOwned), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsSquadOwned() const", asMETHOD(CCircuitUnit, IsSquadOwned), asCALL_THISCALL); ASSERT(r >= 0);
+diff --git a/cpp/src/circuit/task/fighter/SquadTask.cpp b/cpp/src/circuit/task/fighter/SquadTask.cpp
+index f47cbe3f..42c6c853 100644
+--- a/cpp/src/circuit/task/fighter/SquadTask.cpp
++++ b/cpp/src/circuit/task/fighter/SquadTask.cpp
+@@ -1602,7 +1602,23 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+ 				fn[0] += (pushed && !inside) ? 1 : 0;
+ 				fn[1] += inside ? 1 : 0;
+ 				fn[2] += fodder ? 1 : 0;
+-				CTerrainManager::CorrectPosition(newPos);
++				// apex: CLIP THE STAND POINT ALONG ITS BEARING FROM THE TARGET, not per axis. A randomizer unit with a
++				// range of thousands put its ring point far off the map, and the per-axis clamp slid it into a map
++				// corner, so whole squads walked to the top-left (his 11-12 hosted game). Along the bearing it stands at
++				// the map's edge, still in its reach of the target.
++				{
++					AIFloat3 dir = newPos - tPos;
++					float len = std::sqrt(dir.x * dir.x + dir.z * dir.z);
++					if (len > 1.f) {
++						dir.x /= len;
++						dir.y = 0.f;
++						dir.z /= len;
++						const float y = newPos.y;
++						newPos = CTerrainManager::CorrectPosition(tPos, dir, len);
++						newPos.y = y;
++					}
++					CTerrainManager::CorrectPosition(newPos);
++				}
+ 				const bool uStatic = own ? ((uTgt->GetCircuitDef() != nullptr) && !uTgt->GetCircuitDef()->IsMobile()) : isStatic;
+ 				unit->Attack(newPos, uTgt, targetTile, isGround, uStatic, frame + FRAMES_PER_SEC * 60, feared);
+ 			}
+diff --git a/cpp/src/circuit/unit/CircuitDef.cpp b/cpp/src/circuit/unit/CircuitDef.cpp
+index ab6d5099..8b8b4bce 100644
+--- a/cpp/src/circuit/unit/CircuitDef.cpp
++++ b/cpp/src/circuit/unit/CircuitDef.cpp
+@@ -478,6 +478,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	bool longestLandDumb = false;
+ 	int intercept = 0;  // S7: the raw GetInterceptor, logged once per def below
+ 	bool hasZeroRangeWpn = false;
++	float paralyzerRange = 0.f;  // apex: the longest paralyzer weapon, the reach of a launcher no category below names
+ 	CWeaponDef* bestDGunDef = nullptr;
+ 	CWeaponDef* bestWpDef = nullptr;
+ 	WeaponMount* bestDGunMnt = nullptr;
+@@ -711,6 +712,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		} else {
+ 			hasZeroRangeWpn = true;
+ 		}
++		if (wd->IsParalyzer()) {
++			paralyzerRange = std::max(paralyzerRange, range);
++		}
+ 		// apex: a weapon that only answers a fire COMMAND (D-gun, nuke, Juno) or
+ 		// that only hits projectiles (antinuke) never shoots a unit walking past,
+ 		// so its range is not reach. @see GetAutoRange.
+@@ -834,6 +838,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	}
+ 
+ 	isDumbFire = longestLandDumb;
++	// apex: A PARALYZER WHOSE ONLY TARGETS ARE ITS OWN CATEGORY (the EMP launcher armemp targets EMPABLE) matched none
++	// of the land/air/water categories above, so its reach read 0: never sited, and CSuperTask::AimLauncher's pool (in
++	// range of 0) was always empty (11-13 fortress scenario: "outranged(r0<=line620)"). Its paralyzer is its land reach.
++	if ((GetMaxRange() <= 0.f) && (paralyzerRange > 0.f)) {
++		maxRange[static_cast<RangeT>(RangeType::LAND)] = paralyzerRange;
++		maxRangeType = RangeType::LAND;
++	}
+ 	if (hasZeroRangeWpn && (minRange == std::numeric_limits<float>::max())) {
+ 		minRange = 0.f;
+ 	}
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index fb607e67..4bc8090b 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -241,6 +241,8 @@ local NAMES = {
+ 	"apex_arc_span",         -- SquadTask.cpp: ring arc width as a fraction of pi; small = the squad fights as a fist (0.9)
+ 	"apex_line_adapt",       -- army.as: enemy static share bends the reach composition target up (1)
+ 	"apex_line_alloc",       -- production.as: 1 = draw within the ground line class the lab owes most metal (0)
++	"apex_ally_key",         -- want_assist.as: 1 = hands go to an ally's important frame (silo, gun, launcher, Juno, anti-nuke) (1; TEST switch, 11-13)
++	"apex_test_turtle",      -- production.as + facqueue.as: 1 = TEST opponent only: plants build constructors, no fighters (0)
+ 	"apex_mex_expose",       -- want_protect.as: per-mex floor grows with forwardness, floor*(1+fwd*this) (1.5)
+ 	"apex_rezzer_fwd",       -- rules_rezzer.as: idle rezzer past this forward fraction retires to the haven (0.25)
+ 	"apex_consolidate_r",    -- withdraw.as: tracked-pack distance that starts pre-contact consolidation (2000)
+@@ -385,7 +387,6 @@ local NAMES = {
+ 	"apex_air_every",        -- air/every.as + want_plant.as ProposePlant air gates/yield + wing.as IntelPlantToBuild + nnair.as NaCands/NaDecide + state.as Hunts + update.as Intercept + production.as fighters + decide.as: every seat's air plant priced, the wing flies what it has, fighters answer their air (0)
+ 	"apex_unit_life",        -- air/life.as: scout/support plane gains scaled by the life our losses show
+ 	"apex_flow_e_bill",      -- production.as opportunity floor: with metal free, the pick still pays its E bill
+-	"apex_gantry_own_slot",  -- want_super.as: the gantry neither takes nor waits for the strategic one-at-a-time slot
+ 	"apex_nano_early",       -- sites.as PlantFrames/GantryShortSite + want_nano.as FactoryNanoShort + execute.as nano batch: T2+ plant frames take their nanos while rising (0)
+ 	"apex_t2_eco",           -- t2eco.as + nntech.as rule + decide.as super push/next-tier hoist: the ladder's evidence for the next tier; upgrades before the strategic hoists (0)
+ 	"apex_inflight_hold",    -- price.as displacedM: a build pays for the projects in progress it holds up (0)
+@@ -620,7 +621,6 @@ local NAMES = {
+ 	"apex_roam_r",
+ 	"apex_super_self_frac",
+ 	"apex_gantry_afford_s",
+-	"apex_super_flight_per",
+ 	"apex_copy_overflow_m",
+ 	"apex_con_feed_headroom",
+ 	"apex_unit_afford_s",
+diff --git a/tools/dashboard_guide.py b/tools/dashboard_guide.py
+index 7bfaee49..e4cf84bc 100644
+--- a/tools/dashboard_guide.py
++++ b/tools/dashboard_guide.py
+@@ -429,10 +429,6 @@ PANELS = [
+             ("TUNE_FLOW_E_BILL", "ON: when metal is piling up, a factory still only builds something if it is "
+              "worth the energy it costs; nothing worth it, and the factory waits. OFF: with spare metal a "
+              "factory builds even a near-useless unit rather than sit idle."),
+-            ("TUNE_GANTRY_OWN_SLOT", "ON: the gantry goes up alongside a nuke silo, anti-nuke or long-range cannon "
+-             "when we can afford it, instead of waiting for theirs to finish. OFF: one big strategic build at a "
+-             "time (more only while metal overflows), and the gantry waits its turn. `apex: gantry-why` every "
+-             "30 s while no gantry stands says what held it back"),
+             ("TUNE_NANO_EARLY", "ON: construction turrets go up around a gantry, an advanced lab or an "
+              "advanced air plant while it is still being built, as many as it will want once finished; they "
+              "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
+@@ -892,10 +888,6 @@ GROUPS = [
+                   "quarter of the gain)"),
+                  ("TUNE_SUPER_PUSH", "an affordable strategic want skips the "
+                   "category lottery and goes straight through"),
+-                 ("TUNE_SUPER_FLIGHT_PER", "one MORE strategic frame may stand "
+-                  "half-built per this much overflowing metal/s — lower and a "
+-                  "rich, wasteful economy starts gantries, silos and guns in "
+-                  "parallel sooner"),
+                  ("TUNE_COPY_OVERFLOW_M", "the wealth waiver: overflow above "
+                   "this metal/s lifts the plant-copy ban and the one-advanced-"
+                   "plant-at-a-time rule — lower and a wasteful economy earns "
+diff --git a/tools/deploy_ai.py b/tools/deploy_ai.py
+index b5da439e..87096428 100644
+--- a/tools/deploy_ai.py
++++ b/tools/deploy_ai.py
+@@ -94,7 +94,7 @@ def _tree_digest(root: Path) -> str:
+     h = hashlib.sha256()
+     for path in sorted(root.rglob("*")):
+         # the deployed net is the trainer's to write (nntrain.py) and the stamp the deploy's: not drift
+-        if path.is_file() and path.name not in ("nnweights.as", "stamp.as"):
++        if path.is_file() and path.name not in ("nnweights.as", "stamp.as", "provenance.json"):
+             h.update(path.relative_to(root).as_posix().encode())
+             h.update(path.read_bytes())
+     return h.hexdigest()[:12]
+@@ -438,7 +438,13 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
+     stamp = _stamp_scripts(variant, (target / "script", game_target / "script"))
+     print(f"  scripts      {stamp}")
+     print(f"  game-side    {game_target}")
+-    print(f"               digest {_tree_digest(game_target)}")
++    digest = _tree_digest(game_target)
++    print(f"               digest {digest}")
++    import provenance
++    prov = provenance.write([target, game_target], ai=f"{short}:{variant}", game_digest=digest,
++                            dll_sha=hashlib.sha256((target / "SkirmishAI.dll").read_bytes()).hexdigest()[:12]
++                            if (target / "SkirmishAI.dll").is_file() else "")
++    print(f"  provenance   {provenance.label(prov)}" + (f"  ({prov['patch']})" if prov.get("patch") else ""))
+     # the deployed copy must play tunables.as as committed (tools/settings_check.py)
+     chk = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "settings_check.py"),
+                           f"{short}:{variant}"], capture_output=True, text=True)
+diff --git a/tools/ledger.py b/tools/ledger.py
+index 6d020795..f23977f9 100644
+--- a/tools/ledger.py
++++ b/tools/ledger.py
+@@ -1,419 +1,194 @@
+-"""The asset ledger, step 1 (todo/learn-from-each-decision.md): every building our seats placed, joined to the
+-decision that bought it and followed through its life, from logs every game already writes.
++"""The results record (his 11-13: save the test results, the commit they ran and every detail; organised, not one file).
+ 
+-    python tools/ledger.py <tournament-or-match-dir> [...]      # summary by building type
+-    python tools/ledger.py --jsonl out.jsonl <dirs...>           # also one record per asset
++    python tools/ledger.py add --topic TOPIC --title "..." --purpose "..." [--verdict "..."] [--us SPEC] RUN [RUN ...]
++    python tools/ledger.py index
+ 
+-Per asset: the founding decision (frame, builder, reason, rank picked, value, gain, metal, time, net multiplier,
+-the state and the chosen option), when it finished or that it died a frame (and whether the enemy, we, or nobody
+-ended it), when and how it ended, the metal of enemy units it killed (killing blow), a factory's army metal, and from
+-[BARAI_LIFE] the metal of damage it dealt and took, how far a frame got, its build power by source and its output.
+-Jobs that never put a building down are records too: the builder killed on the job, or dropped (with how long it was
+-open), or cut off by the game's end (censored).
++Layout:
++    results/README.md                   the index: one row per batch, grouped by topic, newest first (generated)
++    results/<topic>/<date>-<slug>.md    one page per batch: purpose, code, settings, command, summary, every game
++    results/patches/<head>-<sha>.patch  the uncommitted code a batch ran (tools/provenance.py)
++
++RUN is a tournament dir, a match dir, or a glob of match dirs. Results are OUR side's (--us, a spec substring),
++counted by seat: tournaments alternate seats, and the test turtle shares our spec name. Adding a batch with the
++same topic, date and title again rewrites its page (a batch that finished after a partial entry).
++Games run before 11-13 carry no code record: say what ran in --purpose.
+ """
++from __future__ import annotations
++
+ import argparse
+ import glob
+ import json
+ import math
+-import os
+ import re
+-from collections import defaultdict
+-
+-FRAME = re.compile(r"\[f=(-?\d+)\]")
+-DECIDE = re.compile(r"apex: decide t=(\d+) (\S+) #(\d+) -> [a-z]+/[a-z]+:(\S+) v=([-\d.]+) \(gain=([-\d.]+) m=([-\d.]+) "
+-                    r"t=([-\d.]+)\)(?: nn=([-\d.]+))? why=(\S+)")
+-EXEC = re.compile(r"apex: exec t=(\d+) (\S+) #(\d+) ([a-z]+):(\S+) pick=(\d+) at=(-?\d+),(-?\d+)(?: task=(-?\d+),(-?\d+))?")
+-BUILD = re.compile(r"\[BARAI_BUILD\] team=(\d+) .*?frame=(\d+) .*?unit=(\S+) cost=([\d.]+) x=(\d+) z=(\d+) uid=(\d+)")
+-DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\S+) cost=([\d.]+) x=(-?\d+) z=(-?\d+) .*?built=(\d) "
+-                   r"mob=(\d) atkteam=(-?\d+) atk=(\S+) .*?uid=(\d+) atkid=(-?\d+)")
+-NN = re.compile(r"apex: nn t=(\d+) f=(-?\d+) u=(\d+) c=\S+ pick=(\d+) why=\S+ dm=\S+ \|([^|]*)\|([^|]*)\| chosen=(-?\d+)")
+-SCHEMA = re.compile(r"apex: nn-schema \S+ state=(\S+) opt=(\S+)")
+-LIFE = re.compile(r"\[BARAI_LIFE\] frame=(\d+) team=(\d+) uid=(\d+) unit=(\S+) dealtM=([-\d.]+) takenM=([-\d.]+) "
+-                  r"started=(-?\d+) finished=(-?\d+) prog=([-\d.]+) com=([-\d.]+) con=([-\d.]+) nano=([-\d.]+) "
+-                  r"fac=([-\d.]+) gaveMobileM=([-\d.]+) gaveStaticM=([-\d.]+) madeM=([-\d.]+) madeE=([-\d.]+) end=(\S+)")
+-PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) .*?frame=(\d+) .*?unit=(\S+) cost=([\d.]+) fac=(\S+) uid=\d+ facid=(\d+)")
+-BUILDER = re.compile(r"^(arm|cor|leg)(ck|cv|ca|cs|ch|ack|acv|aca|acs|ach|nanotc\w*|rectr|necro|fast|mlv|com\w*)$")
+-CON = re.compile(r"^(arm|cor|leg)(ck|cv|ca|cs|ch|ack|acv|aca|acs|ach)$")
+-MATCH_R = 320.0
+-BUILD_KINDS = {"mex", "mexup", "energy", "protect", "nano", "plant", "convert", "sense", "airdef", "tech", "geo",
+-               "super", "store"}
+-
+-
+-def our_teams(mdir):
+-    """every player team an Apex AI plays: result.json lists sides, not players"""
+-    try:
+-        txt = open(os.path.join(mdir, "script.txt"), encoding="utf-8", errors="replace").read()
+-    except OSError:
+-        return set()
+-    ours = set()
+-    for block in re.findall(r"\[ai\d+\]\s*\{(.*?)\}", txt, re.S | re.I):
+-        sn = re.search(r"ShortName=([^;]+);", block)
+-        tm = re.search(r"\bTeam=(\d+);", block)
+-        if sn and tm and sn.group(1).startswith("Apex"):
+-            ours.add(int(tm.group(1)))
+-    return ours
+-
+-
+-def ally_teams(mdir):
+-    """team -> allyteam from the start script"""
+-    try:
+-        txt = open(os.path.join(mdir, "script.txt"), encoding="utf-8", errors="replace").read()
+-    except OSError:
+-        return {}
+-    out = {}
+-    for tid, block in re.findall(r"\[team(\d+)\]\s*\{(.*?)\}", txt, re.S | re.I):
+-        m = re.search(r"\bAllyTeam=(\d+);", block)
++from collections import Counter, defaultdict
++from datetime import datetime
++from pathlib import Path
++
++import provenance
++
++REPO = Path(__file__).resolve().parent.parent
++RESULTS = REPO / "results"
++INDEX = RESULTS / "README.md"
++STATS = re.compile(r"\[BARAI_STATS\] team=(\d+) ally=(\d+) .*?frame=(\d+) .*? mInc=([-\d.]+)")
++META = re.compile(r"^<!-- meta (\{.*\}) -->$", re.M)
++
++
++def games(runs):
++    for r in runs:
++        p = Path(r)
++        if (p / "matches").is_dir():
++            yield from sorted(x for x in (p / "matches").iterdir() if (x / "result.json").is_file())
++        elif (p / "result.json").is_file():
++            yield p
++        else:
++            yield from sorted(Path(x) for x in glob.glob(r) if (Path(x) / "result.json").is_file())
++
++
++def income(d: Path):
++    last, at20 = {}, {}
++    f = d / "infolog.txt"
++    if not f.is_file():
++        return None, None
++    for ln in f.open(encoding="utf-8", errors="replace"):
++        h = STATS.search(ln)
++        if h:
++            last[h.group(1)] = (int(h.group(2)), float(h.group(4)))
++            if int(h.group(3)) <= 36060:
++                at20[h.group(1)] = (int(h.group(2)), float(h.group(4)))
++
++    def ratio(m):
++        s = Counter()
++        for a, v in m.values():
++            s[a] += v
++        return math.log(s[0] / s[1]) if s[0] > 0 and s[1] > 0 else None
++    return ratio(at20), ratio(last)
++
++
++def rel(d: Path) -> str:
++    dd = d.resolve()
++    return dd.relative_to(REPO).as_posix() if REPO in dd.parents else str(d)
++
++
++def read_game(d: Path, us: str) -> dict:
++    r = json.loads((d / "result.json").read_text(encoding="utf-8"))
++    teams = [t for t in r.get("teams", []) if not t.get("extra")]
++    mine = [i for i, t in enumerate(teams) if us in t["spec"]]
++    ally = mine[0] if mine else 0
++    w = r["result"].get("winners") or []
++    i20, iend = income(d)
++    if ally == 1:
++        i20 = -i20 if i20 is not None else None
++        iend = -iend if iend is not None else None
++    if w:
++        out = "W" if ally in w else "L"
++    else:
++        out = "w" if (iend or 0) > 0 else ("l" if iend is not None else "-")
++    prov = r.get("provenance") or {}
++    return dict(dir=rel(d), us=teams[ally]["spec"] if teams else "?",
++                them=", ".join(sorted({t["spec"] for i, t in enumerate(teams) if i != ally})) or "?",
++                map=r.get("map"), sides="/".join(dict.fromkeys(r.get("sides") or [])), seed=r.get("seed"),
++                hc=r.get("handicap"), cap=r.get("minutes_cap"), mins=r["result"].get("game_minutes"), out=out,
++                i20=i20, seat=ally, code={k: provenance.label(v) for k, v in prov.items()}, argv=r.get("argv"))
++
++
++def slug(s: str) -> str:
++    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:60]
++
++
++def fmt_x(v):
++    return f"x{math.exp(v):.2f}" if v is not None else "-"
++
++
++def add(args):
++    rows = [read_game(d, args.us) for d in games(args.runs)]
++    if not rows:
++        raise SystemExit("no games found")
++    out = Counter(x["out"] for x in rows)
++    i20 = [x["i20"] for x in rows if x["i20"] is not None]
++    code = Counter((k, v) for x in rows for k, v in x["code"].items())
++    date = args.date or datetime.now().strftime("%Y-%m-%d")
++    summary = (f"{len(rows)} games: won {out['W']}, lost {out['L']}, timeouts ahead {out['w']}, behind {out['l']}"
++               + (f"; income at 20 min {fmt_x(sum(i20) / len(i20))} ours/theirs" if i20 else ""))
++    meta = dict(date=date, topic=args.topic, title=args.title, games=len(rows), W=out["W"], L=out["L"], w=out["w"],
++                l=out["l"], inc20=round(math.exp(sum(i20) / len(i20)), 2) if i20 else None, verdict=args.verdict)
++    page = [
++        f"<!-- meta {json.dumps(meta)} -->",
++        f"# {args.title}",
++        "",
++        f"- **Date:** {date}",
++        f"- **Topic:** {args.topic}",
++        f"- **Purpose:** {args.purpose}",
++        f"- **Result:** {summary}",
++    ]
++    if args.verdict:
++        page.append(f"- **Verdict:** {args.verdict}")
++    page += [
++        f"- **Ours:** {', '.join(sorted({x['us'] for x in rows}))}",
++        f"- **Opponents:** {', '.join(sorted({x['them'] for x in rows}))}",
++        "- **Code:** " + ("; ".join(f"{k} = `{v}` ({n} games)" for (k, v), n in sorted(code.items()))
++                          or "not recorded (games before the code record, 11-13); see Purpose"),
++        f"- **Maps:** {', '.join(sorted({str(x['map']) for x in rows}))}",
++        f"- **Sides:** {', '.join(sorted({x['sides'] for x in rows}))}; **bonus:** "
++        f"{', '.join(sorted({str(x['hc']) for x in rows}))}; **time cap:** "
++        f"{', '.join(sorted({str(x['cap']) for x in rows}))} min",
++        f"- **Runs:** {', '.join(sorted({str(Path(x['dir']).parent.parent) if Path(x['dir']).parent.name == 'matches' else x['dir'] for x in rows}))}",
++    ]
++    if rows[0].get("argv"):
++        page.append(f"- **Command (first game):** `run_match.py {' '.join(rows[0]['argv'])}`")
++    page += ["", "Results are ours, counted by seat. W/L decided; w/l a time-capped game ahead/behind on income at the end.",
++             "", "| # | map | sides | seed | our seat | result | minutes | income at 20 | code | game |",
++             "|---|---|---|---|---|---|---|---|---|---|"]
++    for i, x in enumerate(rows):
++        page.append(f"| {i} | {x['map']} | {x['sides']} | {x['seed']} | {x['seat']} | {x['out']} | "
++                    f"{x['mins'] if x['mins'] is not None else '-'} | {fmt_x(x['i20'])} | "
++                    f"{', '.join(sorted(set(x['code'].values()))) or '-'} | `{x['dir']}` |")
++    text = "\n".join(page) + "\n"
++    if args.dry:
++        print(text)
++        return
++    p = RESULTS / slug(args.topic) / f"{date}-{slug(args.title)}.md"
++    p.parent.mkdir(parents=True, exist_ok=True)
++    p.write_text(text, encoding="utf-8")
++    index()
++    print(f"{p.relative_to(REPO).as_posix()}: {summary}")
++
++
++def index(_args=None):
++    by_topic = defaultdict(list)
++    for p in sorted(RESULTS.glob("*/*.md")):
++        m = META.search(p.read_text(encoding="utf-8"))
+         if m:
+-            out[int(tid)] = int(m.group(1))
+-    return out
+-
+-
+-_TREE = None
+-_CAT = {}
+-
+-
+-def catalog_cost(name):
+-    """a unit's metal from the game's own unit files (never from a game's logs: a commander's cost was only known
+-    in games where a commander died, which leaked the outcome)"""
+-    global _TREE
+-    if name in _CAT:
+-        return _CAT[name]
+-    c = 0.0
+-    try:
+-        if _TREE is None:
+-            import bar_env
+-            import unitdef
+-            _TREE = unitdef.trees(bar_env.load())[0]
+-        info = _TREE.info(name)
+-        if info and info.get("metalcost"):
+-            c = float(info["metalcost"])
+-    except Exception:  # noqa: BLE001
+-        c = 0.0
+-    _CAT[name] = c
+-    return c
+-
+-
+-GRACE = 5 * 30          # a builder killed within 5 s of its job's end still died on it
+-TRUNC = 60 * 30         # a job still open in the last minute of a game is cut off, not dropped
+-NEAR_KILL_R, NEAR_KILL_F = 600.0, 300
+-
+-
+-def read_game(mdir):
+-    ours = our_teams(mdir)
+-    log = os.path.join(mdir, "infolog.txt")
+-    if not ours or not os.path.exists(log):
+-        return []
+-    ally = ally_teams(mdir)
+-    def friend(mine, t):
+-        t = int(t)
+-        return t == mine or (t >= 0 and ally.get(t) is not None and ally.get(t) == ally.get(mine))
+-
+-    def foe(mine, t):
+-        t = int(t)
+-        return t >= 0 and not friend(mine, t)
+-
+-    last_decide = {}
+-    last_nn = {}
+-    last_exec = {}
+-    names = {}
+-
+-    def attach(rec, nm):
+-        # the nn line follows its exec line; its chosen option is the one executed
+-        if not names:
+-            return
+-        state = [float(v) for v in nm.group(5).split(",") if v.strip()]
+-        opts = [o.strip().split(",") for o in nm.group(6).split(";") if o.strip()]
+-        ch = int(nm.group(7))
+-        if len(state) == len(names["state"]):
+-            rec["state"] = state
+-        if 0 <= ch < len(opts) and len(opts[ch]) == len(names["opt"]):
+-            rec["opt"] = dict(zip(names["opt"], opts[ch]))
+-        rec["nOpts"] = len(opts)
+-    execs = defaultdict(list)       # (team, def) -> [exec record]
+-    builds, deaths, prods = [], [], []
+-    lives = {}
+-    end = 0
+-    for ln in open(log, encoding="utf-8", errors="replace"):
+-        fm = FRAME.search(ln)
+-        f = int(fm.group(1)) if fm else 0
+-        if "apex: nn-schema" in ln and not names:
+-            m = SCHEMA.search(ln)
+-            if m:
+-                names = {"state": m.group(1).split(","), "opt": m.group(2).split(",")}
+-            continue
+-        if "apex: nn t=" in ln:
+-            m = NN.search(ln)
+-            if m and int(m.group(1)) in ours:
+-                key = (int(m.group(1)), m.group(3))
+-                last_nn[key] = (int(m.group(2)), m)
+-                e = last_exec.get(key)
+-                if e is not None and "state" not in e and abs(e["frame"] - int(m.group(2))) <= 2:
+-                    attach(e, m)
+-            continue
+-        if "apex: decide t=" in ln:
+-            m = DECIDE.search(ln)
+-            if m and int(m.group(1)) in ours:
+-                last_decide[(int(m.group(1)), m.group(3))] = m
+-            continue
+-        if "apex: exec t=" in ln:
+-            m = EXEC.search(ln)
+-            if m and int(m.group(1)) in ours:
+-                team, uid, kind, d, pick = int(m.group(1)), m.group(3), m.group(4), m.group(5), int(m.group(6))
+-                x, z = (int(m.group(9)), int(m.group(10))) if m.group(9) else (int(m.group(7)), int(m.group(8)))
+-                dm = last_decide.get((team, uid))
+-                rec = {"frame": f, "builder": m.group(2), "builderId": uid, "kind": kind, "pick": pick, "x": x, "z": z,
+-                       "used": False, "def": d, "team": team}
+-                last_exec[(team, uid)] = rec
+-                if dm and dm.group(4) == d:
+-                    rec.update({"v": float(dm.group(5)), "gain": float(dm.group(6)), "m": float(dm.group(7)),
+-                                "t": float(dm.group(8)), "nn": float(dm.group(9) or 1), "why": dm.group(10)})
+-                execs[(team, d)].append(rec)
+-            continue
+-        m = BUILD.search(ln)
+-        if m:
+-            builds.append(m.groups())
+-            end = max(end, int(m.group(2)))
+-            continue
+-        m = DEATH.search(ln)
+-        if m:
+-            deaths.append(m.groups())
+-            end = max(end, int(m.group(1)))
+-            continue
+-        m = PROD.search(ln)
+-        if m:
+-            prods.append(m.groups())
+-            end = max(end, int(m.group(2)))
+-            continue
+-        if "[BARAI_LIFE]" in ln:
+-            m = LIFE.search(ln)
+-            if m and int(m.group(2)) in ours:
+-                old = lives.get(m.group(3))
+-                if not (old and old[17] == "died"):     # a dead unit's real record outranks anything printed after it
+-                    lives[m.group(3)] = m.groups()
+-            end = max(end, int(m.group(1)) if m else end)
+-
+-    def founder(team, d, x, z, before):
+-        best, bd = None, MATCH_R
+-        for e in execs.get((team, d), []):
+-            if e["used"] or e["frame"] > before:
+-                continue
+-            dd = math.hypot(e["x"] - x, e["z"] - z)
+-            if dd < bd:
+-                best, bd = e, dd
+-        if best is not None:
+-            best["used"] = True
+-        return best
+-
+-    game = os.path.basename(mdir)
+-    # `mob` in BARAI_DEATH is mobileArmed, not mobility: building types are the ones decisions place
+-    placed_defs = {d for (team, d), lst in execs.items() if any(e["kind"] in BUILD_KINDS for e in lst)}
+-    assets = {}
+-    for team, f, d, c, x, z, uid in builds:
+-        team, f, c, x, z = int(team), int(f), float(c), int(x), int(z)
+-        if team not in ours or CON.search(d):
+-            continue
+-        assets[uid] = {"game": game, "team": team, "def": d, "cost": c, "x": x, "z": z, "finished": f, "ended": None,
+-                       "how": "standing", "killedM": 0.0, "armyM": 0.0}
+-    # our units the enemy killed, for a frame that died with no attacker named near them (a shell whose owner was
+-    # already gone, a frame left when its builder died)
+-    enemy_kills = [(int(f), int(x), int(z), ally.get(int(team))) for f, team, d, c, x, z, built, mob, at, atk, uid, atkid
+-                   in deaths if int(team) in ours and foe(int(team), at)]
+-    lost_frames = []
+-    for f, team, d, c, x, z, built, mob, at, atk, uid, atkid in deaths:
+-        team, f = int(team), int(f)
+-        if team in ours and built == "0" and d in placed_defs and uid not in assets:
+-            if friend(team, at):
+-                how = "own"
+-            elif foe(team, at):
+-                how = "enemy"
+-            elif any(ka == ally.get(team) and abs(kf - f) <= NEAR_KILL_F
+-                     and math.hypot(kx - int(x), kz - int(z)) <= NEAR_KILL_R for kf, kx, kz, ka in enemy_kills):
+-                how = "enemy"
+-            else:
+-                how = "decayed"
+-            lost_frames.append({"game": game, "team": team, "def": d, "cost": float(c), "frame": f, "uid": uid,
+-                                "x": int(x), "z": int(z), "by": atk, "own": friend(team, at), "frameHow": how,
+-                                "frameLost": True})
+-    # founders in the order things happened: an asset finished late must not take an earlier frame's decision
+-    order = [(a["finished"], "a", uid) for uid, a in assets.items()] + \
+-            [(lf["frame"], "f", i) for i, lf in enumerate(lost_frames)]
+-    order.sort(key=lambda t: t[0])
+-    for fr, k, key in order:
+-        r = assets[key] if k == "a" else lost_frames[key]
+-        r["decision"] = founder(r["team"], r["def"], r["x"], r["z"], fr)
+-        if r["decision"] is not None:
+-            r["decision"]["endFrame"] = fr
+-    for f, team, d, c, x, z, built, mob, at, atk, uid, atkid in deaths:
+-        f, team, c = int(f), int(team), float(c)
+-        if atkid in assets and foe(assets[atkid]["team"], team):
+-            assets[atkid]["killedM"] += c
+-        if uid in assets and team in ours:
+-            a = assets[uid]
+-            a["ended"] = f
+-            a["how"] = "reclaimed/self" if friend(team, at) else ("killed by " + atk)
+-    for team, f, unit, c, fac, facid in prods:
+-        if facid in assets and not BUILDER.search(unit):
+-            assets[facid]["armyM"] += float(c)
+-    died_at = {}
+-    for f, team, d, c, x, z, built, mob, at, atk, uid, atkid in deaths:
+-        if int(team) in ours:
+-            died_at[uid] = (int(f), atk)
+-
+-    # one job = a run of one builder's execs on the same def at the same site (re-elections re-issue it). It is open
+-    # from its first exec to the builder's next job, or to the frame or building it raised. A builder killed inside
+-    # that window (plus GRACE) died on the job; one killed later did not.
+-    out = []
+-    by_builder = defaultdict(list)
+-    for lst in execs.values():
+-        for e in lst:
+-            by_builder[e["builderId"]].append(e)
+-    sites = defaultdict(list)
+-    for a in assets.values():
+-        sites[(a["team"], a["def"])].append((a["x"], a["z"], a["finished"], a["ended"]))
+-    for lf in lost_frames:
+-        sites[(lf["team"], lf["def"])].append((lf["x"], lf["z"], lf["frame"], lf["frame"]))
+-    for bid, lst in by_builder.items():
+-        lst.sort(key=lambda e: e["frame"])
+-        runs = []
+-        for e in lst:
+-            if runs and runs[-1][-1]["def"] == e["def"] and \
+-                    math.hypot(runs[-1][-1]["x"] - e["x"], runs[-1][-1]["z"] - e["z"]) < MATCH_R:
+-                runs[-1].append(e)
+-            else:
+-                runs.append([e])
+-        bd = died_at.get(bid)
+-        for i, run in enumerate(runs):
+-            start = run[0]["frame"]
+-            nxt = runs[i + 1][0]["frame"] if i + 1 < len(runs) else end
+-            used = next((r for r in run if r["used"]), None)
+-            stop = min(nxt, used["endFrame"]) if (used is not None and "endFrame" in used) else nxt
+-            head = used if used is not None else run[0]
+-            head["jobEnd"] = stop
+-            head["builderCost"] = catalog_cost(head.get("builder", ""))
+-            if bd and start <= bd[0] <= stop + GRACE:
+-                head["diedOnJob"] = True
+-                head["killer"] = bd[1]
+-                head["diedAfterS"] = round((bd[0] - head["frame"]) / 30.0, 1)
+-            if used is not None or run[0]["kind"] not in BUILD_KINDS:
+-                continue
+-            e = run[0]
+-            # a join on a site that went up later, or a re-issue while one already stood, is not a job of its own
+-            if any(math.hypot(sx - e["x"], sz - e["z"]) < MATCH_R and
+-                   (fr >= start or (fr < start and (ended is None or ended > start)))
+-                   for sx, sz, fr, ended in sites.get((e["team"], e["def"]), [])):
+-                continue
+-            out.append({"game": game, "team": e["team"], "def": e["def"], "cost": e.get("m", 0.0), "x": e["x"],
+-                        "z": e["z"], "frame": start, "neverPlaced": True, "decision": head,
+-                        "reissued": len(run) - 1, "droppedAfterS": round((stop - start) / 30.0, 1),
+-                        "censored": (stop >= end - TRUNC) and not head.get("diedOnJob"),
+-                        "builderDied": bool(head.get("diedOnJob")), "builderKiller": head.get("killer")})
+-
+-    def fate(r):
+-        d = r.get("decision")
+-        r["builderDied"] = bool(d and d.get("diedOnJob"))
+-        if r["builderDied"]:
+-            r["builderKiller"] = d.get("killer")
+-
+-    def attach_life(r, uid):
+-        lv = lives.get(uid)
+-        if not lv:
+-            return
+-        r["dealtM"], r["takenM"] = float(lv[4]), float(lv[5])
+-        r["started"], r["prog"] = int(lv[6]), float(lv[8])
+-        r["bp"] = {"com": float(lv[9]), "con": float(lv[10]), "nano": float(lv[11]), "fac": float(lv[12])}
+-        r["madeM"], r["madeE"] = float(lv[15]), float(lv[16])
+-
+-    for uid, a in assets.items():
+-        fate(a)
+-        a["lifeMin"] = round(((a["ended"] if a["ended"] is not None else end) - a["finished"]) / 1800.0, 2)
+-        attach_life(a, uid)
+-        out.append(a)
+-    for lf in lost_frames:
+-        fate(lf)
+-        attach_life(lf, lf["uid"])
+-        if "prog" in lf:
+-            lf["spentM"] = round(lf["cost"] * lf["prog"], 1)
+-        out.append(lf)
+-    # what each builder's lathe went into (BARAI_LIFE gaveMobileM / gaveStaticM), one record per builder
+-    for uid, lv in lives.items():
+-        if BUILDER.search(lv[3]) and (float(lv[13]) > 0 or float(lv[14]) > 0):
+-            out.append({"game": game, "team": int(lv[1]), "def": lv[3], "builder": True, "uid": uid,
+-                        "gaveMobileM": float(lv[13]), "gaveStaticM": float(lv[14]),
+-                        "dealtM": float(lv[4]), "takenM": float(lv[5]), "end": lv[17]})
+-    if names:
+-        for r in out:
+-            r["_names"] = names
+-    return out
+-
+-
+-def summarize(rows):
+-    by = defaultdict(lambda: {"n": 0, "cost": 0.0, "killed": 0.0, "army": 0.0, "zero": 0, "died": 0, "life": 0.0,
+-                              "framesLost": 0, "framesM": 0.0, "dec": 0, "v": [], "why": defaultdict(int),
+-                              "never": 0, "neverDied": 0, "conDied": 0})
+-    for r in rows:
+-        if r.get("builder"):
+-            continue
+-        s = by[r["def"]]
+-        s["conDied"] += bool(r.get("builderDied"))
+-        if r.get("neverPlaced"):
+-            s["never"] += 1
+-            s["neverDied"] += bool(r.get("builderDied"))
+-            continue
+-        if r.get("frameLost"):
+-            s["framesLost"] += 1
+-            s["framesM"] += r["cost"]
+-            continue
+-        s["n"] += 1
+-        s["cost"] += r["cost"]
+-        s["killed"] += r["killedM"]
+-        s["army"] += r["armyM"]
+-        s["zero"] += r["killedM"] == 0
+-        s["died"] += r["ended"] is not None and not r["how"].startswith("reclaimed")
+-        s["life"] += r["lifeMin"]
+-        d = r.get("decision")
+-        if d:
+-            s["dec"] += 1
+-            if "v" in d:
+-                s["v"].append(d["v"])
+-            s["why"][d.get("why", "?")] += 1
+-    print("%-12s %6s %9s %7s %7s %6s %6s %6s %7s %7s %6s %s" % (
+-        "building", "built", "metal", "kill/m", "army/m", "kill0", "lost", "life", "frames", "never", "conDie",
+-        "top reasons"))
+-    for d, s in sorted(by.items(), key=lambda kv: -(kv[1]["cost"] + kv[1]["framesM"]))[:40]:
+-        if s["n"] + s["framesLost"] < 10:
+-            continue
+-        n = max(1, s["n"])
+-        why = ", ".join("%s %d" % kv for kv in sorted(s["why"].items(), key=lambda kv: -kv[1])[:3])
+-        print("%-12s %6d %9.0f %7.2f %7.2f %5.0f%% %5.0f%% %6.1f %7d %7d %6d %s" % (
+-            d, s["n"], s["cost"], s["killed"] / max(1, s["cost"]), s["army"] / max(1, s["cost"]),
+-            100 * s["zero"] / n, 100 * s["died"] / n, s["life"] / n, s["framesLost"], s["never"], s["conDied"], why))
++            by_topic[m and json.loads(m.group(1))["topic"]].append((json.loads(m.group(1)), p))
++    out = ["# Test results", "",
++           "One page per test batch, written by `python tools/ledger.py add` (CLAUDE.md). Results are ours, counted by",
++           "seat. W/L = decided games; w/l = time-capped games ahead/behind on income at the end. The code a batch ran",
++           "is on its page; uncommitted code is in `patches/`. This index is generated (`tools/ledger.py index`).", ""]
++    for topic in sorted(by_topic):
++        out += [f"## {topic}", "", "| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |",
++                "|---|---|---|---|---|---|---|"]
++        for m, p in sorted(by_topic[topic], key=lambda t: (t[0]["date"], t[1].name), reverse=True):
++            out.append(f"| {m['date']} | [{m['title']}]({p.relative_to(RESULTS).as_posix()}) | {m['games']} | "
++                       f"{m['W']}-{m['L']} | {m['w']}-{m['l']} | "
++                       f"{'x%.2f' % m['inc20'] if m.get('inc20') else '-'} | {m.get('verdict') or ''} |")
++        out.append("")
++    INDEX.write_text("\n".join(out), encoding="utf-8")
+ 
+ 
+ def main():
+     ap = argparse.ArgumentParser()
+-    ap.add_argument("dirs", nargs="+")
+-    ap.add_argument("--jsonl")
+-    a = ap.parse_args()
+-    games = []
+-    for d in a.dirs:
+-        games += [d] if os.path.exists(os.path.join(d, "infolog.txt")) else sorted(glob.glob(os.path.join(d, "matches", "*")))
+-    rows = []
+-    n = 0
+-    for g in games:
+-        r = read_game(g)
+-        if r:
+-            n += 1
+-            rows += r
+-    print("%d games, %d assets" % (n, len(rows)))
+-    summarize(rows)
+-    if a.jsonl:
+-        names = next((r.pop("_names") for r in rows if "_names" in r), None)
+-        with open(a.jsonl, "w", encoding="utf-8") as fh:
+-            fh.write(json.dumps({"schema": names}) + "\n")
+-            for r in rows:
+-                r.pop("_names", None)
+-                fh.write(json.dumps(r) + "\n")
+-        print("wrote", a.jsonl)
++    sub = ap.add_subparsers(dest="cmd", required=True)
++    a = sub.add_parser("add")
++    a.add_argument("--topic", required=True, help="folder under results/, e.g. release-gate, breach, gauntlet")
++    a.add_argument("--title", required=True)
++    a.add_argument("--purpose", required=True)
++    a.add_argument("--verdict", default="")
++    a.add_argument("--date", help="YYYY-MM-DD the batch ran (default today)")
++    a.add_argument("--us", default="Apex", help="substring of the spec whose results these are (default Apex)")
++    a.add_argument("--dry", action="store_true", help="print the page, write nothing")
++    a.add_argument("runs", nargs="+")
++    sub.add_parser("index")
++    args = ap.parse_args()
++    (add if args.cmd == "add" else index)(args)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/tools/run_match.py b/tools/run_match.py
+index 97726c53..03bf24c1 100644
+--- a/tools/run_match.py
++++ b/tools/run_match.py
+@@ -104,6 +104,20 @@ class AISpec:
+         return "-".join(bits)
+ 
+ 
++def _provenance(env, specs) -> dict:
++    """The code each AI ran (tools/provenance.py): a lane's deploy record, or the release folder's name."""
++    import provenance
++    out = {}
++    for s in specs:
++        if s.is_lua or s.label() in out:
++            continue
++        p = provenance.read(env.skirmish_dir(s.short_name, s.version))
++        if p is None and re.match(r"v\d", s.version or ""):
++            p = {"release": s.version}
++        out[s.label()] = p
++    return out
++
++
+ @dataclass
+ class MatchResult:
+     winners: list[int] = field(default_factory=list)
+@@ -1016,6 +1030,8 @@ def run(args) -> int:
+         },
+         "replay": demo.name if demo else None,
+         "stats": stats,
++        "provenance": _provenance(env, list(ais) + [s for s, _ in extras]),
++        "argv": sys.argv[1:],
+     }
+     (outdir / "result.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+ 
+diff --git a/tools/scenario.py b/tools/scenario.py
+index 48a07354..67a4badb 100644
+--- a/tools/scenario.py
++++ b/tools/scenario.py
+@@ -141,6 +141,8 @@ def launch(spec: dict, args, slot: int) -> tuple[subprocess.Popen, Path]:
+         cmd += ["--seed", str(args.seed)]
+     for kv in args.ai_option:
+         cmd += ["--ai-option", kv]
++    for kv in list(spec.get("enemy_options", [])) + args.enemy_option:
++        cmd += ["--ai-option-b", kv]
+     for kv in args.modoption:
+         cmd += ["--modoption", kv]
+     (out / "scenario.json").write_text(json.dumps(spec, indent=1), encoding="utf-8")
+@@ -323,6 +325,8 @@ def main() -> int:
+     r.add_argument("--seed", type=int)
+     r.add_argument("--parallel", type=int, default=1)
+     r.add_argument("--ai-option", action="append", default=[], metavar="K=V")
++    r.add_argument("--enemy-option", action="append", default=[], metavar="K=V",
++                   help="per-AI option for the enemy AI (also the spec's enemy_options list)")
+     r.add_argument("--modoption", action="append", default=[], metavar="K=V")
+     r.add_argument("--install-gadget", action="store_true")
+     j = sub.add_parser("judge")
+diff --git a/tools/provenance.py b/tools/provenance.py
+new file mode 100644
+index 00000000..1f761429
+--- /dev/null
++++ b/tools/provenance.py
+@@ -0,0 +1,76 @@
++"""What code a test ran (his 11-13: save the results, the commit they ran and every detail).
++
++capture() reads the repo: HEAD, branch, and the uncommitted work as one patch (tracked changes plus the untracked
++files under the AI, C++, gadget and scenario trees), saved once to results/patches/<sha>.patch so the exact code
++stays recoverable after the tree moves on. deploy_ai.py writes it beside every deployed variant as provenance.json;
++run_match.py copies each AI's into result.json. tools/ledger.py turns runs into results/ledger.md entries.
++"""
++from __future__ import annotations
++
++import hashlib
++import json
++import subprocess
++from datetime import datetime
++from pathlib import Path
++
++REPO = Path(__file__).resolve().parent.parent
++PATCHES = REPO / "results" / "patches"
++ROOTS = ("ai/Unstable", "cpp", "game-patches", "tools")
++FILE = "provenance.json"
++
++
++def _git(*args: str) -> str:
++    return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, encoding="utf-8",
++                          errors="replace").stdout
++
++
++def capture() -> dict:
++    head = _git("rev-parse", "HEAD").strip()
++    branch = _git("rev-parse", "--abbrev-ref", "HEAD").strip()
++    patch = _git("diff", "--binary", "HEAD", "--", *ROOTS)
++    untracked = [p for p in _git("ls-files", "--others", "--exclude-standard", "--", *ROOTS).splitlines() if p]
++    for p in sorted(untracked):
++        f = REPO / p
++        if f.is_file() and f.stat().st_size < 2_000_000:
++            patch += subprocess.run(["git", "diff", "--no-index", "--binary", "/dev/null", p], cwd=REPO,
++                                    capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
++    sha = hashlib.sha256(patch.encode("utf-8", "replace")).hexdigest()[:12] if patch else ""
++    if sha:
++        PATCHES.mkdir(parents=True, exist_ok=True)
++        out = PATCHES / f"{head[:10]}-{sha}.patch"
++        if not out.exists():
++            out.write_text(patch, encoding="utf-8")
++    return {"head": head, "branch": branch, "dirty": bool(patch), "diff_sha": sha,
++            "patch": f"results/patches/{head[:10]}-{sha}.patch" if sha else "",
++            "captured": datetime.now().isoformat(timespec="seconds")}
++
++
++def write(dirs, **extra) -> dict:
++    p = dict(capture(), **extra)
++    for d in dirs:
++        d = Path(d)
++        if d.is_dir():
++            (d / FILE).write_text(json.dumps(p, indent=2), encoding="utf-8")
++    return p
++
++
++def read(d) -> dict | None:
++    f = Path(d) / FILE
++    if f.is_file():
++        try:
++            return json.loads(f.read_text(encoding="utf-8"))
++        except ValueError:
++            return None
++    return None
++
++
++def label(p: dict | None) -> str:
++    if not p:
++        return "?"
++    if p.get("release"):
++        return p["release"]
++    return p["head"][:10] + ("+" + p["diff_sha"] if p.get("dirty") else "")
++
++
++if __name__ == "__main__":
++    print(json.dumps(capture(), indent=2))
+diff --git a/tools/scenarios/fortress2_arm.json b/tools/scenarios/fortress2_arm.json
+new file mode 100644
+index 00000000..d10faa91
+--- /dev/null
++++ b/tools/scenarios/fortress2_arm.json
+@@ -0,0 +1,222 @@
++{
++  "about": "The fortress our plain army cannot take (his 11-12: even more defence, no T3 army, we just crack the defence; fortress_arm fell to plain attacks on 11-13). Two gun lines, pop-up artillery behind them, heavy AA, no army, only economy behind. Resources topped up, LOS global. Wall gun metal 74070.",
++  "passes": "half the wall's gun metal dies before the time is up, and we lose less metal than we kill",
++  "map": "Comet Catcher Remake 1.8",
++  "seconds": 1500,
++  "commanders": "remove",
++  "enemy": "none",
++  "units": [
++    {
++      "side": 0,
++      "def": "armack",
++      "n": 6,
++      "at": [
++        "s0",
++        200,
++        0
++      ],
++      "spacing": 60,
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armalab",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        0
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armavp",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armap",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        -300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armfus",
++      "n": 2,
++      "at": [
++        "s0",
++        -500,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "cordoom",
++      "n": 6,
++      "at": [
++        "s1",
++        -1400,
++        0
++      ],
++      "spacing": 220,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corvipe",
++      "n": 8,
++      "at": [
++        "s1",
++        -1550,
++        0
++      ],
++      "spacing": 160,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corhlt",
++      "n": 12,
++      "at": [
++        "s1",
++        -1650,
++        0
++      ],
++      "spacing": 110,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "cordoom",
++      "n": 4,
++      "at": [
++        "s1",
++        -1050,
++        0
++      ],
++      "spacing": 300,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corhlt",
++      "n": 8,
++      "at": [
++        "s1",
++        -1150,
++        0
++      ],
++      "spacing": 160,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "cortoast",
++      "n": 4,
++      "at": [
++        "s1",
++        -850,
++        0
++      ],
++      "spacing": 350,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corflak",
++      "n": 8,
++      "at": [
++        "s1",
++        -1250,
++        0
++      ],
++      "spacing": 180,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "cormadsam",
++      "n": 6,
++      "at": [
++        "s1",
++        -950,
++        0
++      ],
++      "spacing": 240,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corgate",
++      "n": 3,
++      "at": [
++        "s1",
++        -1000,
++        0
++      ],
++      "spacing": 450,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corshroud",
++      "n": 1,
++      "at": [
++        "s1",
++        -800,
++        0
++      ],
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "corfus",
++      "n": 2,
++      "at": [
++        "s1",
++        -300,
++        0
++      ],
++      "spacing": 200,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "cormoho",
++      "n": 4,
++      "at": [
++        "s1",
++        -200,
++        300
++      ],
++      "spacing": 150,
++      "order": "hold"
++    }
++  ],
++  "expect": [
++    {
++      "lost_m1": [
++        ">=",
++        37035
++      ],
++      "lost_m0": [
++        "<=",
++        37035
++      ]
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/tools/scenarios/fortress2_cor.json b/tools/scenarios/fortress2_cor.json
+new file mode 100644
+index 00000000..3f87eeb7
+--- /dev/null
++++ b/tools/scenarios/fortress2_cor.json
+@@ -0,0 +1,222 @@
++{
++  "about": "The fortress our plain army cannot take (his 11-12: even more defence, no T3 army, we just crack the defence; fortress_cor fell to plain attacks on 11-13). Two gun lines, pop-up artillery behind them, heavy AA, no army, only economy behind. Resources topped up, LOS global. Wall gun metal 84525.",
++  "passes": "half the wall's gun metal dies before the time is up, and we lose less metal than we kill",
++  "map": "Comet Catcher Remake 1.8",
++  "seconds": 1500,
++  "commanders": "remove",
++  "enemy": "none",
++  "units": [
++    {
++      "side": 0,
++      "def": "corack",
++      "n": 6,
++      "at": [
++        "s0",
++        200,
++        0
++      ],
++      "spacing": 60,
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "coralab",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        0
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "coravp",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "corap",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        -300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "corfus",
++      "n": 2,
++      "at": [
++        "s0",
++        -500,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armanni",
++      "n": 6,
++      "at": [
++        "s1",
++        -1400,
++        0
++      ],
++      "spacing": 220,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armpb",
++      "n": 8,
++      "at": [
++        "s1",
++        -1550,
++        0
++      ],
++      "spacing": 160,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armhlt",
++      "n": 12,
++      "at": [
++        "s1",
++        -1650,
++        0
++      ],
++      "spacing": 110,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armanni",
++      "n": 4,
++      "at": [
++        "s1",
++        -1050,
++        0
++      ],
++      "spacing": 300,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armhlt",
++      "n": 8,
++      "at": [
++        "s1",
++        -1150,
++        0
++      ],
++      "spacing": 160,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armamb",
++      "n": 4,
++      "at": [
++        "s1",
++        -850,
++        0
++      ],
++      "spacing": 350,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armflak",
++      "n": 8,
++      "at": [
++        "s1",
++        -1250,
++        0
++      ],
++      "spacing": 180,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armmercury",
++      "n": 6,
++      "at": [
++        "s1",
++        -950,
++        0
++      ],
++      "spacing": 240,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armgate",
++      "n": 3,
++      "at": [
++        "s1",
++        -1000,
++        0
++      ],
++      "spacing": 450,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armveil",
++      "n": 1,
++      "at": [
++        "s1",
++        -800,
++        0
++      ],
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armfus",
++      "n": 2,
++      "at": [
++        "s1",
++        -300,
++        0
++      ],
++      "spacing": 200,
++      "order": "hold"
++    },
++    {
++      "side": 1,
++      "def": "armmoho",
++      "n": 4,
++      "at": [
++        "s1",
++        -200,
++        300
++      ],
++      "spacing": 150,
++      "order": "hold"
++    }
++  ],
++  "expect": [
++    {
++      "lost_m1": [
++        ">=",
++        42262
++      ],
++      "lost_m0": [
++        "<=",
++        42262
++      ]
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/tools/scenarios/fortress3_arm.json b/tools/scenarios/fortress3_arm.json
+new file mode 100644
+index 00000000..7c403bfa
+--- /dev/null
++++ b/tools/scenarios/fortress3_arm.json
+@@ -0,0 +1,253 @@
++{
++  "about": "A LIVE turtle behind the fortress (his 11-13: an AI that only makes defences; gauge how quickly we crack it). The wall of fortress2_arm belongs to the test turtle (our AI, no fighters, all spare to defence), with its economy, six T2 constructors and a lab, so it rebuilds, repairs and adds guns while we attack. Resources topped up, LOS global, no commanders. Wall gun metal at start 74070.",
++  "passes": "half the starting wall's gun metal dies before the time is up, and we lose less metal than we kill",
++  "map": "Comet Catcher Remake 1.8",
++  "seconds": 1500,
++  "commanders": "remove",
++  "enemy": "Apexstockf:lane-stockf:standard",
++  "enemy_options": [
++    "apex_test_turtle=1",
++    "apex_share_army=0",
++    "apex_army_spare=0",
++    "apex_share_defence=12",
++    "apex_share_airdef=4",
++    "apex_breach=0"
++  ],
++  "units": [
++    {
++      "side": 0,
++      "def": "armack",
++      "n": 6,
++      "at": [
++        "s0",
++        200,
++        0
++      ],
++      "spacing": 60,
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armalab",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        0
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armavp",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armap",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        -300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "armfus",
++      "n": 2,
++      "at": [
++        "s0",
++        -500,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "cordoom",
++      "n": 6,
++      "at": [
++        "s1",
++        -1400,
++        0
++      ],
++      "spacing": 220,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corvipe",
++      "n": 8,
++      "at": [
++        "s1",
++        -1550,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corhlt",
++      "n": 12,
++      "at": [
++        "s1",
++        -1650,
++        0
++      ],
++      "spacing": 110,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "cordoom",
++      "n": 4,
++      "at": [
++        "s1",
++        -1050,
++        0
++      ],
++      "spacing": 300,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corhlt",
++      "n": 8,
++      "at": [
++        "s1",
++        -1150,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "cortoast",
++      "n": 4,
++      "at": [
++        "s1",
++        -850,
++        0
++      ],
++      "spacing": 350,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corflak",
++      "n": 8,
++      "at": [
++        "s1",
++        -1250,
++        0
++      ],
++      "spacing": 180,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "cormadsam",
++      "n": 6,
++      "at": [
++        "s1",
++        -950,
++        0
++      ],
++      "spacing": 240,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corgate",
++      "n": 3,
++      "at": [
++        "s1",
++        -1000,
++        0
++      ],
++      "spacing": 450,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corshroud",
++      "n": 1,
++      "at": [
++        "s1",
++        -800,
++        0
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corfus",
++      "n": 2,
++      "at": [
++        "s1",
++        -300,
++        0
++      ],
++      "spacing": 200,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "cormoho",
++      "n": 4,
++      "at": [
++        "s1",
++        -200,
++        300
++      ],
++      "spacing": 150,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "corack",
++      "n": 6,
++      "at": [
++        "s1",
++        -400,
++        0
++      ],
++      "spacing": 60,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "coralab",
++      "n": 1,
++      "at": [
++        "s1",
++        -200,
++        -300
++      ],
++      "order": "ai"
++    }
++  ],
++  "expect": [
++    {
++      "lost_m1": [
++        ">=",
++        37035
++      ],
++      "lost_m0": [
++        "<=",
++        37035
++      ]
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/tools/scenarios/fortress3_cor.json b/tools/scenarios/fortress3_cor.json
+new file mode 100644
+index 00000000..856bba7f
+--- /dev/null
++++ b/tools/scenarios/fortress3_cor.json
+@@ -0,0 +1,253 @@
++{
++  "about": "A LIVE turtle behind the fortress (his 11-13: an AI that only makes defences; gauge how quickly we crack it). The wall of fortress2_cor belongs to the test turtle (our AI, no fighters, all spare to defence), with its economy, six T2 constructors and a lab, so it rebuilds, repairs and adds guns while we attack. Resources topped up, LOS global, no commanders. Wall gun metal at start 84525.",
++  "passes": "half the starting wall's gun metal dies before the time is up, and we lose less metal than we kill",
++  "map": "Comet Catcher Remake 1.8",
++  "seconds": 1500,
++  "commanders": "remove",
++  "enemy": "Apexstockf:lane-stockf:standard",
++  "enemy_options": [
++    "apex_test_turtle=1",
++    "apex_share_army=0",
++    "apex_army_spare=0",
++    "apex_share_defence=12",
++    "apex_share_airdef=4",
++    "apex_breach=0"
++  ],
++  "units": [
++    {
++      "side": 0,
++      "def": "corack",
++      "n": 6,
++      "at": [
++        "s0",
++        200,
++        0
++      ],
++      "spacing": 60,
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "coralab",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        0
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "coravp",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "corap",
++      "n": 1,
++      "at": [
++        "s0",
++        -200,
++        -300
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 0,
++      "def": "corfus",
++      "n": 2,
++      "at": [
++        "s0",
++        -500,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armanni",
++      "n": 6,
++      "at": [
++        "s1",
++        -1400,
++        0
++      ],
++      "spacing": 220,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armpb",
++      "n": 8,
++      "at": [
++        "s1",
++        -1550,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armhlt",
++      "n": 12,
++      "at": [
++        "s1",
++        -1650,
++        0
++      ],
++      "spacing": 110,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armanni",
++      "n": 4,
++      "at": [
++        "s1",
++        -1050,
++        0
++      ],
++      "spacing": 300,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armhlt",
++      "n": 8,
++      "at": [
++        "s1",
++        -1150,
++        0
++      ],
++      "spacing": 160,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armamb",
++      "n": 4,
++      "at": [
++        "s1",
++        -850,
++        0
++      ],
++      "spacing": 350,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armflak",
++      "n": 8,
++      "at": [
++        "s1",
++        -1250,
++        0
++      ],
++      "spacing": 180,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armmercury",
++      "n": 6,
++      "at": [
++        "s1",
++        -950,
++        0
++      ],
++      "spacing": 240,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armgate",
++      "n": 3,
++      "at": [
++        "s1",
++        -1000,
++        0
++      ],
++      "spacing": 450,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armveil",
++      "n": 1,
++      "at": [
++        "s1",
++        -800,
++        0
++      ],
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armfus",
++      "n": 2,
++      "at": [
++        "s1",
++        -300,
++        0
++      ],
++      "spacing": 200,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armmoho",
++      "n": 4,
++      "at": [
++        "s1",
++        -200,
++        300
++      ],
++      "spacing": 150,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armack",
++      "n": 6,
++      "at": [
++        "s1",
++        -400,
++        0
++      ],
++      "spacing": 60,
++      "order": "ai"
++    },
++    {
++      "side": 1,
++      "def": "armalab",
++      "n": 1,
++      "at": [
++        "s1",
++        -200,
++        -300
++      ],
++      "order": "ai"
++    }
++  ],
++  "expect": [
++    {
++      "lost_m1": [
++        ">=",
++        42262
++      ],
++      "lost_m0": [
++        "<=",
++        42262
++      ]
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/tools/scenarios/fortress_arm.json b/tools/scenarios/fortress_arm.json
+new file mode 100644
+index 00000000..7bb240ca
+--- /dev/null
++++ b/tools/scenarios/fortress_arm.json
+@@ -0,0 +1,28 @@
++{
++  "about": "DRAFT (his 11-12: even more defence, no T3 army, we just crack the defence). Our Armada T2 base faces a Cortex fortress line with no army behind it, only economy. Resources are topped up and LOS is global, so the only question is which tactic cracks the wall and how fast.",
++  "passes": "most of the fortress dies before the time is up, and we lose less metal than we kill",
++  "map": "Comet Catcher Remake 1.8",
++  "seconds": 900,
++  "commanders": "remove",
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "armack", "n": 6, "at": ["s0", 200, 0], "spacing": 60, "order": "ai"},
++    {"side": 0, "def": "armalab", "n": 1, "at": ["s0", -200, 0], "order": "ai"},
++    {"side": 0, "def": "armavp", "n": 1, "at": ["s0", -200, 300], "order": "ai"},
++    {"side": 0, "def": "armap", "n": 1, "at": ["s0", -200, -300], "order": "ai"},
++    {"side": 0, "def": "armfus", "n": 2, "at": ["s0", -500, 0], "spacing": 160, "order": "ai"},
++
++    {"side": 1, "def": "cordoom", "n": 4, "at": ["s1", -1400, 0], "spacing": 260, "order": "hold"},
++    {"side": 1, "def": "corvipe", "n": 6, "at": ["s1", -1500, 0], "spacing": 180, "order": "hold"},
++    {"side": 1, "def": "corhlt", "n": 8, "at": ["s1", -1300, 0], "spacing": 140, "order": "hold"},
++    {"side": 1, "def": "corflak", "n": 4, "at": ["s1", -1150, 0], "spacing": 300, "order": "hold"},
++    {"side": 1, "def": "cormadsam", "n": 3, "at": ["s1", -1100, 0], "spacing": 400, "order": "hold"},
++    {"side": 1, "def": "corgate", "n": 2, "at": ["s1", -1000, 0], "spacing": 500, "order": "hold"},
++    {"side": 1, "def": "corshroud", "n": 1, "at": ["s1", -900, 0], "order": "hold"},
++    {"side": 1, "def": "corfus", "n": 2, "at": ["s1", -300, 0], "spacing": 200, "order": "hold"},
++    {"side": 1, "def": "cormoho", "n": 4, "at": ["s1", -200, 300], "spacing": 150, "order": "hold"}
++  ],
++  "expect": [
++    {"lost_m1": [">=", 20000], "lost_m0": ["<=", 20000]}
++  ]
++}
+diff --git a/tools/scenarios/fortress_cor.json b/tools/scenarios/fortress_cor.json
+new file mode 100644
+index 00000000..507a2ecc
+--- /dev/null
++++ b/tools/scenarios/fortress_cor.json
+@@ -0,0 +1,28 @@
++{
++  "about": "DRAFT (his 11-12: even more defence, no T3 army, we just crack the defence). Our Cortex T2 base faces an Armada fortress line with no army behind it, only economy. Resources are topped up and LOS is global, so the only question is which tactic cracks the wall (tactical missiles, Behemoths, LRPC, bombers on the AA first) and how fast.",
++  "passes": "most of the fortress dies before the time is up, and we lose less metal than we kill",
++  "map": "Comet Catcher Remake 1.8",
++  "seconds": 900,
++  "commanders": "remove",
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "corack", "n": 6, "at": ["s0", 200, 0], "spacing": 60, "order": "ai"},
++    {"side": 0, "def": "coralab", "n": 1, "at": ["s0", -200, 0], "order": "ai"},
++    {"side": 0, "def": "coravp", "n": 1, "at": ["s0", -200, 300], "order": "ai"},
++    {"side": 0, "def": "corap", "n": 1, "at": ["s0", -200, -300], "order": "ai"},
++    {"side": 0, "def": "corfus", "n": 2, "at": ["s0", -500, 0], "spacing": 160, "order": "ai"},
++
++    {"side": 1, "def": "armanni", "n": 4, "at": ["s1", -1400, 0], "spacing": 260, "order": "hold"},
++    {"side": 1, "def": "armpb", "n": 6, "at": ["s1", -1500, 0], "spacing": 180, "order": "hold"},
++    {"side": 1, "def": "armhlt", "n": 8, "at": ["s1", -1300, 0], "spacing": 140, "order": "hold"},
++    {"side": 1, "def": "armflak", "n": 4, "at": ["s1", -1150, 0], "spacing": 300, "order": "hold"},
++    {"side": 1, "def": "armmercury", "n": 3, "at": ["s1", -1100, 0], "spacing": 400, "order": "hold"},
++    {"side": 1, "def": "armgate", "n": 2, "at": ["s1", -1000, 0], "spacing": 500, "order": "hold"},
++    {"side": 1, "def": "armveil", "n": 1, "at": ["s1", -900, 0], "order": "hold"},
++    {"side": 1, "def": "armfus", "n": 2, "at": ["s1", -300, 0], "spacing": 200, "order": "hold"},
++    {"side": 1, "def": "armmoho", "n": 4, "at": ["s1", -200, 300], "spacing": 150, "order": "hold"}
++  ],
++  "expect": [
++    {"lost_m1": [">=", 20000], "lost_m0": ["<=", 20000]}
++  ]
++}
+diff --git a/tools/surrogate.py b/tools/surrogate.py
+new file mode 100644
+index 00000000..15dccadd
+--- /dev/null
++++ b/tools/surrogate.py
+@@ -0,0 +1,74 @@
++"""Can a model learn how our tunables move the outcome? Cross-validated surrogates.
++
++    python tools/surrogate.py tournaments/ecoclimb-eco4/data.json
++
++Each ecoclimb round played 8 games on one cell (seed, handicap, faction); the
++target of a non-incumbent game is its ln(economy) minus the mean of that round's
++incumbent games, so the cell's luck cancels and what is left is what the knob
++changes did. Features are the 42 knobs in [0,1] knob space (ecoclimb.to_u).
++Models are scored on ROUNDS THEY NEVER SAW (GroupKFold by round): R^2 and the
++correlation of prediction with truth. A model that cannot beat "the knobs do
++nothing" on held-out rounds has learned noise.
++"""
++import json
++import sys
++
++import numpy as np
++from sklearn.ensemble import HistGradientBoostingRegressor
++from sklearn.linear_model import Ridge
++from sklearn.model_selection import GroupKFold
++from sklearn.neural_network import MLPRegressor
++from sklearn.pipeline import make_pipeline
++from sklearn.preprocessing import PolynomialFeatures, StandardScaler
++
++
++def load(path):
++    rows = json.load(open(path, encoding="utf-8"))
++    base = {}
++    for r in rows:
++        if r["kind"] == "inc":
++            base.setdefault(r["round"], []).append(r["y"])
++    X, y, g, inc_u = [], [], [], {}
++    for r in rows:
++        if r["kind"] == "inc":
++            inc_u[r["round"]] = r["u"]
++    for r in rows:
++        if r["kind"] == "inc" or r["round"] not in base:
++            continue
++        X.append(r["u"])
++        y.append(r["y"] - sum(base[r["round"]]) / len(base[r["round"]]))
++        g.append(r["round"])
++    return np.array(X), np.array(y), np.array(g)
++
++
++def main():
++    X, y, g = load(sys.argv[1])
++    print(f"{len(y)} non-baseline games in {len(set(g))} rounds; target sd {y.std():.3f}")
++    models = {
++        "zero (knobs do nothing)": None,
++        "linear (ridge)": make_pipeline(StandardScaler(), Ridge(alpha=30.0)),
++        "linear + squares": make_pipeline(PolynomialFeatures(2, interaction_only=False, include_bias=False),
++                                          StandardScaler(), Ridge(alpha=300.0)),
++        "boosted trees": HistGradientBoostingRegressor(max_depth=3, learning_rate=0.05, max_iter=200,
++                                                       l2_regularization=1.0),
++        "neural net 32x16": make_pipeline(StandardScaler(), MLPRegressor(hidden_layer_sizes=(32, 16), alpha=1.0,
++                                                                          max_iter=3000, random_state=0)),
++    }
++    cv = GroupKFold(n_splits=5)
++    for name, m in models.items():
++        pred = np.zeros_like(y)
++        for tr, te in cv.split(X, y, g):
++            if m is None:
++                pred[te] = 0.0
++            else:
++                m.fit(X[tr], y[tr])
++                pred[te] = m.predict(X[te])
++        ss = ((y - pred) ** 2).sum()
++        r2 = 1.0 - ss / ((y - y.mean()) ** 2).sum()
++        corr = np.corrcoef(pred, y)[0, 1] if pred.std() > 0 else 0.0
++        print(f"  {name:26s} held-out R^2 {r2:+.3f}   corr {corr:+.3f}")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())

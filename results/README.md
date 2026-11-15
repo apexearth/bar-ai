@@ -1,0 +1,99 @@
+# Test results
+
+One page per test batch, written by `python tools/ledger.py add` (CLAUDE.md). Results are ours, counted by
+seat. W/L = decided games; w/l = time-capped games ahead/behind on income at the end. The code a batch ran
+is on its page; uncommitted code is in `patches/`. This index is generated (`tools/ledger.py index`).
+
+## air
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | [Escort fly-home ON vs v0.5.11 (esc3)](air/2026-11-14-escort-fly-home-on-vs-v0-5-11-esc3.md) | 24 | 3-2 | 12-7 | x1.01 |  |
+| 2026-11-14 | [Escort fly-home on HOLD POSITION ON vs v0.5.11 (esc4)](air/2026-11-14-escort-fly-home-on-hold-position-on-vs-v0-5-11-esc4.md) | 24 | 3-2 | 5-14 | x1.07 |  |
+| 2026-11-14 | [Escort fly-home on HOLD POSITION OFF vs v0.5.11 (esc4)](air/2026-11-14-escort-fly-home-on-hold-position-off-vs-v0-5-11-esc4.md) | 24 | 1-3 | 11-9 | x1.02 |  |
+| 2026-11-14 | [Escort fly-home OFF vs v0.5.11 (esc3)](air/2026-11-14-escort-fly-home-off-vs-v0-5-11-esc3.md) | 24 | 0-4 | 8-12 | x0.87 |  |
+
+## army
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | [Am I protected: army row scaled by their force over ours (apex_protect 1 vs 0)](army/2026-11-14-am-i-protected-army-row-scaled-by-their-force-over-ours-apex.md) | 8 | 2-0 | 5-1 | x1.86 | Inconclusive: an A/A. The multiplier rose above 1 on 2 of 480 log lines; in these games we always out-held what we saw (ratio 0.03-0.9). Needs games where we are outgunned, or a reading of their force we are not seeing. |
+
+## constructors
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | [Spare hands subtract from the con floor (apex_con_spare 1 vs 0)](constructors/2026-11-14-spare-hands-subtract-from-the-con-floor-apex-con-spare-1-vs-.md) | 16 | 0-2 | 5-9 | x0.87 | Mechanism did not bite: con-floor orders were not lower with it on (389 vs 256, 279 vs 242) and our cons rose (median 257 vs 101 Legion, 188 vs 104 normal); results favoured on (built ratio 1.12 vs 0.56 Legion, 1.09 vs 0.89 normal) but with the floor unchanged that is game noise. The floor's need is 200-400 a seat on 2x income: SpotHandsOwed (43-82 open spots) x the con net's floor multiplier 5.4-5.6 (trust=1; the rule is 2.5). Next: spots counted, not multiplied (apex_con_spot_count). |
+| 2026-11-14 | [Open-spot hands counted, not multiplied (apex_con_spot_count 1 vs 0)](constructors/2026-11-14-open-spot-hands-counted-not-multiplied-apex-con-spot-count-1.md) | 16 | 2-1 | 6-7 | x1.21 | Small, same direction in both: our cons 237 vs 265 (Legion), 88 vs 101 (normal); army share 45% vs 40%, 40% vs 33%; built ratio 1.40 vs 1.21, 0.98 vs 0.83. The floor's need fell to 5-32 later in the game, but HandsShort was still multiplied and the floor still ordered most cons (legck 102, legca 65 a seat); spare hands read up to 119. Next: HandsShort unscaled too (hcL/hcN). |
+| 2026-11-14 | [Hands short and spot hands both counted, not multiplied (apex_con_spot_count 1 vs 0, second form)](constructors/2026-11-14-hands-short-and-spot-hands-both-counted-not-multiplied-apex-.md) | 16 | 2-3 | 7-4 | x1.17 | Con-floor orders fell 30% (935 vs 1,335 over the 8 pairs, lower in 6). Army share 48% vs 42% (Legion), 40% vs 33% (normal); built ratio 0.90 vs 1.16 (Legion; one rc game lost early), 1.13 vs 1.10 (normal). Standing cons did not fall (they follow the economy). Found: the floor runs twice -- ground labs count only walkers, the air plant only flyers -- so each side fills the whole need, and the walker floor never subtracted spare hands. Spare hands now by kind; the double floor is his call. |
+| 2026-11-14 | [Constructor floors held under the fleet cap (apex_con_floor_cap 1 vs 0)](constructors/2026-11-14-constructor-floors-held-under-the-fleet-cap-apex-con-floor-c.md) | 8 | 0-0 | 1-7 | x0.89 | Not kept as is. Cap on: built ratio median 0.84 vs 1.06 off, kill margin -15.8k vs +7.2k, our cons median 87 vs 136 -- still 2x over the cap of 40, so the floors are not the only path, and on Red Comet both cap-on games fell well behind. 4 pairs is noise-level, but nothing here says the cap helps. |
+
+## gauntlet
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-13 | [Gauntlet: candidate vs wrd, bonus 50v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-wrd-bonus-50v50-us-v-them.md) | 4 | 2-0 | 0-2 | x0.76 |  |
+| 2026-11-13 | [Gauntlet: candidate vs wrd, bonus 0v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-wrd-bonus-0v50-us-v-them.md) | 4 | 0-4 | 0-0 | x0.04 |  |
+| 2026-11-13 | [Gauntlet: candidate vs wrd, bonus 0v0 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-wrd-bonus-0v0-us-v-them.md) | 4 | 0-2 | 1-1 | x0.45 |  |
+| 2026-11-13 | [Gauntlet: candidate vs turtle, bonus 50v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-turtle-bonus-50v50-us-v-them.md) | 4 | 0-0 | 3-1 | x0.91 |  |
+| 2026-11-13 | [Gauntlet: candidate vs turtle, bonus 0v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-turtle-bonus-0v50-us-v-them.md) | 4 | 0-4 | 0-0 | x0.25 |  |
+| 2026-11-13 | [Gauntlet: candidate vs turtle, bonus 0v0 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-turtle-bonus-0v0-us-v-them.md) | 4 | 1-0 | 2-1 | x1.02 |  |
+| 2026-11-13 | [Gauntlet: candidate vs r511, bonus 50v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-r511-bonus-50v50-us-v-them.md) | 4 | 1-1 | 0-2 | x0.74 |  |
+| 2026-11-13 | [Gauntlet: candidate vs r511, bonus 0v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-r511-bonus-0v50-us-v-them.md) | 4 | 0-4 | 0-0 | x0.03 |  |
+| 2026-11-13 | [Gauntlet: candidate vs r511, bonus 0v0 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-r511-bonus-0v0-us-v-them.md) | 4 | 0-0 | 2-2 | x0.91 |  |
+| 2026-11-13 | [Gauntlet: candidate vs r409, bonus 50v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-r409-bonus-50v50-us-v-them.md) | 4 | 2-0 | 1-1 | x1.24 |  |
+| 2026-11-13 | [Gauntlet: candidate vs r409, bonus 0v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-r409-bonus-0v50-us-v-them.md) | 4 | 0-4 | 0-0 | x0.13 |  |
+| 2026-11-13 | [Gauntlet: candidate vs r409, bonus 0v0 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-r409-bonus-0v0-us-v-them.md) | 4 | 0-0 | 2-2 | x1.16 |  |
+| 2026-11-13 | [Gauntlet: candidate vs barb, bonus 50v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-barb-bonus-50v50-us-v-them.md) | 4 | 2-2 | 0-0 | x1.74 |  |
+| 2026-11-13 | [Gauntlet: candidate vs barb, bonus 0v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-barb-bonus-0v50-us-v-them.md) | 4 | 0-2 | 0-2 | x0.36 |  |
+| 2026-11-13 | [Gauntlet: candidate vs barb, bonus 0v0 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-barb-bonus-0v0-us-v-them.md) | 4 | 1-1 | 2-0 | x1.50 |  |
+
+## randomizer
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-14 | [T3 rolls with the lab-class fix (rnd7)](randomizer/2026-11-14-t3-rolls-with-the-lab-class-fix-rnd7.md) | 5 | 0-0 | 5-0 | x21.16 | No freeze in 5 (built 92k-321k vs v0.5.11 6k-11k), but army 2-6% of spend in the four T3 rolls. One roll gave corvacct a cost of 1 metal: 1,537-1,664 of them a seat. Randomizer-only; not chased further today. |
+| 2026-11-14 | [T3 freeze seeds rerun after the first site-odds attempt (rnd4)](randomizer/2026-11-14-t3-freeze-seeds-rerun-after-the-first-site-odds-attempt-rnd4.md) | 4 | 0-0 | 1-3 | x0.93 | Still frozen in 4 of 4: the counter never fired (the dead task keeps its asked position, so the no-position test missed it). Redone on 'died before its frame stood' with a 30 s x (1+n) run; rnd5 reruns. |
+| 2026-11-14 | [T3 freeze seeds after the started-or-not site odds (rnd5)](randomizer/2026-11-14-t3-freeze-seeds-after-the-started-or-not-site-odds-rnd5.md) | 4 | 1-0 | 2-1 | x2.71 | Cortex fixed: 114.7k and 99.0k built vs v0.5.11's 5.4k and 11.8k. Armada still frozen in 2 of 2: every Armada T3 plant (armshltx, armhaap, armhalab, armhavp) refused as a dead end in all four facings; site odds fell to 0.02 but there is nothing placeable to switch to. Next: DoorEscapes does not refuse when the unit cannot leave home either (rnd6). |
+| 2026-11-14 | [First BaRandom batch (v34, pinned 4f3a820a)](randomizer/2026-11-14-first-barandom-batch-v34-pinned-4f3a820a.md) | 8 | 1-3 | 2-2 | x0.60 | Three of three T3 rolls (all Cortex) froze both AIs for 25 min: the commander re-elected one unplaceable plant 1,700-2,800 times (underwater gantry on land: PlantClass missed minWaterDepth; experimental aircraft plant: C++ DoorEscapes refused a flyer plant as a dead end, 1,088 times). Fixed both; rnd2 reruns the seeds. T1/T2 rolls opened air more often than ground (armap 19 vs armlab 4; armaap 32-46 vs armalab 13-27). |
+| 2026-11-14 | [BaRandom Legion, double income (his 11-14 game's settings)](randomizer/2026-11-14-barandom-legion-double-income-his-11-14-game-s-settings.md) | 8 | 4-2 | 0-2 | x1.37 | No air opener in 8. Both water-gantry T3 rolls froze v0.5.11 (4.9k, 5.4k built) and not ours (103k, 46k). One T3 roll (leghalab) put 1% of spend into army: 479 Infestors, which are assault bots that are also builders (build only themselves), ordered as constructors at gain 34k-66k; v0.5.11 the same with 1,157. His own game's glut was air cons (legca 122-134 per seat) from the con floor at need ~98 = rule need ~30 x TUNE_CON_RULE 2.5. |
+| 2026-11-14 | [BaRandom after the water-plant and flyer-door fixes (rnd2 same seeds, rnd3 new)](randomizer/2026-11-14-barandom-after-the-water-plant-and-flyer-door-fixes-rnd2-sam.md) | 16 | 8-1 | 2-5 | x1.00 | Water fix works: where v0.5.11 still opened the underwater gantry and built ~6k all game, ours opened the land gantry and built 26.8k and 43.8k. Still frozen: corhaap (dead-end refusals continue, its largest unit is not a flyer under the randomizer) and armshltx (no site found within 1600 on Comet Catcher / Carrot). Next: plants priced at their odds of finding a site, 1/(1+no-site deaths). One T1 roll opened air on all four seats (gains 5.9 air vs 5.9-8.0 ground; the ground lab's army half was 1.5 m/s). |
+| 2026-11-14 | [Armada T3 freeze after DoorEscapes reads home (rnd6)](randomizer/2026-11-14-armada-t3-freeze-after-doorescapes-reads-home-rnd6.md) | 2 | 0-0 | 2-0 | x100.84 | Fixed: 297k and 327k built vs v0.5.11's 5.8k and 5.1k. But army 1-2% of spend: 8-9 T3 bot labs a seat that made only constructors -- the roll gave armhalab a flying con, PlantClass called it an air plant, and its army half read the strike net (0). Next: a lab with ground combat stays ground (rnd7). |
+
+## release-gate
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-15 | [v0.5.12 arm po0: bombers press-on off](release-gate/2026-11-15-v0-5-12-arm-po0-bombers-press-on-off.md) | 12 | 0-3 | 5-4 | x0.68 | worse than rc3 on the same seeds: contract FAIL, won or ahead 0.33 vs rc3 0.67; press-on stays on |
+| 2026-11-15 | [v0.5.12 arm bc0: bare T2-con floor off](release-gate/2026-11-15-v0-5-12-arm-bc0-bare-t2-con-floor-off.md) | 12 | 0-0 | 3-9 | x0.95 | worse than rc3 on the same seeds: contract FAIL on income at 20 (median seat 105 vs 143), ahead 0.50 vs rc3 0.67; the floor stays on |
+| 2026-11-14 | [Side-A start control: v0.5.11 vs v0.5.11 on the package seeds (aa1)](release-gate/2026-11-14-side-a-start-control-v0-5-11-vs-v0-5-11-on-the-package-seeds.md) | 12 | 0-0 | 6-6 | x0.89 | Side A reads income at 20 x0.89, ahead 6 / behind 6, built at 20 0.97. So of the candidate's x0.78 (ahead 3, behind 7-8, built 0.92) about x0.88 is real: a ~10% early-economy regression from changes older than 11-14. Bisect next: v0.5.12 as deployed 11-14 morning (v512), candidate with apex_air_hold_home 0 (hh1). |
+| 2026-11-14 | [Candidate with the first night fixes (pkg2, partial 6 of 12, stopped for a newer build)](release-gate/2026-11-14-candidate-with-the-first-night-fixes-pkg2-partial-6-of-12-st.md) | 6 | 0-1 | 3-2 | x1.10 | Stopped at 6 games to deploy the second round (crew one number, keep on draw, press-on, nuke guess, bare-hands floor). Read the contract table below as a partial. |
+| 2026-11-14 | [Candidate with every 11-14 switch off vs v0.5.11 (pkg0)](release-gate/2026-11-14-candidate-with-every-11-14-switch-off-vs-v0-5-11-pkg0.md) | 12 | 1-1 | 3-7 | x0.78 | Same lag: income at 20 x0.78, behind 7, ahead 3. Today's switches are not the cause; by game end they helped (built ratio higher in most pairs, e.g. 1.65 vs 0.31, 1.92 vs 0.62). Behind from minute 10 (built 0.92, eco 0.92; cons 0.75 and T2 mex 0.74 at 20). Not the net (lane runs v0.5.11's), not ally-key (0 asks). aa1 runs v0.5.11 vs itself on these seeds to test the side-A start. |
+| 2026-11-14 | [Candidate package vs v0.5.11, all 11-14 switches at default (pkg1)](release-gate/2026-11-14-candidate-package-vs-v0-5-11-all-11-14-switches-at-default-p.md) | 12 | 0-1 | 3-8 | x0.78 | Behind: income at 20 min x0.78, lost 1, ahead 3, behind 8 at time; kills about even (+1.6k a game); end-of-game built ratio median 0.96. pkg0 reruns the same seeds with every 11-14 switch off to tell today's changes from older ones. |
+| 2026-11-13 | [v0.5.12 candidate vs v0.5.11 (512g, paid-the-wall breach)](release-gate/2026-11-13-v0-5-12-candidate-vs-v0-5-11-512g-paid-the-wall-breach.md) | 48 | 6-13 | 8-21 | x0.82 | Worst of the day; the breach was on in 29% of ordinary-game readings. Breach removed after this. |
+| 2026-11-13 | [v0.5.12 candidate vs v0.5.11 (512b, first breach)](release-gate/2026-11-13-v0-5-12-candidate-vs-v0-5-11-512b-first-breach.md) | 48 | 4-9 | 13-22 | x0.92 | Behind v0.5.11. |
+| 2026-11-13 | [v0.5.12 candidate, stricter breach, vs v0.5.11 (512f)](release-gate/2026-11-13-v0-5-12-candidate-stricter-breach-vs-v0-5-11-512f.md) | 48 | 6-10 | 14-18 | x0.94 | Breach on in 5 of 96 seats; behind v0.5.11. |
+| 2026-11-13 | [v0.5.12 candidate (breach removed) vs v0.5.11 (512h)](release-gate/2026-11-13-v0-5-12-candidate-breach-removed-vs-v0-5-11-512h.md) | 16 | 2-2 | 5-7 | x0.87 |  |
+| 2026-11-13 | [v0.5.12 candidate, breach off, vs v0.5.11 (512c)](release-gate/2026-11-13-v0-5-12-candidate-breach-off-vs-v0-5-11-512c.md) | 48 | 10-8 | 13-17 | x1.10 | The breach was the main cost; with it off the candidate is slightly ahead. |
+
+## v0512
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-15 | [wr1: pkg4 + apex_wing_rule=1 (the net may not flip the bomber rule's WAIT)](v0512/2026-11-15-wr1-pkg4-apex-wing-rule-1-the-net-may-not-flip-the-bomber-ru.md) | 12 | 3-0 | 4-5 | x1.07 | contract PASS; 3 games won vs pkg4's 0 (1 lost), ahead 0.50; bomber kill per bomber lost 143 vs pkg4's 221; inconclusive, stays off |
+| 2026-11-15 | [ss2: pkg3 + strategic slot (apex_super_slot=1)](v0512/2026-11-15-ss2-pkg3-strategic-slot-apex-super-slot-1.md) | 12 | 2-0 | 5-5 | x1.00 | contract PASS, ahead 0.67 (8 of 12), T2->1st moho 4.18 vs 4.89; super_slot becomes the default |
+| 2026-11-15 | [rc3: v0.5.12 candidate, super push yields to upgrades, vs v0.5.11](v0512/2026-11-15-rc3-v0-5-12-candidate-super-push-yields-to-upgrades-vs-v0-5-.md) | 20 | 2-1 | 10-7 | x1.40 | Contract PASS (recorded). t2->4th moho 6.63 vs the release's 7.00 (rc2 7.57 vs 6.47); supers on the first T2 con 5/36 (rc2 11/34); income at 20 per seat x1.22 (rc2 x0.70); won or ahead 0.60. Contract instrument fixes this batch: anomaly regime keyed by map (Full Metal Plate has no release normal yet, skipped) and beaten seats dropped; ledger now feeds the detector our seats; wiped bomber runs as a share of runs (margin 0.15 = the release's own 0.40-0.57 spread); peak constructors by mean (a median fell between map clusters). Lone T2 con minutes 1.56 vs 0.67, inside the margin. |
+| 2026-11-15 | [rc2: v0.5.12 release candidate (reviewer fixes, wing rule off) vs v0.5.11](v0512/2026-11-15-rc2-v0-5-12-release-candidate-reviewer-fixes-wing-rule-off-v.md) | 20 | 2-1 | 4-13 | x0.76 | Contract FAIL on t2->4th moho: ours 7.57 min vs the release's 6.47 (margin 1.0); Carrot Mountains 7.78 vs 5.27. Cause: decide.as super push sent home-crew T2 cons to anti-nukes / long-range guns over upgrades priced 20x higher (rc2-v0-cm2-C9502 t0: corfmd v=2.4 over mexup v=52.8); its yield to upgrades lived under apex_t2_eco (off) and field hands only. Fixed 11-15 (validation row 106), re-run as rc3. Won or ahead 0.55. |
+| 2026-11-15 | [rc1: candidate with apex_wing_rule on by default](v0512/2026-11-15-rc1-candidate-with-apex-wing-rule-on-by-default.md) | 12 | 1-0 | 4-7 | x0.97 | contract FAIL: ahead 0.33, t2->4th moho 7.65 vs 6.58; with wr1, 24 games ahead 0.42: wing rule left off |
+| 2026-11-15 | [pkg4: v0.5.12 candidate (bare T2 floor, press-on fix) vs v0.5.11](v0512/2026-11-15-pkg4-v0-5-12-candidate-bare-t2-floor-press-on-fix-vs-v0-5-11.md) | 12 | 0-1 | 6-5 | x0.89 | contract PASS (recorded c494a6f08c-afccf8f64262); lone T2 con minutes 0.26 vs 0.58; turned back 0; near-done strips 8.7 vs 88.6; ahead 0.50; built x1.05 at 30 |
+| 2026-11-15 | [pkg3: every v0.5.12 fix vs v0.5.11](v0512/2026-11-15-pkg3-every-v0-5-12-fix-vs-v0-5-11.md) | 12 | 3-0 | 4-5 | x1.38 | contract FAIL: T2->1st moho 5.10 vs 4.35 min; ahead 0.58. Near-done strips 7 vs 74, early T2 gifts 0 vs 0.42 |
+| 2026-11-15 | [esc1: pkg3 + priced bomber escort (apex_air_escort_priced=1)](v0512/2026-11-15-esc1-pkg3-priced-bomber-escort-apex-air-escort-priced-1.md) | 12 | 2-1 | 3-6 | x1.23 | contract FAIL: wiped runs 2.00 vs 1.33, T2->1st moho 4.20 vs 3.65; ahead 0.50; stays off |
+
+## wrdistilled
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-13 | [v0.5.12 candidate vs WRDistilled 0.3, +50 both, 2v2](wrdistilled/2026-11-13-v0-5-12-candidate-vs-wrdistilled-0-3-50-both-2v2.md) | 20 | 18-0 | 2-0 | x2.47 | No loss of ground: the weak gauntlet cell was the eager-breach build and 4 games. |
+| 2026-11-13 | [v0.5.11 vs WRDistilled 0.3, +50 both, 2v2](wrdistilled/2026-11-13-v0-5-11-vs-wrdistilled-0-3-50-both-2v2.md) | 22 | 20-0 | 2-0 | x2.06 | No: v0.5.11 beats WRDistilled at +50. |
+| 2026-11-09 | [Candidate vs WRDistilled 0.3, +50 both, Cortex 2v2 (dfillwrd-b)](wrdistilled/2026-11-09-candidate-vs-wrdistilled-0-3-50-both-cortex-2v2-dfillwrd-b.md) | 24 | 17-2 | 4-1 | x1.20 |  |
+| 2026-11-09 | [Candidate vs WRDistilled 0.3, +50 both, Cortex 2v2 (dfillwrd-a)](wrdistilled/2026-11-09-candidate-vs-wrdistilled-0-3-50-both-cortex-2v2-dfillwrd-a.md) | 24 | 14-2 | 3-5 | x1.02 |  |

@@ -478,6 +478,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	bool longestLandDumb = false;
 	int intercept = 0;  // S7: the raw GetInterceptor, logged once per def below
 	bool hasZeroRangeWpn = false;
+	float paralyzerRange = 0.f;  // apex: the longest paralyzer weapon, the reach of a launcher no category below names
 	CWeaponDef* bestDGunDef = nullptr;
 	CWeaponDef* bestWpDef = nullptr;
 	WeaponMount* bestDGunMnt = nullptr;
@@ -711,6 +712,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		} else {
 			hasZeroRangeWpn = true;
 		}
+		if (wd->IsParalyzer()) {
+			paralyzerRange = std::max(paralyzerRange, range);
+		}
 		// apex: a weapon that only answers a fire COMMAND (D-gun, nuke, Juno) or
 		// that only hits projectiles (antinuke) never shoots a unit walking past,
 		// so its range is not reach. @see GetAutoRange.
@@ -834,6 +838,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	}
 
 	isDumbFire = longestLandDumb;
+	// apex: A PARALYZER WHOSE ONLY TARGETS ARE ITS OWN CATEGORY (the EMP launcher armemp targets EMPABLE) matched none
+	// of the land/air/water categories above, so its reach read 0: never sited, and CSuperTask::AimLauncher's pool (in
+	// range of 0) was always empty (11-13 fortress scenario: "outranged(r0<=line620)"). Its paralyzer is its land reach.
+	if ((GetMaxRange() <= 0.f) && (paralyzerRange > 0.f)) {
+		maxRange[static_cast<RangeT>(RangeType::LAND)] = paralyzerRange;
+		maxRangeType = RangeType::LAND;
+	}
 	if (hasZeroRangeWpn && (minRange == std::numeric_limits<float>::max())) {
 		minRange = 0.f;
 	}

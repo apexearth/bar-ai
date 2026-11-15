@@ -1,5 +1,11 @@
 namespace Market {
 
+// The TEST turtle (apex_test_turtle; todo/break-the-front.md): its plants make constructors and nothing that fights.
+bool TestTurtleSkips(const CCircuitDef@ o)
+{
+	return (ai.GetTunable("apex_test_turtle", 0.f) > 0.f) && (Catalog::BuildsOf(int(o.id)).length() == 0);
+}
+
 // apex: flowe-stat each minute: the picks the free-metal E bill held and passed, by def.
 array<int> gFlowEHeldDef;
 array<int> gFlowEHeldN;
@@ -211,6 +217,18 @@ int CeilingConsAny()
 		if ((gOwnCount[uint(c)] > 0) && Catalog::gMobile[c] && Catalog::gBuilder[c]
 			&& ReachesCeiling(c) && !Catalog::Def(c).IsRoleAny(Unit::Role::COMM.mask))
 			n += gOwnCount[uint(c)];
+	}
+	return n;
+}
+
+// Ceiling cons ordered and not yet standing, walking or flying.
+int CeilingPendAny()
+{
+	int n = 0;
+	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+		CCircuitDef@ pd = Brain::gFQPendDef[i];
+		if ((pd !is null) && ReachesCeiling(int(pd.id)))
+			++n;
 	}
 	return n;
 }
@@ -497,6 +515,7 @@ int gSpotHandsVal = 0;
 int gSpotHandsBind = 0;   // ConsNeedAny calls the open spots decided
 int gConFloorYieldN = 0;  // con-floor orders that yielded to an army behind its share
 int gNextSpotHandsLog = 0;
+int gNextT2SkipLog = 0;
 int ConsNeedAny(bool walkers = false)
 {
 	return ConsNeedAt(walkers, gConFloorMul);
@@ -528,17 +547,31 @@ int ConsNeedAt(bool walkers, float mul)
 	// ...never by a pure assist unit (apexearth 2026-09-27: unspent metal
 	// does not buy Butlers); as constructors only while no lab offers one --
 	// a T1 con is also the starter the full bank needed.
-	if (!AnyAssistLab())
-		want += HandsShort();
 	// The income cannot see open ground: the hands that claim it are owed too.
 	const int spotK = SpotHandsOwed();
-	if (float(spotK) > want) {
-		want = float(spotK);
-		++gSpotHandsBind;
+	// The hands short and the spot hands are derived counts, not rates: the floor's multiplier (the con net reads
+	// ~5.5-6.7 where the rule is 2.5) scales only the base-and-income guess. Scaled, they asked 200-400 constructors
+	// a seat on a 2x-income map (11-14 Legion batch).
+	if (ai.GetTunable("apex_con_spot_count", 1.f) > 0.f) {
+		want *= mul;
+		if (!AnyAssistLab())
+			want += HandsShort();
+		if (float(spotK) > want) {
+			want = float(spotK);
+			++gSpotHandsBind;
+		}
+	} else {
+		if (!AnyAssistLab())
+			want += HandsShort();
+		if (float(spotK) > want) {
+			want = float(spotK);
+			++gSpotHandsBind;
+		}
+		want *= mul;
 	}
-	want *= mul;
 	const int have = walkers ? (ConsWalking(false) + ConsWalking(true)) : (ConsOwnedAny() + ConsInFlightAny());
-	return (float(have) < want) ? (int(want) - have) : 0;
+	const int gap = int(want) - have - SpareHands(walkers ? 0 : (FlyingConLab(false) ? 1 : 2));
+	return (gap > 0) ? gap : 0;
 }
 
 // THE HANDS OUR OPEN SPOTS OWE: the k that claims them all soonest. Paying for
@@ -1250,6 +1283,11 @@ bool ConPoolFull(int d)
 {
 	const int pool = ConPoolOf(d);
 	return ConPoolHave(pool) >= ConPoolCap(pool);
+}
+// The floors obey the same cap: they skipped it, 74-235 cons against 40 at +50 and 143-232 in his 11-14 game.
+bool FloorUnderCap(int d)
+{
+	return (ai.GetTunable("apex_con_floor_cap", 1.f) <= 0.f) || !ConPoolFull(d);
 }
 int ScoutFleetCap()
 {
@@ -2094,7 +2132,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	array<float> rcTgt;
 	array<float> rcVal;
 	// Metal first takes only army above its share: no window of weakness (his 2026-10-05).
-	const bool metalPath = MetalPathStarved() && (armyHave >= armyT0);
+	const bool metalPath = MetalPathStarved() && (armyHave >= armyT0) && (Military::ProtectMult() <= 1.f);
 	int rezFleet = -1;
 	int conFleet = -1;
 	for (uint i = 0; i < prods.length(); ++i) {
@@ -3074,7 +3112,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		// the queue at a time, so the other air keeps coming.
 		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
 		// the moment the last one flew, and the lab made nothing else.
-		if (!ftrOwed && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
+		if (!ftrOwed && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0) && FloorUnderCap(d)
 			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_AIRCON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
 		{
@@ -3107,9 +3145,16 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		const bool foeOutguns = ArmyShortOfFoe() && WeOutEarnThem();
 		const float yieldMul = (gConFloorMul > 0.01f) ? gConFloorMul : 0.01f;
 		const float yieldCons = (gConFloorMul > 1.f) ? gConFloorMul : 1.f;
-		const bool armyBehind = foeOutguns || ftrOwed || ((Brain::gSpentTotal > 1.f)
+		// A SEAT WITH NO HANDS LEFT NEVER YIELDS ITS FLOOR (his 11-14: "we'll lose our base and we don't really try
+		// to rebuild it even when there's nobody contesting it"). The yield is for a seat with hands to spare; below
+		// his own base floor ("at 12 income we still want 2 or 3 cons") nothing can be rebuilt at all. Measured: 98
+		// seats on disk fell to 0-1 cons with their commander and labs alive (aa1-cm-C9505 t0: 13 -> 0 in 8 min, the
+		// floor asking 75-77 and firing 3 times, 75 extractors lost and not rebuilt).
+		const bool handsBare = (ai.GetTunable("apex_con_bare_floor", 1.f) > 0.f)
+				&& (float(ConsOwnedAny() + ConsInFlightAny()) < ai.GetTunable("apex_con_base", TUNE_CON_BASE));
+		const bool armyBehind = !handsBare && (foeOutguns || ftrOwed || ((Brain::gSpentTotal > 1.f)
 			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= yieldCons)
-			&& (Brain::ShareOf(Brain::ARMY) * yieldMul < Brain::TargetShare(Brain::ARMY)));
+			&& (Brain::ShareOf(Brain::ARMY) * yieldMul < Brain::TargetShare(Brain::ARMY))));
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
@@ -3122,7 +3167,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				return Catalog::Def(orcF);
 			}
 		}
-		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
+		if ((consNeedA > 0) && floorOn && FloorUnderCap(d) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -3131,20 +3176,45 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				+ " inflight=" + (walker ? ConsWalking(true) : ConsInFlightAny())
 				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1)
 				+ " short=" + formatFloat(HandsShort(), "", 0, 1)
-				+ " spot=" + SpotHandsOwed()
+				+ " spot=" + SpotHandsOwed() + " spare=" + SpareHands() + " mul=" + formatFloat(gConFloorMul, "", 0, 2)
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 			return Catalog::Def(d);
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
-		if ((ceilNeed > 0) && !foeOutguns && !ftrOwed && ReachesCeiling(d) && !(walker && FlyingConLab(true))
-			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)
+		// WHY AN ADVANCED PLANT MADE NO ADVANCED CON (11-14: a T2 air plant's first and only order was a 5,100 m
+		// Dragon at v=41,108, seven minutes of plant time, no T2 air con; his live game: "only one T2 con. Just one").
+		// NO T2 HANDS, NO YIELD (his 11-14: "the first priority ... should be to upgrade our metal extractors"). The
+		// ground lab hands this floor to the advanced air plant, and the air plant yields it to fighters owed, so with
+		// both standing neither made one (pkg3-rc-A9501: one T2 con from minute 14 to 30, no moho finished; t1 four
+		// moho 12 min after T2, the release's seats 6-8). Under the base con floor, walking and flying counted
+		// together, the floor never yields and either plant fills it, one at a time.
+		const bool ceilBare = (ceilNeed > 0) && (ai.GetTunable("apex_con_bare_ceiling", 1.f) > 0.f)
+				&& (float(CeilingConsAny() + CeilingPendAny()) < ai.GetTunable("apex_con_base", TUNE_CON_BASE));
+		const bool ceilOpen = ceilBare ? (CeilingPendAny() == 0)
+				: (!foeOutguns && !ftrOwed && !(walker && FlyingConLab(true)) && (CeilingConsInFlight() == 0));
+		if ((ceilNeed > 0) && ReachesCeiling(d) && (ai.frame >= gNextT2SkipLog)) {
+			const bool upk = UpkeepFloorPasses(d, fac, slot);
+			const bool cap = FloorUnderCap(d);
+			const bool hold = Brain::BudgetHoldPasses(Brain::BDH_T2CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97);
+			if (!ceilOpen || !(cap || ceilBare) || !upk || !hold) {
+				gNextT2SkipLog = ai.frame + 30 * SECOND;
+				AiLog("apex: t2floor-skip t=" + ai.teamId + " " + fac.circuitDef.GetName() + " " + Catalog::Def(d).GetName()
+					+ " need=" + ceilNeed + " have=" + CeilingConsOwned() + " foeOutguns=" + (foeOutguns ? 1 : 0)
+					+ " ftrOwed=" + (ftrOwed ? 1 : 0) + " walkerVsFlyLab=" + ((walker && FlyingConLab(true)) ? 1 : 0)
+					+ " inflight=" + CeilingConsInFlight() + " cap=" + (cap ? 1 : 0) + " upkeep=" + (upk ? 1 : 0)
+					+ " budgetHold=" + (hold ? 1 : 0) + " bare=" + (ceilBare ? 1 : 0) + " any=" + CeilingConsAny()
+					+ " pend=" + CeilingPendAny());
+			}
+		}
+		// The fleet cap pools every flyer, T1 air cons too: a seat full of them could never order its first T2 air con.
+		if ((ceilNeed > 0) && ceilOpen && ReachesCeiling(d) && (ceilBare || FloorUnderCap(d)) && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_T2CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (t2-con floor need=" + ceilNeed
 				+ " have=" + CeilingConsOwned()
 				+ " inflight=" + CeilingConsInFlight()
-				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1) + ")");
+				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1) + " bare=" + (ceilBare ? 1 : 0) + ")");
 			return Catalog::Def(d);
 		}
 		// The quiet rear caps LAND con production at its keep-fleet (+2 for

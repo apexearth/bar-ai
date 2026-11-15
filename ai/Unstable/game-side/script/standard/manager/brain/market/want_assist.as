@@ -139,7 +139,7 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 		const bool orphan = !defence && (Requests::Workers(lt) == 0) && (lt.target !is null);
 		if (!OnMap(bp) || ((Requests::Workers(lt) == 0) && !orphan)
 			|| ((Requests::Workers(lt) + uint(GuardsOnJob(lt)))
-				>= Requests::SiteWorkerCap(lt.buildDef)))
+				>= Requests::CrewCapFor(lt, Requests::SiteWorkerCap(lt.buildDef))))
 			continue;
 		if (!ai.CanDefReach(Catalog::Def(int(unit.circuitDef.id)), here, bp))
 			continue;
@@ -189,6 +189,36 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 			gAssistAllyId = ag;
 			gAssistGuardS = (agDone < 1.f)
 				? int(Catalog::gCostM[agDef] * (1.f - agDone) / Requests::DRAIN) + 10 : 60;
+			return w;
+		}
+	}
+	// ...an ally's important frame in reach (his 11-12: "allies help each other with important buildings"): a silo,
+	// anti-nuke, gun, launcher, Juno or advanced air plant still rising, on the same reach, crew cap and arrival test.
+	if ((best is null) && !defence && (ai.GetTunable("apex_ally_key", 1.f) > 0.f)) {
+		AIFloat3 akAt;
+		int akDef = -1;
+		float akDone = 0.f;
+		const int ak = AllyGantryFor(unit, akAt, akDef, akDone, false);
+		if ((ak >= 0) && (akDone < 1.f)
+			&& (uint(AllyGuardsOn(ak)) < Requests::SiteWorkerCap(Catalog::Def(akDef)))
+			&& (!Requests::JoinArriveOn()
+				|| Requests::JoinOk(jaPath, unit, akAt, Requests::JoinArriveSec(unit, akAt),
+					Catalog::gBuildTime[akDef] * (1.f - akDone),
+					float(AllyGuardsOn(ak) + 1) * myBP, myBP, -1.f)))
+		{
+			w.kind = WK_ASSIST;
+			w.pos = akAt;
+			w.spotId = ak;
+			w.gain = 1.f;
+			w.mCost = 1.f;
+			w.tCost = 1.f;
+			w.value = 1.f;
+			@w.def = Catalog::Def(akDef);
+			@gAssistTarget = null;
+			gAssistTargetId = -1;
+			gAssistAllyId = ak;
+			gAssistGuardS = int(Catalog::gCostM[akDef] * (1.f - akDone) / Requests::DRAIN) + 10;
+			++gAllyKeyAsks;
 			return w;
 		}
 	}

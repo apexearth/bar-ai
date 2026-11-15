@@ -42,6 +42,8 @@ his core tenet is: always be making economy. The nets decide; balances are their
 | About to… | Read first |
 |---|---|
 | judge any run | `review.py <run>` (gate 1 = compiled, ran, no crash); `bar-benchmark` skill |
+| hear him call a behaviour wrong | add its check to `tools/contract.py` (his words in the docstring) BEFORE the fix: the contract runs on every results page, and `deploy_ai.py deploy vX` refuses a release without a recorded PASS (`contract.py <12+ games> --record`) |
+| finish or report a test batch | `python tools/ledger.py add --topic ...`: one page per batch under `results/<topic>/`, index `results/README.md` (the code it ran, every game, results from our side) |
 | say why a game was won or lost | `story.py <match> --bucket 120`, then `minutes.py <match>` on a WIN and a LOSS; `mapframe.py` to see it |
 | believe a match result | traps S3, S12, S15, S16, S17, S19, S29, S34 |
 | run a sweep of a tunable | trap S8: deploy the gadget, not only the AI |

@@ -10,6 +10,8 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
+| [no-rebuild-after-base-loss](issues/no-rebuild-after-base-loss.md) | 11-14 | a seat that loses most of its base never rebuilds: its last con re-takes one lab order every 30 s, no eco want reaches it |
+| [fighters-dropped-510](issues/fighters-dropped-510.md) | 11-12 | v0.5.10/11 build 20-40% less fighter metal than v0.5.07 and 1.5-2x the bombers; his watch: enemy owns the sky |
 | [v0510-review-deferred](issues/v0510-review-deferred.md) | 11-12 | five findings left for the next version (metal-field site check, army-target readers, race end, perf) |
 | [cons-flee-to-map-edge](issues/cons-flee-to-map-edge.md) | 11-04 | constructors run to the map edge when threat covers the whole map, and idle there |
 | [off-switches](issues/off-switches.md) | 11-03 | 56 deleted 11-04; left: 26 of his asks awaiting his test-or-delete call |
@@ -21,6 +23,7 @@ unproven. `python tools/trial_report.py` after his games.
 | [antinuke-blind](issues/antinuke-blind.md) | 11-05 | BARb builds one anti-nuke; our salvo counts only antis seen, so the guessed base gets single missiles |
 | [air-late-game](issues/air-late-game.md) | 11-05 | long games: 4 in 10 waves unescorted, half short of their target, no fighters against massed air |
 | [gunships-hover-in-aa](issues/gunships-hover-in-aa.md) | 10-23 | the air net picks GO over WAIT; next is targeted training on scored runs |
+| [gunships-held-big-wing](issues/gunships-held-big-wing.md) | 11-13 | 80+ gunships held a whole game: the race prices a big wing as lost to AA that it would kill; launched runs show losses ~2x high from 6 planes up |
 | [army-order-volume](issues/army-order-volume.md) | 10-22 | ~33 commands per army unit a minute; units re-path every ~2 s |
 | [eco-half-his-curve](issues/eco-half-his-curve.md) | 10-22 | energy and build power behind his curve from minute 2; what was measured and removed |
 | [performance](issues/performance.md) | 10-31 | 16-AI budget fails 1.7x in v0.5.01; his seats 2-3.5 ms; scav 8v8 4x; LatheSiteRaw spikes |

@@ -94,6 +94,23 @@ lane with no flags. Your AI is `Apex<name>:lane-<name>` (`lane.py status` prints
 
 ## Testing and judging a change
 
+**The behaviour contract is the audit every batch and every release passes** (his 11-14: "find a way to validate our
+games so that we don't allow ourselves to create this sort of problem in the first place"):
+
+1. He names a wrong behaviour -> a check goes into `tools/contract.py` first (one function, his words in the
+   docstring, his aim if he gave one), then the fix, then the fix's entry in `issues/validation.md`.
+2. Every batch is filed with `tools/ledger.py add`; the page carries the contract table (ours vs the release seats in
+   the same games; FAIL = worse than the release past the noise margin; "short of aim" never gates).
+3. Behaviour nobody has named yet: `tools/anomaly.py check <games>` flags seats far (robust z >= 5) from the
+   release's normal play in the same regime (bonus, resource multiplier, faction); the page carries it and the
+   contract's "anomalous seats" check gates on it. Rebuild the baseline (`anomaly.py build`) after each release.
+   A slow build is root-caused with `tools/slowbuild.py` (decision -> frame -> finish, against the priced walk and
+   build; crew, leaves by reason, trims, drops, stalls). Broken decision logic in odd games: `tools/pathology.py`.
+4. A release: the 12+-game batch vs the previous release on a lane (+50, both factions, three maps), then
+   `python tools/contract.py <games> --record`. It records a PASS only when every check passes, the head-to-head
+   (games won or ahead) is at least half, all games ran one AI code and the code has not changed since.
+   `deploy_ai.py deploy vX` refuses ai/vX unless its scripts match a recorded PASS (`--allow-red` is his).
+
 - **Every batch passes `--speed`** (`--speed 20` for A/B and tests): uncapped runs stall commanders (S24, S29, S34). Comparable arms need the same worker count or a fixed speed.
 - **Handicap is part of the regime**: `run_match` and `run_tournament` default to +0; his tournaments run +50, `ab.py` and many batteries +100. Never compare economies across handicaps; check `Handicap=` per team in a side-swapped script.
 - **No game plays a wrong net** (his 11-02): every deploy installs the release's net (`ai/vX/.../nnweights.as`; a lane gets the newest release's), and `run_match` refuses an Apex seat whose deployed weights are not its reference. Only the trainer's lanes (`runtime/nn/targets.json`) keep their own net; `--any-net` plays another on purpose.
@@ -126,7 +143,7 @@ the return address (`x86_64-w64-mingw32-addr2line -f -C -i -e SkirmishAI.dll <ad
 - **A hosted game loads the highest installed Apex version**, never the lobby's pick, so deploying to `Unstable` never reaches his online games. VersionCompare compares each dot part as a string: never put a two-digit part next to a one-digit one. From v0.4.0 the last part is two digits (his 10-24): v0.4.01, v0.4.02 ... v0.4.99, then v0.5.0; "01" > "0" and "10" > "09" as strings, so each sorts above the one before (v0.4.0 loaded over v0.3.9 in his 10-24 games).
 - **His last good watch is a release gate.** List every change since the last game he watched win (`find <lane>/script -newermt "<that game's time>"`) and replay that game's setup (map, factions, handicap, options) on the release candidate; its opening must hold (extractors and income at minutes 4, 8, 12) before the release. When later results disagree with what he saw, diff that lane's deployed files against the candidate before testing any theory. 11-10: a one-line fix made 8 minutes after a winning 1v1 watch (field extractors 110 vs 21 at 12 min) shipped untested, cost the commander's opening extractor chain, and took 10-12 hours of gates to find; the diff showed 5 changed files.
 - **A fresh reviewer checks the diff before anything ships** (his 11-11): a release or an install for his hosted games first goes to a reviewer agent with no context but his rulings (docs/doctrine.md, the rulings memory, the owning skills), asked per change what else it touches, when it would be wrong, and whether his words were read as intent or as a literal trigger. Every finding is fixed or answered before shipping.
-- Release: copy `ai/Unstable` to `ai/v0.N.M` and set its `AIInfo.lua` version; build the shared DLL from current `cpp/` (`BARAI_LANE=shared sync_cpp.py apply` + `build_dll.py`); put the chosen policy weights in the release's `policydata.as` (the search republishes the lane's copy on every restart); `BARAI_LANE=shared deploy_ai.py deploy v0.N.M` (needs a green gate or his OK for `--allow-red`); smoke one short match (no `ERR`, `apex: version ... v0.N.M`); drop the old version from the install.
+- Release: copy `ai/Unstable` to `ai/v0.N.M` and set its `AIInfo.lua` version; build the shared DLL from current `cpp/` (`BARAI_LANE=shared sync_cpp.py apply` + `build_dll.py`); put the chosen policy weights in the release's `policydata.as` (the search republishes the lane's copy on every restart); `BARAI_LANE=shared deploy_ai.py deploy v0.N.M` (refused without a behaviour-contract PASS on this exact script tree: run the 12+-game release batch against the previous release on a lane, `python tools/contract.py <games> --record`; or his OK for `--allow-red`); smoke one short match (no `ERR`, `apex: version ... v0.N.M`); drop the old version from the install.
 - GitHub release: a `v*` tag runs `.github/workflows/release.yml`, which builds the DLL from the fork pinned in `.github/release.env` and refuses unless the tagged `cpp/src` equals `CIRCUITAI_SHA`. Push the release's `cpp/src` to apexearth/CircuitAI `barbarian-apex` first, set the pin and `VARIANT`, test with `tools/package_ai.py`, then push the annotated tag. The zip carries `Install.bat` (`tools/installer/`): extract, double-click, it finds BAR and installs into the matching engine.
 - Linux: the `.so` must be compiled against the engine BAR installs it into (`release.env` ENGINE_REF): v0.5.04's, built against 2026.06.12, segfaulted at frame 1 on AIFloat3's calling convention. v0.5.05, built against 2026.07.04, ran for a Linux player (his report 11-05); we have no Linux machine, so a player's report is the only test.
 

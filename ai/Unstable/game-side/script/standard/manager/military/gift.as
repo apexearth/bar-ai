@@ -520,6 +520,15 @@ int gConGiftTo = -1;
 int gConGiftLastAt = -1000000;
 int gConGiftShipped = 0;
 
+// OUR EXTRACTORS FIRST (his 11-14, watching the eco seat: its first T2 con "immediately walks to some other allies
+// base and then was given away ... the first priority I say a thousand times should be to upgrade our metal
+// extractors" -- the 1x-to-4x income that should come in ~3 minutes came in ~10). A seat keeps every advanced con
+// its own extractor upgrades can use; only the hands beyond them are given.
+bool OwnUpgradesFirst()
+{
+	return ai.GetTunable("apex_gift_own_first", 1.f) > 0.f;
+}
+
 // The advanced hand nearest the ally's home that is safe, can get there and is not mid-build.
 CCircuitUnit@ ConToGive(const AIFloat3& in toHome, float &out bestD)
 {
@@ -582,6 +591,8 @@ void TeamTechGift(int mineN)
 	int keep = int(ceil(float(mineN) * own / (own + total)));
 	if (keep < 1)
 		keep = 1;
+	if (OwnUpgradesFirst() && (int(own) > keep))
+		keep = int(own);
 	if (mineN <= keep)
 		return;
 	int pick = -1;
@@ -676,6 +687,8 @@ void UpdateConGift()
 			}
 		}
 		if (giver != ai.teamId)
+			continue;
+		if (OwnUpgradesFirst() && (mineN <= Market::UpgradeHandsWant()))
 			continue;
 		float bestD = 0.f;
 		CCircuitUnit@ best = ConToGive(toHome, bestD);

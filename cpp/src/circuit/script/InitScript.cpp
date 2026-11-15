@@ -355,6 +355,26 @@ static void CCircuitUnit_CmdInsertBuild(CCircuitUnit* unit, CCircuitDef* buildDe
 	}
 }
 
+// The same insert at the END of the queue (position -1, CommandAI::ExecuteInsert): one unit, no SHIFT multiplier, and
+// every order waits behind the ones sent before it. At position 1 each later batch jumped the earlier ones, so on a
+// line kept fed an order could wait for ever (rc3-rc2-A9504 t1: a T2 con ordered at 12.8 min never built; 18.8 min on).
+static void CCircuitUnit_CmdAppendBuild(CCircuitUnit* unit, CCircuitDef* buildDef)
+{
+	if (buildDef == nullptr) {
+		return;
+	}
+	std::vector<float> params = {
+		-1.f,
+		float(-buildDef->GetId()),
+		float(UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_INTERNAL_ORDER)
+	};
+	try {
+		unit->GetUnit()->ExecuteCustomCommand(CMD_INSERT, std::move(params),
+				UNIT_COMMAND_OPTION_ALT_KEY | UNIT_COMMAND_OPTION_CONTROL_KEY);
+	} catch (const std::exception& e) {
+	}
+}
+
 static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
 {
 	return circuit->GetAllyTeam()->GetLeaderId();
@@ -487,6 +507,19 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 	}
 	try {
 		unit->CmdMoveTo(pos, 0, INT_MAX, CCircuitUnit::OrdSrc::SCRIPT);
+	} catch (const std::exception&) {
+	}
+}
+
+// apex: hold position (true) or the def's own move state (false). A held fighter flying home on "maneuver" broke
+// off to chase every plane it met and died in their AA (11-14: 221 idle deaths ~9 s after a fly-home order).
+static void CCircuitUnit_CmdHoldPos(CCircuitUnit* unit, bool hold)
+{
+	if ((unit == nullptr) || unit->IsDead()) {
+		return;
+	}
+	try {
+		unit->CmdSetMoveState(hold ? CCircuitDef::MoveType::HOLD_POS : unit->GetCircuitDef()->GetMoveState());
 	} catch (const std::exception&) {
 	}
 }
@@ -3334,6 +3367,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// command moves the unit without consuming its task slot.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdGuard(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdGuard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdHoldPos(bool)", asFUNCTION(CCircuitUnit_CmdHoldPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdFightTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdFightTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetSquadOwned(bool)", asFUNCTION(CCircuitUnit_SetSquadOwned), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsSquadOwned() const", asMETHOD(CCircuitUnit, IsSquadOwned), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3383,6 +3417,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// Jump the queue without clearing it -- how an advanced constructor gets built
 	// first when the tier changes.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdInsertBuild(CCircuitDef@, bool)", asFUNCTION(CCircuitUnit_CmdInsertBuild), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAppendBuild(CCircuitDef@)", asFUNCTION(CCircuitUnit_CmdAppendBuild), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Health is the missing half of "is this risky". Threat alone said commanders
 	// die where the map reads ZERO, because the killer is often at range -- the
 	// last plasma shots landing on a commander already running. Health loss is

@@ -35,6 +35,7 @@ array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
 array<bool> gFloater;   // stands on water
 array<bool> gAmphib;    // moves through water and land both
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
+array<bool> gNeedWater; // placed only in water of some depth (the underwater gantry is neither floater nor sub)
 array<bool> gHitsLand;  // a weapon that can hit a target on land
 array<int>  gLimit;     // the def's own cap (behaviour.json "limit"), the DLL's maxThisUnit
 array<int> gAreaCells;  // footprint in 16-elmo build cells
@@ -124,7 +125,7 @@ void Init()
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
-	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gHitsLand.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gNeedWater.resize(n); gHitsLand.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
 	gFootX.resize(n); gFootZ.resize(n);
 	gBlastR.resize(n); gBlastD.resize(n); gBlastE.resize(n);
 	gSelfDR.resize(n); gSelfDD.resize(n); gSelfDE.resize(n);
@@ -172,6 +173,7 @@ void Init()
 		gFloater[i]      = cdef.IsFloater();
 		gAmphib[i]       = cdef.IsAmphibious();
 		gSub[i]          = cdef.IsSubmarine();
+		gNeedWater[i]    = cdef.GetMinWaterDepth() > 0.f;
 		gHitsLand[i]     = cdef.HasSurfToLand();
 		gAreaCells[i]    = cdef.GetAreaCells();
 		gFootX[i]        = cdef.GetFootX();

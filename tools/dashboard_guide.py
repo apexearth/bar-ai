@@ -429,10 +429,6 @@ PANELS = [
             ("TUNE_FLOW_E_BILL", "ON: when metal is piling up, a factory still only builds something if it is "
              "worth the energy it costs; nothing worth it, and the factory waits. OFF: with spare metal a "
              "factory builds even a near-useless unit rather than sit idle."),
-            ("TUNE_GANTRY_OWN_SLOT", "ON: the gantry goes up alongside a nuke silo, anti-nuke or long-range cannon "
-             "when we can afford it, instead of waiting for theirs to finish. OFF: one big strategic build at a "
-             "time (more only while metal overflows), and the gantry waits its turn. `apex: gantry-why` every "
-             "30 s while no gantry stands says what held it back"),
             ("TUNE_NANO_EARLY", "ON: construction turrets go up around a gantry, an advanced lab or an "
              "advanced air plant while it is still being built, as many as it will want once finished; they "
              "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
@@ -892,10 +888,6 @@ GROUPS = [
                   "quarter of the gain)"),
                  ("TUNE_SUPER_PUSH", "an affordable strategic want skips the "
                   "category lottery and goes straight through"),
-                 ("TUNE_SUPER_FLIGHT_PER", "one MORE strategic frame may stand "
-                  "half-built per this much overflowing metal/s — lower and a "
-                  "rich, wasteful economy starts gantries, silos and guns in "
-                  "parallel sooner"),
                  ("TUNE_COPY_OVERFLOW_M", "the wealth waiver: overflow above "
                   "this metal/s lifts the plant-copy ban and the one-advanced-"
                   "plant-at-a-time rule — lower and a wasteful economy earns "

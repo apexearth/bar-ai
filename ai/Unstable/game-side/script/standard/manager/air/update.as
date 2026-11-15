@@ -299,6 +299,7 @@ void Release(const string& in why)
 		return;
 	}
 	gWaveLaunched = gWaveBombers;
+	gWaveArrived = false;
 	NoteStrikeLaunched();
 	Economy::isSwitchAssist = false;   // stop holding build power on the plant
 	// ANTI_STAT makes CBombTask::FindTarget skip enemy army but keep static eco,
@@ -382,6 +383,10 @@ void ReArm()
 	bool cleared = false;
 	if (gNaCellOn) {
 		const float cr = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
+		for (uint i = 0; (i < gWave.length()) && !gWaveArrived; ++i) {
+			CCircuitUnit@ wu = ai.GetTeamUnit(gWave[i]);
+			gWaveArrived = (wu !is null) && (wu.GetPos(ai.frame).distance2D(gNaCellAt) <= cr);
+		}
 		if (aiEnemyMgr.GetEnemyStructCostAt(gNaCellAt, cr) <= 1.f) {
 			for (uint i = 0; (i < gWave.length()) && !cleared; ++i) {
 				CCircuitUnit@ wu = ai.GetTeamUnit(gWave[i]);
@@ -389,7 +394,17 @@ void ReArm()
 			}
 		}
 	}
-	if (!cleared && (have > 0) && (have * 2 >= gWaveLaunched) && (float(held) <= gWaveMass))
+	// A RUN DOES NOT TURN BACK BEFORE IT DROPS (his 11-14, watching: the bombers "are met by the enemy fighters and
+	// then we turn around and we just run ... we're just dying to enemy fighters"; his standing "Air bombing attacks
+	// should never retreat. You'll take 75% losses and achieve nothing"). Half the wave lost on the way IN recalled
+	// the rest through the same fighters with their bombs. Before the wave reaches its cell, losses do not end it.
+	// A wave that cannot reach its cell within twice the run's settle window (apex_air_settle_s) is not pressing on.
+	const bool pressOn = gNaCellOn && !gWaveArrived && (have > 0)
+			&& (ai.GetTunable("apex_air_press_on", 1.f) > 0.f)
+			&& (ai.frame < gRunSettleAt + int(ai.GetTunable("apex_air_settle_s", TUNE_AIR_SETTLE_S)) * SECOND);
+	// ...nor does a bigger force built at home since: it is the next wave, not a reason to fly this one back (pkg3/esc1:
+	// 38 of 39 bombers recalled before any reached the cell).
+	if (!cleared && (have > 0) && (pressOn || ((have * 2 >= gWaveLaunched) && (float(held) <= gWaveMass))))
 		return;
 	if (cleared) {
 		++gNaCellCleared;

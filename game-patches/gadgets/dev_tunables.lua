@@ -241,6 +241,27 @@ local NAMES = {
 	"apex_arc_span",         -- SquadTask.cpp: ring arc width as a fraction of pi; small = the squad fights as a fist (0.9)
 	"apex_line_adapt",       -- army.as: enemy static share bends the reach composition target up (1)
 	"apex_line_alloc",       -- production.as: 1 = draw within the ground line class the lab owes most metal (0)
+	"apex_ally_key",         -- want_assist.as: 1 = hands go to an ally's important frame (silo, gun, launcher, Juno, anti-nuke) (1; TEST switch, 11-13)
+	"apex_air_cadence_net",  -- nnair.as: 1 = the held wing's cadence launch needs a run priced at no net loss (1; TEST switch, 11-14)
+	"apex_air_gun_race",     -- nnair.as NaEval: 1 = a gunship wing and the AA under it both fall as they fire (square law) instead of the AA at full fire the whole crossing (1; TEST switch, 11-14)
+	"apex_con_floor_cap",    -- production.as: 1 = the con floors stop at the constructor fleet cap like the draw does (1; TEST switch, 11-14)
+	"apex_protect",          -- deathledger.as ProtectMult: 1 = the army row grows while the ground power they have shown beats our team's (1; TEST switch, 11-14)
+	"apex_protect_cap",      -- deathledger.as ProtectMult: the most the army row grows by (3)
+	"apex_con_bare_floor",   -- production.as: below the base con floor the con floor never yields to army, so a seat can rebuild (1; TEST switch, 11-14)
+	"apex_con_bare_ceiling", -- production.as: below the base con floor in T2 cons (walking + flying) the T2 con floor never yields and either lab fills it (1; TEST switch, 11-15)
+	"apex_air_press_on",     -- air/update.as ReArm: a bomber wave is not recalled for losses before it reaches its cell (1; TEST switch, 11-14)
+	"apex_nuke_on_ground",   -- nukes.as NukeGuessOnBaseGround: the unscouted-base guess moves off ground no walker reaches (1; TEST switch, 11-14)
+	"apex_crew_one_number",  -- requests/join.as CrewCapFor: every join rung admits to the seat plan's crew the peel trims to (1; TEST switch, 11-14)
+	"apex_keep_on_draw",     -- decide.as: a draw re-election keeps the job in hand unless it outbids it, like a hoist (1; TEST switch, 11-14)
+	"apex_gift_own_first",   -- gift.as OwnUpgradesFirst: a seat gives away only the advanced cons beyond its own extractor-upgrade hands (1; TEST switch, 11-14)
+	"apex_keep_same_job",    -- decide.as: a re-election whose winner is the building in hand keeps the job, not a re-order (1; TEST switch, 11-14)
+	"apex_peel_near_done",   -- requests/peel.as CrewFinishesFirst: no peel, ring trim or energy consolidation off a site its crew finishes before a peeled hand reaches other work (1; TEST switch, 11-14)
+	"apex_con_spot_count",   -- production.as ConsNeedAt: the open-spot hands are a count, not scaled by the con floor multiplier (1; TEST switch, 11-14)
+	"apex_con_spare",        -- floor.as SpareHands: the con floor subtracts constructors the market had nothing for in 30 s (1; TEST switch, 11-14)
+	"apex_team_front",       -- want_plant.as TeamFrontMul: a ground army plant's production half x (1 + w x AI mates with no ground plant) (1; TEST switch, 11-14)
+	"apex_plant_class_army", -- want_plant.as PlantClass: a lab offering an air con stays a ground line while it fields ground combat (1; TEST switch, 11-14)
+	"apex_plant_site_odds",  -- builder/events.as PlantSiteOdds: a plant priced at 1/(1+no-site deaths) (1; TEST switch, 11-14)
+	"apex_test_turtle",      -- production.as + facqueue.as: 1 = TEST opponent only: plants build constructors, no fighters (0)
 	"apex_mex_expose",       -- want_protect.as: per-mex floor grows with forwardness, floor*(1+fwd*this) (1.5)
 	"apex_rezzer_fwd",       -- rules_rezzer.as: idle rezzer past this forward fraction retires to the haven (0.25)
 	"apex_consolidate_r",    -- withdraw.as: tracked-pack distance that starts pre-contact consolidation (2000)
@@ -385,9 +406,8 @@ local NAMES = {
 	"apex_air_every",        -- air/every.as + want_plant.as ProposePlant air gates/yield + wing.as IntelPlantToBuild + nnair.as NaCands/NaDecide + state.as Hunts + update.as Intercept + production.as fighters + decide.as: every seat's air plant priced, the wing flies what it has, fighters answer their air (0)
 	"apex_unit_life",        -- air/life.as: scout/support plane gains scaled by the life our losses show
 	"apex_flow_e_bill",      -- production.as opportunity floor: with metal free, the pick still pays its E bill
-	"apex_gantry_own_slot",  -- want_super.as: the gantry neither takes nor waits for the strategic one-at-a-time slot
 	"apex_nano_early",       -- sites.as PlantFrames/GantryShortSite + want_nano.as FactoryNanoShort + execute.as nano batch: T2+ plant frames take their nanos while rising (0)
-	"apex_t2_eco",           -- t2eco.as + nntech.as rule + decide.as super push/next-tier hoist: the ladder's evidence for the next tier; upgrades before the strategic hoists (0)
+	"apex_t2_eco",           -- t2eco.as + nntech.as rule + decide.as super push/next-tier hoist: the ladder's evidence for the next tier (0)
 	"apex_inflight_hold",    -- price.as displacedM: a build pays for the projects in progress it holds up (0)
 	"apex_income_accel",     -- floor.as IncomeAccelM: income wants credited the share of income times the in-flight gain (0)
 	"apex_lab_assist",       -- want_assist.as LabAssistGuard: lab orders priced, lab guards priced by the time they save (0)
@@ -620,7 +640,6 @@ local NAMES = {
 	"apex_roam_r",
 	"apex_super_self_frac",
 	"apex_gantry_afford_s",
-	"apex_super_flight_per",
 	"apex_copy_overflow_m",
 	"apex_con_feed_headroom",
 	"apex_unit_afford_s",

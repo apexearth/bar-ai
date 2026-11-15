@@ -63,6 +63,46 @@ bool NukeStillWorth(float cost, int hits, float minValue)
 // those buildings rank as sighted base targets on their own; out of LOS again it regrows from nothing at the rate
 // a base could be rebuilt -- our own income, the map's measured yield in a mirrored game. A look used to clear the
 // strike count instead, so seeing the ground empty priced the guess whole again and it was nuked again.
+// THE GUESS STANDS WHERE A BASE CAN (his 11-14, watching: "we try to nuke the top of a mountain where nobody would be
+// able to build anything"). Their box centre can be a peak. Ground no walker of ours reaches from home is ground no
+// base stands on; the guess moves to the nearest metal spot that is reachable, within 1,500 of it; across water, with
+// no reachable spot near, it stays. Cached per guess -- a path query per ranking tick is not free.
+AIFloat3 gNkGuessIn(-1.f, 0.f, -1.f), gNkGuessOut(-1.f, 0.f, -1.f);
+AIFloat3 NukeGuessOnBaseGround(const AIFloat3 &in guess)
+{
+	if (!OnMap(guess) || !Builder::gHomeSet || (ai.GetTunable("apex_nuke_on_ground", 1.f) <= 0.f))
+		return guess;
+	if (gNkGuessIn.SqDistance2D(guess) < 200.f * 200.f)
+		return gNkGuessOut;
+	CCircuitDef@ walker = (Builder::gComm !is null) ? Catalog::Def(int(Builder::gComm.circuitDef.id)) : null;
+	for (uint w = 0; (walker is null) && (w < Market::gWorkers.length()); ++w) {
+		CCircuitUnit@ u = Market::gWorkers[w];
+		if ((u !is null) && !u.circuitDef.IsAbleToFly())
+			@walker = Catalog::Def(int(u.circuitDef.id));
+	}
+	if (walker is null)
+		return guess;
+	gNkGuessIn = guess;
+	gNkGuessOut = guess;
+	if (ai.CanDefReach(walker, Builder::gHomePos, guess))
+		return guess;
+	array<AIFloat3>@ spotsAll = Market::gAllSpots;
+	float bestD = 1500.f;
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	for (uint i = 0; i < spotsAll.length(); ++i) {
+		const float d = spotsAll[i].distance2D(guess);
+		if ((d < bestD) && ai.CanDefReach(walker, Builder::gHomePos, spotsAll[i])) {
+			bestD = d;
+			best = spotsAll[i];
+		}
+	}
+	// no reachable spot near it: their base is across water or cliffs from ours (an island map), not on a peak
+	gNkGuessOut = OnMap(best) ? best : guess;
+	AiLog("apex: nuke-guess t=" + ai.teamId + " box=" + int(guess.x) + "," + int(guess.z) + " unreachable -> "
+		+ (OnMap(best) ? (int(best.x) + "," + int(best.z)) : "kept (no reachable spot near: across water)"));
+	return gNkGuessOut;
+}
+
 int gNkMirSeenAt = -1;
 float NukeMirrorWorth(const AIFloat3 &in mirror, float cost)
 {
@@ -758,6 +798,7 @@ void UpdateNukes()
 			mirror = Front::FoeAnchor();
 		if (!OnMap(mirror) && Builder::gHomeSet)
 			mirror = AIFloat3(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
+		mirror = NukeGuessOnBaseGround(mirror);
 		if (OnMap(mirror) && !VolleyServes(mirror)) {
 			const float cost = NukeMirrorWorth(mirror, ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE))
 					- OwnKilledM(mirror);

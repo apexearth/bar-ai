@@ -111,6 +111,7 @@ void DecideIdGone(int id)
 int gKeepJob = 0;
 int gHoistWaitN = 0;   // hoists that waited for a hand walking to a live job (TUNE_HOIST_WAITS)
 int gSameTypeKeep = 0;   // confirmations whose same-type answer was dropped for the job in hand
+int gSameJobKeep = 0;    // re-elections whose winner was the building in hand, kept instead of re-ordered
 int gHwOn = -1;
 bool HoistWaitsOn()
 {
@@ -2654,7 +2655,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// own (eta.as EtaEcoWeight). The flag stays so the chain below reads.
 	const bool convertPush = false;
 	bool superPush = false;
-	const bool upOwed = !aaPanic && T2EcoOn() && UpgradeOwed(unit, ranked);
+	const bool upOwed = !aaPanic && UpgradeOwed(unit, ranked);
 	if (!aaPanic && !convertPush && (ai.GetTunable("apex_super_push", TUNE_SUPER_PUSH) > 0.f)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_SUPER)
@@ -3554,8 +3555,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const float remK = unit.GetPos(ai.frame).distance2D(ip);
 				const float incNow = gIncVal[uidk] * ((gIncWalk0[uidk] > remK) ? (gIncWalk0[uidk] / ((remK > bdK) ? remK : bdK)) : 1.f);
 				const bool drawn = (why == "draw") || (why == "ladder") || (why.findFirst("held") == 0);
+				// ...a draw too (11-14: 177 of 300 departures from T2 lab jobs were draws; the comment above is the
+				// intent -- a draw is not new information -- and the exemption had no measurement behind it)
+				const bool keepOnDraw = ai.GetTunable("apex_keep_on_draw", 1.f) > 0.f;
 				const bool hoistWaits = HoistWaitsOn() && OnMap(ip) && !Builder::SiteHot(ip)
-						&& !drawn
+						&& (!drawn || keepOnDraw)
 						&& (remK > bdK + 64.f)
 						&& (top.value / ((top.nnMult > 0.f) ? top.nnMult : 1.f) <= incNow);
 				if (hoistWaits) {
@@ -3564,7 +3568,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				const bool gunHeld = !hoistWaits && gIncGun[uidk] && OnMap(ip) && !Builder::SiteHot(ip);
 				if (gunHeld)
 					++gGunHeldN;
-				const bool dropped = !onCrew && !hoistWaits && !gunHeld;
+				// THE SAME BUILDING IS NOT A NEW JOB (his 11-14: a con on a T2 lab "stops, walks away, and then goes
+				// right back to building it again ... a pure waste of time"). The lab is offered twice, as plant and
+				// as tech, and the winner flipped between the two; each flip released the order and re-issued it
+				// (v0.5.11, 12 games: 39 returns to the same lab, 0-3 s apart).
+				const bool sameJob = (ai.GetTunable("apex_keep_same_job", 1.f) > 0.f)
+						&& (top.def !is null) && (inc.buildDef !is null) && (top.def.id == inc.buildDef.id)
+						&& OnMap(ip) && !Builder::SiteHot(ip);
+				if (sameJob)
+					++gSameJobKeep;
+				const bool dropped = !onCrew && !hoistWaits && !gunHeld && !sameJob;
 				if (dropped) {
 					if (Requests::OrderReleaseOn()) {
 						const int li = Requests::LiveIndex(inc);
@@ -3583,7 +3596,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 							+ " #" + unit.id + " v=" + formatFloat(gIncVal[uidk] * 1000.f, "", 0, 2)
 							+ " over " + KindName(top.kind) + " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
 							+ " kept=" + gKeepJob + " hoistWait=" + gHoistWaitN + " gunHeld=" + gGunHeldN
-							+ " sameType=" + gSameTypeKeep);
+							+ " sameType=" + gSameTypeKeep + " sameJob=" + gSameJobKeep);
 					}
 					return inc;
 				}

@@ -42,3 +42,4 @@ reference/within-reason/
 
 # Windows crash dumps from the shell
 *.stackdump
+reference/barandom/

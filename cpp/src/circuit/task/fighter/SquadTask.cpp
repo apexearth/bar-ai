@@ -1602,7 +1602,23 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				fn[0] += (pushed && !inside) ? 1 : 0;
 				fn[1] += inside ? 1 : 0;
 				fn[2] += fodder ? 1 : 0;
-				CTerrainManager::CorrectPosition(newPos);
+				// apex: CLIP THE STAND POINT ALONG ITS BEARING FROM THE TARGET, not per axis. A randomizer unit with a
+				// range of thousands put its ring point far off the map, and the per-axis clamp slid it into a map
+				// corner, so whole squads walked to the top-left (his 11-12 hosted game). Along the bearing it stands at
+				// the map's edge, still in its reach of the target.
+				{
+					AIFloat3 dir = newPos - tPos;
+					float len = std::sqrt(dir.x * dir.x + dir.z * dir.z);
+					if (len > 1.f) {
+						dir.x /= len;
+						dir.y = 0.f;
+						dir.z /= len;
+						const float y = newPos.y;
+						newPos = CTerrainManager::CorrectPosition(tPos, dir, len);
+						newPos.y = y;
+					}
+					CTerrainManager::CorrectPosition(newPos);
+				}
 				const bool uStatic = own ? ((uTgt->GetCircuitDef() != nullptr) && !uTgt->GetCircuitDef()->IsMobile()) : isStatic;
 				unit->Attack(newPos, uTgt, targetTile, isGround, uStatic, frame + FRAMES_PER_SEC * 60, feared);
 			}

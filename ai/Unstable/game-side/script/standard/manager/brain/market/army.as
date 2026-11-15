@@ -2459,8 +2459,9 @@ float ArmySpendFlow()
 	const float store = aiEconomyMgr.metal.storage;
 	const float fill = (store > 1.f) ? Eco::MCur() / store : 1.f;
 	const float spare = inc - Eco::MPull();
+	// apex_army_spare: the test turtle (todo/break-the-front.md) sets 0 so its spare metal does not become an army
 	gArmySpendVal = Brain::TargetShare(Brain::ARMY) * inc
-		+ ((spare > 0.f) ? spare * ((fill < 1.f) ? fill : 1.f) : 0.f);
+		+ ((spare > 0.f) ? spare * ((fill < 1.f) ? fill : 1.f) * ai.GetTunable("apex_army_spare", 1.f) : 0.f);
 	return gArmySpendVal;
 }
 

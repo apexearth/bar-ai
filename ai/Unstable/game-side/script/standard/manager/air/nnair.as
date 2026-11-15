@@ -84,6 +84,7 @@ class NaCand {
 	int n = 0;
 	float aaT = 0.f;      // air dps over the cell
 	float aaR = 0.f;      // the longest air reach among the AA over it
+	float aaH = 0.f;      // the health of the AA over it
 }
 
 class NaPrice {
@@ -306,10 +307,12 @@ void NaCands(float r, array<NaCand@>& out cs)
 			}
 		}
 		for (uint e = 0; e < gNaAAP.length(); ++e) {
-			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
+			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f) {
 				c.aaT += gNaAAV[e];
+				c.aaH += Catalog::gHealth[gNaAAD[e]];
 				if (gNaAAR[e] > c.aaR)
 					c.aaR = gNaAAR[e];
+			}
 		}
 		cs.insertLast(c);
 	}
@@ -340,10 +343,12 @@ void NaCands(float r, array<NaCand@>& out cs)
 			}
 		}
 		for (uint e = 0; e < gNaAAP.length(); ++e) {
-			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
+			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f) {
 				c.aaT += gNaAAV[e];
+				c.aaH += Catalog::gHealth[gNaAAD[e]];
 				if (gNaAAR[e] > c.aaR)
 					c.aaR = gNaAAR[e];
+			}
 		}
 		if (c.n > 0)
 			cs.insertLast(c);
@@ -438,10 +443,12 @@ void NaCandsWon(float r, const array<int>& in top, array<NaCand@>& cs)
 			}
 		}
 		for (uint e = 0; e < gNaAAP.length(); ++e) {
-			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
+			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f) {
 				c.aaT += gNaAAV[e];
+				c.aaH += Catalog::gHealth[gNaAAD[e]];
 				if (gNaAAR[e] > c.aaR)
 					c.aaR = gNaAAR[e];
+			}
 		}
 		cs.insertLast(c);
 	}
@@ -521,6 +528,7 @@ void NaAACands(array<NaCand@>& cs, float r, const AIFloat3& in ctr, int n, float
 		for (uint e = 0; e < na; ++e) {
 			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f) {
 				c.aaT += gNaAAV[e];
+				c.aaH += Catalog::gHealth[gNaAAD[e]];
 				if (gNaAAR[e] > c.aaR)
 					c.aaR = gNaAAR[e];
 			}
@@ -533,16 +541,21 @@ void NaAACands(array<NaCand@>& cs, float r, const AIFloat3& in ctr, int n, float
 		q.n = prize.n;
 		q.aaT = prize.aaT;
 		q.aaR = prize.aaR;
+		q.aaH = prize.aaH;
 		array<float> keep;
 		for (uint m = 0; m < mem.length(); ++m) {
 			const uint e = mem[m];
-			if (gNaAAP[e].distance2D(prize.at) <= gNaAAR[e] + r * 0.5f)
+			if (gNaAAP[e].distance2D(prize.at) <= gNaAAR[e] + r * 0.5f) {
 				q.aaT -= gNaAAV[e];
+				q.aaH -= Catalog::gHealth[gNaAAD[e]];
+			}
 			keep.insertLast(gNaAAV[e]);
 			gNaAAV[e] = 0.f;
 		}
 		if (q.aaT < 0.f)
 			q.aaT = 0.f;
+		if (q.aaH < 0.f)
+			q.aaH = 0.f;
 		const float pathQ = NaPathAA(ctr, prize.at);
 		for (uint m = 0; m < mem.length(); ++m)
 			gNaAAV[mem[m]] = keep[m];
@@ -585,7 +598,24 @@ float NaEval(const NaCand@ c, float pathAAx, float ftrA, int n, float h, float d
 	const float N1 = N - lostIn;
 	const float A = c.aaT + ftrA;
 	float killF = 0.f, tk = 0.f, lostT = 0.f;
-	if ((N1 > 0.f) && (dps1 > 0.f) && (c.hp > 0.f)) {
+	// A GUNSHIP WING SHOOTS THE AA THAT SHOOTS IT (his 11-13: a 80-103 gunship wing held all game, "too scared to use
+	// them"). Both sides fall as they fire, so the square law: the wing outlasts AA of health H and dps A when
+	// N^2 > A H / (h dps1), keeping sqrt(N^2 - A H / (h dps1)), then has the cell to itself. Their fighters are
+	// taken at the AA's health per dps. Bombers do not shoot back and keep the race below.
+	const bool race2 = !back && (c.aaT > 0.f) && (c.aaH > 0.f) && (h > 0.f) && (dps1 > 0.f)
+		&& (ai.GetTunable("apex_air_gun_race", 1.f) > 0.f);
+	if (race2 && (N1 > 0.f)) {
+		const float Ht = c.aaH * A / c.aaT;
+		const float K = A * Ht / (h * dps1);
+		if (N1 * N1 > K) {
+			const float Ns = sqrt(N1 * N1 - K);
+			lostT = N1 - Ns;
+			killF = (c.hp > 0.f) ? 1.f : 0.f;
+			tk = Ht / (0.5f * (N1 + Ns) * dps1) + c.hp / (Ns * dps1);
+		} else {
+			lostT = N1;
+		}
+	} else if ((N1 > 0.f) && (dps1 > 0.f) && (c.hp > 0.f)) {
 		if (A <= 0.f) {
 			killF = 1.f;
 			tk = c.hp / (N1 * dps1);
@@ -608,7 +638,7 @@ float NaEval(const NaCand@ c, float pathAAx, float ftrA, int n, float h, float d
 	// pricing factors in enemy AA we've seen"). The kill time alone left a 12-Brawler wing under 6 light AA and a
 	// flak priced at killF 1.00 lossN 0.1; it lost all 12. One crossing of the cell's AA reach each way, at the
 	// wing's speed, under the cell's whole AA.
-	if ((ai.GetTunable("apex_aa_dwell", TUNE_AA_DWELL) > 0.f) && (c.aaT > 0.f) && (c.aaR > 0.f) && (spd > 0.f)
+	if (!race2 && (ai.GetTunable("apex_aa_dwell", TUNE_AA_DWELL) > 0.f) && (c.aaT > 0.f) && (c.aaR > 0.f) && (spd > 0.f)
 		&& (h > 0.f) && (N1 > 0.f))
 	{
 		const float dwellS = 2.f * c.aaR / spd;
@@ -789,8 +819,11 @@ int NaDecide(int kind, const string why)
 			if (gNaEcoP[e].distance2D(deep) <= r)
 				seenHere += Catalog::gCostM[gNaEcoD[e]];
 		}
-		for (uint e = 0; e < gNaAAV.length(); ++e)
+		float aaHAll = 0.f;
+		for (uint e = 0; e < gNaAAV.length(); ++e) {
 			aaAll += gNaAAV[e];
+			aaHAll += Catalog::gHealth[gNaAAD[e]];
+		}
 		float fade = 1.f;
 		if (gNaDeepLookAt >= 0) {
 			const float horizon = ai.GetTunable("apex_ghost_stale_min", TUNE_GHOST_STALE_MIN) * float(MINUTE);
@@ -808,13 +841,16 @@ int NaDecide(int kind, const string why)
 			const float per = (gNaEcoP.length() > 0) ? (ecoM / float(gNaEcoP.length())) : unseen;
 			c.n = (per > 1.f) ? int(unseen / per) + 1 : 1;
 			for (uint e = 0; e < gNaAAP.length(); ++e) {
-				if (gNaAAP[e].distance2D(deep) <= gNaAAR[e] + r * 0.5f)
+				if (gNaAAP[e].distance2D(deep) <= gNaAAR[e] + r * 0.5f) {
 					c.aaT += gNaAAV[e];
+					c.aaH += Catalog::gHealth[gNaAAD[e]];
 					if (gNaAAR[e] > c.aaR)
 						c.aaR = gNaAAR[e];
+				}
 			}
 			if (c.aaT < aaAll / seats) {
 				c.aaT = aaAll / seats;
+				c.aaH = aaHAll / seats;
 				for (uint e = 0; e < gNaAAR.length(); ++e)
 					if (gNaAAR[e] > c.aaR)
 						c.aaR = gNaAAR[e];
@@ -940,12 +976,13 @@ int NaDecide(int kind, const string why)
 		pr[NA_WAIT] = 1.f;
 		pr[NA_GO] = 0.f;
 	}
-	// THE WING ALWAYS FLIES (his 2026-10-12): a wing held a whole cadence since its last launch goes at
-	// the best cell it knows, even when heavy AA prices every cell below zero.
+	// A wing held a whole cadence since its last launch goes at the best cell it knows (his 2026-10-12, "the wing
+	// always flies") -- but not into a run its own price says loses (his 11-13, watching 9 bombers fly at a priced
+	// -1,510 into 1,453 metal of AA with one fighter, after a run that lost all 5: "yes do it").
 	if (kind == 0) {
 		if (gNaWaitFrom < 0)
 			gNaWaitFrom = ai.frame;
-		if (have && (chosen == NA_WAIT) && (ai.frame - gNaWaitFrom >= AIR_CADENCE)
+		if (have && (chosen == NA_WAIT) && ((best.netM >= 0.f) || (ai.GetTunable("apex_air_cadence_net", 1.f) <= 0.f)) && (ai.frame - gNaWaitFrom >= AIR_CADENCE)
 			&& (BomberMass() >= DeadlineBombBar()) && (BomberMass() >= NaFinishBar()))
 		{
 			chosen = NA_GO;

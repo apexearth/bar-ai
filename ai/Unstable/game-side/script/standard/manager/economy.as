@@ -65,6 +65,10 @@ void AiUpdateEconomy()
 			+ " excess=" + formatFloat(energy.excess, "", 0, 0)
 			+ " lineE=" + formatFloat(Market::LineDrainE(), "", 0, 0)
 			+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0"));
+		AiLog(Factory::T() + "apex: metal cur=" + formatFloat(metal.current, "", 0, 0)
+			+ "/" + formatFloat(metal.storage, "", 0, 0)
+			+ " inc=" + formatFloat(metal.income, "", 0, 1)
+			+ " pull=" + formatFloat(metal.pull, "", 0, 1));
 	}
 
 	isSwitchAssist = isSwitchAssist && aiFactoryMgr.isAssistRequired;

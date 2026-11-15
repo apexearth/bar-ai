@@ -313,6 +313,8 @@ void RecallWave()
 	if (kept > 0)
 		AiLog(Factory::T() + "apex: air recall -- " + kept
 			+ " bombers past the point of no return press on");
+	AiLog(Factory::T() + "apex: air run end t=" + ai.teamId + " arrived=" + (gWaveArrived ? 1 : 0)
+		+ " left=" + gWaveBombers + "/" + gWaveLaunched + " pressed=" + kept);
 }
 
 }  // namespace Air

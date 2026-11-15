@@ -241,14 +241,11 @@ int SuperTarget(int sc)
 // the classifier walks the whole def table, and this is asked once per
 // candidate per election.
 array<int> gSuperHave(8, 0);
+// NO STRATEGIC SLOT (his 11-12: "we don't want that one at a time thing on, just go on our pricing logic"). Each
+// super is priced against the budget that remains; how many stand at once is the pricing's answer. The slot it
+// replaced held breach tools behind silos in 36 of 51 readings. gSuperFlight is a count for the log only.
 int gSuperFlight = 0;
 int gSuperCensusAt = -1;
-
-// His 10-17 ruling: the gantry goes up alongside a gun, neither taking nor waiting for the slot.
-bool GantryOwnSlot()
-{
-	return ai.GetTunable("apex_gantry_own_slot", TUNE_GANTRY_OWN_SLOT) > 0.f;
-}
 
 void SuperCensus()
 {
@@ -260,7 +257,6 @@ void SuperCensus()
 		gSuperHave[c] = 0;
 	// One source: standing, half-built, orphaned frame and outstanding order
 	// are all rows of the commitment ledger.
-	const bool ownSlot = GantryOwnSlot();
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		const int sc = SuperClassOf(gComDef[ci]);
 		if (sc < 0)
@@ -270,7 +266,7 @@ void SuperCensus()
 			continue;
 		}
 		++gSuperHave[sc];
-		if ((gComState[ci] != CS_FINISHED) && !(ownSlot && (sc == SC_GANTRY)))
+		if ((gComState[ci] != CS_FINISHED) && (sc != SC_GANTRY))
 			++gSuperFlight;
 	}
 	gSuperHave[SC_SILO] += Brain::SiloCountAdjust();
@@ -284,21 +280,6 @@ int SuperHave(int sc)
 	return ((sc >= 0) && (sc < int(gSuperHave.length()))) ? gSuperHave[sc] : 0;
 }
 
-// STRATEGIC FRAMES AT ONCE: one, plus one per apex_super_flight_per m/s of
-// structural overflow. The single-frame law is the focus rule for an economy
-// that must choose; overflow is the economy saying it has nothing to focus
-// FROM ("gotta go somewhere - gotta do something").
-int SuperFlightCap()
-{
-	const float per = ai.GetTunable("apex_super_flight_per", TUNE_SUPER_FLIGHT_PER);
-	return 1 + int(OverflowM() / ((per > 1.f) ? per : 140.f));
-}
-
-bool SuperInFlight()
-{
-	SuperCensus();
-	return gSuperFlight >= SuperFlightCap();
-}
 
 // Whether decide.as's super-push will jump the queue for this def. An
 // anti-nuke against no silo seen is insurance, priced in the draw, except:
@@ -683,7 +664,14 @@ void AdvDeferLog(const string& in what)
 		row = " " + Catalog::Def(gComDef[r]).GetName() + " state=" + gComState[r]
 			+ " at=" + int(gComPos[r].x) + "," + int(gComPos[r].z)
 			+ " task=" + ((gComTask[r] is null) ? "none" : "live")
-			+ " workers=" + ((gComTask[r] is null) ? 0 : Requests::Workers(gComTask[r]));
+			+ " workers=" + ((gComTask[r] is null) ? 0 : Requests::Workers(gComTask[r]))
+			// why nobody helps it (11-14: an advanced air plant one hand built for 12 min held the T2 lab; its
+			// assist was never offered): is it the unlock the assist path serves, and who else stands there
+			+ " unlock=" + (Requests::IsMetalUnlock(Catalog::Def(gComDef[r])) ? 1 : 0)
+			+ " makesUp=" + (MakesUpgradeHands(gComDef[r]) ? 1 : 0)
+			+ " upPlant=" + (UpgradeHandPlantStanding() ? 1 : 0)
+			+ " cap=" + ((gComTask[r] is null) ? 0 : int(Requests::SiteWorkerCap(Catalog::Def(gComDef[r]))))
+			+ " done=" + ((gComTask[r] is null) ? "-" : formatFloat(Requests::Progress(gComTask[r]), "", 0, 2));
 	}
 	AiLog("apex: adv-plant defer t=" + ai.teamId + " " + what
 		+ " -- an advanced plant is already in flight:" + row);
@@ -821,7 +809,10 @@ float TacticalGain(int d)
 	if (stake <= 0.f)
 		return 0.f;
 	float cap = Catalog::gSurfDps[d] * StructMetalPerHp();
-	if ((cap <= 0.01f * stake) || (cap > stake))
+	// A stockpiled missile fires once per reload, so its dps reads near zero too, yet each shot erases a tower
+	// cluster: it answers the loss at its spot like the paralyzer (11-12 turtle: cortron capped at 0.42 m/s against
+	// 13 m/s lost to their guns, never built).
+	if ((cap <= 0.01f * stake) || (cap > stake) || Catalog::gStock[d])
 		cap = stake;
 	float left = stake - float(SuperHave(SC_TACTICAL)) * cap;
 	return (left < cap) ? ((left > 0.f) ? left : 0.f) : cap;
@@ -905,24 +896,35 @@ bool SiegeSite(CCircuitUnit@ unit, int d, AIFloat3 &out at)
 	AIFloat3 foe;
 	float foeR = 0.f, foeM = 0.f;
 	if (!Military::TurretTarget(foe, foeR, foeM))
-		return false;
+		{ gSiegeSiteWhy = "no-target"; return false; }
+	// Outrange the line's guns, not their super weapon: one LRPC behind a turtle's wall (reach 4,650) refused every
+	// EMP launcher (3,650) against towers of 1,380 (11-12 turtle pilot).
+	foeR = Military::TurretLineReach();
 	const float reach = Catalog::gMaxRange[d];
 	if (reach <= foeR)
-		return false;
+		{ gSiegeSiteWhy = "outranged(r" + int(reach) + "<=line" + int(foeR) + ")"; return false; }
 	const AIFloat3 back = home - foe;
 	const float len = sqrt(back.x * back.x + back.z * back.z);
 	if (len < 1.f)
-		return false;
+		{ gSiegeSiteWhy = "at-home"; return false; }
 	float stand = (reach + foeR) * 0.5f;
 	if (stand > len)
 		stand = len;
 	at = foe + back * (stand / len);
+	gSiegeSiteWhy = OnMap(at) ? "ok" : "offmap";
 	return OnMap(at);
 }
+string gSiegeSiteWhy = "-";
 
 string gGantryWhy = "";
 float gGantryV = 0.f;
 int gNextGantryWhyLog = 0;
+
+// A nuke threat we know of: one of their silos seen, or a warhead that reached us.
+bool AntiThreatKnown(int sc)
+{
+	return (sc == SC_ANTINUKE) && ((Brain::NukeShotsRecent() > 0) || (Brain::EnemyNukeSilos() > 0));
+}
 
 void GantryWhy(int sc, const string &in why)
 {
@@ -949,7 +951,7 @@ void GantryWhyLog(CCircuitUnit@ unit, const string &in why, float v, const Want@
 		+ " bestV=" + formatFloat(w.value * 1000.f, "", 0, 2)
 		+ " inc=" + int((gIncEma > 0.f) ? gIncEma : Eco::MInc())
 		+ " over=" + int(OverflowM())
-		+ " flight=" + gSuperFlight + "/" + SuperFlightCap());
+		+ " flight=" + gSuperFlight);
 }
 
 Want@ ProposeSuper(CCircuitUnit@ unit)
@@ -958,9 +960,6 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	Want wIns;
 	if (ai.GetTunable("apex_super_want", TUNE_SUPER_WANT) <= 0.f)
 		return w;
-	const bool slotFull = SuperInFlight();
-	if (slotFull && !GantryOwnSlot())
-		{ GantryWhyLog(unit, "super-in-flight", 0.f, w); return w; }
 	const float budget = SuperBudget();
 	if (budget <= 0.f)
 		{ GantryWhyLog(unit, "no-budget", 0.f, w); return w; }
@@ -982,8 +981,6 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
 			continue;
-		if (slotFull && (sc != SC_GANTRY))
-			continue;
 		if ((sc == SC_GANTRY) && StrikeBuilding())
 			continue;   // a tier-up waits for the strike (strike.as)
 		// ...and no big gun or heavy turret either: they are the military
@@ -1001,8 +998,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// below, taken first for every class whose budget IS the plain one --
 		// the gantry's team purse is computed further down and keeps its
 		// place.
-		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && (SuperBill(d) >= budget * PlanMul(sc)))
-			continue;
+		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && !AntiThreatKnown(sc) && (SuperBill(d) >= budget * PlanMul(sc)))
+			{ GantryWhy(sc, "afford"); continue; }
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			{ GantryWhy(sc, "live-request"); continue; }
 		if ((sc != SC_LRPC) && (sc != SC_TACTICAL) && (sc != SC_JUNO)
@@ -1071,6 +1068,13 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					TUNE_GANTRY_AFFORD_S);
 			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f) * PlanMul(sc);
 		}
+		// A SEEN SILO OR A LANDED WARHEAD: the anti covers every clustered ally, so the team's purse affords it (his
+		// 11-12 game: five seats started on top of each other, warheads landed at 16.6 and 20.3 min, the first anti
+		// was ordered at 21.7; no single seat's minute of income covered the bill). Allies help raise it (ally-key).
+		if (AntiThreatKnown(sc)) {
+			const float asec = ai.GetTunable("apex_super_afford_s", TUNE_SUPER_AFFORD_S);
+			classBudget = (teamInc + TgPayersInc()) * ((asec > 1.f) ? asec : 60.f);
+		}
 		// A cannon's price is its time to afford (ValueOf), not this cut.
 		if ((sc != SC_LRPC) && (bill >= classBudget))
 			{ GantryWhy(sc, "afford"); continue; }   // cannot afford it; nothing else about it matters
@@ -1093,7 +1097,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				continue;
 		} else if (sc == SC_TACTICAL) {
 			if (!SiegeSite(unit, d, at))
-				continue;
+				{ GantryWhy(sc, "no-site:" + gSiegeSiteWhy); continue; }
 		} else {
 			const double _tSs = Perf::T0();
 			const int sKey = -(d * 16 + sc + 1);
@@ -1268,7 +1272,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	// Priced here as what it is, a strategic line the economy can carry, on
 	// the same affordability shape as the rest of this market.
 	{
-		CCircuitDef@ ap = (slotFull || StrikeBuilding()) ? null : Air::IntelPlantToBuild();
+		CCircuitDef@ ap = StrikeBuilding() ? null : Air::IntelPlantToBuild();
 		// An ADVANCED air plant waits its turn behind any advanced plant
 		// already in flight -- see AdvPlantInFlight above (Purple's
 		// simultaneous T2 vehicle + T2 air, "a huge 'no no'").

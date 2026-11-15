@@ -43,6 +43,17 @@ IUnitTask@ CoverFor(CCircuitDef@ want, const AIFloat3& in spot, float radius)
 // JOIN_MIN_COST still applies, so a ~50 metal T1 extractor is not worth a walk
 // to assist -- for those the second asker takes ANOTHER SPOT, which is the
 // same answer arrived at by not joining.
+// ONE CREW NUMBER FOR BOTH RUNGS: the peel trims a site to the seat plan's crew when the plan sized it (peel.as), so
+// the join must admit to that same number, or one takes hands off and the other puts them straight back (11-14:
+// a T2 lab peeled at 617.0 s and re-joined at 617.1 s, again at 675.0/675.1 -- his "stops, walks away, goes back").
+uint CrewCapFor(IUnitTask@ cand, uint cap)
+{
+	if (ai.GetTunable("apex_crew_one_number", 1.f) <= 0.f)
+		return cap;
+	const int planN = Market::PlanCrewFor(cand);
+	return ((planN > 0) && (uint(planN) < cap)) ? uint(planN) : cap;
+}
+
 IUnitTask@ JoinSpot(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spot)
 {
 	if ((want is null) || (want.costM < JOIN_MIN_COST) || !OnMap(spot))
@@ -52,7 +63,7 @@ IUnitTask@ JoinSpot(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in sp
 		IUnitTask@ cand = gLive[i];
 		if ((cand is null) || cand.IsDead() || (cand.buildDef !is want))
 			continue;
-		if (Workers(cand) >= cap)
+		if (Workers(cand) >= CrewCapFor(cand, cap))
 			continue;
 		if (NanoFed(cand, Workers(cand), 0.f, 0.f))
 			continue;
@@ -83,8 +94,8 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		// The site's crew cap belongs to the def actually being BUILT there:
 		// pricing a fusion's crew off the advsol want that walked in read a
 		// 2-hand cap against a job that feeds many more.
-		const uint candCap = ((cand.buildDef is null) || (cand.buildDef is want))
-				? cap : SiteWorkerCap(cand.buildDef);
+		const uint candCap = CrewCapFor(cand, ((cand.buildDef is null) || (cand.buildDef is want))
+				? cap : SiteWorkerCap(cand.buildDef));
 		if ((busy >= candCap) || !SameJob(cand.buildDef, want, busy))
 			continue;
 		if ((unit !is null) && (cand.buildDef !is null)

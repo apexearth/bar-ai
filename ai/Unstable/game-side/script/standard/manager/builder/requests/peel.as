@@ -12,7 +12,53 @@ namespace Requests {
 int gPeeled = 0;
 int gNanoFedPeel = 0;   // sites trimmed to the founder because the ring is on them
 int gPeelKept = 0;      // hands past halfway to their site, kept on it
+int gNearDoneKept = 0;  // sites left whole because the crew finishes before a peeled hand reaches other work
 int gNextPeelLog = 0;
+
+// A SITE THE CREW FINISHES BEFORE A PEELED HAND COULD REACH ANY OTHER WORK KEEPS ITS CREW (his 11-14: "when it's
+// almost complete we let a lot of our builders move on ... something 95% done and then taking a long time to
+// finally 100% complete. we should stop doing that"). The hand's walk to the nearest other live site is what peeling
+// buys nothing during; the finish it delays is the building's own value starting. No other live site: nothing to go to.
+bool CrewFinishesFirst(IUnitTask@ t, array<CCircuitUnit@>@ crew)
+{
+	if (ai.GetTunable("apex_peel_near_done", 1.f) <= 0.f)
+		return false;
+	if ((t is null) || (t.buildDef is null) || (crew is null) || (crew.length() == 0))
+		return false;
+	const int d = int(t.buildDef.id);
+	float bp = 0.f, spd = 0.f;
+	for (uint c = 0; c < crew.length(); ++c) {
+		if (crew[c] is null)
+			continue;
+		const int cd = int(crew[c].circuitDef.id);
+		bp += Catalog::gBuildPower[cd];
+		if (Catalog::gSpeed[cd] > spd)
+			spd = Catalog::gSpeed[cd];   // the fastest hand's walk: kept only when even it would arrive after the finish
+	}
+	if (bp <= 0.f)
+		return false;
+	const float remainS = (1.f - Progress(t)) * Catalog::gBuildTime[d] / bp;
+	const AIFloat3 site = t.GetBuildPos();
+	if (!OnMap(site))
+		return false;
+	float nearD = -1.f;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ o = gLive[i];
+		if ((o is null) || (o is t) || o.IsDead() || (o.GetType() != Task::Type::BUILDER))
+			continue;
+		const AIFloat3 op = o.GetBuildPos();
+		if (!OnMap(op))
+			continue;
+		const float dd = op.distance2D(site);
+		if ((nearD < 0.f) || (dd < nearD))
+			nearD = dd;
+	}
+	if (nearD < 0.f)
+		return true;
+	const float walkS = (spd > 1.f) ? (nearD / spd) : 1e9f;
+	return remainS <= walkS;
+}
+
 void PeelSurplus()
 {
 	if (ai.GetTunable("apex_assist_release", TUNE_ASSIST_RELEASE) <= 0.f)
@@ -25,8 +71,12 @@ void PeelSurplus()
 		if ((t.buildDef is null) || (t.target is null))
 			continue;
 		array<CCircuitUnit@>@ crew = t.GetUnits();
-		if (crew is null)
+		if ((crew is null) || (crew.length() <= 1))
 			continue;
+		if (CrewFinishesFirst(t, crew)) {
+			++gNearDoneKept;
+			continue;
+		}
 		// The same feed-derived crew the join rung authorises, so a peeled
 		// worker cannot walk straight back on: peeling against one number
 		// while SiteWorkerCap admitted against another only cycled them.
@@ -98,7 +148,7 @@ void PeelSurplus()
 		gNextPeelLog = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: peeled " + peeledNow
 			+ " surplus assister(s) back to the auction (total " + gPeeled
-			+ " nanoFed=" + gNanoFedPeel + " keptPastHalf=" + gPeelKept + ")");
+			+ " nanoFed=" + gNanoFedPeel + " keptPastHalf=" + gPeelKept + " keptNearDone=" + gNearDoneKept + ")");
 	}
 }
 
@@ -164,6 +214,10 @@ void ConsolidateEnergy()
 			|| (aiEconomyMgr.GetEnergyMake(d) <= 1.f))
 			continue;
 		array<CCircuitUnit@>@ crew = t.GetUnits();
+		if (CrewFinishesFirst(t, crew)) {
+			++gNearDoneKept;
+			continue;
+		}
 		// Never the last hand: the engine deletes a frame at zero progress the
 		// moment no one lathes it, so moving it throws the project away.
 		while ((crew !is null) && (crew.length() > 1) && (moved < PEEL_PER_TICK)) {

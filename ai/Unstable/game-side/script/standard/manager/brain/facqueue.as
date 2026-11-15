@@ -42,6 +42,7 @@ array<int> gFQOutAt;             // ...as of this frame
 // undercount and the line over-order.
 array<int> gFQPendLine;
 array<CCircuitDef@> gFQPendDef;
+array<int> gFQPendAt;            // ...and the frame each was sent
 
 int gFQOrders = 0;               // build orders issued, all lines
 float gFQArmyM = 0.f;            // army metal ordered, all lines
@@ -87,6 +88,7 @@ void PendAdd(int line, CCircuitDef@ d)
 {
 	gFQPendLine.insertLast(line);
 	gFQPendDef.insertLast(d);
+	gFQPendAt.insertLast(ai.frame);
 	Market::AatNotePend(d);
 }
 
@@ -122,6 +124,7 @@ void PendDrop(int line, int n)
 		if (gFQPendLine[i] == line) {
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);
+			gFQPendAt.removeAt(i);
 			--n;
 			continue;
 		}
@@ -136,6 +139,7 @@ void PendReindex(int gone)
 		if (gFQPendLine[i] == gone) {
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);
+			gFQPendAt.removeAt(i);
 		} else if (gFQPendLine[i] > gone) {
 			gFQPendLine[i] -= 1;
 		}
@@ -400,6 +404,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			stop = redraw ? "slice" : ("null:" + Market::gNoOrder);
 			break;
 		}
+		if (Market::TestTurtleSkips(o))
+			continue;
 		batch.insertLast(o);
 		if (slot == 0)
 			Market::LabOrderNote(fac, o);
@@ -436,13 +442,11 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	}
 	if (batch.length() > 0) {
 		// EXACTLY ONE UNIT PER ORDER: a SHIFT append is multiplied by five
-		// inside CFactoryCAI, so CmdInsertBuild is the only append that queues
-		// what the market asked for. It lands at position 1 -- behind whatever
-		// is being built, AHEAD of everything else -- so the batch is issued
-		// back to front to come out in the order it was decided, and lands in
-		// front of work queued on an earlier pass. That is what puts an escort
-		// or a constructor floor in front of the army: those are priced first,
-		// so they sit at the head of the batch.
+		// inside CFactoryCAI, so CmdAppendBuild (an insert at the end) is the
+		// append that queues what the market asked for. FIFO, as the ledger
+		// assumes: at position 1 every later batch jumped the earlier ones, and
+		// on a line kept fed an order waited for ever while the ledger held it
+		// pending (rc3-rc2-A9504 t1: a T2 con from 12.8 min, never built).
 		uint first = 0;
 		// A replace order WIPES the queue it lands on, so it is only safe on a
 		// line with nothing outstanding at all -- an order still in flight has
@@ -451,8 +455,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			fac.CmdBuildUnit(batch[0], 1, true);
 			first = 1;
 		}
-		for (int i = int(batch.length()) - 1; i >= int(first); --i)
-			fac.CmdInsertBuild(batch[i], false);
+		for (uint i = first; i < batch.length(); ++i)
+			fac.CmdAppendBuild(batch[i]);
 		gFQAt[line] = ai.frame;
 		gFQEvt[line] = ai.frame;
 		gFQOrders += int(batch.length());
@@ -578,6 +582,7 @@ void NoteProduced(CCircuitUnit@ unit)
 			}
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);
+			gFQPendAt.removeAt(i);
 			return;
 		}
 	}
@@ -602,9 +607,14 @@ void LogFacQueues()
 			+ "/" + formatFloat(LineSeconds(int(i), gFQFac[i], false), "", 0, 0)
 			+ "s buf" + formatFloat(LineSeconds(int(i), gFQFac[i], true), "", 0, 0) + "s";
 	}
+	int oldest = 0;
+	for (uint i = 0; i < gFQPendAt.length(); ++i) {
+		if ((ai.frame - gFQPendAt[i]) / SECOND > oldest)
+			oldest = (ai.frame - gFQPendAt[i]) / SECOND;
+	}
 	AiLog(Factory::T() + "apex: facqueue lines=" + gFQFac.length()
 		+ " orders=" + gFQOrders + " lost=" + gFQLost
-		+ " milreq=" + gFQMilReq + " depth+pend:" + d);
+		+ " milreq=" + gFQMilReq + " oldest=" + oldest + "s depth+pend:" + d);
 }
 
 }  // namespace Brain

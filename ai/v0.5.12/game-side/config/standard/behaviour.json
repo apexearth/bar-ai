@@ -1,0 +1,2139 @@
+// Fight values are stock BARb's (his 11-06): quota num_batch/raid/slack_mod/thr_mod, defence base_rad/comm_rad/
+// escort, retreat, and every unit's retreat/power/threat. Production keys (role, limit, attribute, since,
+// build_speed, scout, aa_threat) are ours. 2v2 vs BARb, 24 pairs: own vs foe near our deaths 4.0 v 7.8 ->
+// 5.1 v 5.6, metal lost outnumbered 2:1 39% -> 23%, damage efficiency 0.78-0.84 -> 0.88-0.91, kills +2.5k.
+// Except escort: his 08-21 rule, every constructor outside the base keeps one armed guard all game ([12, 1, 100000]);
+// against stock [2, 1, 600], 24 pairs: damage efficiency 0.86-0.97 -> 0.93-1.02, income at 20 min +16.6 (t 2.0), lost -2.1k.
+// The commented version this replaced is in git history.
+{
+	"quota": {
+		"scout": 2,
+		"raid": [
+			9.0,
+			420.0
+		],
+		"attack": 60.0,
+		"thr_mod": {
+			"attack": [
+				1.0,
+				1.0
+			],
+			"defence": [
+				1.0,
+				1.0
+			],
+			"mobile": 1.05,
+			"static": 1.2,
+			"comm": 0.01
+		},
+		"aa_threat": [
+			[
+				8,
+				500.0
+			],
+			[
+				24,
+				500.0
+			]
+		],
+		"slack_mod": {
+			"all": 0.5,
+			"static": 0.5,
+			"speed": [
+				0.75,
+				4.0
+			]
+		},
+		"num_batch": 5,
+		"anti_cap": 2.0
+	},
+	"retreat": {
+		"builder": [
+			0.8,
+			0.89,
+			1.0
+		],
+		"fighter": [
+			0.5,
+			0.55,
+			1.0
+		],
+		"shield": [
+			0.25,
+			0.55
+		]
+	},
+	"defence": {
+		"infl_rad": 5,
+		"base_rad": [
+			600.0,
+			1200.0
+		],
+		"comm_rad": [
+			1000.0,
+			500.0
+		],
+		"escort": [
+			12,
+			1,
+			100000
+		]
+	},
+	"behaviour": {
+		"armcom": {
+			"role": [
+				"builder"
+			],
+			"attribute": [
+				"commander",
+				"dg_cost"
+			],
+			"build_speed": 10.0,
+			"power": 0.4
+		},
+		"corcom": {
+			"role": [
+				"builder"
+			],
+			"attribute": [
+				"commander",
+				"dg_cost"
+			],
+			"build_speed": 10.0,
+			"power": 0.4
+		},
+		"armlab": {
+			"role": [
+				"static"
+			],
+			"build_speed": 5.0
+		},
+		"armalab": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"build_speed": 15.0
+		},
+		"armshltx": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"midposoffset": [
+				0,
+				0,
+				-16
+			],
+			"build_speed": 1.0
+		},
+		"armvp": {
+			"role": [
+				"static"
+			],
+			"build_speed": 5.0
+		},
+		"armavp": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"build_speed": 15.0
+		},
+		"corlab": {
+			"role": [
+				"static"
+			],
+			"build_speed": 5.0,
+			"midposoffset": [
+				-3.239746,
+				0,
+				-2
+			]
+		},
+		"coralab": {
+			"role": [
+				"static"
+			],
+			"midposoffset": [
+				0,
+				0,
+				-4
+			],
+			"build_speed": 15.0
+		},
+		"corgant": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"build_speed": 1.0
+		},
+		"corvp": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 5.0
+		},
+		"coravp": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"build_speed": 15.0
+		},
+		"armap": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"build_speed": 5
+		},
+		"armaap": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"since": 420,
+			"build_speed": 10.0
+		},
+		"corap": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"build_speed": 5.0
+		},
+		"coraap": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"since": 420,
+			"build_speed": 10.0
+		},
+		"armsy": {
+			"role": [
+				"static"
+			],
+			"build_speed": 8.0
+		},
+		"armasy": {
+			"role": [
+				"static"
+			],
+			"build_speed": 15.0
+		},
+		"armhp": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0
+		},
+		"armfhp": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0
+		},
+		"armamsub": {
+			"role": [
+				"static"
+			],
+			"build_speed": 7.5
+		},
+		"armplat": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0,
+			"since": 420
+		},
+		"armshltxuw": {
+			"role": [
+				"static"
+			],
+			"attribute": [
+				"support"
+			],
+			"midposoffset": [
+				0,
+				0,
+				-16
+			],
+			"build_speed": 1.0
+		},
+		"corsy": {
+			"role": [
+				"static"
+			],
+			"build_speed": 8.0
+		},
+		"corasy": {
+			"role": [
+				"static"
+			],
+			"build_speed": 15.0,
+			"since": 480
+		},
+		"corhp": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0
+		},
+		"corfhp": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0,
+			"since": 300
+		},
+		"coramsub": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 7.5
+		},
+		"corplat": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 10.0,
+			"since": 420
+		},
+		"armnanotc": {
+			"role": [
+				"support"
+			],
+			"build_speed": 10.0
+		},
+		"armnanotcplat": {
+			"role": [
+				"support"
+			],
+			"build_speed": 10.0
+		},
+		"cornanotc": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0
+		},
+		"cornanotcplat": {
+			"role": [
+				"static"
+			],
+			"build_speed": 10.0
+		},
+		"armllt": {
+			"role": [
+				"static"
+			],
+			"since": 70,
+			"build_mod": 400
+		},
+		"armbeamer": {
+			"role": [
+				"static"
+			],
+			"since": 360
+		},
+		"armhlt": {
+			"role": [
+				"static"
+			]
+		},
+		"armfhlt": {
+			"role": [
+				"static"
+			],
+			"since": 360
+		},
+		"armguard": {
+			"role": [
+				"static"
+			],
+			"on": false,
+			"threat": 0.3,
+			"since": 600
+		},
+		"armclaw": {
+			"role": [
+				"static"
+			],
+			"since": 420
+		},
+		"armpb": {
+			"role": [
+				"static"
+			]
+		},
+		"armamb": {
+			"role": [
+				"static"
+			],
+			"on": false
+		},
+		"armanni": {
+			"role": [
+				"static"
+			]
+		},
+		"armbrtha": {
+			"role": [
+				"static"
+			]
+		},
+		"armsilo": {
+			"role": [
+				"super",
+				"static"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.1
+			}
+		},
+		"armrl": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armferret": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armcir": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armflak": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armmercury": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armtl": {
+			"role": [
+				"static"
+			]
+		},
+		"armatl": {
+			"role": [
+				"static"
+			]
+		},
+		"armkraken": {
+			"role": [
+				"static"
+			],
+			"threat": {
+				"air": 0.0,
+				"surf": 1.0,
+				"water": 1.0
+			}
+		},
+		"corllt": {
+			"role": [
+				"static"
+			],
+			"since": 70,
+			"build_mod": 300,
+			"midposoffset": [
+				0,
+				0,
+				2.38
+			]
+		},
+		"corhllt": {
+			"role": [
+				"static"
+			]
+		},
+		"corhlt": {
+			"role": [
+				"static"
+			]
+		},
+		"corfhlt": {
+			"role": [
+				"static"
+			],
+			"since": 360
+		},
+		"cormaw": {
+			"role": [
+				"static"
+			],
+			"since": 300
+		},
+		"corpun": {
+			"role": [
+				"static"
+			],
+			"on": false,
+			"threat": 0.3,
+			"since": 600
+		},
+		"corrl": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"cormadsam": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"corerad": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"corflak": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"corscreamer": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"cortl": {
+			"role": [
+				"static"
+			]
+		},
+		"coratl": {
+			"role": [
+				"static"
+			]
+		},
+		"corvipe": {
+			"role": [
+				"static"
+			]
+		},
+		"cortoast": {
+			"role": [
+				"static"
+			],
+			"on": false
+		},
+		"cordoom": {
+			"role": [
+				"static"
+			]
+		},
+		"corfdoom": {
+			"role": [
+				"static"
+			],
+			"threat": {
+				"air": 0.0,
+				"surf": 1.0,
+				"water": 0.1,
+				"vs": {
+					"scout": 0.4,
+					"raider": 0.4,
+					"artillery": 0.3,
+					"anti_heavy": 0.5,
+					"anti_heavy_ass": 0.5,
+					"super": 0.8
+				}
+			}
+		},
+		"corjuno": {
+			"role": [
+				"super",
+				"static"
+			],
+			"since": 900
+		},
+		"corsilo": {
+			"role": [
+				"super",
+				"static"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.1
+			}
+		},
+		"armtarg": {
+			"role": [
+				"static"
+			]
+		},
+		"cortarg": {
+			"role": [
+				"static"
+			]
+		},
+		"armemp": {
+			"role": [
+				"super",
+				"static"
+			]
+		},
+		"cortron": {
+			"role": [
+				"super",
+				"static"
+			]
+		},
+		"armveil": {
+			"role": [
+				"static"
+			]
+		},
+		"corshroud": {
+			"role": [
+				"static"
+			]
+		},
+		"armrad": {
+			"role": [
+				"static"
+			],
+			"since": 120
+		},
+		"corrad": {
+			"role": [
+				"static"
+			],
+			"since": 120
+		},
+		"armjamt": {
+			"role": [
+				"static"
+			],
+			"since": 600
+		},
+		"corjamt": {
+			"role": [
+				"static"
+			],
+			"since": 600
+		},
+		"armjuno": {
+			"role": [
+				"super",
+				"static"
+			],
+			"since": 900
+		},
+		"armmakr": {
+			"role": [
+				"static"
+			],
+			"since": 300
+		},
+		"cormakr": {
+			"role": [
+				"static"
+			],
+			"since": 300
+		},
+		"armdrag": {
+			"role": [
+				"static"
+			]
+		},
+		"cordrag": {
+			"role": [
+				"static"
+			]
+		},
+		"armmex": {
+			"role": [
+				"static"
+			],
+			"build_mod": 300
+		},
+		"armmoho": {
+			"role": [
+				"static"
+			],
+			"build_mod": 200
+		},
+		"armsolar": {
+			"role": [
+				"static"
+			],
+			"build_mod": 300
+		},
+		"armgeo": {
+			"role": [
+				"static"
+			],
+			"midposoffset": [
+				0,
+				0,
+				-2
+			]
+		},
+		"armfus": {
+			"role": [
+				"static"
+			],
+			"build_mod": 2000,
+			"cooldown": 3
+		},
+		"armafus": {
+			"role": [
+				"static"
+			],
+			"build_mod": 4000
+		},
+		"armuwfus": {
+			"role": [
+				"static"
+			],
+			"build_mod": 4000
+		},
+		"armestor": {
+			"role": [
+				"static"
+			],
+			"since": 240
+		},
+		"armuwes": {
+			"role": [
+				"static"
+			],
+			"since": 240
+		},
+		"armmstor": {
+			"role": [
+				"static"
+			],
+			"since": 500
+		},
+		"armuwadvms": {
+			"role": [
+				"static"
+			]
+		},
+		"cormex": {
+			"role": [
+				"static"
+			],
+			"build_mod": 300
+		},
+		"cormoho": {
+			"role": [
+				"static"
+			],
+			"build_mod": 200
+		},
+		"cormexp": {
+			"role": [
+				"static"
+			],
+			"build_mod": 500,
+			"limit": 0
+		},
+		"corfus": {
+			"role": [
+				"static"
+			],
+			"build_mod": 4000,
+			"cooldown": 3
+		},
+		"coruwfus": {
+			"role": [
+				"static"
+			],
+			"build_mod": 4000
+		},
+		"cormstor": {
+			"role": [
+				"static"
+			],
+			"since": 500
+		},
+		"coruwms": {
+			"role": [
+				"static"
+			],
+			"since": 500
+		},
+		"coruwadvms": {
+			"role": [
+				"static"
+			]
+		},
+		"corestor": {
+			"role": [
+				"static"
+			],
+			"since": 240
+		},
+		"coruwes": {
+			"role": [
+				"static"
+			],
+			"since": 240
+		},
+		"armfort": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"corfort": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"armdrag_scav": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"cordrag_scav": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"armfort_scav": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"corfort_scav": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"corscavdrag": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"corscavdrag_scav": {
+			"role": [
+				"static"
+			],
+			"ignore": true
+		},
+		"armck": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 4.0
+		},
+		"corck": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 4.0
+		},
+		"armack": {
+			"role": [
+				"builderT2"
+			],
+			"attribute": [
+				"solo"
+			],
+			"build_speed": 9.0
+		},
+		"corack": {
+			"role": [
+				"builderT2"
+			],
+			"attribute": [
+				"solo"
+			],
+			"build_speed": 9.0
+		},
+		"armfark": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 1.0,
+			"since": 1500
+		},
+		"corfast": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 7.0,
+			"since": 1500
+		},
+		"armcv": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 4.5
+		},
+		"corcv": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 4.5
+		},
+		"armbeaver": {
+			"role": [
+				"builder"
+			],
+			"attribute": [
+				"solo"
+			],
+			"build_speed": 4.0
+		},
+		"cormuskrat": {
+			"role": [
+				"builder"
+			],
+			"attribute": [
+				"solo"
+			],
+			"build_speed": 4.0
+		},
+		"cormlv": {
+			"role": [
+				"support"
+			],
+			"limit": 0
+		},
+		"armacv": {
+			"role": [
+				"builderT2"
+			],
+			"attribute": [
+				"solo"
+			],
+			"build_speed": 12.5
+		},
+		"coracv": {
+			"role": [
+				"builderT2"
+			],
+			"attribute": [
+				"solo"
+			],
+			"build_speed": 12.5
+		},
+		"armconsul": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 1.0,
+			"since": 1500
+		},
+		"armca": {
+			"role": [
+				"builder",
+				"air"
+			],
+			"retreat": 0.6,
+			"build_speed": 3.0
+		},
+		"corca": {
+			"role": [
+				"builder",
+				"air"
+			],
+			"attribute": [
+				"solo"
+			],
+			"retreat": 0.6,
+			"build_speed": 3.0
+		},
+		"armaca": {
+			"role": [
+				"builder",
+				"air"
+			],
+			"attribute": [
+				"solo"
+			],
+			"retreat": 0.6,
+			"build_speed": 5.0
+		},
+		"coraca": {
+			"role": [
+				"builder",
+				"air"
+			],
+			"retreat": 0.6,
+			"build_speed": 5.0
+		},
+		"armcs": {
+			"role": [
+				"builder"
+			],
+			"retreat": 0.6,
+			"build_speed": 6
+		},
+		"corcs": {
+			"role": [
+				"builder"
+			],
+			"retreat": 0.6,
+			"build_speed": 6.0
+		},
+		"armacsub": {
+			"role": [
+				"builderT2",
+				"sub"
+			],
+			"attribute": [
+				"solo"
+			],
+			"retreat": 0.3,
+			"build_speed": 15.0
+		},
+		"coracsub": {
+			"role": [
+				"builderT2",
+				"sub"
+			],
+			"attribute": [
+				"solo"
+			],
+			"retreat": 0.3,
+			"build_speed": 15.0
+		},
+		"armmls": {
+			"role": [
+				"builder"
+			],
+			"retreat": 0.5,
+			"build_speed": 10.0
+		},
+		"cormls": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 10.0,
+			"retreat": 0.75
+		},
+		"armch": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 6.0
+		},
+		"corch": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 6.0
+		},
+		"armpw": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"scout"
+			],
+			"retreat": 0.1
+		},
+		"armrectr": {
+			"role": [
+				"support"
+			]
+		},
+		"armrock": {
+			"role": [
+				"assault"
+			]
+		},
+		"armham": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"armjeth": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armwar": {
+			"role": [
+				"riot"
+			],
+			"attribute": [
+				"melee"
+			]
+		},
+		"armflea": {
+			"role": [
+				"scout"
+			]
+		},
+		"armfast": {
+			"role": [
+				"raider"
+			]
+		},
+		"armamph": {
+			"role": [
+				"raider",
+				"anti_air"
+			]
+		},
+		"armzeus": {
+			"role": [
+				"assault"
+			],
+			"attribute": [
+				"melee"
+			]
+		},
+		"armfboy": {
+			"role": [
+				"heavy"
+			]
+		},
+		"armmav": {
+			"role": [
+				"riot"
+			]
+		},
+		"armfido": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			],
+			"slow_target": true
+		},
+		"armvader": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"melee"
+			],
+			"retreat": 0
+		},
+		"armaak": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armmark": {
+			"role": [
+				"support"
+			]
+		},
+		"armaser": {
+			"role": [
+				"support"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.0
+			}
+		},
+		"armspid": {
+			"role": [
+				"raider"
+			]
+		},
+		"armsptk": {
+			"role": [
+				"support"
+			]
+		},
+		"armsnipe": {
+			"role": [
+				"anti_heavy_ass"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armscab": {
+			"role": [
+				"support"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.0
+			}
+		},
+		"armspy": {
+			"role": [
+				"scout"
+			]
+		},
+		"armmar": {
+			"role": [
+				"raider",
+				"heavy"
+			]
+		},
+		"armlun": {
+			"role": [
+				"skirmish",
+				"heavy"
+			],
+			"attribute": [
+				"siege"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 1.0
+			}
+		},
+		"armraz": {
+			"role": [
+				"riot",
+				"heavy"
+			],
+			"attribute": [
+				"melee"
+			],
+			"power": 2.5
+		},
+		"armvang": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			],
+			"power": 2.0
+		},
+		"armbanth": {
+			"role": [
+				"super"
+			],
+			"attribute": [
+				"melee"
+			],
+			"power": 2.0
+		},
+		"armthor": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 1.0
+			},
+			"power": 0.1,
+			"retreat": 0.4
+		},
+		"armmlv": {
+			"role": [
+				"support"
+			],
+			"limit": 0
+		},
+		"armfav": {
+			"role": [
+				"scout"
+			]
+		},
+		"armflash": {
+			"role": [
+				"raider"
+			]
+		},
+		"armpincer": {
+			"role": [
+				"raider"
+			]
+		},
+		"armstump": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"armart": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armjanus": {
+			"role": [
+				"assault"
+			]
+		},
+		"armsam": {
+			"role": [
+				"anti_air"
+			],
+			"attribute": [
+				"support",
+				"siege"
+			]
+		},
+		"armlatnk": {
+			"role": [
+				"raider"
+			]
+		},
+		"armgremlin": {
+			"role": [
+				"raider"
+			]
+		},
+		"armbull": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"armmanni": {
+			"role": [
+				"anti_heavy_ass"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armmart": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armmerl": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armyork": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armseer": {
+			"role": [
+				"support"
+			]
+		},
+		"armjam": {
+			"role": [
+				"support"
+			]
+		},
+		"armpeep": {
+			"role": [
+				"scout",
+				"air"
+			]
+		},
+		"armfig": {
+			"role": [
+				"anti_air",
+				"air"
+			]
+		},
+		"armthund": {
+			"role": [
+				"bomber",
+				"air"
+			],
+			"threat": 0.1
+		},
+		"armkam": {
+			"role": [
+				"raider",
+				"air"
+			],
+			"retreat": 0.6
+		},
+		"armawac": {
+			"role": [
+				"scout",
+				"air"
+			]
+		},
+		"armhawk": {
+			"role": [
+				"anti_air",
+				"air"
+			]
+		},
+		"armpnix": {
+			"role": [
+				"bomber",
+				"air"
+			]
+		},
+		"armbrawl": {
+			"role": [
+				"raider",
+				"air"
+			],
+			"attribute": [
+				"siege"
+			],
+			"retreat": 0.5
+		},
+		"armblade": {
+			"role": [
+				"heavy",
+				"air"
+			],
+			"attribute": "support",
+			"retreat": 0.4
+		},
+		"armstil": {
+			"role": [
+				"assault",
+				"air"
+			],
+			"attribute": "support"
+		},
+		"armliche": {
+			"role": [
+				"bomber",
+				"air"
+			],
+			"retreat": 0.5
+		},
+		"armsaber": {
+			"role": [
+				"skirmish",
+				"air"
+			],
+			"retreat": 0.6
+		},
+		"armrecl": {
+			"role": [
+				"support"
+			],
+			"retreat": 0.6
+		},
+		"armpt": {
+			"role": [
+				"scout",
+				"anti_air"
+			]
+		},
+		"armdecade": {
+			"role": [
+				"raider"
+			]
+		},
+		"armpship": {
+			"role": [
+				"riot"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armsub": {
+			"role": [
+				"sub"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armroy": {
+			"role": [
+				"anti_sub"
+			],
+			"attribute": [
+				"siege"
+			],
+			"retreat": 0.5
+		},
+		"armsubk": {
+			"role": [
+				"anti_sub",
+				"sub"
+			]
+		},
+		"armserp": {
+			"role": [
+				"sub"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armaas": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"armcrus": {
+			"role": [
+				"skirmish"
+			],
+			"attribute": [
+				"anti_sub"
+			]
+		},
+		"armsjam": {
+			"role": [
+				"support"
+			],
+			"retreat": 0.75
+		},
+		"armcarry": {
+			"role": [
+				"support"
+			],
+			"retreat": 0.75
+		},
+		"armmship": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			],
+			"retreat": 0.5
+		},
+		"armbats": {
+			"role": [
+				"heavy"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"armepoch": {
+			"role": [
+				"super"
+			],
+			"attribute": [
+				"super"
+			],
+			"retreat": 0.3
+		},
+		"armsh": {
+			"role": [
+				"raider"
+			]
+		},
+		"armanac": {
+			"role": [
+				"assault"
+			]
+		},
+		"armmh": {
+			"role": [
+				"artillery"
+			]
+		},
+		"armah": {
+			"role": [
+				"anti_air"
+			],
+			"attribute": [
+				"skirmish"
+			]
+		},
+		"corak": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"scout"
+			],
+			"retreat": 0.1
+		},
+		"cornecro": {
+			"role": [
+				"scout"
+			]
+		},
+		"corstorm": {
+			"role": [
+				"assault"
+			]
+		},
+		"corthud": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"corcrash": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"cortermite": {
+			"role": [
+				"raider"
+			]
+		},
+		"corpyro": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"melee"
+			]
+		},
+		"corsumo": {
+			"role": [
+				"heavy"
+			],
+			"attribute": [
+				"support"
+			]
+		},
+		"corcan": {
+			"role": [
+				"skirmish"
+			],
+			"attribute": [
+				"melee"
+			]
+		},
+		"cormort": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"support"
+			]
+		},
+		"corhrk": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"coraak": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"cormando": {
+			"role": [
+				"support"
+			],
+			"buildpeed": 6.0
+		},
+		"cordecom": {
+			"role": [
+				"builder"
+			],
+			"build_speed": 6.0
+		},
+		"corroach": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"melee"
+			],
+			"retreat": 0
+		},
+		"corsktl": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"melee"
+			],
+			"retreat": 0
+		},
+		"corvoyr": {
+			"role": [
+				"support"
+			]
+		},
+		"corspec": {
+			"role": [
+				"support"
+			]
+		},
+		"coramph": {
+			"role": [
+				"raider"
+			]
+		},
+		"corspy": {
+			"role": [
+				"scout"
+			]
+		},
+		"corsok": {
+			"role": [
+				"skirmish"
+			],
+			"retreat": 0.6
+		},
+		"corshiva": {
+			"role": [
+				"assault",
+				"heavy"
+			]
+		},
+		"corkarg": {
+			"role": [
+				"raider",
+				"heavy"
+			]
+		},
+		"corcat": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			],
+			"power": 2.0
+		},
+		"corkorg": {
+			"role": [
+				"super"
+			],
+			"attribute": [
+				"melee"
+			],
+			"power": 2.2
+		},
+		"corjugg": {
+			"role": [
+				"super"
+			],
+			"attribute": [
+				"melee"
+			],
+			"power": 2.5
+		},
+		"corfav": {
+			"role": [
+				"scout"
+			]
+		},
+		"corgator": {
+			"role": [
+				"raider"
+			],
+			"attribute": [
+				"scout"
+			]
+		},
+		"corgarp": {
+			"role": [
+				"raider"
+			]
+		},
+		"corraid": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"corlevlr": {
+			"role": [
+				"riot"
+			]
+		},
+		"corwolv": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"cormist": {
+			"role": [
+				"anti_air"
+			],
+			"attribute": [
+				"support",
+				"siege"
+			]
+		},
+		"corseal": {
+			"role": [
+				"raider"
+			]
+		},
+		"corparrow": {
+			"role": [
+				"raider"
+			]
+		},
+		"correap": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"corgol": {
+			"role": [
+				"heavy"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"cormart": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"corsent": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"corvroc": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"corban": {
+			"role": [
+				"assault"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"cortrem": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"corvrad": {
+			"role": [
+				"support"
+			]
+		},
+		"coreter": {
+			"role": [
+				"support"
+			]
+		},
+		"cormabm": {
+			"role": [
+				"support"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"correcl": {
+			"role": [
+				"support"
+			],
+			"retreat": 0.6
+		},
+		"corpt": {
+			"role": [
+				"anti_air"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"coresupp": {
+			"role": [
+				"scout"
+			]
+		},
+		"corpship": {
+			"role": [
+				"riot"
+			]
+		},
+		"corroy": {
+			"role": [
+				"anti_sub"
+			],
+			"attribute": [
+				"siege",
+				"support"
+			],
+			"retreat": 0.5
+		},
+		"corsub": {
+			"role": [
+				"raider",
+				"sub"
+			]
+		},
+		"corshark": {
+			"role": [
+				"anti_sub",
+				"sub"
+			],
+			"attribute": [
+				"anti_sub"
+			]
+		},
+		"corssub": {
+			"role": [
+				"sub"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"corarch": {
+			"role": [
+				"anti_air"
+			]
+		},
+		"corcrus": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"corsjam": {
+			"role": [
+				"support"
+			],
+			"retreat": 0.75
+		},
+		"corcarry": {
+			"role": [
+				"support"
+			],
+			"retreat": 0.75
+		},
+		"cormship": {
+			"role": [
+				"artillery"
+			],
+			"attribute": [
+				"siege"
+			],
+			"retreat": 0.5
+		},
+		"corbats": {
+			"role": [
+				"heavy"
+			],
+			"attribute": [
+				"siege"
+			]
+		},
+		"corblackhy": {
+			"role": [
+				"super"
+			],
+			"attribute": [
+				"siege"
+			],
+			"retreat": 0.3
+		},
+		"corfink": {
+			"role": [
+				"scout",
+				"air"
+			]
+		},
+		"corveng": {
+			"role": [
+				"anti_air",
+				"air"
+			]
+		},
+		"corshad": {
+			"role": [
+				"bomber",
+				"air"
+			],
+			"threat": 0.1
+		},
+		"corbw": {
+			"role": [
+				"skirmish",
+				"air"
+			],
+			"retreat": 0.3
+		},
+		"corawac": {
+			"role": [
+				"scout",
+				"air"
+			]
+		},
+		"corvamp": {
+			"role": [
+				"anti_air",
+				"air"
+			]
+		},
+		"corhurc": {
+			"role": [
+				"bomber",
+				"air"
+			]
+		},
+		"corape": {
+			"role": [
+				"raider",
+				"air"
+			],
+			"retreat": 0.5
+		},
+		"corcrw": {
+			"role": [
+				"heavy",
+				"air"
+			],
+			"retreat": 0.5
+		},
+		"corcut": {
+			"role": [
+				"raider",
+				"air"
+			],
+			"retreat": 0.8
+		},
+		"corsh": {
+			"role": [
+				"raider"
+			]
+		},
+		"corsnap": {
+			"role": [
+				"skirmish"
+			]
+		},
+		"cormh": {
+			"role": [
+				"artillery"
+			]
+		},
+		"corah": {
+			"role": [
+				"anti_air"
+			],
+			"attribute": [
+				"support"
+			]
+		},
+		"corhal": {
+			"role": [
+				"heavy",
+				"skirmish"
+			]
+		},
+		"raptor_queen_epiq": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.01
+			},
+			"retreat": 0.8
+		},
+		"raptor_queen_veryhard": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.012
+			},
+			"retreat": 0.8
+		},
+		"raptor_queen_hard": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.015
+			},
+			"retreat": 0.8
+		},
+		"raptor_queen_normal": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.02
+			},
+			"retreat": 0.8
+		},
+		"raptor_queen_easy": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.03
+			},
+			"retreat": 0.8
+		},
+		"raptor_queen_veryeasy": {
+			"role": [
+				"super"
+			],
+			"threat": {
+				"air": 0.0,
+				"water": 0.0,
+				"surf": 0.04
+			},
+			"retreat": 0.8
+		}
+	}
+}

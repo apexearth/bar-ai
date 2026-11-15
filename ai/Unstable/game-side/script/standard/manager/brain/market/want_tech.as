@@ -1102,7 +1102,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				InteriorSite(here, Catalog::Def(int(unit.circuitDef.id))));
 		Want c;
 		ValueOf(d, techGain * fundedMul * BreachPlantMul(d, Catalog::gBuildPower[uid])
-					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),
+					* PipeLatencyMult(d, Catalog::gBuildPower[uid]) * Builder::PlantSiteOdds(d),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c, true, 0.f, LabInheritOn());
 		// the follow-through bill: cheapest constructor this lab produces
 		{

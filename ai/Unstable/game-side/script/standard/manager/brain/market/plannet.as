@@ -628,8 +628,10 @@ int TeamGoOp()
 // 8v8 when you can notice one of your allies is making one and if it isn't far
 // away you can help them make it and then support what they build"). "Not far"
 // is the walk against the time our whole build power would take to raise one.
-array<float> gAllyGant;   // x, z, defId, unitId, progress
+array<float> gAllyGant;   // x, z, defId, unitId, progress: ally gantries, and every strategic frame still rising
 int gAllyGantAt = -1;
+int gAllyKeyAsks = 0;      // hands sent to an ally's important frame since the last log
+int gAllyKeyLogAt = 0;
 float gOwnBpRaw = 0.f;
 
 void AllyGantScan()
@@ -640,10 +642,19 @@ void AllyGantScan()
 	gAllyGant.resize(0);
 	const array<float>@ ab = ai.GetAllyBuilds();
 	for (uint i = 0; (ab !is null) && (i + 4 < ab.length()); i += 5) {
-		if (!IsGantryDef(int(ab[i + 2])))
+		const int ad = int(ab[i + 2]);
+		// the gantry (its frame and its production), and since his 11-12 every strategic frame: "allies help each
+		// other with important buildings" -- silos, anti-nukes, guns, launchers, Junos, advanced air plants
+		if (!IsGantryDef(ad) && !((SuperClassOf(ad) >= 0) && (ab[i + 4] < 1.f)))
 			continue;
 		for (uint k = 0; k < 5; ++k)
 			gAllyGant.insertLast(ab[i + k]);
+	}
+	if (ai.frame >= gAllyKeyLogAt) {
+		gAllyKeyLogAt = ai.frame + 60 * SECOND;
+		if ((gAllyGant.length() > 0) || (gAllyKeyAsks > 0))
+			AiLog("apex: ally-key t=" + ai.teamId + " frames=" + (gAllyGant.length() / 5) + " asks=" + gAllyKeyAsks);
+		gAllyKeyAsks = 0;
 	}
 	gOwnBpRaw = 0.f;
 	const array<int>@ own = OwnedDefs();
@@ -682,8 +693,8 @@ int AllyGuardsOn(int allyId)
 	return n;
 }
 
-// The ally gantry this hand should serve, or -1.
-int AllyGantryFor(CCircuitUnit@ unit, AIFloat3 &out at, int &out def, float &out progress)
+// The ally gantry this hand should serve, or -1 (gantry); else the nearest other important ally frame (his 11-12).
+int AllyGantryFor(CCircuitUnit@ unit, AIFloat3 &out at, int &out def, float &out progress, bool gantry = true)
 {
 	if ((unit is null) || (unit.circuitDef is null))
 		return -1;
@@ -697,6 +708,8 @@ int AllyGantryFor(CCircuitUnit@ unit, AIFloat3 &out at, int &out def, float &out
 		AIFloat3 p(gAllyGant[i], 0.f, gAllyGant[i + 1]);
 		p.y = ai.GetElevationAt(p);
 		const int gd = int(gAllyGant[i + 2]);
+		if (IsGantryDef(gd) != gantry)
+			continue;
 		const float d = here.distance2D(p);
 		const float ownS = (gOwnBpRaw > 0.f) ? (Catalog::gBuildTime[gd] / gOwnBpRaw) : 1e9f;
 		if ((speed <= 0.f) || (d / speed > ownS))

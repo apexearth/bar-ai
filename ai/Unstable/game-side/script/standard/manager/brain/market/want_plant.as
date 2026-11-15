@@ -421,14 +421,25 @@ bool NavalLead()
 
 int PlantClass(int plantId)
 {
-	if (Catalog::gFloater[plantId] || Catalog::gSub[plantId])
+	if (Catalog::gFloater[plantId] || Catalog::gSub[plantId]
+		|| (Catalog::gNeedWater[plantId] && (ai.GetTunable("apex_plant_class_army", 1.f) > 0.f)))
 		return PC_WATER;
 	const array<int>@ pr = Catalog::gBuildsList[plantId];
+	bool flyCon = false, groundArmy = false;
 	for (uint i = 0; i < pr.length(); ++i) {
-		if (Catalog::gMobile[pr[i]] && Catalog::gBuilder[pr[i]]
-			&& Catalog::gFlyer[pr[i]])
-			return PC_AIR;
+		const int p = pr[i];
+		if (!Catalog::gMobile[p])
+			continue;
+		if (Catalog::gBuilder[p] && Catalog::gFlyer[p])
+			flyCon = true;
+		else if (!Catalog::gBuilder[p] && !Catalog::gFlyer[p] && (Catalog::gDps[p] > 0.f))
+			groundArmy = true;
 	}
+	// a lab that also offers a flying constructor is still a ground line while it fields ground combat units (a
+	// randomizer roll gave the T3 bot lab an air con: classed air, its army half read the strike net, 0, and 8-9
+	// such labs a seat made nothing but constructors, army 1-2% of spend)
+	if (flyCon && (!groundArmy || (ai.GetTunable("apex_plant_class_army", 1.f) <= 0.f)))
+		return PC_AIR;
 	return PC_LAND;
 }
 
@@ -623,6 +634,7 @@ int gNextPlantDupLog = 0;
 int gNextPlantLiftLog = 0;
 int gNextPlantCandLog = 0;
 int gNextAirPlantDropLog = 0;
+int gPlantHalvesNext = 0, gPlantHalvesAt = -1;
 int gNextWetReachLog = 0;
 int gNextYardHoldLog = 0;
 // When one of our water plants last died (main.as unit-destroyed).
@@ -1486,6 +1498,45 @@ float RecordLineMul(int plantDef)
 // difference between a rule and a value.
 int gTeamPlantAt = -999999;
 array<int> gTeamPlantN;
+int gMatesNoGround = 0;     // AI mates (they publish "apexseat") with no ground army plant standing or in flight
+int gOurFront = 0;          // ours, as published in "apexfront": 2 = a ground army plant standing or building
+int gMatesGround = 0;       // AI mates that already field one
+array<int> gGroundArmyPlant; // per def: 0 unknown, 1 yes, 2 no
+
+bool GroundArmyPlant(int d)
+{
+	if (int(gGroundArmyPlant.length()) <= Catalog::gDefCount)
+		gGroundArmyPlant.resize(Catalog::gDefCount + 1);
+	if (gGroundArmyPlant[d] == 0) {
+		bool yes = false;
+		if (PlantClass(d) == PC_LAND) {
+			const array<int>@ pr = Catalog::gBuildsList[d];
+			for (uint i = 0; (i < pr.length()) && !yes; ++i) {
+				const int p = pr[i];
+				yes = Catalog::gAvailable[p] && Catalog::gMobile[p] && !Catalog::gBuilder[p] && !Catalog::gFlyer[p];
+			}
+		}
+		gGroundArmyPlant[d] = yes ? 1 : 2;
+	}
+	return gGroundArmyPlant[d] == 1;
+}
+
+// HIS 11-14: "imagine the entire team goes air ... and then they don't have ground ... you need those tanky ground
+// units to create a front line." The production half of a ground army plant carries the front line of every AI mate
+// who fields none: 1 + w x those mates. Every mate on ground reads exactly today's price. A seat that already fields
+// one carries that front: its next ground plant is priced as before (reviewer 11-15: 8x on a second lab in a 7v7).
+// The front is ONE team need (team-thinks-as-one, his 11-15 "split it"): shared over every seat that answers or could,
+// us, the mates without ground and the mates already on it, so seven air mates do not all turn to ground at once.
+float TeamFrontMul(int d)
+{
+	const float w = ai.GetTunable("apex_team_front", 1.f);
+	if ((w <= 0.f) || !GroundArmyPlant(d))
+		return 1.f;
+	TeamPlantRefresh();
+	if (gOurFront >= 2)
+		return 1.f;
+	return 1.f + w * float(gMatesNoGround) / float(1 + gMatesNoGround + gMatesGround);
+}
 
 void TeamPlantRefresh()
 {
@@ -1499,6 +1550,8 @@ void TeamPlantRefresh()
 	for (int i = 0; i <= Catalog::gDefCount; ++i)
 		gTeamPlantN[i] = 0;
 	// Publish what WE hold, so every mate can read it.
+	ai.PublishTeamValue("apexseat", 1.f);
+	int front = 0;   // 0 no plant, 1 plants but no ground army plant, 2 a ground army plant (standing or building)
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		const int cd = gComDef[ci];
 		if (Catalog::gBuildsList[cd].length() == 0)
@@ -1508,23 +1561,51 @@ void TeamPlantRefresh()
 				|| (Requests::Workers(gComTask[ci]) == 0)))
 			continue;
 		ai.PublishTeamValue("plant" + cd, 1.f);
+		if (front < 2)
+			front = GroundArmyPlant(cd) ? 2 : 1;
 	}
+	// The front term reads its own value, republished every refresh: "plant<d>" is never cleared, so a mate that
+	// lost its ground lab read as still holding it, and one with no plant yet read as having no ground.
+	gOurFront = front;
+	ai.PublishTeamValue("apexfront", float(front));
+	ai.PublishTeamValue("apexbeat", float(ai.frame + 1));
 	array<Id>@ mates = ai.GetTeamIds();
+	gMatesNoGround = 0;
+	gMatesGround = 0;
 	if (mates is null)
 		return;
+	array<bool> ground(mates.length(), false);
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
 			|| (Catalog::gBuildsList[d].length() == 0))
 			continue;
+		const bool ga = GroundArmyPlant(d);
 		int n = 0;
 		for (uint m = 0; m < mates.length(); ++m) {
 			const int t = int(mates[m]);
 			if (t == ai.teamId)
 				continue;   // our own copies are the duplicate rule's job
-			if (ai.ReadTeamValue(t, "plant" + d, 0.f) > 0.5f)
+			if (ai.ReadTeamValue(t, "plant" + d, 0.f) > 0.5f) {
 				++n;
+				if (ga)
+					ground[m] = true;
+			}
 		}
 		gTeamPlantN[d] = n;
+	}
+	// A mate counts when it has published lately (a dead seat stops), holds a plant, and none of them is ground army.
+	for (uint m = 0; m < mates.length(); ++m) {
+		const int t = int(mates[m]);
+		if (t == ai.teamId)
+			continue;
+		const float beat = ai.ReadTeamValue(t, "apexbeat", 0.f);
+		if ((beat <= 0.f) || (float(ai.frame) - beat > 90.f * SECOND))
+			continue;
+		const float mf = ai.ReadTeamValue(t, "apexfront", 0.f);
+		if ((mf > 0.5f) && (mf < 1.5f))
+			++gMatesNoGround;
+		else if (mf >= 1.5f)
+			++gMatesGround;
 	}
 }
 
@@ -1932,7 +2013,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
 		float prodOwn = evAir ? Air::EvPlantProdYield(d, fillS0)
-				: prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d) * TeamLineMul(d) * RecordLineMul(d);
+				: prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d) * TeamLineMul(d) * RecordLineMul(d) * TeamFrontMul(d);
 		// A LINE WE CANNOT FEED ADDS NO THROUGHPUT, air too (his 10-19: "we still build the second T2 plant too
 		// early... I'd never do that until I have multiple fusion alive with energy converters"). The ground
 		// half is already capped at the metal nothing spends (prodTerm above); the air yield was not. Converted
@@ -1962,6 +2043,19 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (EcoOnly())
 			prodOwn = 0.f;
 		const float gain = conHalf + prodOwn;
+		if (Factory::gFactoryCount == 0) {
+			if (ai.frame >= gPlantHalvesNext) {
+				gPlantHalvesNext = ai.frame + 20 * SECOND;
+				gPlantHalvesAt = ai.frame;
+			}
+			if (gPlantHalvesAt == ai.frame)
+				AiLog(Factory::T() + "apex: plant-halves t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+					+ " con=" + NnF(conHalf, 3) + " (pipe=" + NnF(pipeT, 3) + " exp=" + NnF(expTerm, 3) + " rate="
+					+ NnF(rateMul, 2) + ") prod=" + NnF(prodOwn, 3) + " (half=" + NnF(prodHalf, 3) + " foe=" + NnF(FoeTierPlantMul(d), 2)
+				+ " terr=" + NnF(LineTerrainMul(d), 2) + " team=" + NnF(TeamLineMul(d), 2) + " rec=" + NnF(RecordLineMul(d), 2)
+				+ " air=" + (evAir ? 1 : 0) + ") front=" + NnF(TeamFrontMul(d), 2) + " gain=" + NnF(gain, 3)
+				+ " aGap=" + int(aGap));
+		}
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
@@ -2179,7 +2273,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 					+ " plant=" + formatFloat(plantG, "", 0, 3)
 					+ " lift=" + formatFloat(liftG, "", 0, 3));
 		}
-		ValueOf(d, (plantG + liftG) * AirLineGroundMul(d) * BreachPlantMul(d, Catalog::gBuildPower[uid]),
+		ValueOf(d, (plantG + liftG) * AirLineGroundMul(d) * BreachPlantMul(d, Catalog::gBuildPower[uid])
+				* Builder::PlantSiteOdds(d),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
 		if (evAir)
 			Air::EvNotePlant(d, c.value, evCaution);
@@ -2194,6 +2289,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				+ ",rate" + formatFloat(rateMul, "", 0, 2)
 				+ ",mob" + formatFloat(bestMob, "", 0, 2)
 				+ ",lat" + formatFloat(PipeLatencyMult(d, Catalog::gBuildPower[uid]), "", 0, 2)
+				+ ",site" + formatFloat(Builder::PlantSiteOdds(d), "", 0, 2)
 				+ ")";
 		}
 		PlantExpApply(d, c);

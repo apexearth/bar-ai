@@ -412,6 +412,7 @@ float gRunKilled = 0.f;  // enemy structure metal that died in the target cell, 
 AIFloat3 gRunAt;         // the cell the run was sent at
 int   gRunSettleAt = 0;
 int   gWaveLaunched = 0; // bombers the current wave left with
+bool  gWaveArrived = false;  // a bomber of the wave has reached the cell it was sent at
 
 // Fed from AiEnemyDestroyed: what the run is scored on. The cell's standing
 // value before and after read 0 for three runs that the death log showed
@@ -648,8 +649,18 @@ bool Hunts(CCircuitUnit@ unit)
 	if (!IsFighterDef(int(unit.circuitDef.id)) || InWave(unit.id) || Covering(unit.id)
 		|| (FlightOutIdx(unit.id) >= 0))
 		return false;
-	if (InList(gHunters, unit.id))
-		return true;
+	// A hunter is SURPLUS over the escort, every time it asks, not for life: with the count fallen a hunter kept
+	// hunting while the bombers flew bare (his 11-13 game: air.hunt=14, air.cover=1, 0 of 12 fighters home, a 9-bomber
+	// run with 1 fighter).
+	if (InList(gHunters, unit.id)) {
+		HuntPrune();
+		// kept against the same reserve it was admitted on (every-seat air admits over the held bombers' escort)
+		const int keep = EveryOn() ? EvEscortWant() : ScaledFighters();
+		if (Fighters() - gWaveFighters - int(gHunters.length()) >= keep)
+			return true;
+		gHunters.removeAt(uint(gHunters.find(unit.id)));
+		return false;
+	}
 	if (EveryOn())
 		return EvHuntLaunch(unit);
 	if (aiEnemyMgr.GetEnemyCostFresh(RT::AIR) <= 0.f)

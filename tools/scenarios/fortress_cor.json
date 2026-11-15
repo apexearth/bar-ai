@@ -1,0 +1,28 @@
+{
+  "about": "DRAFT (his 11-12: even more defence, no T3 army, we just crack the defence). Our Cortex T2 base faces an Armada fortress line with no army behind it, only economy. Resources are topped up and LOS is global, so the only question is which tactic cracks the wall (tactical missiles, Behemoths, LRPC, bombers on the AA first) and how fast.",
+  "passes": "most of the fortress dies before the time is up, and we lose less metal than we kill",
+  "map": "Comet Catcher Remake 1.8",
+  "seconds": 900,
+  "commanders": "remove",
+  "enemy": "none",
+  "units": [
+    {"side": 0, "def": "corack", "n": 6, "at": ["s0", 200, 0], "spacing": 60, "order": "ai"},
+    {"side": 0, "def": "coralab", "n": 1, "at": ["s0", -200, 0], "order": "ai"},
+    {"side": 0, "def": "coravp", "n": 1, "at": ["s0", -200, 300], "order": "ai"},
+    {"side": 0, "def": "corap", "n": 1, "at": ["s0", -200, -300], "order": "ai"},
+    {"side": 0, "def": "corfus", "n": 2, "at": ["s0", -500, 0], "spacing": 160, "order": "ai"},
+
+    {"side": 1, "def": "armanni", "n": 4, "at": ["s1", -1400, 0], "spacing": 260, "order": "hold"},
+    {"side": 1, "def": "armpb", "n": 6, "at": ["s1", -1500, 0], "spacing": 180, "order": "hold"},
+    {"side": 1, "def": "armhlt", "n": 8, "at": ["s1", -1300, 0], "spacing": 140, "order": "hold"},
+    {"side": 1, "def": "armflak", "n": 4, "at": ["s1", -1150, 0], "spacing": 300, "order": "hold"},
+    {"side": 1, "def": "armmercury", "n": 3, "at": ["s1", -1100, 0], "spacing": 400, "order": "hold"},
+    {"side": 1, "def": "armgate", "n": 2, "at": ["s1", -1000, 0], "spacing": 500, "order": "hold"},
+    {"side": 1, "def": "armveil", "n": 1, "at": ["s1", -900, 0], "order": "hold"},
+    {"side": 1, "def": "armfus", "n": 2, "at": ["s1", -300, 0], "spacing": 200, "order": "hold"},
+    {"side": 1, "def": "armmoho", "n": 4, "at": ["s1", -200, 300], "spacing": 150, "order": "hold"}
+  ],
+  "expect": [
+    {"lost_m1": [">=", 20000], "lost_m0": ["<=", 20000]}
+  ]
+}

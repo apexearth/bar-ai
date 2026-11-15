@@ -1176,7 +1176,9 @@ AIFloat3 CTerrainManager::FloodStop(CCircuitDef* mobileDef, const AIFloat3& star
 bool CTerrainManager::DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, const AIFloat3& pos, int facing,
 		const AIFloat3& goal)
 {
-	if ((facDef == nullptr) || (mobileDef == nullptr) || !utils::is_valid(goal)) {
+	// a plant whose largest unit flies has no ground door (a T3-rolled randomizer game refused every corhaap site
+	// as a dead end, 1,088 times, and the commander built nothing for 25 minutes)
+	if ((facDef == nullptr) || (mobileDef == nullptr) || mobileDef->IsAbleToFly() || !utils::is_valid(goal)) {
 		return true;
 	}
 	const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
@@ -1198,7 +1200,35 @@ bool CTerrainManager::DoorEscapes(CCircuitDef* facDef, CCircuitDef* mobileDef, c
 		g = door + (g - door) * (2000.f / dg);
 	}
 	const AIFloat3 stop = FloodStop(mobileDef, door, g);
-	return stop.distance2D(door) >= stop.distance2D(g);
+	if (stop.distance2D(door) >= stop.distance2D(g)) {
+		return true;
+	}
+	// ...unless that unit cannot leave home either: then no door passes and the site is not what traps it (a
+	// T3-rolled randomizer game refused every armhalab site in all four facings and built nothing for 25 minutes)
+	AIFloat3 home = circuit->GetSetupManager()->GetBasePos();
+	if (!utils::is_valid(home)) {
+		return false;
+	}
+	CorrectPosition(home);
+	AIFloat3 hg = goal;
+	const float dh = home.distance2D(hg);
+	if (dh > 2000.f) {
+		hg = home + (hg - home) * (2000.f / dh);
+	}
+	// the home flood does not depend on the site: one per AI, unit and goal cell for 30 s, not one per failing facing
+	struct HomeEsc { int frame; int cell; bool trapped; };
+	static std::map<std::pair<int, int>, HomeEsc> homeCache;
+	const std::pair<int, int> hk(circuit->GetSkirmishAIId(), int(mobileDef->GetId()));
+	const int cell = int(hg.z / 512.f) * 4096 + int(hg.x / 512.f);
+	const int now = circuit->GetLastFrame();
+	auto it = homeCache.find(hk);
+	if ((it != homeCache.end()) && (it->second.cell == cell) && (now - it->second.frame < FRAMES_PER_SEC * 30)) {
+		return it->second.trapped;
+	}
+	const AIFloat3 hstop = FloodStop(mobileDef, home, hg);
+	const bool trapped = hstop.distance2D(home) < hstop.distance2D(hg);
+	homeCache[hk] = HomeEsc{now, cell, trapped};
+	return trapped;
 }
 
 void CTerrainManager::MarkAllyBuildings()

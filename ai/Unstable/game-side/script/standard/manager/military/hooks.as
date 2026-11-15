@@ -557,7 +557,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			if (cg !is null)
 				return NoteElect("air.cover", cg);
 		}
-		if (AirGthOn() && Air::gStrike) {
+		// ...with no bomber left to guard it comes home for the next wave: left to stock tasks or a hold where it stood,
+		// the escort hovered over their base until their AA found it (11-13: of 4,543 fighters lost in 48 games, ~2,900
+		// died idle or retreating, mostly deep on their side; ~120 died fighting).
+		if ((AirGthOn() || (ai.GetTunable("apex_air_hold_home", TUNE_AIR_HOLD_HOME) > 0.f)) && Air::gStrike) {
 			Air::HoldHome(unit);
 			return null;   // it left its wave's cover: held for the next one
 		}

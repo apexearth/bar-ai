@@ -320,12 +320,11 @@ bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
 	return true;
 }
 
-// The hand UpgradesFirst would strip for its upgrades, asked before the hoists above it run.
+// A ceiling hand with an upgrade on its own list, home crew or field: the super push yields it (his 11-14: the first
+// T2 con upgrades our extractors; rc2-cm2-C9502 t0 pushed an anti-nuke at v=2.4 over an upgrade at v=52.8).
 bool UpgradeOwed(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	if (!ReachesCeiling(int(unit.circuitDef.id)) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-		return false;
-	if (CrewSplitOn() && !CrewIsField(unit))
 		return false;
 	bool up = false;
 	for (uint i = 0; (i < ranked.length()) && !up; ++i)
@@ -599,7 +598,7 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 		// claim business (placing needs build capability).
 		if ((busy == 0) && (cand.target is null))
 			continue;
-		if ((busy > 0) && (busy >= Requests::SiteWorkerCap(cand.buildDef)))
+		if ((busy > 0) && (busy >= Requests::CrewCapFor(cand, Requests::SiteWorkerCap(cand.buildDef))))
 			continue;
 		if ((unit !is null) && !unit.circuitDef.CanBuild(cand.buildDef)
 			&& (cand.target is null))

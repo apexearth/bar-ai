@@ -141,6 +141,8 @@ def launch(spec: dict, args, slot: int) -> tuple[subprocess.Popen, Path]:
         cmd += ["--seed", str(args.seed)]
     for kv in args.ai_option:
         cmd += ["--ai-option", kv]
+    for kv in list(spec.get("enemy_options", [])) + args.enemy_option:
+        cmd += ["--ai-option-b", kv]
     for kv in args.modoption:
         cmd += ["--modoption", kv]
     (out / "scenario.json").write_text(json.dumps(spec, indent=1), encoding="utf-8")
@@ -323,6 +325,8 @@ def main() -> int:
     r.add_argument("--seed", type=int)
     r.add_argument("--parallel", type=int, default=1)
     r.add_argument("--ai-option", action="append", default=[], metavar="K=V")
+    r.add_argument("--enemy-option", action="append", default=[], metavar="K=V",
+                   help="per-AI option for the enemy AI (also the spec's enemy_options list)")
     r.add_argument("--modoption", action="append", default=[], metavar="K=V")
     r.add_argument("--install-gadget", action="store_true")
     j = sub.add_parser("judge")

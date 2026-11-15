@@ -454,7 +454,7 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 		// happened to fall under its equal share. Self-limiting with no
 		// number anywhere: each hand that joins raises pull and closes the
 		// gap behind it.
-		if (requireFeed && (busy >= Requests::SiteWorkerCap(cand.buildDef))
+		if (requireFeed && (busy >= Requests::CrewCapFor(cand, Requests::SiteWorkerCap(cand.buildDef)))
 			&& (FreeMetalFlow() < Requests::DRAIN)) {
 			++gJobFull;
 			continue;   // the income genuinely cannot feed another hand
@@ -630,11 +630,49 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 	return null;
 }
 
+// SPARE HANDS: distinct constructors the market had nothing for in the last 30 s. The con floors subtract them --
+// a hand standing spare is supply already there (his 11-14 game: 120+ air cons on make-work assists, "no positive
+// want", while the floor asked for 98).
+array<int> gSpareId;
+array<int> gSpareAt;
+array<bool> gSpareFly;
+void NoteSpareHand(int id, bool fly)
+{
+	for (uint i = 0; i < gSpareId.length(); ++i) {
+		if (gSpareId[i] == id) {
+			gSpareAt[i] = ai.frame;
+			return;
+		}
+	}
+	gSpareId.insertLast(id);
+	gSpareAt.insertLast(ai.frame);
+	gSpareFly.insertLast(fly);
+}
+// kind: 0 walkers, 1 flyers, 2 any -- each floor subtracts the spare hands of the kind it counts
+int SpareHands(int kind = 2)
+{
+	if (ai.GetTunable("apex_con_spare", 1.f) <= 0.f)
+		return 0;
+	int n = 0;
+	for (int i = int(gSpareId.length()) - 1; i >= 0; --i) {
+		if (ai.frame - gSpareAt[i] > 30 * SECOND) {
+			gSpareId.removeAt(uint(i));
+			gSpareAt.removeAt(uint(i));
+			gSpareFly.removeAt(uint(i));
+		} else if ((kind == 2) || ((kind == 1) == gSpareFly[i])) {
+			++n;
+		}
+	}
+	return n;
+}
+
 IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 {
 	if (unit is null)
 		return null;
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	if (!isComm)
+		NoteSpareHand(int(unit.id), unit.circuitDef.IsAbleToFly());
 	const bool logIt = (ai.frame >= gNextFloorLog);
 	// The commander takes only jobs inside his leash (ComFar). Far out
 	// with nothing near, he walks home (below), never to any job.

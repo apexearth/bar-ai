@@ -92,7 +92,8 @@ void CbBuildMatch(int d, const AIFloat3& in p)
 	const uint b = uint(best);
 	AiLog("apex: calib-build t=" + ai.teamId + " def=" + Catalog::Def(d).GetName() + " fwd="
 		+ NnF(Military::ForwardFraction(p), 2) + " walk=" + int(gCxWalk[b]) + " build=" + int(gCxBuild[b])
-		+ " actual=" + int(float(ai.frame - gCxAt[b]) / 30.f) + " inc=" + int(Eco::MInc()));
+		+ " actual=" + int(float(ai.frame - gCxAt[b]) / 30.f) + " inc=" + int(Eco::MInc())
+		+ " at=" + int(p.x) + "," + int(p.z));
 	for (int i = int(gCxDef.length()) - 1; i >= 0; --i) {
 		if ((gCxDef[i] == d) && (Sq(gCxX[i] - p.x) + Sq(gCxZ[i] - p.z) < CB_SITE_R * CB_SITE_R)) {
 			gCxDef.removeAt(i); gCxAt.removeAt(i); gCxX.removeAt(i); gCxZ.removeAt(i);
