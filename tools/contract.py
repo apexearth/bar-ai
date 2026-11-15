@@ -33,7 +33,8 @@ class Seat:
 
 
 KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
-        "facqueue takes ", "facqueue lines=", "placed t=", "latency ")
+        "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
+        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships")
 
 
 def load(match: Path) -> list[Seat]:
@@ -205,6 +206,15 @@ def wing_wiped_runs(s: Seat):
     return worst / n if n >= 2 else None
 
 
+def gunships_sent_to_lose(s: Seat):
+    """His 11-15, a hosted 4v4 at minute 78: "50 or more Tyrannus ... just sitting around doing nothing", "they're under
+    attack ... not even using them defensively". The stale net turned the rule's WAIT into GO at a cell the wing's own
+    price said loses (killF=0, net=-321), every 25 s for 14 minutes, so the wing hovered there instead of holding home.
+    Share of the seat's gunship launches made at a negative own price."""
+    nets = [int(m.group(1)) for _f, body in s.lines["nnair-go gunships"] if (m := re.search(r"net=(-?\d+)", body))]
+    return sum(1 for v in nets if v < 0) / len(nets) if len(nets) >= 2 else None
+
+
 ADV_PLANT = re.compile(r"^(arm|cor|leg)(a(lab|vp|ap|sy)|gant|shltx|haap|halab|havp)")
 _SLOW_CACHE: dict = {}
 
@@ -257,11 +267,45 @@ def no_t2_by_20(s: Seat):
 
 def lone_t2_minutes(s: Seat):
     """His 11-14: a seat with a T2 air plant "has only one T2 con. Just one." Minutes from two minutes after T2 with at
-    most one advanced constructor standing (pkg3-rc-A9501 t0: one from minute 14 to 30, no moho finished)."""
+    most one advanced constructor standing WHILE an advanced plant stands to make more (pkg3-rc-A9501 t0: one from
+    minute 14 to 30, no moho finished; rc5's three worst seats had lost every advanced plant first, a lost fight)."""
     tech = next((r["techFrame"] for r in s.stats if r.get("techFrame", -1) > 0), None)
     if tech is None:
         return None
-    return 2.0 * sum(1 for r in s.stats if r["frame"] >= tech + 2 * 1800 and r.get("conT2", 0) <= 1)
+    ev = sorted([(f, 1) for f, b in s.lines["latency "] if ADV_PLANT_DONE.search(b)]
+                + [(f, -1) for f, b in s.lines["unit-destroyed "] if ADV_PLANT_DIED.search(b)])
+    def standing(frame):
+        return sum(d for f, d in ev if f <= frame)
+    return 2.0 * sum(1 for r in s.stats if r["frame"] >= tech + 2 * 1800 and r.get("conT2", 0) <= 1
+                     and standing(r["frame"]) > 0)
+
+
+ADV_PLANT_DONE = re.compile(r"latency (arm|cor|leg)a(lab|vp|ap|sy) done=")
+ADV_PLANT_DIED = re.compile(r"unit-destroyed (arm|cor|leg)a(lab|vp|ap|sy) ")
+
+
+DM_STAT = re.compile(r"target=[\d.]+->([\d.]+) have=([\d.]+)")
+STRUCT_DIED = re.compile(r"unit-destroyed \w+ .*?cost=([\d.]+) fwd=(-?[\d.]+) .*?mob=0")
+
+
+def covered_losses_k(s: Seat):
+    """His 11-15 hosted 4v4: "our base is just dying to spam ... completely predictable", while the defence pricer read
+    the stream as one arrival and held its target under what stood (t4: 0 of 63 tower bids won). Thousands of metal of
+    our structures lost on our side of the map (forward fraction < 0.5) while the pricer said we had enough."""
+    events = sorted([(f, 0, b) for f, b in s.lines["defmeasured-stat "]] + [(f, 1, b) for f, b in s.lines["unit-destroyed "]])
+    if not s.lines["defmeasured-stat "]:
+        return None
+    covered, lost = False, 0.0
+    for _f, kind, body in events:
+        if kind == 0:
+            m = DM_STAT.search(body)
+            if m:
+                covered = float(m.group(2)) >= float(m.group(1)) > 0.0
+        elif covered:
+            m = STRUCT_DIED.search(body)
+            if m and float(m.group(2)) < 0.5:
+                lost += float(m.group(1))
+    return lost / 1000.0
 
 
 OLDEST = re.compile(r"facqueue lines=.* oldest=(\d+)s")
@@ -291,8 +335,12 @@ def supers_before_upgrades(s: Seat):
 
 
 def cons_peak(s: Seat):
-    """His 11-14 randomizer game: 143-232 constructors a seat and no army. Most constructors standing at once."""
-    return max((int(r.get("conT1", 0) + r.get("conT2", 0)) for r in s.stats), default=0)
+    """His 11-14 randomizer game: 143-232 constructors a seat and no army. Most constructors standing at once, per the
+    seat's best metal income, as a log so the margin is a ratio (his 11-15: a bigger economy with the same army share
+    is not this failure; rc5+rc6 121 vs 106 cons on 17% more income)."""
+    cons = max((int(r.get("conT1", 0) + r.get("conT2", 0)) for r in s.stats), default=0)
+    inc = max((r.get("mInc", 0) for r in s.stats), default=0)
+    return math.log(cons / inc) if cons > 0 and inc > 0 else None
 
 
 def income_at_20(s: Seat):
@@ -323,14 +371,16 @@ CHECKS = [
     ("t2 cons given early", t2_cons_given_early, "mean", 0.25, 0.0), # "upgrade our metal extractors" first
     ("supers before 4 moho", supers_before_upgrades, "mean", 0.5, 0.0),  # the same, strategic builds first
     ("lone t2 con minutes", lone_t2_minutes, "mean", 1.0, 0.0),      # "only one T2 con. Just one."
+    ("base lost while 'covered' k", covered_losses_k, "mean", 1.0, 0.0),   # "our base is just dying to spam"
     ("oldest plant order min", oldest_order_minutes, "mean", 1.0, None),  # n/a vs a release that cannot log it
     ("no t2 by minute 20", no_t2_by_20, "mean", 0.10, None),         # the T2 checks skip such seats
     ("frozen minutes", frozen_minutes, "mean", 1.0, 0.0),            # "we don't rebuild"
     ("bare-hands minutes", bare_hands_minutes, "mean", 1.0, 0.0),    # "we don't really try to rebuild it"
     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"
+    ("gunships sent to lose", gunships_sent_to_lose, "mean", 0.10, 0.0),  # "just sitting around doing nothing"
     ("anomalous seats", anomalous_seat, "mean", 0.10, 0.0),          # "acts dramatically different"
-    ("peak constructors", cons_peak, "mean", 10.0, None),   # mean: a median falls between map clusters
+    ("log peak cons per income", cons_peak, "mean", 0.10, None),   # mean: a median falls between map clusters
     ("army share (neg)", army_share, "median", 0.03, None),
     ("-log income at 20", income_at_20, "median", 0.15, None),  # his eco target, minute 20
 ]

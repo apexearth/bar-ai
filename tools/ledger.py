@@ -167,7 +167,10 @@ def add(args):
         buf2 = io.StringIO()
         with contextlib.redirect_stdout(buf2):
             # the detector matches a seat by its version name (lane-estall, v0.5.11), not the spec --us names
-            anomaly.main(["check"] + [x["dir"] for x in rows] + ["--ai", rows[0]["ver"]])
+            # normal = the release these games were played against, when it has a baseline (a release just cut has none)
+            opp = re.search(r"v\d+\.\d+\.\d+", rows[0]["them"])
+            base = ["--base-ai", opp.group(0)] if opp and (anomaly.BASE / ("baseline-%s.json" % opp.group(0))).exists() else []
+            anomaly.main(["check"] + [x["dir"] for x in rows] + ["--ai", rows[0]["ver"]] + base)
         page += ["", "## Anomalies", "", "Seats far outside the release's normal play in the same regime "
                  "(`tools/anomaly.py`, robust z >= 5 against every finished release seat).", "", "```",
                  buf2.getvalue().rstrip(), "```"]

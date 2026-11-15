@@ -967,6 +967,12 @@ int NaDecide(int kind, const string why)
 			chosen = NA_WAIT;
 			++gNaRuleHeldN;
 		}
+		// Gunships never go where their own price loses (his 11-15: 100+ gunships hovered over a killF=0, net=-321
+		// cell for 14 minutes while their base died; WAIT holds them on home ground).
+		if ((kind == 1) && (rule == NA_WAIT) && (chosen == NA_GO) && have && (best.netM < 0.f)) {
+			chosen = NA_WAIT;
+			++gNaRuleHeldN;
+		}
 		Market::NnOneHot(pr, chosen);
 	}
 	// GO needs somewhere to go: with nothing known and no wing clock, WAIT stands

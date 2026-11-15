@@ -274,10 +274,13 @@ void DefMeasuredStep()
 		const uint i = gDmPIdx++;
 		const AIFloat3 p(gDmPX[i], 0.f, gDmPZ[i]);
 		const float m = ai.GetEnemyArmedCostNear(p, gDmR);
-		if ((gDmPPrev[i] >= 0.f) && (gDmPPrev[i] < 1.f) && (m >= 1.f)) {
+		// AN ARRIVAL IS NEW ENEMY METAL AT THE PROBE, not the first after a quiet read: a stream that never clears
+		// was one arrival however much came (his 11-15 hosted 4v4: T1 spam ate t4's side from one direction while
+		// this counted 3 arrivals, 564 m, to minute 27, and 0 of 63 tower bids won).
+		if ((gDmPPrev[i] >= 0.f) && (m >= gDmPPrev[i] + 1.f)) {
 			DmAdd(gDmAX, gDmAZ, gDmAN, p.x, p.z);
 			++gDmArrN;
-			gDmArrM += m;
+			gDmArrM += m - gDmPPrev[i];
 		}
 		gDmPPrev[i] = m;
 	}
