@@ -125,7 +125,9 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	constexpr int LEAN_AHEAD = 4;
 	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
 	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
-	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
+	// 2: in contact too (FightAction.cpp, his 11-15 stalled pushes)
+	const float leanT = circuit->GetTunable("apex_travel_lean", 1.f);
+	bool lean = leanT > 0.f;
 	const AIFloat3& up = unit->GetPos(lastFrame);
 	// ...and far enough ahead that the next order lands before the unit gets there: its speed over the order lag
 	// and the update period (his 10-31: fast bombers turned around between orders in a lagging game)
@@ -133,7 +135,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	const float lagS = circuit->GetOrderLagSec();
 	const float leadD = ((circuit->GetTunable("apex_travel_lag", 1.f) > 0.f) && (lagS > CCircuitAI::ORDER_LAG_REAL_S))
 			? unit->GetCircuitDef()->GetSpeed() * (lagS + 2.f) : 0.f;
-	if (lean) {
+	if (lean && !LeansInContact(circuit, unit, leanT)) {
 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
 		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
 		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;

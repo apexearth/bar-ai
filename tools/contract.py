@@ -34,7 +34,7 @@ class Seat:
 
 KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
-        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships")
+        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim")
 
 
 def load(match: Path) -> list[Seat]:
@@ -215,6 +215,74 @@ def gunships_sent_to_lose(s: Seat):
     return sum(1 for v in nets if v < 0) / len(nets) if len(nets) >= 2 else None
 
 
+def army_stuck_per_10(s: Seat):
+    """His 11-15 v0.5.13 game: pushes stall because the move order points "right inside of a bunch of things ...
+    dead robot bodies", "it continuously retries to move to a place it can't go". Army units the stuck watcher caught
+    standing under an order (unstick-nudge without `builder`), per ten game minutes (t4-t7 there: 123-203 by ~40 min),
+    per 1,000 metal of standing army (armyReal, mean over the game): per seat alone, a side that wins fields more army
+    and reads worse (h07: v0.5.13 41 vs v0.5.07 16 per seat, 4.9 vs 7.2 per 1k army metal)."""
+    n = sum(1 for _f, b in s.lines["unstick-nudge "] if " builder" not in b)
+    end = max((r["frame"] for r in s.stats), default=0)
+    army = [r.get("armyReal", 0) for r in s.stats]
+    mean_k = (sum(army) / len(army) / 1000.0) if army else 0.0
+    if end <= 1800 * 5 or mean_k < 0.5:
+        return None
+    return 10.0 * n / (end / 1800.0) / mean_k
+
+
+FRONT_CELLS = re.compile(r"cAlly=(\d+) cFoe=(\d+)")
+
+
+def ground_given_up(s: Seat):
+    """His 11-15 v0.5.13 game: "consistently getting pushed back ... if you keep falling back and getting more and more
+    tight into your base, you will definitely not win ... it's just a slow death" (doctrine: push the front back).
+    Our share of the held cells (cAlly over cAlly+cFoe) from minute 10: the deepest fall below its own running peak
+    (t4 there: 176 of 1001 cells at minute 26, 17 of 1383 by minute 48)."""
+    peak = worst = 0.0
+    seen = False
+    for f, b in s.lines["frontline perim"]:
+        m = FRONT_CELLS.search(b)
+        if f < 18000 or not m or int(m.group(1)) + int(m.group(2)) == 0:
+            continue
+        seen = True
+        share = int(m.group(1)) / (int(m.group(1)) + int(m.group(2)))
+        peak = max(peak, share)
+        worst = max(worst, peak - share)
+    return worst if seen else None
+
+
+SENSE_R = {"rad": 2100, "frad": 2100, "arad": 3500, "jamt": 500, "veil": 760, "shroud": 700, "jam": 390}
+SENSE_PLACED = re.compile(r"placed t=\d+ ((arm|cor|leg)(rad|frad|arad|jamt|veil|shroud|jam)) at=(-?\d+),(-?\d+)")
+SENSE_DIED = re.compile(r"unit-destroyed ((arm|cor|leg)(rad|frad|arad|jamt|veil|shroud|jam)) .*? at=(-?\d+),(-?\d+)")
+
+
+def stacked_senses(s: Seat):
+    """His 11-15 v0.5.13 game: "multiple radar or jammers completely adjacent to each other ... pretty much pointless";
+    a jammer hides the buildings around it, one is enough (t4: five Cortex jammers in a row 32 apart, t6: three Veils
+    40 apart). Radar or jammer placements within a quarter of their own range of a standing one of the same kind
+    (radar with radar, jammer with jammer); a rebuild on a dead one's spot is not stacking."""
+    ev = sorted([(f, 0, m) for f, b in s.lines["placed t="] if (m := SENSE_PLACED.search(b))]
+                + [(f, 1, m) for f, b in s.lines["unit-destroyed "] if (m := SENSE_DIED.search(b))], key=lambda e: (e[0], e[1]))
+    if not ev:
+        return None
+    standing = {"radar": [], "jam": []}
+    stacked = 0
+    for _f, died, m in ev:
+        kind = "radar" if m.group(3) in ("rad", "frad", "arad") else "jam"
+        x, z = float(m.group(4)), float(m.group(5))
+        if died:
+            near = min(range(len(standing[kind])), default=None,
+                       key=lambda i: math.hypot(standing[kind][i][0] - x, standing[kind][i][1] - z))
+            if near is not None and math.hypot(standing[kind][near][0] - x, standing[kind][near][1] - z) < 64:
+                standing[kind].pop(near)
+            continue
+        r = SENSE_R[m.group(3)]
+        if any(math.hypot(a - x, b - z) < 0.25 * r for a, b in standing[kind]):
+            stacked += 1
+        standing[kind].append((x, z))
+    return float(stacked)
+
+
 ADV_PLANT = re.compile(r"^(arm|cor|leg)(a(lab|vp|ap|sy)|gant|shltx|haap|halab|havp)")
 _SLOW_CACHE: dict = {}
 
@@ -228,9 +296,11 @@ def adv_plant_frame_x(s: Seat):
         lines, _ = slowbuild.scan(Path(_MATCH_DIRS[s.match]) / "infolog.txt", s.ai)
         _SLOW_CACHE[key] = slowbuild.analyse(Path(_MATCH_DIRS[s.match]), lines, None, 0.0, -1e9)
     # the seat's FIRST advanced plant, the unlock he timed; a later plant is fed its share like any other site
-    xs = sorted((b["start"], b["frame_s"] / max(b["build"], 10)) for b in _SLOW_CACHE[key]
+    # a plant whose decision logged no price (calib-build walk=0 build=0, ~1 in 5 for both AIs) has no ratio: the 10 s
+    # floor made its 200-s frame read 20x (na7/na8: three such seats failed the check alone)
+    xs = sorted((b["start"], b["frame_s"] / max(b["build"], 10), b["build"] + b["walk"]) for b in _SLOW_CACHE[key]
                 if b["team"] == s.team and ADV_PLANT.match(b["d"]))
-    return xs[0][1] if xs else None
+    return xs[0][1] if xs and xs[0][2] > 0 else None
 
 
 _MATCH_DIRS: dict = {}
@@ -379,6 +449,9 @@ CHECKS = [
     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"
     ("gunships sent to lose", gunships_sent_to_lose, "mean", 0.10, 0.0),  # "just sitting around doing nothing"
+    ("stacked radar/jammers", stacked_senses, "mean", 0.5, 0.0),     # "completely adjacent ... pretty much pointless"
+    ("army stuck /10min/1k army", army_stuck_per_10, "median", 1.0, 0.0),  # "continuously retries to move to a place it can't go"
+    ("ground given up share", ground_given_up, "mean", 0.05, 0.0),   # "falling back ... tight into your base ... slow death"
     ("anomalous seats", anomalous_seat, "mean", 0.10, 0.0),          # "acts dramatically different"
     ("log peak cons per income", cons_peak, "mean", 0.10, None),   # mean: a median falls between map clusters
     ("army share (neg)", army_share, "median", 0.03, None),

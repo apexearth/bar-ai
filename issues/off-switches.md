@@ -16,6 +16,5 @@ DYN_MOD, PRODUCE_FOCUS, PRODUCE_NOCONS), plan by price (PLAN_FROM_PRICE), produc
 (COM_FIGHT, C++), kill their damage first (FOCUS_FIRE, C++), fusions and mohos first (T2_ECO), eco seat builds the
 gantry (ECO_SEAT_T3), no gifts to a dead seat (GIFT_STAKE), a hand always on energy (ECO_HAND), upgrades first
 (UPGRADE_FIRST), one decision per crew (CREW_ELECT), bolder commander (COM_BOLD), AFUS before Epic
-(ENERGY_GROWTH_ARRIVE), land value (LAND_VALUE), air transports (LIFT_TURRETS, LIFT_HANDS), cannons on one area
-(LRPC_FOCUS), fusion soon after T2 (T2_FUSION_PULL, waits on his ruling), siege (SIEGE, his ruling: off until the
+(ENERGY_GROWTH_ARRIVE), land value (LAND_VALUE), air transports (LIFT_TURRETS, LIFT_HANDS), fusion soon after T2 (T2_FUSION_PULL, waits on his ruling), siege (SIEGE, his ruling: off until the
 siege squad works).

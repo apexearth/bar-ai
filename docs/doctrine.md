@@ -148,7 +148,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - A committed push punches through and stays in their back lines killing bases: commit to the base or come home.
 - On the way to a target, shoot on the move and keep going.
 - Join a fight only if we arrive while it still rages.
-- Be the aggressor when we built for it; if they turtle, scale and scout; if the front moves back into us, build army and push it back.
+- Be the aggressor when we built for it; if they turtle, scale and scout; if the front moves back into us, build army and push it back: falling back tighter and tighter into the base is a slow death, so fight, lash out, do the best we can (11-15).
 - The front line holds where our ground ends, at a narrow place, inside nano range; from the border it sieges them and keeps growing.
 - Retreat to chokes and the front, concentrated opposite their army; a squad waiting to gather waits closer to the enemy.
 - A squad in a fight it clearly cannot win turns at once, under our towers if any are near.

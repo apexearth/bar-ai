@@ -60,8 +60,11 @@ void CFightAction::Update(CCircuitAI* circuit)
 	constexpr int LEAN_AHEAD = 4;
 	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
 	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
-	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
-	if (lean) {
+	// 2: in contact too (his 11-15: the per-second order to the next waypoint aimed into wrecks and our own crowd,
+	// re-sent until the push stalled; "move further up ... stop giving quite so many move orders").
+	const float leanT = circuit->GetTunable("apex_travel_lean", 1.f);
+	bool lean = leanT > 0.f;
+	if (lean && !LeansInContact(circuit, unit, leanT)) {
 		const AIFloat3& up = unit->GetPos(lastFrame);
 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
 		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();

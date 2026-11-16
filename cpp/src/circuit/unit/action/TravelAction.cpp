@@ -180,6 +180,18 @@ void ITravelAction::FaceStep(int idx)
 	}
 }
 
+// His 11-15 complaint was a push stalling in wrecks; a raid, scout, retreat, builder or flier in contact keeps the
+// per-second re-path (threat-aware between waypoints), so only a ground unit on an ATTACK task leans there.
+bool ITravelAction::LeansInContact(CCircuitAI* circuit, CCircuitUnit* unit, float leanT)
+{
+	if ((leanT < 2.f) || unit->GetCircuitDef()->IsAbleToFly()) {
+		return false;
+	}
+	IUnitTask* task = unit->GetTask();
+	return (task != nullptr) && (task->GetType() == IUnitTask::Type::FIGHTER)
+			&& (static_cast<IFighterTask*>(task)->GetFightType() == IFighterTask::FightType::ATTACK);
+}
+
 int ITravelAction::CalcSpeedStep(CCircuitAI* circuit, float& stepSpeed)
 {
 	CCircuitUnit* unit = static_cast<CCircuitUnit*>(ownerList);

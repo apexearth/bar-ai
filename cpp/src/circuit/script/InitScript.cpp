@@ -1401,6 +1401,26 @@ static float CCircuitAI_GetOwnRepairM(CCircuitAI* circuit)
 	return m;
 }
 
+// our team's and allies' metal within radius, every kind: CSuperTask::AimAtStructure's own-fire guard, for the battery
+// director (brain/lrpc.as)
+static float CCircuitAI_GetFriendlyCostIn(CCircuitAI* circuit, const AIFloat3& pos, float radius)
+{
+	if (!utils::is_valid(pos) || (radius <= 0.f)) {
+		return 0.f;
+	}
+	circuit->UpdateFriendlyUnits();
+	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius);
+	float cost = 0.f;
+	for (springai::Unit* u : units) {
+		CAllyUnit* au = (u != nullptr) ? circuit->GetFriendlyUnit(u) : nullptr;
+		if ((au != nullptr) && (au->GetCircuitDef() != nullptr)) {
+			cost += au->GetCircuitDef()->GetCostM();
+		}
+	}
+	utils::free(units);
+	return cost;
+}
+
 static float CCircuitAI_GetWreckValueAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	return circuit->GetWreckValueAt(pos, radius);
@@ -3107,6 +3127,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestRezPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestRezPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetWreckValueAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetWreckValueAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetFriendlyCostIn(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetFriendlyCostIn), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetFieldWorkAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetFieldWorkAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetOwnRepairM() const", asFUNCTION(CCircuitAI_GetOwnRepairM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetWeaponStaticOwner(int) const", asMETHOD(CCircuitAI, GetWeaponStaticOwner), asCALL_THISCALL); ASSERT(r >= 0);

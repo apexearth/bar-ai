@@ -157,10 +157,16 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		AIFloat3 shAt;
 		const float shG = JamShelledGain(d, shAt);
 		if (shG > 0.f) {
-			JamSiteLog(d, shAt, 3, JamReach(d));
-			at = shAt;
-			gain = shG;
-			return true;
+			// the engine's site, spaced like the cluster path below (11-15: asked at 7024,5968, stood 33 from a jammer)
+			const AIFloat3 shSite = JamSiteNear(d, shAt, JamReach(d));
+			if (OnMap(shSite) && (shSite.distance2D(shAt) <= JamReach(d))
+				&& !ProtCovered(PROT_JAM, shSite, JamSpacing(d)))
+			{
+				JamSiteLog(d, shSite, 3, JamReach(d));
+				at = shSite;
+				gain = shG;
+				return true;
+			}
 		}
 		// Tower concentrations want jamming first (apexearth): find a
 		// cluster of >=3 defenses with no jammer in reach.

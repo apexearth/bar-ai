@@ -3346,13 +3346,15 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			const float hClaim = PayH();
 			claimGain = mob * util * SpotM() * (((hClaim > 1.f) ? hClaim : 900.f) / 60.f)
 					* share;
-			// the spot race prices the hand's own speed and the spots it wins first
+			// the spot race prices the hand's own speed and the spots it wins first -- shared over the claimers like
+			// the claim above (his 11-15 no-air game: 12 open spots it never won, our claim rate 0, so each new con
+			// priced as the only claimer while 100 stood: "a huge blob of just a bunch of constructors")
 			if (SpotRaceOn() && (reach > 0.f)) {
 				float sH, sTR, sA, sArr, sHold, sFree;
 				OpenRaceClock(fid, sH, sTR, sA, sArr, sHold);
 				const float sBp = Brain::LineBuildPower(fac);
 				string sT;
-				claimGain = (sBp > 0.f) ? util * SpotRaceConM(d, Catalog::gBuildTime[d] / sBp, sH, sTR, sHold, sFree, sT) / 60.f : 0.f;
+				claimGain = (sBp > 0.f) ? util * SpotRaceConM(d, Catalog::gBuildTime[d] / sBp, sH, sTR, sHold, sFree, sT) / 60.f * share : 0.f;
 			}
 		}
 		// UNPROTECTED BUILD POWER IS DISCOUNTED BUILD POWER (apexearth: "we

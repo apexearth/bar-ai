@@ -48,6 +48,13 @@ is on its page; uncommitted code is in `patches/`. This index is generated (`too
 | 2026-11-13 | [Gauntlet: candidate vs barb, bonus 0v50 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-barb-bonus-0v50-us-v-them.md) | 4 | 0-2 | 0-2 | x0.36 |  |
 | 2026-11-13 | [Gauntlet: candidate vs barb, bonus 0v0 (us v them)](gauntlet/2026-11-13-gauntlet-candidate-vs-barb-bonus-0v0-us-v-them.md) | 4 | 1-1 | 2-0 | x1.50 |  |
 
+## lrpc
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-16 | [lrpc_melee + lrpc_army after review 2: director holds guns, own-fire guard](lrpc/2026-11-16-lrpc-melee-lrpc-army-after-review-2-director-holds-guns-own-.md) | 6 | 0-0 | 0-0 | - | lrpc_army (on): 4 and 12 Hammers killed (was 10/6/12/15). lrpc_melee: Warriors lost 12 and 7 with the battery on, 12 and 12 off; Hammers all dead in 62/45 s on, 82/70 s off. No sign of own fire. 2+2 runs: direction. |
+| 2026-11-16 | [lrpc_army: the battery on an encroaching army (focus on vs off)](lrpc/2026-11-16-lrpc-army-the-battery-on-an-encroaching-army-focus-on-vs-off.md) | 4 | 0-0 | 0-0 | - | After the fix: focus on killed 5 and 12 of 16 Hammers, focus off 0 and 0 (fusions 8/8 both). The cannons still die: 16 Hammers vs 4 unescorted guns. 2+2 runs: direction, needs a long game. |
+
 ## randomizer
 
 | date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
@@ -76,6 +83,13 @@ is on its page; uncommitted code is in `patches/`. This index is generated (`too
 | 2026-11-13 | [v0.5.12 candidate (breach removed) vs v0.5.11 (512h)](release-gate/2026-11-13-v0-5-12-candidate-breach-removed-vs-v0-5-11-512h.md) | 16 | 2-2 | 5-7 | x0.87 |  |
 | 2026-11-13 | [v0.5.12 candidate, breach off, vs v0.5.11 (512c)](release-gate/2026-11-13-v0-5-12-candidate-breach-off-vs-v0-5-11-512c.md) | 48 | 10-8 | 13-17 | x1.10 | The breach was the main cost; with it off the candidate is slightly ahead. |
 
+## stuck-push
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-16 | [wreck_push: travel lean 1 vs 2 (in-contact lean)](stuck-push/2026-11-16-wreck-push-travel-lean-1-vs-2-in-contact-lean.md) | 6 | 0-0 | 0-0 | - | lean=2 better in all 3 pairs, small sample. lean=1: stuck nudges 0/3/12, all killed 33.0/43.3/77.9 s, travel orders 44/64/129 (+ring 264, attack 132 in the stalled run). lean=2: stuck 0/0/0, all killed 32.4/32.7/33.0 s, travel orders 52/41/30. Next: more scenario repeats, then 3-4 full games per army.md. |
+| 2026-11-16 | [ln8: travel lean 1 vs 2 in games vs v0.5.13 (8 games), wreck_push 8 more](stuck-push/2026-11-16-ln8-travel-lean-1-vs-2-in-games-vs-v0-5-13-8-games-wreck-pus.md) | 8 | 1-1 | 4-2 | x0.76 | Scenario, all 7 pairs: lean=2 stuck 0 every run vs 17 nudges at lean=1; all killed 31-33 s vs 33-78 s (mean 44), lean=2 faster in 7 of 7. Games: army stuck per 10 min per 1k army 2.98 (lean 2) vs 3.44 (lean 1), v0.5.13 seats 2.36; won or ahead 0.50 vs 0.75, noise at 4 games. Made the Unstable default (TUNE_TRAVEL_LEAN 2) for the next gate. |
+
 ## v0512
 
 | date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
@@ -90,6 +104,24 @@ is on its page; uncommitted code is in `patches/`. This index is generated (`too
 | 2026-11-15 | [pkg4: v0.5.12 candidate (bare T2 floor, press-on fix) vs v0.5.11](v0512/2026-11-15-pkg4-v0-5-12-candidate-bare-t2-floor-press-on-fix-vs-v0-5-11.md) | 12 | 0-1 | 6-5 | x0.89 | contract PASS (recorded c494a6f08c-afccf8f64262); lone T2 con minutes 0.26 vs 0.58; turned back 0; near-done strips 8.7 vs 88.6; ahead 0.50; built x1.05 at 30 |
 | 2026-11-15 | [pkg3: every v0.5.12 fix vs v0.5.11](v0512/2026-11-15-pkg3-every-v0-5-12-fix-vs-v0-5-11.md) | 12 | 3-0 | 4-5 | x1.38 | contract FAIL: T2->1st moho 5.10 vs 4.35 min; ahead 0.58. Near-done strips 7 vs 74, early T2 gifts 0 vs 0.42 |
 | 2026-11-15 | [esc1: pkg3 + priced bomber escort (apex_air_escort_priced=1)](v0512/2026-11-15-esc1-pkg3-priced-bomber-escort-apex-air-escort-priced-1.md) | 12 | 2-1 | 3-6 | x1.23 | contract FAIL: wiped runs 2.00 vs 1.33, T2->1st moho 4.20 vs 3.65; ahead 0.50; stays off |
+
+## v0513
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-16 | [h13: v0.5.13 vs v0.5.12, the gate he let it skip (20 games)](v0513/2026-11-16-h13-v0-5-13-vs-v0-5-12-the-gate-he-let-it-skip-20-games.md) | 20 | 1-3 | 7-9 | x0.90 | Not better than v0.5.12. Contract FAIL (2): won or ahead 0.45 vs 0.50, army share 0.38 vs 0.42; income at 20 x0.90. Better on near-done strips 9.4 vs 14.9, supers before 4 moho 2.9 vs 4.3, gunships sent to lose 0.00 vs 0.32 (row 110), stacked senses 0.20 vs 0.28, army stuck 45 vs 58 per 10 min. Worse on bare-hands 1.3 vs 0.5 and frozen 0.8 vs 0.4 minutes. Unstable (rc7) is tested against v0.5.13 next. |
+| 2026-11-16 | [h07: v0.5.13 vs v0.5.07 (20 games)](v0513/2026-11-16-h07-v0-5-13-vs-v0-5-07-20-games.md) | 20 | 10-0 | 6-4 | x2.75 | v0.5.13 far stronger: decided 10-0, at time ahead 6 behind 4, won or ahead 0.80 vs 0.50, income at 20 x2.75. Better on near-done strips 9.7 vs 69.6, base lost while covered 4.1k vs 17.0k, t2 cons given early 0.06 vs 0.53, frozen 0.17 vs 0.94, bare-hands 0.11 vs 0.83, gunships sent to lose 0 vs 0.49. Contract FAIL (2): supers before 4 moho 3.8 vs 1.7, army stuck 41 vs 16 per 10 min a seat (v0.5.07's armies were smaller, so the rate is not per unit; row 113 says it has been ~45 since v0.5.11). |
+
+## v0514
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-16 | [rc9: Unstable vs v0.5.13 (20 games)](v0514/2026-11-16-rc9-unstable-vs-v0-5-13-20-games.md) | 20 | 3-1 | 5-11 | x1.00 | Not a clean PASS. Decided 3-1, at time ahead 5 behind 11; won or ahead 0.55 vs 0.50; income at 20 x1.00. Contract FAIL (1): base lost while covered 7.67k vs 4.95k; one seat fm2-C9511 t0 (80.6k) carries most of it, without it 5.6 vs 4.95 (margin 1.0). The release side itself reads 4.5-8.0 across rc8/rc9/na8/na9 on unchanged code. Early defence at minute 8: target 2270 have 825 vs release 2638/962 (rc8 2577/998): no overbuild from the first-arrival weight jump. Stacked senses 0.06 vs 0.53, supers before 4 moho 3.2 vs 4.6, anomalous seats 0 vs 0.08. |
+| 2026-11-16 | [rc8: Unstable vs v0.5.13 (20 games)](v0514/2026-11-16-rc8-unstable-vs-v0-5-13-20-games.md) | 20 | 3-1 | 6-10 | x1.30 | Better than rc7, not a clean PASS. Decided 3-1 (rc7 1-4; both rc7 wipes gone), at time ahead 6 behind 10; won or ahead 0.50 vs 0.50; income at 20 x1.30 (rc7 x0.80). Contract FAIL (1): supers before 4 moho 3.74 vs 3.18, all from one seat (fm2-A9511 t0, 35 orders, a game we won; Full Metal Plate seats run high for both AIs, a release seat there 27); without it 2.8 vs 3.2 (rc7 2.8 vs 3.8). Army stuck per 1k army 2.0 vs 2.3; stacked radar/jammers 0.18 vs 0.17; anomalous seats 0.04 vs 0.08 (baseline built 11-16). Loss rc2-A9501 at 14.6 min: lab raided by Pawns and Fleas by minute 4 (row 114). Red Comet 0-4 for us. |
+| 2026-11-16 | [rc7: Unstable vs v0.5.13 (20 games)](v0514/2026-11-16-rc7-unstable-vs-v0-5-13-20-games.md) | 20 | 1-4 | 9-6 | x0.80 | Not yet a release. Decided 1-4 (two wipes: cc A9503 x0.10, fm2 A9511 x0.04), at time ahead 9 behind 6; won or ahead 0.65 vs 0.50; income at 20 x0.80. Contract FAIL (2): lab-job leaves 0.57 vs 0.44, income at 20. Better: bare-hands 0.06 vs 1.06 and frozen 0.06 vs 0.89 minutes (blob fix), supers before 4 moho 2.8 vs 3.8, army share 0.42 vs 0.39. Stacked radar/jammers 0.28 vs 0.42, not gone: still to read. |
+| 2026-11-16 | [na9: Unstable vs v0.5.13, no air, no nukes (8 games)](v0514/2026-11-16-na9-unstable-vs-v0-5-13-no-air-no-nukes-8-games.md) | 8 | 1-2 | 2-3 | x1.16 | Worse than na8. Decided 1-2 (na8 3-1), at time ahead 2 behind 3; won or ahead 0.62 vs 0.50. Contract FAIL (3): base lost while covered 7.26k vs 4.46k (medians 4.2 vs 1.8), t2 to first moho median 2.89 vs 2.18 min, oldest plant order 3.88 vs 2.71 min (na8 on near-identical code passed both: 2.94 vs 2.60, 2.74 vs 3.19). Pooled rc9+na9 (52 seats a side): only base lost while covered fails, 7.54 vs 4.80. |
+| 2026-11-16 | [na8: Unstable vs v0.5.13, no air, no nukes (8 games)](v0514/2026-11-16-na8-unstable-vs-v0-5-13-no-air-no-nukes-8-games.md) | 8 | 3-1 | 2-2 | x1.07 | Decided 3-1, at time ahead 2 behind 2; won or ahead 0.62 vs 0.50; income at 20 x1.07. Contract FAIL (1): near-done strips 14.9 vs 7.8; the trim rule is unchanged since v0.5.12 and near-done is the same share of all trims (0.21 vs 0.20): ours ran 1113 trims to 631 on 26% more metal built. Adv plant frame x first read 2.69 vs 1.86, all from three first plants whose decision logged no price (both AIs ~1 in 5, the 10 s floor read them 16-24x); contract.py now skips an unpriced plant: 2.04 vs 1.86. Stacked radar/jammers 0.12 vs 0.81. 8 games: direction only. |
+| 2026-11-16 | [na7: Unstable vs v0.5.13, no air, no nukes (8 games)](v0514/2026-11-16-na7-unstable-vs-v0-5-13-no-air-no-nukes-8-games.md) | 8 | 1-0 | 2-5 | x1.95 | Even: won 1, lost 0, at time ahead 2 behind 5; won or ahead 0.50 vs 0.50; income at 20 x1.95. Contract FAIL (2): adv plant frame x 3.5 vs 2.3, army stuck 45 vs 35 per 10 min. Stacked radar/jammers 0.13 vs 0.79 (row 112 fix shows here). 8 games: direction only. |
 
 ## wrdistilled
 

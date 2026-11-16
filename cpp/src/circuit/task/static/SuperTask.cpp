@@ -153,6 +153,17 @@ void CSuperTask::Update()
 	// antinukes covering a target, which this per-group scorer cannot see.
 	// Stockpiling itself continues (MilitaryManager's finished-handler orders
 	// it); only the targeting is ceded. Non-stock supers (LRPC) stay here.
+	// apex: a gun the battery director (script brain/lrpc.as) holds is its: aiming here every TARGET_DELAY re-pointed it
+	// between the director's looks (lrpc_army). A gun it does not hold aims here as before (review 11-16: an out-of-reach
+	// gun stood silent); the task's own aim is cleared so a released gun re-aims at once.
+	if (unit->scriptFree && (circuit->GetTunable("apex_lrpc_focus", 0.f) > 0.f)) {
+		if (GetTarget() != nullptr) {
+			SetTarget(nullptr);
+		}
+		state = State::ROAM;
+		targetFrame = 0;
+		return;
+	}
 	if (cdef->IsAttrStock()) {
 		if (launcher == Launcher::UNKNOWN) {
 			CWeaponDef* cwd = cdef->GetWeaponDef();

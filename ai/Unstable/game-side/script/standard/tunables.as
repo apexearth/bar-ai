@@ -1720,7 +1720,7 @@ const float TUNE_PRODUCE_FOCUS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE ea
 const float TUNE_PRODUCE_NOCONS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE no new constructor while 3 stand
 const float TUNE_DYN_MOD = 0.f;   // [toggle 0/1] strike.as DynMod: the attack threat modifier follows the balance -- (theirs/ours)^2 when we outweigh them
 const float TUNE_DOOR_CLEAR = 1.f;   // [toggle 0/1] BuilderTask.cpp SitePredicate: no building in any friendly factory's doorway (ours or an ally's)
-const float TUNE_LRPC_FOCUS = 0.f;   // [toggle 0/1] brain/lrpc.as: every long-range gun in reach fires at one focus cell, switched whole
+const float TUNE_LRPC_FOCUS = 1.f;   // [toggle 0/1] brain/lrpc.as: every long-range gun in reach fires at one focus cell (buildings, or an army on our half), switched whole
 const float TUNE_AA_DWELL = 1.f;   // [toggle 0/1] nnair.as NaEval: a strike pays the AA it crosses inside the cell (2 x its air reach at the wing's speed)
 const float TUNE_GUN_REFUSE = 1.f;   // [toggle 0/1] RaidTask.cpp + nnair.as: a gunship wing that takes nothing at its goal for 3 s is recalled and the cell remembered (pain point); the unseen-base cell from the enemy start box
 const float TUNE_MEX_BASIC = 1.f;   // [toggle 0/1] protect_target.as: mex cover is tower reach less raider reach, guard sites cover several mexes, a mex's first gun not scaled by the gunp head
@@ -2164,7 +2164,7 @@ const float TUNE_STOCK_STALL_ABORT = 0.f;   // C++ only: task/builder/BuilderTas
 const float TUNE_STOCK_STALL_WAIT = 0.f;   // C++ only: task/builder/BuilderTask.cpp:1258
 const float TUNE_TARGET_VALUE = 1.f;   // C++ only: task/fighter/AttackTask.cpp:1073
 const float TUNE_TASK_TRACE = 0.f;   // C++ only: task/builder/BuilderTask.cpp:446
-const float TUNE_TRAVEL_LEAN = 1.f;   // C++ only: unit/action/FightAction.cpp:63
+const float TUNE_TRAVEL_LEAN = 2.f;   // [0/1/2] C++ only: unit/action/FightAction.cpp, MoveAction.cpp; 2 = also in contact (11-15 stalled pushes)
 const float TUNE_TRAVEL_SAMESTEP = 0.f;   // C++ only: unit/action/FightAction.cpp:97
 const float TUNE_WAKE_SPLIT = 1.f;   // C++ only: unit/CircuitUnit.cpp:210
 

@@ -220,7 +220,10 @@ void ShelledNoteDeath(CCircuitUnit@ unit, const CCircuitDef@ attackerDef, bool a
 			return;
 		sR = Catalog::gLandRange[ad];
 		by = ad;
-	} else if (!ShLongHit(vd, at, weapon, ai.frame - unit.GetDamagedFrame(), sR, by)) {
+	} else if ((unit.GetDamagedFrame() < 0)
+		|| !ShLongHit(vd, at, weapon, ai.frame - unit.GetDamagedFrame(), sR, by)) {
+		// never hit and no killer: our own reclaim (his 11-15 game, t4: each reclaimed jammer booked as shelled
+		// ordered the next one beside it)
 		return;
 	}
 	ShelledNote(vd, at, Catalog::gCostM[vd] * ((left > 0.f) ? left : 0.f), sR, by,

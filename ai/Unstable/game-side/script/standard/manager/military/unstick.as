@@ -204,7 +204,7 @@ void UsNudgeOne()
 		}
 		AiLog(Factory::T() + "apex: unstick-nudge " + u.circuitDef.GetName() + " #" + id
 			+ " q=" + u.CmdQueueSize() + " at=" + int(at.x) + "," + int(at.z)
-			+ " to=" + int(to.x) + "," + int(to.z) + (bld ? " builder" : ""));
+			+ " to=" + int(to.x) + "," + int(to.z) + " acts=" + u.GetActTrace() + (bld ? " builder" : ""));
 		return;
 	}
 }

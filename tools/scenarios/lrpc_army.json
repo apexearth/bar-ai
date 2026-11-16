@@ -1,0 +1,15 @@
+{
+  "about": "4 Big Berthas at our start with 8 fusions and 16 mexes of theirs in reach, and 16 Hammers walking from the centre at our start (his 11-15: 'if the enemy is encroaching, sick the lrpc on them'; every LRPC's unit file marks MOBILE a bad target, so the engine alone shoots the fusions)",
+  "passes": "the battery turns on the army: at least 4 of the 16 Hammers die",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "units": [
+    {"side": 0, "def": "armbrtha", "n": 4, "at": ["s0", 0, 0], "spacing": 120, "order": "ai"},
+    {"side": 1, "def": "armfus", "n": 8, "at": ["s1", 0, 0], "spacing": 110, "order": "ai"},
+    {"side": 1, "def": "armmex", "n": 16, "at": ["s1", -400, 0], "spacing": 120, "order": "ai"},
+    {"side": 1, "def": "armham", "n": 16, "at": ["c", 300, 0], "spacing": 48, "order": "fight", "to": ["s0", 0, 0]}
+  ],
+  "expect": [
+    {"killed:armham": [">=", 4]}
+  ]
+}

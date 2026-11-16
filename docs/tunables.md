@@ -45,6 +45,8 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 
 ## Military -- stance, engagement, squads
 
+- `TUNE_LRPC_FOCUS` = 1 (`apex_lrpc_focus`, brain/lrpc.as): the long-range cannons fire as one battery at the cell worth most (metal x guns in reach), which since 11-15 counts an armed ground army seen or on radar on our half beside their buildings. On for his 11-15 "if the enemy is encroaching, sick the lrpc on them": off, the engine aims, and every LRPC's unit file marks MOBILE a bad target, so it never chooses an army while a building is in reach. Off from 10-23 because the scenario (4 Berthas vs fusions + mexes) showed it only equal to the engine's picks against buildings. Against an army (lrpc_army, 11-16): with it on, C++ SuperTask now leaves the cannons to it, and an army cell also counts our stake within its reach + 10 s walk; 5 and 12 of 16 Hammers killed vs 0 and 0 off.
+
 - `TUNE_PROTECT` = 1 (`apex_protect`, military/deathledger.as ProtectMult, brain/budget.as ARMY row): the army row of the budget is multiplied by the enemy's ground force we know of (fresh at 1, ghosts at `apex_ghost_weight`) over the team's army plus guns, never below 1. His 11-14: the AI must know whether its army protects it; a randomizer game held every seat at 10-20% of its army target. TEST switch until the prot1 A/B reads.
 - `TUNE_PROTECT_CAP` = 3 (`apex_protect_cap`): the most that ratio may multiply the army row. Unmeasured; 3 keeps the economy row alive while outgunned 3:1 or worse.
 
@@ -283,4 +285,5 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_TARGET_VALUE` = 1 (`apex_target_value`). 43% of our kills were under 100 metal. On since v0.3.2; forced 0 for stock-controlled units.
 - `TUNE_UNIT_COVER` = 1 (`apex_unit_cover`). His ruling. Off, ~70% more defence stood and the abort rate did not move (54% -> 53%).
 - `TUNE_INBASE_PATH` = 0 (`apex_inbase_path`). Removed the anomaly (119 -> 0) but not the stuck builders (21 -> 20); mexes held worse.
+- `TUNE_TRAVEL_LEAN` = 2 (`apex_travel_lean`, C++ MoveAction/FightAction): a walking unit is sent 4 waypoints ahead and re-ordered only near the last; at 1 the lean switched off within armed reach, so a unit in a fight got the next waypoint every 2 s, into wrecks and our own crowd (his 11-15 "it continuously retries"). 2 keeps the lean in contact. wreck_push, 7 pairs: stuck nudges 17 -> 0, all killed 44 -> 32 s mean, faster in 7 of 7; 4+4 games: army stuck per 1k army 3.4 -> 3.0 (results/stuck-push). Default 2 since 11-16, gated in the next release batch.
 - `apex_hold_<unit>`. Live only while losing ground; the Behemoth 2x is his call. Unmeasured.

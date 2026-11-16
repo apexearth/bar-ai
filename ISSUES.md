@@ -10,6 +10,7 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
+| [v0514-review-deferred](issues/v0514-review-deferred.md) | 11-16 | ten review findings left for the next version (held gun idles after its kill, first-arrival weight jump, sensor spacing vs nanoframes, perf) |
 | [no-rebuild-after-base-loss](issues/no-rebuild-after-base-loss.md) | 11-14 | a seat that loses most of its base never rebuilds: its last con re-takes one lab order every 30 s, no eco want reaches it |
 | [fighters-dropped-510](issues/fighters-dropped-510.md) | 11-12 | v0.5.10/11 build 20-40% less fighter metal than v0.5.07 and 1.5-2x the bombers; his watch: enemy owns the sky |
 | [v0510-review-deferred](issues/v0510-review-deferred.md) | 11-12 | five findings left for the next version (metal-field site check, army-target readers, race end, perf) |

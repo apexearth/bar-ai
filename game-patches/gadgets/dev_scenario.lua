@@ -160,7 +160,43 @@ local function issue(rec)
 	end
 end
 
+-- dev_scenario_wrecks: "name:n:ref:x:z:spacing|..." -- a feature def, or a unit def standing for its corpse, in a
+-- square block like a unit group (clutter a push has to cross).
+local function spawnWrecks(spec)
+	for part in tostring(spec or ""):gmatch("[^|]+") do
+		local f = {}
+		for tok in part:gmatch("[^:]+") do
+			f[#f + 1] = tok
+		end
+		local name = f[1] or ""
+		if not FeatureDefNames[name] and UnitDefNames[name] then
+			name = UnitDefNames[name].corpse or name
+		end
+		local fd = FeatureDefNames[name]
+		if not fd then
+			Echo("[BARAI_SCEN] ERROR unknown feature " .. tostring(f[1]))
+		else
+			local n, sp = tonumber(f[2]) or 1, tonumber(f[6]) or 48
+			local cx, cz = toWorld(f[3] or "c", tonumber(f[4]) or 0, tonumber(f[5]) or 0)
+			local cols = math.max(1, math.ceil(math.sqrt(n)))
+			local rows = math.ceil(n / cols)
+			local px, pz = -fwdZ, fwdX
+			local made = 0
+			for i = 0, n - 1 do
+				local a = (math.floor(i / cols) - (rows - 1) / 2) * sp
+				local b = (i % cols - (cols - 1) / 2) * sp
+				local wx, wz = cx + a * fwdX + b * px, cz + a * fwdZ + b * pz
+				if Spring.CreateFeature(fd.id, wx, Spring.GetGroundHeight(wx, wz), wz, math.random(0, 65535)) then
+					made = made + 1
+				end
+			end
+			Echo(string.format("[BARAI_SCEN_WRECKS] def=%s n=%d x=%d z=%d", name, made, cx, cz))
+		end
+	end
+end
+
 local function spawnAll()
+	spawnWrecks(modOptions.dev_scenario_wrecks)
 	for gi, g in ipairs(groups) do
 		local ud, mobile = defFacts(g.def)
 		local team = (g.order == "ai" or not mobile) and mainTeam[g.side] or holderTeam[g.side]

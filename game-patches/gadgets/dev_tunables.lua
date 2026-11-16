@@ -412,7 +412,7 @@ local NAMES = {
 	"apex_income_accel",     -- floor.as IncomeAccelM: income wants credited the share of income times the in-flight gain (0)
 	"apex_lab_assist",       -- want_assist.as LabAssistGuard: lab orders priced, lab guards priced by the time they save (0)
 	"apex_site_cache",       -- sites.as: LatheSite/SuperSite answers cached one memo lifetime (0)
-	"apex_travel_lean",      -- MoveAction/FightAction/SupportAction: walkers told 4 waypoints at once, re-ordered near the last; speed and escort only on change (1)
+	"apex_travel_lean",      -- MoveAction/FightAction/SupportAction: walkers told 4 waypoints at once, re-ordered near the last; speed and escort only on change (1); 2 = Move/Fight also within armed reach
 	"apex_catchup_wall",     -- perf.as CatchingUp: behind the server, elections budgeted per wall second (1)
 	"apex_reach_orders",     -- CircuitUnit ReachOrder: a move/fight/patrol point the unit cannot reach goes to the nearest reachable one (0)
 	"apex_elec_avg_us",      -- decide.as ElecFrameRoll: average election budget per frame, us (0 off)
@@ -451,7 +451,7 @@ local NAMES = {
 	"apex_produce_nocons", -- strike.as: no new constructors in PRODUCE (0)
 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
-	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)
+	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)

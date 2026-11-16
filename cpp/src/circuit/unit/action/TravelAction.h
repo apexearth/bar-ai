@@ -30,6 +30,8 @@ public:
 
 protected:
 	int CalcSpeedStep(CCircuitAI* circuit, float& stepSpeed);
+	// apex_travel_lean 2 keeps the lean in contact, for a push only (an ATTACK fighter on the ground)
+	static bool LeansInContact(CCircuitAI* circuit, CCircuitUnit* unit, float leanT);
 	// Keep the unit's formation heading square to the LOCAL direction of
 	// travel, so a line stays perpendicular to the path around corners
 	// instead of shearing. The offset itself is applied in CCircuitUnit's

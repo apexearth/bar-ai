@@ -91,6 +91,11 @@ def encode_units(spec: dict) -> str:
     return "|".join(out)
 
 
+def encode_wrecks(spec: dict) -> str:
+    return "|".join(":".join([w["def"], str(w.get("n", 1)), w["at"][0], str(int(w["at"][1])), str(int(w["at"][2])),
+                              str(int(w.get("spacing", 48)))]) for w in spec.get("wrecks", []))
+
+
 def gadget_check(install: bool) -> None:
     dst = bar_env.load().game_sdd / "luarules" / "gadgets" / GADGET.name
     if dst.exists() and filecmp.cmp(GADGET, dst, shallow=False):
@@ -132,6 +137,8 @@ def launch(spec: dict, args, slot: int) -> tuple[subprocess.Popen, Path]:
            "--modoption", f"dev_scenario_los={spec.get('los', 'global')}",
            "--modoption", f"dev_maxgameminutes={end_frame / FPS / 60:.4f}",
            "--modoption", f"debugcommands={end_frame + 3 * FPS}:quitforce"]
+    if spec.get("wrecks"):
+        cmd += ["--modoption", f"dev_scenario_wrecks={encode_wrecks(spec)}"]
     if coms != "keep":
         cmd += ["--modoption", "deathmode=neverend"]
     for side in (0, 1):
@@ -181,6 +188,11 @@ def parse(text: str) -> dict:
             d["errors"].append(line.strip()[:200])
         elif "apex: " in line:
             tag = line.split("apex: ", 1)[1].split(" ", 1)[0]
+            if tag == "unstick-nudge" and not line.rstrip().endswith(" builder"):
+                d["stuck"] = d.get("stuck", 0) + 1
+            if tag == "order-src":
+                m = re.search(r" fightwalk=(\d+)/", line)
+                d["fwalk"] = d.get("fwalk", 0) + (int(m.group(1)) if m else 0)
             if ARMY_TAG.search(tag):
                 d["apex"][tag] = d["apex"].get(tag, 0) + 1
     return d
@@ -216,6 +228,10 @@ def counters(d: dict, spec: dict) -> dict:
     for side, key in ((1, "first_kill_s"), (0, "first_loss_s")):
         fr = [int(x["frame"]) for x in d["deaths"] if x["side"] == str(side)]
         c[key] = round((min(fr) - spawn) / FPS, 1) if fr else -1
+    fr = sorted(int(x["frame"]) for x in d["deaths"] if x["side"] == "1")
+    c["all_killed_s"] = round((fr[-1] - spawn) / FPS, 1) if fr and len(fr) == c["spawned1"] else 9999
+    c["stuck"] = d.get("stuck", 0)          # army units the stuck watch found not moving on an order
+    c["fightwalk"] = d.get("fwalk", 0)      # fight-walk orders sent (order-src, per minute summed)
     return c
 
 
@@ -267,7 +283,8 @@ def judge(mdir: Path, spec: dict | None = None) -> bool | None:
     print(f"   our deaths  alone {c['alone']}  still {c['still']}  never fired {c['nofire']}")
     print(f"   contact     {c['contacted']} reached reach, {c['trickle']} trickled in "
           f"(> {spec.get('window_s', 4)} s after the first)")
-    print(f"   first kill  {c['first_kill_s']} s   first loss {c['first_loss_s']} s")
+    print(f"   first kill  {c['first_kill_s']} s   first loss {c['first_loss_s']} s   all killed {c['all_killed_s']} s")
+    print(f"   stuck       {c['stuck']} nudges   fight-walk orders {c['fightwalk']}")
     kd = {k: v for k, v in c.items() if ":" in k}
     if kd:
         print("   by def      " + "  ".join(f"{k}={v}" for k, v in sorted(kd.items())))

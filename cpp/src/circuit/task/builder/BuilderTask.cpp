@@ -1820,13 +1820,46 @@ CTerrainManager::TerrainPredicate IBuilderTask::SitePredicate(CCircuitUnit* buil
 		}
 		utils::free(units);
 	}
+	// NO RADAR OR JAMMER BESIDE ONE OF THE SAME KIND (his 11-15: "multiple radar or jammers completely adjacent ...
+	// pretty much pointless"). The script spaces its ask, but this search settles where it can: in rc7 it put two
+	// jammers ~460 from their asks and 32-64 from a standing one. A quarter of the def's own range, like the contract.
+	// Pure sensors only, on both sides: IsRadar/IsJammer is any radius > 1, which takes in Annihilators, DOOMs, air
+	// plants, silos and Legion labs (review 11-16).
+	auto pureSense = [](CCircuitDef* cd) {
+		return !cd->IsMobile() && !cd->IsAttacker() && cd->GetBuildOptions().empty() && (cd->IsRadar() || cd->IsJammer());
+	};
+	std::vector<AIFloat3> senses;
+	float senseBar = 0.f;
+	if ((siteDef != nullptr) && pureSense(siteDef)) {
+		const bool jam = siteDef->IsJammer();
+		senseBar = 0.25f * (jam ? siteDef->GetJammerRadius() : siteDef->GetRadarRadius());
+		if (senseBar > 0.f) {
+			circuit->UpdateFriendlyUnits();
+			// the widest site search reaches 3200 from the ask
+			auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(GetPosition(), 3200.f + senseBar);
+			for (springai::Unit* u : units) {
+				auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+				CCircuitDef* cd = (cand == nullptr) ? nullptr : cand->GetCircuitDef();
+				// finished only: a task re-searching after its own frame went up must not refuse its own spot
+				if ((cd != nullptr) && pureSense(cd) && (jam ? cd->IsJammer() : cd->IsRadar()) && !u->IsBeingBuilt()) {
+					senses.push_back(cand->GetPos(circuit->GetLastFrame()));
+				}
+			}
+			utils::free(units);
+		}
+	}
 	// Everything captured BY VALUE. An earlier version flipped one
 	// captured-by-reference flag between two passes; FindBuildSite takes the
 	// predicate by non-const reference and the AI crashed with an access
 	// violation on two of twelve games. Nothing here outlives this frame.
-	return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar, doors, siteHalf](const AIFloat3& p) {
+	return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar, doors, siteHalf, senses, senseBar](const AIFloat3& p) {
 		if ((selfBar > 0.f) && (p.SqDistance2D(builderPos) < SQUARE(selfBar))) {
 			return false;
+		}
+		for (const AIFloat3& sp : senses) {
+			if (p.SqDistance2D(sp) < SQUARE(senseBar)) {
+				return false;
+			}
 		}
 		if (keepLanes && circuit->IsInBaseLane(p)) {
 			return false;

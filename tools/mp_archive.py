@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """His multiplayer games become training games.
 
-    python tools/mp_archive.py            # one pass: archive new games, build what has a replay
+    python tools/mp_archive.py [--limit N] # one pass: archive new games, build what has a replay (newest first)
     python tools/mp_archive.py --watch    # archive only, every 30 s while no game of his is running
 
 1. ARCHIVE. Our AI writes its decisions to data/AI/Skirmish/<short>/<version>/
@@ -143,20 +143,28 @@ def build(gdir):
     return out
 
 
-def one_pass(env):
+def one_pass(env, limit=None):
     state = load_state()
     ARCH.mkdir(parents=True, exist_ok=True)
     archive(env, state)
     STATE.write_text(json.dumps(state))
-    for g in sorted(ARCH.glob("*")):
+    # Newest first, and never while he plays: each build is a headless playback (11-15: a pass rebuilding October games
+    # started a new replay engine minutes after his next game began, past the guard that had stopped the last one).
+    for g in sorted(ARCH.glob("*"), reverse=True):
         if g.is_dir() and (g / "game.json").is_file():
-            build(g)
+            if his_game_running():
+                print("mp_archive: his game is running, builds stopped")
+                return
+            if build(g) is not None and limit is not None:
+                limit -= 1
+                if limit <= 0:
+                    return
 
 
 def main(argv):
     env = bar_env.load()
     if "--watch" not in argv:
-        one_pass(env)
+        one_pass(env, int(argv[argv.index("--limit") + 1]) if "--limit" in argv else None)
         return 0
     # Watching only archives: the next game overwrites the logs, and a replay
     # build is a long headless playback that would compete with his next game.

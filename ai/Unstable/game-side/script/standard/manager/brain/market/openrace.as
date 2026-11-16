@@ -145,7 +145,7 @@ float OpenRaceConV(int cd, float lineBp, float H, float tR, float hold0, string 
 	string sT = "";
 	if (SpotRaceOn()) {
 		float tFree = tB;
-		V = SpotRaceConM(cd, tB, H, tR, hold0, tFree, sT);
+		V = SpotRaceConM(cd, tB, H, tR, hold0, tFree, sT) * ((share < 1.f) ? share : 1.f);   // shared like the path below
 		t = tFree;
 	} else {
 		float left = (mex > 0) ? share : 0.f;

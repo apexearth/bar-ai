@@ -573,7 +573,7 @@ void Update()
 		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
 
 	array<AIFloat3> _gates;
-	AiLog("apex: frontline perim=" + gPerim.length()
+	AiLog(Factory::T() + "apex: frontline perim=" + gPerim.length()
 			+ " gates=" + GateChokes(_gates)
 			+ " front=" + CountEdge(FRONT) + " back=" + CountEdge(BACK)
 			+ " mine=" + MineEdge(FRONT) + " sectors=" + (gSectored ? int(gMateX.length()) + 1 : 1)

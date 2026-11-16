@@ -1,0 +1,17 @@
+{
+  "about": "our squad of 12 pushes through a field of wrecks to an enemy group holding past it (his 11-15: move orders aim inside dead robot bodies and are re-sent over and over, pushes stall)",
+  "passes": "every enemy dead inside 120 s and at most 2 stuck-unit nudges",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "wrecks": [
+    {"def": "armwar", "n": 64, "at": ["c", -350, 0], "spacing": 56}
+  ],
+  "units": [
+    {"side": 0, "def": "armwar", "n": 12, "at": ["c", -1000, 0], "order": "ai"},
+    {"side": 1, "def": "armpw", "n": 8, "at": ["c", 250, 0], "spacing": 56, "order": "hold"},
+    {"side": 1, "def": "armllt", "n": 1, "at": ["c", 350, 0], "order": "hold"}
+  ],
+  "expect": [
+    {"all_killed_s": ["<=", 120], "stuck": ["<=", 2]}
+  ]
+}

@@ -8,11 +8,13 @@ const int DM_MAX = 24;
 array<float> gDmAX, gDmAZ, gDmAN;   // arrivals, decayed counts
 array<float> gDmLX, gDmLZ, gDmLN;   // our structure deaths, decayed counts
 int gDmLast = 0;
-array<float> gDmPX, gDmPZ, gDmPPrev;
+array<float> gDmPX, gDmPZ, gDmPPrev;   // per probe: the high-water mark of enemy metal, decaying toward the reading
+array<int> gDmPAt;                      // ...and the frame it was last read
 int gDmPL = -1, gDmPO = -1;
 uint gDmPIdx = 0;
 int gDmArrN = 0, gDmLossN = 0;
 float gDmArrM = 0.f;
+float gDmArrEN = 0.f, gDmArrEM = 0.f;   // arrivals and their metal, decayed like the counts
 float gDmTgtRaw = 0.f, gDmTgtK = 1.f;
 
 bool gDmOnSet = false;
@@ -47,9 +49,11 @@ void DmDecay()
 		gDmAN[i] *= k;
 	for (uint i = 0; i < gDmLN.length(); ++i)
 		gDmLN[i] *= k;
+	gDmArrEN *= k;
+	gDmArrEM *= k;
 }
 
-void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout ns, float x, float z)
+void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout ns, float x, float z, float w = 1.f)
 {
 	DmDecay();
 	const float r2 = LOSS_MERGE_R * LOSS_MERGE_R;
@@ -57,7 +61,7 @@ void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout n
 		const float dx = xs[i] - x;
 		const float dz = zs[i] - z;
 		if (dx * dx + dz * dz < r2) {
-			ns[i] += 1.f;
+			ns[i] += w;
 			return;
 		}
 	}
@@ -74,7 +78,7 @@ void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout n
 	}
 	xs.insertLast(x);
 	zs.insertLast(z);
-	ns.insertLast(1.f);
+	ns.insertLast(w);
 }
 
 void DmNoteLoss(const AIFloat3& in at)
@@ -231,6 +235,7 @@ void DmProbesRebuild()
 	gDmPL = gLStamp;
 	gDmPO = gOwnStamp;
 	array<float> px, pz, pp;
+	array<int> pa;
 	px.insertLast(Builder::gHomePos.x);
 	pz.insertLast(Builder::gHomePos.z);
 	const array<int>@ rows = MexRows();
@@ -242,17 +247,21 @@ void DmProbesRebuild()
 	// re-arm an edge on a raid already counted.
 	for (uint i = 0; i < px.length(); ++i) {
 		float prev = -1.f;
+		int at = ai.frame;
 		for (uint j = 0; j < gDmPX.length(); ++j) {
 			if ((gDmPX[j] == px[i]) && (gDmPZ[j] == pz[i])) {
 				prev = gDmPPrev[j];
+				at = gDmPAt[j];
 				break;
 			}
 		}
 		pp.insertLast(prev);
+		pa.insertLast(at);
 	}
 	gDmPX = px;
 	gDmPZ = pz;
 	gDmPPrev = pp;
+	gDmPAt = pa;
 	if (gDmPIdx >= gDmPX.length())
 		gDmPIdx = 0;
 }
@@ -277,12 +286,32 @@ void DefMeasuredStep()
 		// AN ARRIVAL IS NEW ENEMY METAL AT THE PROBE, not the first after a quiet read: a stream that never clears
 		// was one arrival however much came (his 11-15 hosted 4v4: T1 spam ate t4's side from one direction while
 		// this counted 3 arrivals, 564 m, to minute 27, and 0 of 63 tower bids won).
+		// Measured above the probe's high-water mark, which decays toward the reading over the loss tau. Weighted by its
+		// metal over the larger of the recent mean arrival and the metal already standing there: a late T3 wave is
+		// compared with recent waves, not the opening, and a line pacing at the edge adds only the share of it that is
+		// new on each swing, about one arrival per tau however it paces (any mean of the steps alone tends to the step,
+		// so each swing weighed 1 again). The mean is weighted the same way, so the pacing steps do not drag it down
+		// (reviews 11-15, 11-16).
+		DmDecay();
 		if ((gDmPPrev[i] >= 0.f) && (m >= gDmPPrev[i] + 1.f)) {
-			DmAdd(gDmAX, gDmAZ, gDmAN, p.x, p.z);
+			const float d = m - gDmPPrev[i];
+			const float mean = (gDmArrEN > 0.01f) ? gDmArrEM / gDmArrEN : d;
+			const float w = d / ((gDmPPrev[i] > mean) ? gDmPPrev[i] : mean);
+			DmAdd(gDmAX, gDmAZ, gDmAN, p.x, p.z, w);
 			++gDmArrN;
-			gDmArrM += m - gDmPPrev[i];
+			gDmArrM += d;
+			gDmArrEN += w;
+			gDmArrEM += w * d;
 		}
-		gDmPPrev[i] = m;
+		if ((gDmPPrev[i] < 0.f) || (m >= gDmPPrev[i])) {
+			gDmPPrev[i] = m;
+		} else {
+			float k = 1.f - (float(ai.frame - gDmPAt[i]) / 30.f) / LossTau();
+			if (k < 0.f)
+				k = 0.f;
+			gDmPPrev[i] = m + (gDmPPrev[i] - m) * k;
+		}
+		gDmPAt[i] = ai.frame;
 	}
 	DefMeasuredLog();
 	BareMexStep();
