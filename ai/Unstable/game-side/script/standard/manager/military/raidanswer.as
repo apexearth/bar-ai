@@ -248,6 +248,8 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 		pk.insertLast(uint(k));
 	}
 	const uint take = pk.length();
+	if (take == 0)
+		return;
 	if (have < need) {
 		++gAnsShort;
 		if (AnswerLogOk())

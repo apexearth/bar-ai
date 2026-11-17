@@ -262,8 +262,11 @@ static std::string CCircuitAI_RosterLineOnce(CCircuitAI* circuit)
 		return (a == std::string::npos) ? std::string() : v.substr(a, b - a + 1);
 	};
 	const std::string script = circuit->GetGame()->GetSetupScript();
-	std::vector<std::string> names;
-	std::string name, shortName, version, team;
+	// each host's process speaks once, for the Apex AIs it runs: two players hosting Apex AIs gave two full lists
+	std::vector<std::pair<std::string, std::string>> found;
+	const std::string myTeam = std::to_string(circuit->GetTeamId());
+	std::string myHost;
+	std::string name, shortName, version, team, host;
 	bool inAi = false;
 	int depth = 0;
 	size_t pos = 0;
@@ -279,7 +282,7 @@ static std::string CCircuitAI_RosterLineOnce(CCircuitAI* circuit)
 			if ((l.rfind("[ai", 0) == 0) && (l.find(']') != std::string::npos)) {
 				inAi = true;
 				depth = 0;
-				name.clear(); shortName.clear(); version.clear(); team.clear();
+				name.clear(); shortName.clear(); version.clear(); team.clear(); host.clear();
 			}
 			continue;
 		}
@@ -295,17 +298,27 @@ static std::string CCircuitAI_RosterLineOnce(CCircuitAI* circuit)
 			else if (k == "shortname") shortName = v;
 			else if (k == "version") version = v;
 			else if (k == "team") team = v;
+			else if (k == "host") host = v;
 		}
 		if ((depth <= 0) && (line.find('}') != std::string::npos)) {
 			inAi = false;
+			if (team == myTeam) {
+				myHost = host;
+			}
 			// a hosted game names no version and loads the highest one installed: this library
 			if ((lower(shortName) == lower(myShort)) && (version.empty() || (version == circuit->GetAiVersion()))
 				&& !name.empty()) {
 				// the name players see: the game names AIs at random (luarules ai_namer.lua, rules param ainame_<team>)
 				const std::string shown = team.empty() ? std::string()
 						: circuit->GetGame()->GetRulesParamString(("ainame_" + team).c_str(), "");
-				names.push_back(shown.empty() ? name : shown);
+				found.emplace_back(host, shown.empty() ? name : shown);
 			}
+		}
+	}
+	std::vector<std::string> names;
+	for (const auto& f : found) {
+		if (myHost.empty() || (f.first == myHost)) {
+			names.push_back(f.second);
 		}
 	}
 	const std::string apex = "Apex " + circuit->GetAiVersion();

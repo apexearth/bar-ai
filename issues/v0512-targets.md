@@ -17,11 +17,25 @@ check gates a release only against the previous release. Re-run this table after
 | Bombers go in with escort, never turn back | `wiped bomber runs`, `runs turned back` | 0.39, 0.06 | 0.49, 0.04 | 0 | better / level |
 | Bomber escort sized for ~400 fighters | `wiped bomber runs` | 0.39 | 0.49 | 0 | better; no game here had 400 enemy fighters |
 | No nukes on mountain tops | `apex: nuke-guess` (logs only when the guess is moved) | 0 moves in 420 volleys | - | - | never needed on the test maps; unproven on his map (validation 103) |
-| Tanky ground units hold the front / fight back when pushed | `ground given up share`; raid answer A/B (results/row114) | 0.29 | n/a | 0 | raid answer under the stock army on in Unstable (24 pairs: won or ahead 15 vs 10); gate rc11/na10 vs v0.5.14 |
-| Don't send the whole army after small raids (his 11-16) | `raid answer army share` | max 0.31, median 0.05 (ra1+ra2) | n/a | - | built |
+| Tanky ground units hold the front / fight back when pushed | `ground given up share`; raid answer A/B (results/row114) | 0.29 | n/a | 0 | raid answer under the stock army built, measured (vs v0.5.14 28 vs 23 of 44; vs WRDistilled 8 vs 8 of 16) and shipped OFF in v0.5.15 after his watch game fed units into their army; delete or keep: his call |
+| Don't send the whole army after small raids (his 11-16) | `raid answer army share` | max 0.31, median 0.05 (ra1+ra2) | n/a | - | built (smallest covering group); off with the answer |
 | Stacked radar/jammers | `stacked radar/jammers` | 0.14 | 0.44 | 0 | 3x better |
 | Stuck pushes into wrecks | `army stuck /10min/1k army` | 2.01 | 2.52 | 0 | better |
 | Constructor blob | `log peak cons per income` | -1.67 | -1.64 | - | level |
 | LRPC on encroaching armies | scenarios lrpc_army, lrpc_melee | 4 and 12 Hammers killed; own line spared | 0 and 0 | - | shipped in v0.5.14 |
 | Base lost while the pricer read covered | `base lost while 'covered' k` | 6.26 | 4.64 | 0 | FAIL pooled; rc10 alone 4.41 vs 4.40; the release side reads 4.5-8.0 by batch |
-| Releases v0.5.12, v0.5.13, v0.5.14 | git tags, GitHub releases | - | - | - | released |
+| Releases v0.5.12, v0.5.13, v0.5.14, v0.5.15 | git tags, GitHub releases | - | - | - | released; v0.5.15 (engine 2026.09.03) checked after shipping: rv2/rv3/rv5/rv6, 80 games vs v0.5.14, won or ahead 0.56 vs 0.50, nothing that repeats |
+
+## The 11-16 asks (vs WRDistilled), as of 11-17
+
+| Ask | Check | Where it stands |
+|---|---|---|
+| Our AI on BAR's new engine | lobby shows Apex | done: v0.5.14 and v0.5.15 installed and run on recoil_2026.09.03 |
+| One chat line naming each Apex AI by its game name | `/say` at 3 s | in v0.5.15; one line per host built on the test copy, not released; his live game unconfirmed |
+| The commander not caught out on their half | `com minutes on their half`, `com lost on their half` | COM_UNSEEN measured and removed; v0.5.15 level with v0.5.14 over 80 games; the extractor-claim walk past the middle is open (validation 117) |
+| Extractors not lost to Ticks | `mex lost to ticks by 10 min`, scenario ticks_mexes | DEF_NN_FLOOR measured and removed; two fixes await his choice (validation 118) |
+| Raid their extractors | `their mex killed /10min` | cause found (spam aimed at their base core, no ground raid pool fills); direction awaits his choice (validation 119) |
+| Heavy-army strategy: medium army behind defences, resbots eat the reclaim, win the trade | `lost per killed`, `reclaimed / killed`, `their army / ours` | resbot cap off vs 12%: 24 pairs, trade better in 16 (p~0.12), reclaim share unchanged; lifting it awaits his call |
+| No swearing in files | grep | done (code, tools, docs reworded) |
+| Tests on Comet Catcher 1v1, both +50 | batch lists | done since 11-16 |
+| The audit gate | contract per page | identical play fails ~2 of ~25 checks per 20-40 games; noise-aware margins await his OK |
