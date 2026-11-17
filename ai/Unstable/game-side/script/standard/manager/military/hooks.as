@@ -500,18 +500,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (sp > 0)
 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
 	}
-	if (StockCtl(unit)) {
-		if (RaStock() && AnswerClaimed(int(unit.id))) {
-			IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
-			if (ans !is null) {
-				unit.SetScriptFree(true);
-				return NoteElect("raid.answer", ans);
-			}
-		}
-		if (RaUnfree(int(unit.id)))
-			unit.SetScriptFree(false);
+	if (StockCtl(unit))
 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
-	}
 	const CCircuitDef@ cdef = unit.circuitDef;
 	MarkSpearhead(cdef);
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
@@ -588,11 +578,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		IUnitTask@ ct = JwJoinable(CfEcoTaskFor(int(unit.id)), unit);
 		if (ct !is null)
 			return NoteElect("comfight.eco", ct);
-	}
-	if (AnswerClaimed(int(unit.id))) {
-		IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
-		if (ans !is null)
-			return NoteElect("raid.answer", ans);
 	}
 	IUnitTask@ flank = JwJoinable(FlankTaskFor(unit), unit);
 	if (flank !is null)

@@ -24574,7 +24574,7 @@ index 90c3b71b..22166e8b 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d6..57602a40 100644
+index 0400f8d6..2d366cc1 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
 @@ -10,14 +10,19 @@
@@ -24597,7 +24597,7 @@ index 0400f8d6..57602a40 100644
  
  namespace circuit {
  
-@@ -44,8 +49,96 @@ IFighterTask::~IFighterTask()
+@@ -44,8 +49,85 @@ IFighterTask::~IFighterTask()
  	}
  }
  
@@ -24609,18 +24609,7 @@ index 0400f8d6..57602a40 100644
 +bool IFighterTask::IsStockTask() const
 +{
 +	const CCircuitAI* circuit = manager->GetCircuit();
-+	if (!circuit->IsStockArmy() || (circuit->IsOurAir() && (units.empty() ? scriptMade : airSide))) {
-+		return false;
-+	}
-+	// the script's raid answer: a raid it made, crewed by units it took out of stock control, runs its goal and its end
-+	if (scriptMade && (fightType == FightType::RAID)) {
-+		for (const CCircuitUnit* u : units) {
-+			if (u->scriptFree) {
-+				return false;
-+			}
-+		}
-+	}
-+	return true;
++	return circuit->IsStockArmy() && !(circuit->IsOurAir() && (units.empty() ? scriptMade : airSide));
 +}
 +
 +bool IFighterTask::OtherSide(const CCircuitUnit* unit) const
@@ -24694,7 +24683,7 @@ index 0400f8d6..57602a40 100644
  	IUnitTask::AssignTo(unit);
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
-@@ -100,6 +193,59 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -100,6 +182,59 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -24754,7 +24743,7 @@ index 0400f8d6..57602a40 100644
  void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -112,6 +258,13 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -112,6 +247,13 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -24768,7 +24757,7 @@ index 0400f8d6..57602a40 100644
  	const float healthPerc = unit->GetHealthPercent();
  
  	if (unit->HasShield()) {
-@@ -131,11 +284,17 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -131,11 +273,17 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		}
  		return;
  	} else if (healthPerc < 0.2f) {  // stuck units workaround: they don't shoot and don't see distant threat
@@ -24786,7 +24775,7 @@ index 0400f8d6..57602a40 100644
  	CThreatMap* threatMap = circuit->GetThreatMap();
  	const float range = cdef->GetMaxRange();
  	if ((target == nullptr) || !target->IsInLOS()) {
-@@ -177,7 +336,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
+@@ -177,7 +325,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
  	if (unit->Blocker() != nullptr) {
  		return;  // Do not interrupt current action
  	}
@@ -24797,7 +24786,7 @@ index 0400f8d6..57602a40 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const AIFloat3& tPos = GetTarget()->GetPos();
-@@ -223,4 +384,45 @@ void IFighterTask::Log()
+@@ -223,4 +373,45 @@ void IFighterTask::Log()
  }
  #endif
  

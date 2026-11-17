@@ -94,7 +94,6 @@ local NAMES = {
 	"apex_mex_cover_floor",
 	"apex_mex_growth",
 	"apex_range_worth",
-	"apex_medic_frac",
 	"apex_auction_diag",
 	"apex_efloor_diag",
 	"apex_wanttest",
@@ -452,7 +451,6 @@ local NAMES = {
 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
-	"apex_raid_answer_stock", -- military/raidanswer.as: under the stock army the raid answer still sends near units at a raid on our ground (0 since 11-16, row 114)
 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
@@ -473,7 +471,7 @@ local NAMES = {
 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)
 	"apex_ally_air",         -- air/update.as Intercept + aathreat.as AatRaidNow: interceptors fly to an ally's worst air-damage place, not only its home (0)
 	"apex_air_answer",       -- aathreat.as raid memory/AatReach/AatNoteLoss + air/every.as EvFighterMemM + state.as HuntFighterGainFor + production.as all-quiet: fighters against the raid that hurt us, AA priced by the reach it covers (0)
-	"apex_jam_sight",        -- military/jamsight.as + coverage.as ThreatAt/HazardWith/TripRiskWith + raid/raidanswer/guards ArmedNearM + jamsight_want.as: a suspected unseen force is priced, and sight over it bought (0)
+	"apex_jam_sight",        -- military/jamsight.as + coverage.as ThreatAt/HazardWith/TripRiskWith + raid/guards ArmedNearM + jamsight_want.as: a suspected unseen force is priced, and sight over it bought (0)
 	"apex_order_release",    -- requests/register.as + governed.as LiveOfDef/LiveCountOf + take.as + commit.as + want_super.as SuperCensus + want_plant.as unlocks + nntech.as: an order with no worker and no frame stops counting as coming (0)
 	"apex_live_not_ban",     -- liveban.as + sites.as NearBlockedFor/graves + execute.as gun grave + want_mex.as spot table + stuck.as + events.as/take.as abort streak + want_tech.as UpRefused: site judgements live or priced, no clock bans (0)
 	"apex_defend_engage_margin",

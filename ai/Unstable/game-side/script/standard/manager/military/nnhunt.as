@@ -1,5 +1,23 @@
 namespace Military {
 
+// The margin our force needs over theirs to be sent at it.
+const float ANSWER_PARITY = 1.2f;
+
+// nearer our start than theirs
+bool OnOurGround(const AIFloat3& in at)
+{
+	if (!Builder::gHomeSet)
+		return false;
+	const AIFloat3 foe = Front::FoeAnchor();
+	return !OnMap(foe) || (at.distance2D(foe) >= at.distance2D(Builder::gHomePos));
+}
+
+// Our guns that reach `at`, units standing there left out.
+float GunsAt(const AIFloat3& in at)
+{
+	return Market::CoverAt(at) - UnitCoverAt(at) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER);
+}
+
 // HUNT THEIR ARMY, AND EAT IT (apexearth 2026-10-08, docs/doctrine.md section 6). Every
 // 30 s the biggest ground army of theirs we can see is weighed against our
 // attack squads. NO keeps today's play (the rule); HUNT puts our squads' focus

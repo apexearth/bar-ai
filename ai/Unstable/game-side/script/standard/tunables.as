@@ -148,10 +148,6 @@ const float TUNE_PN_EXPLORE = 0.f;   // policy.as: the training push on every ne
 const float TUNE_PN_EXPLORE_TILT = 0.05f;   // policy.as: the push on a choice or list option's output under exploration (a tilt exp(8 x o): 0.05 is about x1.5)
 const float TUNE_PN_LOG_RATE = 0.02f;   // policy.as: share of auction/production option calls logged under exploration
 
-// [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
-//   clear our structures in their reach (raidanswer.as), not only units within one
-//   building's lifetime of travel. His 10-14; A/B before default.
-const float TUNE_RAID_ANSWER_REACH = 1.f;
 
 // [toggle 0/1] -- Flank guards (flankguard.as): groups from the home pools stand
 //   on stock GUARD tasks at the economy's approaches no tower covers. His 10-14;
@@ -1145,8 +1141,6 @@ const float TUNE_OUR_AIR = 1.f;
 // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
 const float TUNE_SQUADS = 0.f;
 
-// RAID_ANSWER_STOCK: [toggle 0/1] (with STOCK_ARMY 1) the raid answer still sends near units at a raid on our ground. See docs/tunables.md.
-const float TUNE_RAID_ANSWER_STOCK = 0.f;
 
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
 //   guarding a con is a Bull missing from the line.
@@ -1218,9 +1212,6 @@ const float TUNE_SCREEN_WORTH = 0.2f;
 //   player fields at once; the screen axis stops buying past it. See docs/tunables.md.
 const float TUNE_SCREEN_MAX = 5.f;
 
-// MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
-//   (apexearth: "3 times more rezbots" -- was 0.04). See docs/tunables.md.
-const float TUNE_MEDIC_FRAC = 0.12f;
 
 // ECO_REAR_MARGIN: how much farther from the enemy than the #2 ally the
 //   rear-most home must be to count as "obviously" rear (distance ratio).

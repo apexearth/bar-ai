@@ -185,10 +185,10 @@ task takes its side from its first member (`IFighterTask::IsStockTask`), and gro
 
 | Layer | Files | What it overrides | Under the switch |
 |---|---|---|---|
-| Election | `military/hooks.as` `MakeTaskInner` (air hunt/hold/strike/cover, looks, late fighters, AA guard, rolling bomb, comfight eco, raid answer, flank, raid pull, siege, escort, cover pool, fodder/spam, charger, superguard, massing pool) | stock `DefaultMakeTask` | first line: `DefaultMakeTask` (`stock.army`) |
+| Election | `military/hooks.as` `MakeTaskInner` (air hunt/hold/strike/cover, looks, late fighters, AA guard, rolling bomb, comfight eco, flank, raid pull, siege, escort, cover pool, fodder/spam, charger, superguard, massing pool) | stock `DefaultMakeTask` | first line: `DefaultMakeTask` (`stock.army`) |
 | Posture, massing, holds | `posture.as`, `massing.as`, `nnpost.as`, `superguard.as`, `market/earlyball.as` bar | `quota.attack`/`raid.min`, hold pools, def retreat values, held supers | `UpdatePosture` returns after its analysis and publishes; `UpdateSpamPosture`, `UpdateNnPost`, `ReleaseHeldSupers` return; hold-pool bindings drop |
 | Decisions that move the army | `nnhunt.as`, `nnstrike.as`, `nnsiege.as`, `nnmassodds.as`, `nnarmy.as`, `market/armynet.as`, `market/plannet.as` `TeamPush` | `SetFocus`, siege tasks, board odds/mass/flank/split/commit/stage/retreat/one-army | update returns; C++ board multipliers 1, focus bindings drop |
-| Raids | `raid.as`, `nnraid.as`, `raidanswer.as`, `gather.as`, `joinwin.as` | raid tasks, goals, pulls, packs, join window | updates return; `SetRaidGoal`/`Join*` drop; `apex_gather` 0 |
+| Raids | `raid.as`, `nnraid.as`, `gather.as`, `joinwin.as` | raid tasks, goals, pulls, packs, join window | updates return; `SetRaidGoal`/`Join*` drop; `apex_gather` 0 |
 | Fights and pull-backs | `comfight.as`, `withdraw.as`, `joinfight.as`, `flankguard.as`, `guardposts.as`, `gift.as` | script moves, keep-out rings, aborts, flank guards, army gifts | updates return; `SetScriptMove`/`SetKeepOut`/`RemoveUnit`/`Abort`/`GiveUnits` drop |
 | Utilities on units | `unblock.as`, `unstick.as`, `brain/yard.as`, `market/execute.as` reclaim move | per-unit moves, unit control | per-unit `StockQuietUnit` |
 | Escorts and support | `market/guards.as`, `market/escnet.as` | guard elections, escort recruit, support spots | sweeps return; support bindings drop |

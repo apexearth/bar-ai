@@ -62,8 +62,7 @@ bool EscortRecruitable(CCircuitUnit@ c)
 	// a raid pack the raid net holds home is idle, and holds most of our raiders
 	return (ft == int(Task::FightType::DEFEND)) || (ft == int(Task::FightType::RALLY))
 		|| (ft == int(Task::FightType::ATTACK)) || (ft == int(Task::FightType::SCOUT))
-		|| ((ft == int(Task::FightType::RAID)) && Military::NrOn() && (Military::gNrNow == Military::NR_WAIT)
-			&& !Military::IsAnswerTask(t));
+		|| ((ft == int(Task::FightType::RAID)) && Military::NrOn() && (Military::gNrNow == Military::NR_WAIT));
 }
 
 int gEscCensusLogAt = 0;

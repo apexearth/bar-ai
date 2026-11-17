@@ -2556,13 +2556,6 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				// short of bots: the wrecks are under the enemy's guns.
 				if (Military::RezLostRateM() >= float(rezHave + 1) * rezCap)
 					unmet = 0.f;
-				// ...and the fleet is part of the army, sized to it (his
-				// apex_medic_frac); a wreck stream alone bought bots by
-				// the hundred.
-				const float medic = ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC);
-				if ((medic > 0.f)
-					&& (float(rezHave) * Catalog::gCostM[d] >= medic * ArmyValue()))
-					unmet = 0.f;
 				rezEat = (unmet > 0.f) ? unmet : 0.f;
 				rezRestore = rezEat * roleMul;
 				continue;

@@ -57,18 +57,7 @@ bool IFighterTask::JoinAdmitted(const CCircuitUnit* unit) const
 bool IFighterTask::IsStockTask() const
 {
 	const CCircuitAI* circuit = manager->GetCircuit();
-	if (!circuit->IsStockArmy() || (circuit->IsOurAir() && (units.empty() ? scriptMade : airSide))) {
-		return false;
-	}
-	// the script's raid answer: a raid it made, crewed by units it took out of stock control, runs its goal and its end
-	if (scriptMade && (fightType == FightType::RAID)) {
-		for (const CCircuitUnit* u : units) {
-			if (u->scriptFree) {
-				return false;
-			}
-		}
-	}
-	return true;
+	return circuit->IsStockArmy() && !(circuit->IsOurAir() && (units.empty() ? scriptMade : airSide));
 }
 
 bool IFighterTask::OtherSide(const CCircuitUnit* unit) const

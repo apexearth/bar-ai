@@ -275,7 +275,6 @@ void UpdateChunk(int c)
 		// one line a game-minute, so the last one is the game-end census.
 		if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
-		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
 		{ double _t = Perf::T0(); Military::UpdateFlankGuard(); Perf::Add("up.flank", _t); }
 		{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
 		{ double _t = Perf::T0(); Military::UpdateGather(); Perf::Add("up.gather", _t); }
@@ -569,7 +568,6 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		if (Catalog::ValidId(int(attackerDef.id)) && Catalog::gMobile[int(attackerDef.id)]
 			&& !Catalog::gFlyer[int(attackerDef.id)]) {
 			Market::DefNoteLeak(at, int(cdef.id), attackerDef);
-			Military::NoteRaidOn(at, int(attackerDef.id));
 		}
 	}
 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill

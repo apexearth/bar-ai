@@ -27,7 +27,6 @@
 #include "military/guardposts.as"   // idle home units posted where building cover is missing
 #include "military/raid.as"        // ask for a raid and pull the units to make one
 #include "military/nnraid.as"      // the raid priced and decided: GO at the best target or WAIT
-#include "military/raidanswer.as"  // a raider that kills a building of ours gets a squad its size
 #include "military/flankguard.as"  // groups stand at the economy's untowered approaches
 #include "military/withdraw.as"   // pull a losing squad back under our guns
 #include "military/comfight.as"   // one fight estimate per group: engage what it beats, else fall back and pool

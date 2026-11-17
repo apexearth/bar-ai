@@ -1,0 +1,916 @@
+diff --git a/ai/Unstable/game-side/script/standard/main.as b/ai/Unstable/game-side/script/standard/main.as
+index d344b614..52dd2a2c 100644
+--- a/ai/Unstable/game-side/script/standard/main.as
++++ b/ai/Unstable/game-side/script/standard/main.as
+@@ -275,7 +275,6 @@ void UpdateChunk(int c)
+ 		// one line a game-minute, so the last one is the game-end census.
+ 		if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
+ 		if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
+-		if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
+ 		{ double _t = Perf::T0(); Military::UpdateFlankGuard(); Perf::Add("up.flank", _t); }
+ 		{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
+ 		{ double _t = Perf::T0(); Military::UpdateGather(); Perf::Add("up.gather", _t); }
+@@ -569,7 +568,6 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
+ 		if (Catalog::ValidId(int(attackerDef.id)) && Catalog::gMobile[int(attackerDef.id)]
+ 			&& !Catalog::gFlyer[int(attackerDef.id)]) {
+ 			Market::DefNoteLeak(at, int(cdef.id), attackerDef);
+-			Military::NoteRaidOn(at, int(attackerDef.id));
+ 		}
+ 	}
+ 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/escnet.as b/ai/Unstable/game-side/script/standard/manager/brain/market/escnet.as
+index 5d3348cc..1926d11a 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/escnet.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/escnet.as
+@@ -62,8 +62,7 @@ bool EscortRecruitable(CCircuitUnit@ c)
+ 	// a raid pack the raid net holds home is idle, and holds most of our raiders
+ 	return (ft == int(Task::FightType::DEFEND)) || (ft == int(Task::FightType::RALLY))
+ 		|| (ft == int(Task::FightType::ATTACK)) || (ft == int(Task::FightType::SCOUT))
+-		|| ((ft == int(Task::FightType::RAID)) && Military::NrOn() && (Military::gNrNow == Military::NR_WAIT)
+-			&& !Military::IsAnswerTask(t));
++		|| ((ft == int(Task::FightType::RAID)) && Military::NrOn() && (Military::gNrNow == Military::NR_WAIT));
+ }
+ 
+ int gEscCensusLogAt = 0;
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/ledger.as b/ai/Unstable/game-side/script/standard/manager/brain/market/ledger.as
+index 2b7fc201..ff0bb2e7 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/ledger.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/ledger.as
+@@ -69,6 +69,27 @@ float SpotM()
+ 			: ai.GetTunable("apex_spot_m", TUNE_SPOT_M);
+ }
+ 
++// What killing a structure of theirs is worth: its metal, and an extractor also the metal it would have made over the
++// worth horizon (their raw spot yield taken as the map's mean, their handicap as ours).
++float gMeanSpotRaw = -1.f;
++float FoeEconomyM(int d)
++{
++	float m = Catalog::gCostM[d];
++	if (Catalog::gExtractsM[d] <= 0.f)
++		return m;
++	if (gMeanSpotRaw < 0.f) {
++		const uint n = gAllSpots.length();
++		float sum = 0.f;
++		for (uint s = 0; s < n; ++s)
++			sum += aiEconomyMgr.GetMexSpotIncome(int(s));
++		if (n > 0)
++			gMeanSpotRaw = sum / float(n);
++	}
++	if (gMeanSpotRaw > 0.f)
++		m += gMeanSpotRaw * IncomeMult() * Catalog::gExtractsM[d] * MexWorthHorizon();
++	return m;
++}
++
+ //------------------------------------------------------------------------------
+ // The claimed-spot ledger: which spots are ours, at what standing extraction.
+ // Fed by our own decisions and the finished/destroyed events; upgrade demand
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/production.as b/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
+index 8d495d82..b48e6636 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
+@@ -2556,13 +2556,6 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
+ 				// short of bots: the wrecks are under the enemy's guns.
+ 				if (Military::RezLostRateM() >= float(rezHave + 1) * rezCap)
+ 					unmet = 0.f;
+-				// ...and the fleet is part of the army, sized to it (his
+-				// apex_medic_frac); a wreck stream alone bought bots by
+-				// the hundred.
+-				const float medic = ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC);
+-				if ((medic > 0.f)
+-					&& (float(rezHave) * Catalog::gCostM[d] >= medic * ArmyValue()))
+-					unmet = 0.f;
+ 				rezEat = (unmet > 0.f) ? unmet : 0.f;
+ 				rezRestore = rezEat * roleMul;
+ 				continue;
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
+index c9ea691a..33df4b76 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
+@@ -382,6 +382,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
+ 	// not this floor, is what closes it.
+ 	const float horizW = ai.GetTunable("apex_exposed_loss_s",
+ 			TUNE_EXPOSED_LOSS_S);
++	const bool mexOwnRisk = ai.GetTunable("apex_mex_own_risk", TUNE_MEX_OWN_RISK) > 0.f;
+ 	// T3 WALKS THROUGH (his 2026-10-12, docs/doctrine.md): an enemy T3 army is not stopped at one gun's circle, so
+ 	// a home-ground post is staked by the base it would reach and expects it inside the exposure window,
+ 	// both by the share of their identified army that is T3. Priced per gun's circle and at the measured
+@@ -747,6 +748,16 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
+ 			if (hz < mexHz)
+ 				hz = mexHz;
+ 		}
++		// EACH EXTRACTOR CARRIES ITS OWN RISK (his 11-17, Ticks taking extractors one light turret saves): an extractor
++		// no gun covers dies at the bare-extractor rate whichever threat priced the site; only when the floor beat the
++		// wave did the guard see it, so early, when the wave prior is bigger, it read the quiet measured rate.
++		else if (!floored && isMexG && BareMexOn() && mexOwnRisk
++			&& (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER) <= 1.f)
++			&& MexUnguardedInReach(s, reach)) {
++			const float bm = BareMexHzAt(s);
++			if (hz < bm)
++				hz = bm;
++		}
+ 		const float face = FaceAt(s);
+ 		if (sg * face > hz)
+ 			hz = sg * face;
+diff --git a/ai/Unstable/game-side/script/standard/manager/military.as b/ai/Unstable/game-side/script/standard/manager/military.as
+index de8667bb..0ed08430 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military.as
++++ b/ai/Unstable/game-side/script/standard/manager/military.as
+@@ -27,7 +27,6 @@
+ #include "military/guardposts.as"   // idle home units posted where building cover is missing
+ #include "military/raid.as"        // ask for a raid and pull the units to make one
+ #include "military/nnraid.as"      // the raid priced and decided: GO at the best target or WAIT
+-#include "military/raidanswer.as"  // a raider that kills a building of ours gets a squad its size
+ #include "military/flankguard.as"  // groups stand at the economy's untowered approaches
+ #include "military/withdraw.as"   // pull a losing squad back under our guns
+ #include "military/comfight.as"   // one fight estimate per group: engage what it beats, else fall back and pool
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/flankguard.as b/ai/Unstable/game-side/script/standard/manager/military/flankguard.as
+index abe61613..d98dad06 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/flankguard.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/flankguard.as
+@@ -472,7 +472,7 @@ bool FlankForm(uint s, float need)
+ 			if (!RaidWorthPulling(u) || IsRollingBomb(u.circuitDef))
+ 				continue;
+ 			const int uid = int(u.id);
+-			if (RaidClaimed(uid) || AnswerClaimed(uid) || (gFgMemId.find(uid) >= 0))
++			if (RaidClaimed(uid) || (gFgMemId.find(uid) >= 0))
+ 				continue;
+ 			const float d = u.GetPos(ai.frame).distance2D(at);
+ 			uint k = cd.length();
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/hooks.as b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+index d2ba32fc..85e82805 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/hooks.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+@@ -290,7 +290,8 @@ void SpamWatch()
+ 	}
+ }
+ // WHERE SPAM GOES: one start box holds a whole team's bases (an 8v8's eight), so the nearest box sent every unit to
+-// one point. The destinations are the enemy bases seen -- their buildings in 800-elmo cells, the 12 richest --
++// one point. The destinations are the enemy economy seen -- their buildings in 800-elmo cells, the 12 richest, an
++// extractor counted at the metal it makes (his 11-17: choke their economy, not only their base) --
+ // else a 3x3 grid over their start box; each unit takes one by its id and a point of its own within 300 of it,
+ // so they split over the bases and do not stack where they stop.
+ array<AIFloat3> gSpamDest;
+@@ -326,7 +327,7 @@ void SpamDestBuild(const AIFloat3& in from)
+ 			sz.insertLast(0.f);
+ 			j = int(key.length()) - 1;
+ 		}
+-		const float c = Catalog::gCostM[d];
++		const float c = (ai.GetTunable("apex_spam_eco", TUNE_SPAM_ECO) > 0.f) ? Market::FoeEconomyM(d) : Catalog::gCostM[d];
+ 		m[uint(j)] += c;
+ 		sx[uint(j)] += p.x * c;
+ 		sz[uint(j)] += p.z * c;
+@@ -500,18 +501,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+ 		if (sp > 0)
+ 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
+ 	}
+-	if (StockCtl(unit)) {
+-		if (RaStock() && AnswerClaimed(int(unit.id))) {
+-			IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
+-			if (ans !is null) {
+-				unit.SetScriptFree(true);
+-				return NoteElect("raid.answer", ans);
+-			}
+-		}
+-		if (RaUnfree(int(unit.id)))
+-			unit.SetScriptFree(false);
++	if (StockCtl(unit))
+ 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
+-	}
+ 	const CCircuitDef@ cdef = unit.circuitDef;
+ 	MarkSpearhead(cdef);
+ 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
+@@ -589,11 +580,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+ 		if (ct !is null)
+ 			return NoteElect("comfight.eco", ct);
+ 	}
+-	if (AnswerClaimed(int(unit.id))) {
+-		IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
+-		if (ans !is null)
+-			return NoteElect("raid.answer", ans);
+-	}
+ 	IUnitTask@ flank = JwJoinable(FlankTaskFor(unit), unit);
+ 	if (flank !is null)
+ 		return NoteElect("flank", flank);
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/nnhunt.as b/ai/Unstable/game-side/script/standard/manager/military/nnhunt.as
+index d0cac3ee..eb29a0ba 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/nnhunt.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/nnhunt.as
+@@ -1,5 +1,20 @@
+ namespace Military {
+ 
++// nearer our start than theirs
++bool OnOurGround(const AIFloat3& in at)
++{
++	if (!Builder::gHomeSet)
++		return false;
++	const AIFloat3 foe = Front::FoeAnchor();
++	return !OnMap(foe) || (at.distance2D(foe) >= at.distance2D(Builder::gHomePos));
++}
++
++// Our guns that reach `at`, units standing there left out.
++float GunsAt(const AIFloat3& in at)
++{
++	return Market::CoverAt(at) - UnitCoverAt(at) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER);
++}
++
+ // HUNT THEIR ARMY, AND EAT IT (apexearth 2026-10-08, docs/doctrine.md section 6). Every
+ // 30 s the biggest ground army of theirs we can see is weighed against our
+ // attack squads. NO keeps today's play (the rule); HUNT puts our squads' focus
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/nnraid.as b/ai/Unstable/game-side/script/standard/manager/military/nnraid.as
+index a3ed8f33..90561773 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/nnraid.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/nnraid.as
+@@ -279,7 +279,7 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
+ 	const float homeS = HomeStrength();
+ 	for (uint i = 0; i < gSquads.length(); ++i) {
+ 		IUnitTask@ t = gSquads[i];
+-		if ((t is null) || t.IsDead() || IsAnswerTask(t) || IsFlankTask(t))
++		if ((t is null) || t.IsDead() || IsFlankTask(t))
+ 			continue;
+ 		const int ft = t.GetFightType();
+ 		const bool ours = (gAskTask !is null) && (t is gAskTask);
+@@ -843,7 +843,7 @@ void NrHoldRaids()
+ 	array<IUnitTask@> held;
+ 	for (uint i = 0; i < gSquads.length(); ++i) {
+ 		IUnitTask@ t = gSquads[i];
+-		if ((t is null) || t.IsDead() || (t is gAskTask) || IsAnswerTask(t)
++		if ((t is null) || t.IsDead() || (t is gAskTask)
+ 			|| (t.GetFightType() != int(Task::FightType::RAID)) || Air::NaAirTask(t))
+ 			continue;
+ 		if (gth && (GthIsOut(t) || (gCfEcoT.findByRef(t) >= 0)))
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/raid.as b/ai/Unstable/game-side/script/standard/manager/military/raid.as
+index e423b51e..09fc8d64 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/raid.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/raid.as
+@@ -326,7 +326,7 @@ float RaidPowerLive()
+ 	float p = 0.f;
+ 	for (uint i = 0; i < gSquads.length(); ++i) {
+ 		IUnitTask@ t = gSquads[i];
+-		if ((t is null) || t.IsDead() || IsAnswerTask(t))
++		if ((t is null) || t.IsDead())
+ 			continue;
+ 		if (t.GetFightType() == int(Task::FightType::RAID))
+ 			p += TaskPower(t);
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as b/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
+deleted file mode 100644
+index 52c0635f..00000000
+--- a/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
++++ /dev/null
+@@ -1,377 +0,0 @@
+-namespace Military {
+-
+-// A RAIDER THAT KILLS A BUILDING ON OUR GROUND GETS A SQUAD ITS SIZE (docs/doctrine.md:
+-// size a squad for each threat and hunt it down; home defence at 1.2x parity;
+-// guns there mean it will be fine). CDefendTask::Detach does it only inside a
+-// DEFEND pool, which in a 1v1 holds about one unit. The nearest units within
+-// PostReach -- spare escorts, DEFEND pools, packs the raid net holds home,
+-// attack squads -- go together on a RAID task aimed at the spot, or none go;
+-// they re-elect when the spot is clear or after BaseRaided's 45 s. An army
+-// out of reach is met by the hunt's intercept (nnhunt.as).
+-
+-const float ANSWER_PARITY = 1.2f;
+-const int   ANSWER_LIFE = 45 * SECOND;
+-
+-array<int>      gAnsId;
+-array<AIFloat3> gAnsPos;
+-array<float>    gAnsR;
+-array<int>      gAnsAt;
+-array<int>      gAnsBorn;
+-array<int>      gAnsSent;
+-array<IUnitTask@> gAnsTask;
+-array<int>      gAnsClaim;
+-array<int>      gAnsClaimSlot;
+-int gAnsNextId = 1;
+-
+-array<AIFloat3> gAnsEvPos;
+-array<int>      gAnsEvDef;
+-
+-int gAnsEvents = 0, gAnsSentN = 0, gAnsPulled = 0, gAnsShort = 0, gAnsCovered = 0;
+-int gAnsMerged = 0, gAnsClear = 0, gAnsTimeout = 0, gAnsGone = 0;
+-int gAnsLogAt = 0;
+-int gAnsStatAt = 0;
+-
+-bool IsAnswerTask(IUnitTask@ t)
+-{
+-	if (t is null)
+-		return false;
+-	for (uint i = 0; i < gAnsTask.length(); ++i) {
+-		if (gAnsTask[i] is t)
+-			return true;
+-	}
+-	return false;
+-}
+-
+-bool AnswerClaimed(int id)
+-{
+-	return gAnsClaim.find(id) >= 0;
+-}
+-
+-// The pulled unit's re-election: the answer's task, created on the first claim
+-// to arrive so the manager never reaps an empty one.
+-IUnitTask@ AnswerTaskFor(int id)
+-{
+-	const int c = gAnsClaim.find(id);
+-	if (c < 0)
+-		return null;
+-	const int slot = gAnsClaimSlot[c];
+-	gAnsClaim.removeAt(c);
+-	gAnsClaimSlot.removeAt(c);
+-	for (uint i = 0; i < gAnsId.length(); ++i) {
+-		if (gAnsId[i] != slot)
+-			continue;
+-		if ((gAnsTask[i] is null) || gAnsTask[i].IsDead()) {
+-			@gAnsTask[i] = aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
+-			if (gAnsTask[i] !is null) {
+-				gAnsTask[i].SetRaidGoal(gAnsPos[i], gAnsR[i]);
+-				// sent at the answer: its roster is what the answer claimed
+-				array<int> ros;
+-				for (uint k = 0; k < gAnsClaim.length(); ++k) {
+-					if (gAnsClaimSlot[k] == slot)
+-						ros.insertLast(gAnsClaim[k]);
+-				}
+-				JwCommit(gAnsTask[i], ros, id);
+-			}
+-		}
+-		return gAnsTask[i];
+-	}
+-	return null;
+-}
+-
+-bool OnOurGround(const AIFloat3& in at)
+-{
+-	if (!Builder::gHomeSet)
+-		return false;
+-	const AIFloat3 foe = Front::FoeAnchor();
+-	return !OnMap(foe) || (at.distance2D(foe) >= at.distance2D(Builder::gHomePos));
+-}
+-
+-// Our guns that reach `at`, units standing there left out.
+-float GunsAt(const AIFloat3& in at)
+-{
+-	return Market::CoverAt(at) - UnitCoverAt(at) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER);
+-}
+-
+-// From the death hook: a finished structure of ours killed by a ground unit.
+-int gAnsDropNoKiller = 0, gAnsDropFar = 0, gAnsReachWide = 0;
+-void NoteRaidOn(const AIFloat3& in at, int killerDef)
+-{
+-	if (!OnMap(at))
+-		return;
+-	if (!Catalog::ValidId(killerDef)) {
+-		++gAnsDropNoKiller;
+-		return;
+-	}
+-	if (!OnOurGround(at)) {
+-		++gAnsDropFar;
+-		return;
+-	}
+-	++gAnsEvents;
+-	for (uint i = 0; i < gAnsPos.length(); ++i) {
+-		if (gAnsPos[i].distance2D(at) <= gAnsR[i]) {
+-			gAnsAt[i] = ai.frame;
+-			++gAnsMerged;
+-			return;
+-		}
+-	}
+-	gAnsEvPos.insertLast(at);
+-	gAnsEvDef.insertLast(killerDef);
+-}
+-
+-bool AnswerLogOk()
+-{
+-	if (ai.frame < gAnsLogAt)
+-		return false;
+-	gAnsLogAt = ai.frame + 5 * SECOND;
+-	return true;
+-}
+-
+-// No base-under-attack gate: BaseUnderAttack reads BaseRaided, which this very
+-// death has just set, and an army bigger than what is in reach reads "short".
+-void AnswerRaid(const AIFloat3& in at, int kd)
+-{
+-	for (uint i = 0; i < gAnsPos.length(); ++i) {
+-		if (gAnsPos[i].distance2D(at) <= gAnsR[i]) {
+-			gAnsAt[i] = ai.frame;
+-			++gAnsMerged;
+-			return;
+-		}
+-	}
+-	const float r = PostReach(kd);
+-	float foeM = ArmedNearM(at, r);
+-	if (foeM < Catalog::gCostM[kd])
+-		foeM = Catalog::gCostM[kd];
+-	const float need = foeM * ANSWER_PARITY;
+-	FlankNoteRaid(foeM);
+-	// HOW LONG THE RAID LASTS, NOT ONE BUILDING (his 10-14: raiders went round the towers and ate the
+-	// wind fields; every answer read have=0/0 because only units within one building's lifetime of
+-	// travel counted). The raiders need the hp of our structures in their reach over the raid's dps.
+-	float raidS = -1.f;
+-	if (ai.GetTunable("apex_raid_answer_reach", TUNE_RAID_ANSWER_REACH) > 0.f) {
+-		array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(at, r);
+-		float hp = 0.f;
+-		for (uint i = 0; (near !is null) && (i < near.length()); ++i)
+-			hp += Catalog::gHealth[int(near[i].circuitDef.id)];
+-		raidS = hp / ((gPostRaidDps > 1.f) ? gPostRaidDps : 20.f);
+-	}
+-	const float guns = GunsAt(at);
+-	if (guns >= foeM) {
+-		++gAnsCovered;
+-		if (AnswerLogOk())
+-			AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " covered at=" + int(at.x) + "," + int(at.z)
+-				+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " guns=" + int(guns));
+-		return;
+-	}
+-
+-	array<CCircuitUnit@> cu;
+-	array<IUnitTask@> ct;
+-	array<float> cd;
+-	array<bool> ce;
+-	for (uint i = 0; i < gSquads.length(); ++i) {
+-		IUnitTask@ t = gSquads[i];
+-		if ((t is null) || t.IsDead() || IsAnswerTask(t) || IsFlankTask(t))
+-			continue;
+-		const int ft = t.GetFightType();
+-		const bool escort = ft == int(Task::FightType::GUARD);
+-		// a pack the raid net holds home is idle (escnet recruits from it too)
+-		const bool heldRaid = (ft == int(Task::FightType::RAID)) && NrOn() && (gNrNow == NR_WAIT)
+-				&& !((gAskTask !is null) && (t is gAskTask));
+-		if (!escort && !heldRaid && (ft != int(Task::FightType::DEFEND)) && (ft != int(Task::FightType::ATTACK)))
+-			continue;
+-		array<CCircuitUnit@>@ on = t.GetUnits();
+-		if (on is null)
+-			continue;
+-		// a squad holding where its units were born under fire is already the answer there
+-		if ((ft == int(Task::FightType::DEFEND)) && (on.length() > 0) && aiMilitaryMgr.IsBirthDefender(on[0])) {
+-			aiMilitaryMgr.NoteBirthScript(3);
+-			continue;
+-		}
+-		for (uint j = 0; j < on.length(); ++j) {
+-			CCircuitUnit@ u = on[j];
+-			if (!RaidWorthPulling(u) || IsRollingBomb(u.circuitDef))
+-				continue;
+-			const int uid = int(u.id);
+-			if (RaidClaimed(uid) || AnswerClaimed(uid))
+-				continue;
+-			const float d = u.GetPos(ai.frame).distance2D(at);
+-			const int ud = int(u.circuitDef.id);
+-			if (d > PostReach(ud)) {
+-				if ((raidS <= 0.f) || (Catalog::gSpeed[ud] <= 0.f) || (d / Catalog::gSpeed[ud] > raidS))
+-					continue;
+-				++gAnsReachWide;
+-			}
+-			if (escort && !EscortSpare(u.id))
+-				continue;
+-			uint k = cd.length();
+-			while ((k > 0) && (cd[k - 1] > d))
+-				--k;
+-			cu.insertAt(k, u);
+-			ct.insertAt(k, t);
+-			cd.insertAt(k, d);
+-			ce.insertAt(k, escort);
+-		}
+-	}
+-	// the smallest answer that covers the raid (his 11-16: never the whole army after a small raid): nearest first,
+-	// every unit that fits in what is still needed; then the one unit that closes the rest with the least spare
+-	float have = 0.f;
+-	array<uint> pk;
+-	array<bool> used(cu.length(), false);
+-	for (uint k = 0; (k < cu.length()) && (have < need); ++k) {
+-		const float c = Catalog::gCostM[int(cu[k].circuitDef.id)];
+-		if (have + c <= need) {
+-			have += c;
+-			used[k] = true;
+-			pk.insertLast(k);
+-		}
+-	}
+-	while (have < need) {
+-		int best = -1, big = -1;
+-		float bestC = 0.f, bigC = 0.f;
+-		for (uint k = 0; k < cu.length(); ++k) {
+-			if (used[k])
+-				continue;
+-			const float c = Catalog::gCostM[int(cu[k].circuitDef.id)];
+-			if ((c >= need - have) && ((best < 0) || (c < bestC))) {
+-				best = int(k);
+-				bestC = c;
+-			}
+-			if ((big < 0) || (c > bigC)) {
+-				big = int(k);
+-				bigC = c;
+-			}
+-		}
+-		const int k = (best >= 0) ? best : big;
+-		if (k < 0)
+-			break;
+-		have += Catalog::gCostM[int(cu[k].circuitDef.id)];
+-		used[k] = true;
+-		pk.insertLast(uint(k));
+-	}
+-	const uint take = pk.length();
+-	if (take == 0)
+-		return;
+-	if (have < need) {
+-		++gAnsShort;
+-		if (AnswerLogOk())
+-			AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " short at=" + int(at.x) + "," + int(at.z)
+-				+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " need=" + int(need)
+-				+ " have=" + int(have) + "/" + cu.length() + " r=" + int(r));
+-		return;
+-	}
+-
+-	const int id = gAnsNextId++;
+-	gAnsId.insertLast(id);
+-	gAnsPos.insertLast(at);
+-	gAnsR.insertLast(r);
+-	gAnsAt.insertLast(ai.frame);
+-	gAnsBorn.insertLast(ai.frame);
+-	gAnsSent.insertLast(int(take));
+-	gAnsTask.insertLast(null);
+-	int nEsc = 0, nAtk = 0;
+-	for (uint q = 0; q < take; ++q) {
+-		const uint k = pk[q];
+-		gAnsClaim.insertLast(int(cu[k].id));
+-		gAnsClaimSlot.insertLast(id);
+-		if (ce[k]) {
+-			Market::EscortGone(cu[k].id);
+-			++nEsc;
+-		}
+-		if (ct[k].GetFightType() == int(Task::FightType::ATTACK))
+-			++nAtk;
+-		if (RaStock()) {
+-			cu[k].SetScriptFree(true);
+-			gRaFreed.insertLast(int(cu[k].id));
+-		}
+-		ct[k].RemoveUnit(cu[k]);
+-	}
+-	++gAnsSentN;
+-	gAnsPulled += int(take);
+-	AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " sent at=" + int(at.x) + "," + int(at.z)
+-		+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " need=" + int(need)
+-		+ " m=" + int(have) + " n=" + take + " esc=" + nEsc + " atk=" + nAtk + " near=" + int(cd[pk[0]]) + " r=" + int(r)
+-		+ " army=" + int(Market::ArmyValue()));
+-}
+-
+-void EndAnswer(uint i, const string why)
+-{
+-	// claims first: a member the abort sends back to the election must not find its answer still waiting
+-	for (int c = int(gAnsClaim.length()) - 1; c >= 0; --c) {
+-		if (gAnsClaimSlot[c] == gAnsId[i]) {
+-			gAnsClaim.removeAt(c);
+-			gAnsClaimSlot.removeAt(c);
+-		}
+-	}
+-	if ((gAnsTask[i] !is null) && !gAnsTask[i].IsDead())
+-		gAnsTask[i].Abort();
+-	if (AnswerLogOk())
+-		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " end " + why
+-			+ " at=" + int(gAnsPos[i].x) + "," + int(gAnsPos[i].z)
+-			+ " lifeS=" + int((ai.frame - gAnsBorn[i]) / SECOND) + " n=" + gAnsSent[i]);
+-	gAnsId.removeAt(i);
+-	gAnsPos.removeAt(i);
+-	gAnsR.removeAt(i);
+-	gAnsAt.removeAt(i);
+-	gAnsBorn.removeAt(i);
+-	gAnsSent.removeAt(i);
+-	gAnsTask.removeAt(i);
+-}
+-
+-// apex_raid_answer_stock: under the stock army the answer still pulls units off stock tasks (his 11-16 row 114, A/B);
+-// a pulled unit is scriptFree while on the answer and handed back to stock at its next election
+-int gRaStock = -1;
+-bool RaStock()
+-{
+-	if (gRaStock < 0)
+-		gRaStock = (StockArmy() && (ai.GetTunable("apex_raid_answer_stock", TUNE_RAID_ANSWER_STOCK) > 0.f)) ? 1 : 0;
+-	return gRaStock > 0;
+-}
+-
+-// units the answer took out of stock control; each goes back at its next election
+-array<int> gRaFreed;
+-bool RaUnfree(int id)
+-{
+-	const int k = gRaFreed.find(id);
+-	if (k < 0)
+-		return false;
+-	gRaFreed.removeAt(k);
+-	return true;
+-}
+-
+-void UpdateRaidAnswer()
+-{
+-	if (!RaStock() && StockQuiet("raidanswer"))
+-		return;
+-	for (int i = int(gAnsId.length()) - 1; i >= 0; --i) {
+-		const uint u = uint(i);
+-		const bool started = (gAnsTask[u] !is null);
+-		const bool waiting = gAnsClaimSlot.find(gAnsId[u]) >= 0;
+-		if (ai.frame - gAnsAt[u] > ANSWER_LIFE) {
+-			++gAnsTimeout;
+-			EndAnswer(u, "timeout");
+-		} else if (started && gAnsTask[u].IsDead() && !waiting) {
+-			++gAnsGone;
+-			EndAnswer(u, "gone");
+-		} else if (started && (ai.GetEnemyArmedCostNear(gAnsPos[u], gAnsR[u]) <= 0.f)) {
+-			++gAnsClear;
+-			EndAnswer(u, "clear");
+-		}
+-	}
+-	if (gAnsClaim.length() > 32) {
+-		gAnsClaim.removeRange(0, gAnsClaim.length() - 32);
+-		gAnsClaimSlot.removeRange(0, gAnsClaimSlot.length() - 32);
+-	}
+-	for (uint e = 0; e < gAnsEvPos.length(); ++e)
+-		AnswerRaid(gAnsEvPos[e], gAnsEvDef[e]);
+-	gAnsEvPos.resize(0);
+-	gAnsEvDef.resize(0);
+-	if (ai.frame >= gAnsStatAt) {
+-		gAnsStatAt = ai.frame + 60 * SECOND;
+-		AiLog(Factory::T() + "apex: raid-answer-stat t=" + ai.teamId + " events=" + gAnsEvents
+-			+ " sent=" + gAnsSentN + " pulled=" + gAnsPulled + " short=" + gAnsShort + " dropNoKiller=" + gAnsDropNoKiller + " dropFar=" + gAnsDropFar + " reachWide=" + gAnsReachWide
+-			+ " covered=" + gAnsCovered + " merged=" + gAnsMerged
+-			+ " clear=" + gAnsClear + " timeout=" + gAnsTimeout + " gone=" + gAnsGone
+-			+ " live=" + gAnsId.length());
+-	}
+-}
+-
+-}  // namespace Military
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index e70d5ab0..14240d32 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -148,10 +148,6 @@ const float TUNE_PN_EXPLORE = 0.f;   // policy.as: the training push on every ne
+ const float TUNE_PN_EXPLORE_TILT = 0.05f;   // policy.as: the push on a choice or list option's output under exploration (a tilt exp(8 x o): 0.05 is about x1.5)
+ const float TUNE_PN_LOG_RATE = 0.02f;   // policy.as: share of auction/production option calls logged under exploration
+ 
+-// [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
+-//   clear our structures in their reach (raidanswer.as), not only units within one
+-//   building's lifetime of travel. His 10-14; A/B before default.
+-const float TUNE_RAID_ANSWER_REACH = 1.f;
+ 
+ // [toggle 0/1] -- Flank guards (flankguard.as): groups from the home pools stand
+ //   on stock GUARD tasks at the economy's approaches no tower covers. His 10-14;
+@@ -1145,8 +1141,6 @@ const float TUNE_OUR_AIR = 1.f;
+ // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
+ const float TUNE_SQUADS = 0.f;
+ 
+-// RAID_ANSWER_STOCK: [toggle 0/1] (with STOCK_ARMY 1) the raid answer still sends near units at a raid on our ground. See docs/tunables.md.
+-const float TUNE_RAID_ANSWER_STOCK = 0.f;
+ 
+ // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
+ //   guarding a con is a Bull missing from the line.
+@@ -1218,9 +1212,6 @@ const float TUNE_SCREEN_WORTH = 0.2f;
+ //   player fields at once; the screen axis stops buying past it. See docs/tunables.md.
+ const float TUNE_SCREEN_MAX = 5.f;
+ 
+-// MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
+-//   (apexearth: "3 times more rezbots" -- was 0.04). See docs/tunables.md.
+-const float TUNE_MEDIC_FRAC = 0.12f;
+ 
+ // ECO_REAR_MARGIN: how much farther from the enemy than the #2 ally the
+ //   rear-most home must be to count as "obviously" rear (distance ratio).
+@@ -1467,6 +1458,7 @@ const float TUNE_PERSONA = 0.f;   // [toggle 0/1] persona_style.as + persona.as:
+ const float TUNE_PERSONA_FORCE = -1.f;   // [style] persona_style.as: >= 0 the team plays that style all game (0 BALANCED 1 ARTY 2 STEALTH 3 AIR 4 FAST 5 T3 6 NUKE 7 SHIELD 8 SCOUT); -1 hidden random draw. Needs apex_persona
+ const float TUNE_INFLIGHT_PS = 1.f;   // [toggle 0/1] price.as displacedM: each job in progress waits min(this cost, its remaining cost)/income, as stalled metal is shared (floor.as InFlightHoldM)
+ const float TUNE_BARE_MEX_HZ = 1.f;   // [toggle 0/1] protect_measured.as: an unguarded extractor's guard is priced on how fast our unguarded extractors die, by forward fraction (his 10-26 insurance ruling)
++const float TUNE_MEX_OWN_RISK = 1.f;   // [toggle 0/1] protect_fill.as: an extractor no gun covers prices its guard at the bare-extractor rate whichever threat priced the site (his 11-17, Ticks; A/B, then delete)
+ const float TUNE_LADDER_YIELDS = 1.f;   // [toggle 0/1] decide.as CategoryDraw: the ladder's spot claim no longer jumps a constructor's tower priced above it (the commander was always exempt)
+ const float TUNE_ECO_SEAT_T3 = 0.f;   // [toggle 0/1] ecoseat.as EcoSeatT3: past half its growth target the eco seat builds the team's gantry and its T3 (his 10-26)
+ const float TUNE_ECO_SEAT2_SHARE = 0.33f;   // [0.33/0.5/1] army.as EcoRoleTargetM: the second eco seat grows to this share of the first's target (his 10-31: a half eco)
+@@ -1958,6 +1950,7 @@ const float TUNE_RAIDER_MASSING = 0.f;
+ const float TUNE_SPAM_RAIDERS = 1.f;
+ 
+ const float TUNE_SPAM_SEND = 1.f;   // [toggle 0/1] hooks.as SpamSend: late fodder gets one fight order at their base and none after
++const float TUNE_SPAM_ECO = 1.f;   // [toggle 0/1] hooks.as SpamDestBuild: spam goes at their economy, an extractor counted at the metal it makes (his 11-17; A/B, then delete)
+ const float TUNE_SPAM_SHELL = 1.f;   // [toggle 0/1] hooks.as SpamShellPick: late fodder moves to where fire on our structures comes from (his 11-07)
+ const float TUNE_WING_BUILD = 1.f;   // [toggle 0/1] air/wing.as WingShort: the armed wing's bombers/fighters unmuted on the basic plant and its escort in the fighter target (his 11-07)
+ const float TUNE_AIR_AA_UNLOCK = 0.f; // [toggle 0/1] air/nnair.as NaAACands: seen AA clusters offered to the bombers at their metal plus the strike they unlock (his 11-07)
+diff --git a/cpp/src/circuit/task/fighter/FighterTask.cpp b/cpp/src/circuit/task/fighter/FighterTask.cpp
+index 57602a40..2d366cc1 100644
+--- a/cpp/src/circuit/task/fighter/FighterTask.cpp
++++ b/cpp/src/circuit/task/fighter/FighterTask.cpp
+@@ -57,18 +57,7 @@ bool IFighterTask::JoinAdmitted(const CCircuitUnit* unit) const
+ bool IFighterTask::IsStockTask() const
+ {
+ 	const CCircuitAI* circuit = manager->GetCircuit();
+-	if (!circuit->IsStockArmy() || (circuit->IsOurAir() && (units.empty() ? scriptMade : airSide))) {
+-		return false;
+-	}
+-	// the script's raid answer: a raid it made, crewed by units it took out of stock control, runs its goal and its end
+-	if (scriptMade && (fightType == FightType::RAID)) {
+-		for (const CCircuitUnit* u : units) {
+-			if (u->scriptFree) {
+-				return false;
+-			}
+-		}
+-	}
+-	return true;
++	return circuit->IsStockArmy() && !(circuit->IsOurAir() && (units.empty() ? scriptMade : airSide));
+ }
+ 
+ bool IFighterTask::OtherSide(const CCircuitUnit* unit) const
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 51285898..a8427881 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -94,7 +94,6 @@ local NAMES = {
+ 	"apex_mex_cover_floor",
+ 	"apex_mex_growth",
+ 	"apex_range_worth",
+-	"apex_medic_frac",
+ 	"apex_auction_diag",
+ 	"apex_efloor_diag",
+ 	"apex_wanttest",
+@@ -435,6 +434,7 @@ local NAMES = {
+ 	"apex_air_rich",
+ 	"apex_lrpc_prize", -- want_super.as: LRPC kills priced like a bomber's (1)
+ 	"apex_spam_send", -- hooks.as: late fodder sent once at their base, never re-ordered (1)
++	"apex_spam_eco", -- hooks.as: spam destinations weigh their extractors at the metal they make (1, A/B)
+ 	"apex_mex_cover_site", -- execute.as: no interior gun waived for a mex it does not cover (1)
+ 	"apex_stock_heal", -- RetreatTask.cpp: stock wounded to a manned medic station (1)
+ 	"apex_strike_schedule", -- strike.as: his timed play (0)
+@@ -452,7 +452,6 @@ local NAMES = {
+ 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
+ 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
+ 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
+-	"apex_raid_answer_stock", -- military/raidanswer.as: under the stock army the raid answer still sends near units at a raid on our ground (0 since 11-16, row 114)
+ 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
+ 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
+ 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
+@@ -473,7 +472,7 @@ local NAMES = {
+ 	"apex_com_air",          -- comdecide.as ComAirAssess/ComAirApply + safety.as ComSelfGun: the commander answers strike air he would die to (0)
+ 	"apex_ally_air",         -- air/update.as Intercept + aathreat.as AatRaidNow: interceptors fly to an ally's worst air-damage place, not only its home (0)
+ 	"apex_air_answer",       -- aathreat.as raid memory/AatReach/AatNoteLoss + air/every.as EvFighterMemM + state.as HuntFighterGainFor + production.as all-quiet: fighters against the raid that hurt us, AA priced by the reach it covers (0)
+-	"apex_jam_sight",        -- military/jamsight.as + coverage.as ThreatAt/HazardWith/TripRiskWith + raid/raidanswer/guards ArmedNearM + jamsight_want.as: a suspected unseen force is priced, and sight over it bought (0)
++	"apex_jam_sight",        -- military/jamsight.as + coverage.as ThreatAt/HazardWith/TripRiskWith + raid/guards ArmedNearM + jamsight_want.as: a suspected unseen force is priced, and sight over it bought (0)
+ 	"apex_order_release",    -- requests/register.as + governed.as LiveOfDef/LiveCountOf + take.as + commit.as + want_super.as SuperCensus + want_plant.as unlocks + nntech.as: an order with no worker and no frame stops counting as coming (0)
+ 	"apex_live_not_ban",     -- liveban.as + sites.as NearBlockedFor/graves + execute.as gun grave + want_mex.as spot table + stuck.as + events.as/take.as abort streak + want_tech.as UpRefused: site judgements live or priced, no clock bans (0)
+ 	"apex_defend_engage_margin",
+@@ -651,6 +650,7 @@ local NAMES = {
+ 	"apex_eco_lean", -- army.as: a 3-4 player team's farthest seat leans eco, this share of the phase, not strict (0)
+ 	"apex_ladder_yields", -- decide.as: the ladder's mex claim yields to a tower priced above it (0)
+ 	"apex_bare_mex_hz", -- protect_measured.as: a bare extractor's guard on our bare extractors' death rate (0)
++	"apex_mex_own_risk", -- protect_fill.as: an uncovered extractor guard priced at the bare-extractor rate whatever the threat (1, A/B)
+ 	"apex_inflight_ps", -- price.as: the in-flight hold under shared metal, min(cost, remaining) (0)
+ 	"apex_persona", -- persona_style.as + persona.as: hidden team style and seat flavours (0)
+ 	"apex_persona_force", -- persona_style.as: the team plays this style all game, -1 hidden draw (-1)
+diff --git a/tools/contract.py b/tools/contract.py
+index 23fa09ea..d14b8e2e 100644
+--- a/tools/contract.py
++++ b/tools/contract.py
+@@ -16,6 +16,7 @@ import collections
+ import glob
+ import json
+ import math
++import random
+ import re
+ import statistics
+ import sys
+@@ -37,7 +38,7 @@ class Seat:
+ 
+ KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
+         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
+-        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim", "raid-answer t=",
++        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim",
+         "com-pos ", "armyest t=")
+ 
+ 
+@@ -187,25 +188,6 @@ def t2_cons_given_early(s: Seat):
+     return sum(1 for f, _b in s.lines["congift "] if f < four)
+ 
+ 
+-ANS_SENT = re.compile(r"raid-answer t=\d+ sent .* m=(\d+) n=.* army=(\d+)")
+-
+-
+-def raid_answer_share(s: Seat):
+-    """His 11-16: "very aggressive enemy pushes can't hold us back from doing our own pushes and we need to make sure
+-    that we don't end up with our entire army just chasing small raiding groups". The largest raid answer of the game
+-    as a share of the army standing then (army= on the sent line; older logs lack it and read None)."""
+-    best = None
+-    for f, body in s.lines["raid-answer t="]:
+-        m = ANS_SENT.search(body)
+-        if not m:
+-            continue
+-        army = float(m.group(2))
+-        if army > 0:
+-            x = float(m.group(1)) / army
+-            best = x if best is None else max(best, x)
+-    return best
+-
+-
+ TICKS = ("armflea", "armfav", "corfav", "legscout")
+ 
+ 
+@@ -555,7 +537,6 @@ CHECKS = [
+     ("oldest plant order min", oldest_order_minutes, "mean", 1.0, None),  # n/a vs a release that cannot log it
+     ("no t2 by minute 20", no_t2_by_20, "mean", 0.10, None),         # the T2 checks skip such seats
+     ("frozen minutes", frozen_minutes, "mean", 1.0, 0.0),            # "we don't rebuild"
+-    ("raid answer army share", raid_answer_share, "mean", 0.1, None),  # "not our entire army chasing small raids"
+     ("com minutes on their half", com_their_half_minutes, "mean", 0.5, None),  # "the com got caught out in danger"
+     ("com lost on their half", com_lost_their_half, "mean", 0.05, 0.0),
+     ("mex lost to ticks by 10 min", mex_lost_to_ticks, "mean", 0.5, 0.0),  # one turret guards up to four extractors
+@@ -647,6 +628,28 @@ def agg(vals, how):
+     return statistics.median(vals) if how == "median" else sum(vals) / len(vals)
+ 
+ 
++# A check fails only when it is worse than the release past its margin in this share of resampled batches (games
++# drawn with replacement). Measured 11-17: on identical play (v0.5.15 vs v0.5.14, rv2-rv6) the point estimate failed
++# ~2 of ~25 checks in every 20-40 game batch, a different two each time.
++SURE = 0.9
++RESAMPLES = 400
++
++
++def worse_share(by_match, how, margin, rng):
++    """by_match: [(our values, their values)] per game. Share of resamples where ours > theirs + margin."""
++    n = len(by_match)
++    hit = tot = 0
++    for _ in range(RESAMPLES):
++        pick = [by_match[rng.randrange(n)] for _ in range(n)]
++        o = agg([v for ov, _t in pick for v in ov], how)
++        t = agg([v for _o, tv in pick for v in tv], how)
++        if o is None or t is None:
++            continue
++        tot += 1
++        hit += o > t + margin
++    return hit / tot if tot else 0.0
++
++
+ def main(argv):
+     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+     ap.add_argument("matches", nargs="+")
+@@ -670,36 +673,54 @@ def main(argv):
+         return 2
+     fails = short = 0
+     rows = []
++    rng = random.Random(1)
++    matches = sorted({s.match for s in seats})
+     for name, fn, how, margin, aim in CHECKS:
+-        o = agg([fn(s) for s in ours], how)
+-        t = agg([fn(s) for s in theirs], how)
++        ov = {id(s): fn(s) for s in ours}
++        tv = {id(s): fn(s) for s in theirs}
++        o = agg(list(ov.values()), how)
++        t = agg(list(tv.values()), how)
+         if o is None or t is None:
+             rows.append((name, o, t, aim, "n/a"))
+             continue
+-        bad = o > t + margin
++        worse = o > t + margin
++        sure = 0.0
++        if worse:
++            by_match = [([ov[id(s)] for s in ours if s.match == m], [tv[id(s)] for s in theirs if s.match == m])
++                        for m in matches]
++            sure = worse_share(by_match, how, margin, rng)
++        bad = worse and sure >= SURE
+         fails += bad
+         miss = (aim is not None) and (o > aim + 1e-9)
+         short += miss
+-        v = "FAIL (worse than release)" if bad else ("ok, short of aim" if miss else "ok")
++        v = ("FAIL (worse than release, %.0f%% of resamples)" % (100 * sure) if bad
++             else "worse, within noise (%.0f%% of resamples)" % (100 * sure) if worse
++             else ("ok, short of aim" if miss else "ok"))
+         rows.append((name, o, t, aim, v))
+     games = len({s.match for s in seats})
+     # HEAD TO HEAD (memory: release-gate-head-to-head -- no release without beating the previous one): a game is ours
+     # when our side won, or at the time cap built more metal than theirs. Under half fails.
+     ahead = 0
++    marks = []
+     for m in sorted({s.match for s in seats}):
+         res = json.loads((Path(_MATCH_DIRS[m]) / "result.json").read_text())
+         rb = res.get("result") if isinstance(res.get("result"), dict) else {}
+         win = [w for w in (rb.get("winner_specs") or res.get("winner_specs") or []) if w]
+         mine = sum(s.stats[-1].get("mBuiltReal", 0) for s in ours if s.match == m and s.stats)
+         theirs_b = sum(s.stats[-1].get("mBuiltReal", 0) for s in theirs if s.match == m and s.stats)
+-        if win:
+-            ahead += any(a.us in str(w) for w in win)
+-        else:
+-            ahead += mine > theirs_b
++        mark = any(a.us in str(w) for w in win) if win else (mine > theirs_b)
++        marks.append(mark)
++        ahead += mark
+     h2h = ahead / max(1, games)
+-    h2h_bad = h2h < 0.5
++    sure = 0.0
++    if h2h < 0.5 and marks:
++        n = len(marks)
++        sure = sum(sum(marks[rng.randrange(n)] for _ in range(n)) < 0.5 * n for _ in range(RESAMPLES)) / RESAMPLES
++    h2h_bad = h2h < 0.5 and sure >= SURE
+     fails += h2h_bad
+-    rows.append(("games won or ahead", -h2h, -0.5, None, "FAIL (does not beat the release)" if h2h_bad else "ok"))
++    rows.append(("games won or ahead", -h2h, -0.5, None,
++                 "FAIL (does not beat the release, %.0f%% of resamples)" % (100 * sure) if h2h_bad
++                 else "under half, within noise (%.0f%% of resamples)" % (100 * sure) if h2h < 0.5 else "ok"))
+     fmt = lambda x, name: "-" if x is None else "%.2f" % (abs(x) if ("share" in name or "ahead" in name) else x)
+     if a.md:
+         print("| check | ours | release | his aim | verdict |\n|---|---|---|---|---|")
+diff --git a/tools/scenarios/raid_home.json b/tools/scenarios/raid_home.json
+index 8134267f..bf46b429 100644
+--- a/tools/scenarios/raid_home.json
++++ b/tools/scenarios/raid_home.json
+@@ -1,6 +1,6 @@
+ {
+   "about": "an early raid on our base (row 114; rc8's loss: lab raided by Pawns and Fleas by minute 4): 10 Pawns walk in on our lab, extractors and solars; 8 Warriors of ours stand 600 out on the far side under the stock army",
+-  "passes": "the raid costs us less with apex_raid_answer_stock 1 than 0 (judge on vs off: lost_m0, killed:armpw)",
++  "passes": "the stock army's answer: lost_m0 small, killed:armpw high (the script raid answer was deleted 11-17)",
+   "map": "Geyser Plains",
+   "seconds": 150,
+   "enemy": "none",

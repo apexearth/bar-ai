@@ -472,7 +472,7 @@ bool FlankForm(uint s, float need)
 			if (!RaidWorthPulling(u) || IsRollingBomb(u.circuitDef))
 				continue;
 			const int uid = int(u.id);
-			if (RaidClaimed(uid) || AnswerClaimed(uid) || (gFgMemId.find(uid) >= 0))
+			if (RaidClaimed(uid) || (gFgMemId.find(uid) >= 0))
 				continue;
 			const float d = u.GetPos(ai.frame).distance2D(at);
 			uint k = cd.length();

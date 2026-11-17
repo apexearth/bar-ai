@@ -1,6 +1,6 @@
 {
   "about": "an early raid on our base (row 114; rc8's loss: lab raided by Pawns and Fleas by minute 4): 10 Pawns walk in on our lab, extractors and solars; 8 Warriors of ours stand 600 out on the far side under the stock army",
-  "passes": "the raid costs us less with apex_raid_answer_stock 1 than 0 (judge on vs off: lost_m0, killed:armpw)",
+  "passes": "the stock army's answer: lost_m0 small, killed:armpw high (the script raid answer was deleted 11-17)",
   "map": "Geyser Plains",
   "seconds": 150,
   "enemy": "none",
