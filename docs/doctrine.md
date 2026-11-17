@@ -72,6 +72,8 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Every extractor outside the base gets a gun, more the sooner the enemy can reach it; guns stand just outside the base, inside only as an extractor's only cover.
 - Refill defences where they just fell: the enemy comes back through the hole.
 - Guard the flanks and the map edge: answer raiders that go round the towers and stand guards where no tower covers the economy.
+- Answer a raid in proportion to it: their aggressive pushes never stop our own push, and the whole army never chases small raiding groups (his 11-16).
+- Against an opponent who builds a great deal of army, make them bleed it into us: just enough army of our own to survive and hold ground, a medium army backed by strong defences, resurrection bots eating the reclaim of what they lose, and the economy kept growing, so they trade worse than we do and we pull ahead gradually (his 11-16).
 - Where one gun stands, more belong; where nanos mass, fortify and shield it.
 - Against a blob: beamers and HLTs, a jammer over them, construction turrets behind to repair and rebuild, cheap things in front.
 - When the enemy closes on a T2 base, T2 or T3 defence, decided while they are still walking; seriously behind, lean into T3 defence.

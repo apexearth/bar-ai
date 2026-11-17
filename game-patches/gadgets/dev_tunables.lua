@@ -452,6 +452,7 @@ local NAMES = {
 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
+	"apex_raid_answer_stock", -- military/raidanswer.as: under the stock army the raid answer still sends near units at a raid on our ground (0 since 11-16, row 114)
 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)

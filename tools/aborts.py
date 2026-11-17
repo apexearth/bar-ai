@@ -5,7 +5,7 @@
 `apex: task-gone` reports every builder task that ended, as done= or abort=.
 An abort is a walk already paid for and a build never had. A def with a high
 abort share is one the AI keeps changing its mind about -- apexearth, 2026-09-22:
-"he walks all over the damn place... it's almost like he can't make up his mind."
+he walks all over the place, as if he can't make up his mind.
 """
 import collections
 import glob

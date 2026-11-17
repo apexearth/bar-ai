@@ -258,7 +258,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// that, which is the same hole the tech want already closed
 		// (apexearth: "we keep making AFUS and its so insanely stupid. Enemy
 		// walks up to us with a tzar and just completely annihilates us. one
-		// damn unit and we have nothing to defend ourselves against it").
+		// unit and we have nothing to defend ourselves against it").
 		// Scales with the build's own latency, so cheap fast generators are
 		// untouched and only the long bets are discounted; and with measured
 		// hazard, so it lifts by itself once the base is actually covered.

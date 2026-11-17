@@ -1806,8 +1806,8 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	// (apexearth 2026-09-26: at +100% the T1 window is too short to use).
 	// ...and behind them it is the economy's -- unless the economy is not
 	// taking it: metal we are throwing away buys army, idle factory time is
-	// free (his 2026-09-28, Supreme Isthmus: "use the factories, make shit!
-	// Instead, they're all idle", bank 93% and wasting while behind=1).
+	// free (his 2026-09-28, Supreme Isthmus: use the factories and make units
+	// instead of leaving them idle; bank 93% and wasting while behind=1).
 	// ...and SPARE MONEY GOES INTO THE ECONOMY (apexearth 2026-10-03, again):
 	// army takes it only while it is actually being thrown away. The army
 	// itself is held at their parity by ArmyFloor.
@@ -3024,9 +3024,9 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			//
 			// Fatboy last of nine, at 1/106th the Platypus. The cost ratio alone
 			// (1400/260)^2 is 29x of that before any question of which unit is
-			// actually better. apexearth, watching: "we could have made a fatboy
-			// easily and kicked the enemies butt but we made like 1 hound, then
-			// a fuckin platypus which is USELESS here."
+			// actually better. apexearth, watching: a Fatboy would have beaten
+			// them easily, but we made one Hound and then a Platypus, which is
+			// useless here.
 			//
 			// `v = gain / cost` is the right shape and every other want kind
 			// uses it, so the half that is wrong is the GAIN: it must be the

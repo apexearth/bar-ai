@@ -1872,8 +1872,8 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
 	// metal income had already earned. Measured 2026-08-15: composition
 	// stayed pinned near tier0 (mostly Hound) until income reached fusion
 	// territory (130 m/s, well past armalab's own top income bracket of 80)
-	// -- apexearth: "it took a shit ton of eco to get us past just making
-	// hounds... your eco thresholds are far too strong." Two fusions gave
+	// -- apexearth: it took a great deal of economy to get us past making
+	// only Hounds; the economy thresholds are far too strong. Two fusions gave
 	// enough storage buffer to stop the flicker, which is what actually
 	// unblocked it, not the higher income itself. Metal income alone now
 	// drives tier, full stop; genuine unaffordability is still caught by

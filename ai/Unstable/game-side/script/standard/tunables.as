@@ -1145,6 +1145,9 @@ const float TUNE_OUR_AIR = 1.f;
 // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
 const float TUNE_SQUADS = 0.f;
 
+// RAID_ANSWER_STOCK: [toggle 0/1] (with STOCK_ARMY 1) the raid answer still sends near units at a raid on our ground. See docs/tunables.md.
+const float TUNE_RAID_ANSWER_STOCK = 0.f;
+
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
 //   guarding a con is a Bull missing from the line.
 const float TUNE_ESCORT_MAX_COST = 120.f;

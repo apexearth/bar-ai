@@ -27,3 +27,6 @@ these were left because the gate was running on the final code, or they cost tim
    discounted twice for a seat with many claimers; unmeasured.
 10. **A stream held at a steady level counts as one arrival** (enemy replacing what our towers kill). A high-water mark
     cannot tell replenishment from pacing; enemy ids new to a probe could.
+11. **The near-done strips check is a raw count** (tools/contract.py near_done_stripped): it grows with how much a seat
+    builds, so a seat that out-builds the release fails it (rc10: 17.1 vs 10.7 on 290k vs 223k metal built; per 10k
+    built 0.59 vs 0.48, rc9 0.47 vs 0.52, rc8 0.42 vs 0.50). Ask him before changing it to a rate: it gates releases.

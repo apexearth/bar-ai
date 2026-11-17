@@ -211,12 +211,43 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 			ce.insertAt(k, escort);
 		}
 	}
+	// the smallest answer that covers the raid (his 11-16: never the whole army after a small raid): nearest first,
+	// every unit that fits in what is still needed; then the one unit that closes the rest with the least spare
 	float have = 0.f;
-	uint take = 0;
-	while ((take < cu.length()) && (have < need)) {
-		have += Catalog::gCostM[int(cu[take].circuitDef.id)];
-		++take;
+	array<uint> pk;
+	array<bool> used(cu.length(), false);
+	for (uint k = 0; (k < cu.length()) && (have < need); ++k) {
+		const float c = Catalog::gCostM[int(cu[k].circuitDef.id)];
+		if (have + c <= need) {
+			have += c;
+			used[k] = true;
+			pk.insertLast(k);
+		}
 	}
+	while (have < need) {
+		int best = -1, big = -1;
+		float bestC = 0.f, bigC = 0.f;
+		for (uint k = 0; k < cu.length(); ++k) {
+			if (used[k])
+				continue;
+			const float c = Catalog::gCostM[int(cu[k].circuitDef.id)];
+			if ((c >= need - have) && ((best < 0) || (c < bestC))) {
+				best = int(k);
+				bestC = c;
+			}
+			if ((big < 0) || (c > bigC)) {
+				big = int(k);
+				bigC = c;
+			}
+		}
+		const int k = (best >= 0) ? best : big;
+		if (k < 0)
+			break;
+		have += Catalog::gCostM[int(cu[k].circuitDef.id)];
+		used[k] = true;
+		pk.insertLast(uint(k));
+	}
+	const uint take = pk.length();
 	if (have < need) {
 		++gAnsShort;
 		if (AnswerLogOk())
@@ -235,7 +266,8 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 	gAnsSent.insertLast(int(take));
 	gAnsTask.insertLast(null);
 	int nEsc = 0, nAtk = 0;
-	for (uint k = 0; k < take; ++k) {
+	for (uint q = 0; q < take; ++q) {
+		const uint k = pk[q];
 		gAnsClaim.insertLast(int(cu[k].id));
 		gAnsClaimSlot.insertLast(id);
 		if (ce[k]) {
@@ -244,30 +276,35 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 		}
 		if (ct[k].GetFightType() == int(Task::FightType::ATTACK))
 			++nAtk;
+		if (RaStock()) {
+			cu[k].SetScriptFree(true);
+			gRaFreed.insertLast(int(cu[k].id));
+		}
 		ct[k].RemoveUnit(cu[k]);
 	}
 	++gAnsSentN;
 	gAnsPulled += int(take);
-	if (AnswerLogOk())
-		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " sent at=" + int(at.x) + "," + int(at.z)
-			+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " need=" + int(need)
-			+ " m=" + int(have) + " n=" + take + " esc=" + nEsc + " atk=" + nAtk + " near=" + int(cd[0]) + " r=" + int(r));
+	AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " sent at=" + int(at.x) + "," + int(at.z)
+		+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " need=" + int(need)
+		+ " m=" + int(have) + " n=" + take + " esc=" + nEsc + " atk=" + nAtk + " near=" + int(cd[pk[0]]) + " r=" + int(r)
+		+ " army=" + int(Market::ArmyValue()));
 }
 
 void EndAnswer(uint i, const string why)
 {
-	if ((gAnsTask[i] !is null) && !gAnsTask[i].IsDead())
-		gAnsTask[i].Abort();
-	if (AnswerLogOk())
-		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " end " + why
-			+ " at=" + int(gAnsPos[i].x) + "," + int(gAnsPos[i].z)
-			+ " lifeS=" + int((ai.frame - gAnsBorn[i]) / SECOND) + " n=" + gAnsSent[i]);
+	// claims first: a member the abort sends back to the election must not find its answer still waiting
 	for (int c = int(gAnsClaim.length()) - 1; c >= 0; --c) {
 		if (gAnsClaimSlot[c] == gAnsId[i]) {
 			gAnsClaim.removeAt(c);
 			gAnsClaimSlot.removeAt(c);
 		}
 	}
+	if ((gAnsTask[i] !is null) && !gAnsTask[i].IsDead())
+		gAnsTask[i].Abort();
+	if (AnswerLogOk())
+		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " end " + why
+			+ " at=" + int(gAnsPos[i].x) + "," + int(gAnsPos[i].z)
+			+ " lifeS=" + int((ai.frame - gAnsBorn[i]) / SECOND) + " n=" + gAnsSent[i]);
 	gAnsId.removeAt(i);
 	gAnsPos.removeAt(i);
 	gAnsR.removeAt(i);
@@ -277,9 +314,30 @@ void EndAnswer(uint i, const string why)
 	gAnsTask.removeAt(i);
 }
 
+// apex_raid_answer_stock: under the stock army the answer still pulls units off stock tasks (his 11-16 row 114, A/B);
+// a pulled unit is scriptFree while on the answer and handed back to stock at its next election
+int gRaStock = -1;
+bool RaStock()
+{
+	if (gRaStock < 0)
+		gRaStock = (StockArmy() && (ai.GetTunable("apex_raid_answer_stock", TUNE_RAID_ANSWER_STOCK) > 0.f)) ? 1 : 0;
+	return gRaStock > 0;
+}
+
+// units the answer took out of stock control; each goes back at its next election
+array<int> gRaFreed;
+bool RaUnfree(int id)
+{
+	const int k = gRaFreed.find(id);
+	if (k < 0)
+		return false;
+	gRaFreed.removeAt(k);
+	return true;
+}
+
 void UpdateRaidAnswer()
 {
-	if (StockQuiet("raidanswer"))
+	if (!RaStock() && StockQuiet("raidanswer"))
 		return;
 	for (int i = int(gAnsId.length()) - 1; i >= 0; --i) {
 		const uint u = uint(i);

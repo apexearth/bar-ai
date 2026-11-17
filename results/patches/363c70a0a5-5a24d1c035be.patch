@@ -1,0 +1,607 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/lrpc.as b/ai/Unstable/game-side/script/standard/manager/brain/lrpc.as
+index 05be1e84..4c9cf2d3 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/lrpc.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/lrpc.as
+@@ -3,8 +3,9 @@ namespace Brain {
+ // THE BATTERY FIRES AS ONE (apex_lrpc_focus; his 10-23: "When we make LRPC its kinda like nukes, we should have them
+ // all focusing specific enemy areas which we want to defeat"; "sometimes switching targets fully and suddenly will
+ // catch someone else off-guard"). Each gun used to shoot whatever the engine picked in its reach. Every 10 s the
+-// enemy buildings we know of (seen or remembered) are summed per 256-elmo cell; a cell is worth its metal times the
+-// guns of ours that reach it, and every gun in reach of the chosen cell is ordered onto it. The battery holds the
++// enemy buildings we know of (seen or remembered), and armies on our half, are summed per 256-elmo cell; a cell is
++// worth its metal times the guns of ours that reach it, and every gun in reach of the chosen cell is ordered onto it.
++// The battery holds the
+ // cell until it is spent (half its value gone) or another is worth half again as much, then moves whole.
+ 
+ const float LR_CELL = 256.f;
+@@ -16,6 +17,17 @@ array<int> gLrOrdered;     // gun ids ordered onto the current focus
+ array<int> gLrTarget;      // ...and the enemy id each was given (parallel)
+ int gLrNextAt = 0;
+ 
++// An army on our half is a target, at its metal like a building (his 11-15: "if our artillery can severely damage an
++// attacking army they should ... if the enemy is encroaching, sick the lrpc on them"). Seen or on radar now only.
++bool LrWorth(int d, int los, const AIFloat3& in p)
++{
++	if (!Catalog::gMobile[d])
++		return true;
++	if (Catalog::gFlyer[d] || (Catalog::gSurfT[d] <= 0.01f) || ((los & (1 | 2)) == 0))
++		return false;
++	return Military::ForwardFraction(p) < 0.5f;
++}
++
+ bool LrpcFocusOn()
+ {
+ 	return ai.GetTunable("apex_lrpc_focus", TUNE_LRPC_FOCUS) > 0.f;
+@@ -47,18 +59,18 @@ void UpdateLrpc()
+ 	// their buildings, per cell
+ 	const int cols = int(AiTerrainWidth() / LR_CELL) + 1;
+ 	const int rows = int(AiTerrainHeight() / LR_CELL) + 1;
+-	array<float> cm(cols * rows, 0.f), cx(cols * rows, 0.f), cz(cols * rows, 0.f);
++	array<float> cm(cols * rows, 0.f), cam(cols * rows, 0.f), cx(cols * rows, 0.f), cz(cols * rows, 0.f);
+ 	array<int> used;
+ 	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+ 	for (int i = 0; i < total; ++i) {
+ 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+-		if ((d <= 0) || (d > Catalog::gDefCount) || Catalog::gMobile[d])
++		if ((d <= 0) || (d > Catalog::gDefCount))
+ 			continue;
+ 		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+ 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+ 			continue;
+ 		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+-		if (!OnMap(p))
++		if (!OnMap(p) || !LrWorth(d, los, p))
+ 			continue;
+ 		const int c = int(p.x / LR_CELL) + cols * int(p.z / LR_CELL);
+ 		if ((c < 0) || (c >= cols * rows))
+@@ -67,11 +79,13 @@ void UpdateLrpc()
+ 			used.insertLast(c);
+ 		const float m = Catalog::gCostM[d];
+ 		cm[c] += m;
++		if (Catalog::gMobile[d])
++			cam[c] += m;
+ 		cx[c] += p.x * m;
+ 		cz[c] += p.z * m;
+ 	}
+ 	// the best cell, and the current focus's standing
+-	float bestS = 0.f, bestV = 0.f, curS = 0.f, curV = 0.f;
++	float bestS = 0.f, bestV = 0.f, bestA = 0.f, curS = 0.f, curV = 0.f;
+ 	int bestN = 0, curN = 0;
+ 	AIFloat3 bestAt;
+ 	const int curC = gLrHave ? (int(gLrFocus.x / LR_CELL) + cols * int(gLrFocus.z / LR_CELL)) : -1;
+@@ -91,6 +105,7 @@ void UpdateLrpc()
+ 		if (s > bestS) {
+ 			bestS = s;
+ 			bestV = cm[c];
++			bestA = cam[c];
+ 			bestN = n;
+ 			bestAt = at;
+ 		}
+@@ -111,7 +126,7 @@ void UpdateLrpc()
+ 		gLrOrdered.resize(0);
+ 		gLrTarget.resize(0);
+ 		AiLog(Factory::T() + "apex: lrpc-focus t=" + ai.teamId + " guns=" + bestN + "/" + guns.length()
+-			+ " at=" + int(bestAt.x) + "," + int(bestAt.z) + " value=" + int(bestV) + " why=" + why
++			+ " at=" + int(bestAt.x) + "," + int(bestAt.z) + " value=" + int(bestV) + " army=" + int(bestA) + " why=" + why
+ 			+ " was=" + int(curV) + "/" + int(gLrFocusV0));
+ 	} else if (gLrHave && (bestS <= 0.f)) {
+ 		gLrHave = false;   // nothing of theirs left in reach: the guns pick their own targets again
+@@ -131,12 +146,13 @@ void UpdateLrpc()
+ 	array<float> tm;
+ 	for (int i = 0; i < total; ++i) {
+ 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+-		if ((d <= 0) || (d > Catalog::gDefCount) || Catalog::gMobile[d])
++		if ((d <= 0) || (d > Catalog::gDefCount))
+ 			continue;
+ 		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+ 		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+ 			continue;
+-		if (aiEnemyMgr.GetEnemyUnitPosAt(i).distance2D(gLrFocus) > LR_CELL)
++		const AIFloat3 q = aiEnemyMgr.GetEnemyUnitPosAt(i);
++		if ((q.distance2D(gLrFocus) > LR_CELL) || !LrWorth(d, los, q))
+ 			continue;
+ 		const float m = Catalog::gCostM[d];
+ 		uint at = tm.length();
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/openrace.as b/ai/Unstable/game-side/script/standard/manager/brain/market/openrace.as
+index f00955cd..297e071c 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/openrace.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/openrace.as
+@@ -145,7 +145,7 @@ float OpenRaceConV(int cd, float lineBp, float H, float tR, float hold0, string
+ 	string sT = "";
+ 	if (SpotRaceOn()) {
+ 		float tFree = tB;
+-		V = SpotRaceConM(cd, tB, H, tR, hold0, tFree, sT);
++		V = SpotRaceConM(cd, tB, H, tR, hold0, tFree, sT) * ((share < 1.f) ? share : 1.f);   // shared like the path below
+ 		t = tFree;
+ 	} else {
+ 		float left = (mex > 0) ? share : 0.f;
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/production.as b/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
+index 9ae0887c..6510839d 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/production.as
+@@ -3346,13 +3346,15 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
+ 			const float hClaim = PayH();
+ 			claimGain = mob * util * SpotM() * (((hClaim > 1.f) ? hClaim : 900.f) / 60.f)
+ 					* share;
+-			// the spot race prices the hand's own speed and the spots it wins first
++			// the spot race prices the hand's own speed and the spots it wins first -- shared over the claimers like
++			// the claim above (his 11-15 no-air game: 12 open spots it never won, our claim rate 0, so each new con
++			// priced as the only claimer while 100 stood: "a huge blob of just a bunch of constructors")
+ 			if (SpotRaceOn() && (reach > 0.f)) {
+ 				float sH, sTR, sA, sArr, sHold, sFree;
+ 				OpenRaceClock(fid, sH, sTR, sA, sArr, sHold);
+ 				const float sBp = Brain::LineBuildPower(fac);
+ 				string sT;
+-				claimGain = (sBp > 0.f) ? util * SpotRaceConM(d, Catalog::gBuildTime[d] / sBp, sH, sTR, sHold, sFree, sT) / 60.f : 0.f;
++				claimGain = (sBp > 0.f) ? util * SpotRaceConM(d, Catalog::gBuildTime[d] / sBp, sH, sTR, sHold, sFree, sT) / 60.f * share : 0.f;
+ 			}
+ 		}
+ 		// UNPROTECTED BUILD POWER IS DISCOUNTED BUILD POWER (apexearth: "we
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_measured.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_measured.as
+index 808781ad..1b7e18df 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_measured.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_measured.as
+@@ -49,7 +49,7 @@ void DmDecay()
+ 		gDmLN[i] *= k;
+ }
+ 
+-void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout ns, float x, float z)
++void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout ns, float x, float z, float w = 1.f)
+ {
+ 	DmDecay();
+ 	const float r2 = LOSS_MERGE_R * LOSS_MERGE_R;
+@@ -57,7 +57,7 @@ void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout n
+ 		const float dx = xs[i] - x;
+ 		const float dz = zs[i] - z;
+ 		if (dx * dx + dz * dz < r2) {
+-			ns[i] += 1.f;
++			ns[i] += w;
+ 			return;
+ 		}
+ 	}
+@@ -74,7 +74,7 @@ void DmAdd(array<float>& inout xs, array<float>& inout zs, array<float>& inout n
+ 	}
+ 	xs.insertLast(x);
+ 	zs.insertLast(z);
+-	ns.insertLast(1.f);
++	ns.insertLast(w);
+ }
+ 
+ void DmNoteLoss(const AIFloat3& in at)
+@@ -277,10 +277,14 @@ void DefMeasuredStep()
+ 		// AN ARRIVAL IS NEW ENEMY METAL AT THE PROBE, not the first after a quiet read: a stream that never clears
+ 		// was one arrival however much came (his 11-15 hosted 4v4: T1 spam ate t4's side from one direction while
+ 		// this counted 3 arrivals, 564 m, to minute 27, and 0 of 63 tower bids won).
++		// Weighted by its metal over the mean arrival so far (reviewer 11-15: a line drifting at the edge counted a
++		// full arrival every other read, and protect_fill reads the rate raw).
+ 		if ((gDmPPrev[i] >= 0.f) && (m >= gDmPPrev[i] + 1.f)) {
+-			DmAdd(gDmAX, gDmAZ, gDmAN, p.x, p.z);
++			const float d = m - gDmPPrev[i];
++			const float w = (gDmArrN > 0) ? d * float(gDmArrN) / gDmArrM : 1.f;
++			DmAdd(gDmAX, gDmAZ, gDmAN, p.x, p.z, w);
+ 			++gDmArrN;
+-			gDmArrM += m - gDmPPrev[i];
++			gDmArrM += d;
+ 		}
+ 		gDmPPrev[i] = m;
+ 	}
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_senseprice.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_senseprice.as
+index 60687552..61357b6a 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_senseprice.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_senseprice.as
+@@ -157,10 +157,16 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
+ 		AIFloat3 shAt;
+ 		const float shG = JamShelledGain(d, shAt);
+ 		if (shG > 0.f) {
+-			JamSiteLog(d, shAt, 3, JamReach(d));
+-			at = shAt;
+-			gain = shG;
+-			return true;
++			// the engine's site, spaced like the cluster path below (11-15: asked at 7024,5968, stood 33 from a jammer)
++			const AIFloat3 shSite = JamSiteNear(d, shAt, JamReach(d));
++			if (OnMap(shSite) && (shSite.distance2D(shAt) <= JamReach(d))
++				&& !ProtCovered(PROT_JAM, shSite, JamSpacing(d)))
++			{
++				JamSiteLog(d, shSite, 3, JamReach(d));
++				at = shSite;
++				gain = shG;
++				return true;
++			}
+ 		}
+ 		// Tower concentrations want jamming first (apexearth): find a
+ 		// cluster of >=3 defenses with no jammer in reach.
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_shelled.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_shelled.as
+index 69337c69..8fdbb16e 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_shelled.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_shelled.as
+@@ -220,7 +220,10 @@ void ShelledNoteDeath(CCircuitUnit@ unit, const CCircuitDef@ attackerDef, bool a
+ 			return;
+ 		sR = Catalog::gLandRange[ad];
+ 		by = ad;
+-	} else if (!ShLongHit(vd, at, weapon, ai.frame - unit.GetDamagedFrame(), sR, by)) {
++	} else if ((unit.GetDamagedFrame() < 0)
++		|| !ShLongHit(vd, at, weapon, ai.frame - unit.GetDamagedFrame(), sR, by)) {
++		// never hit and no killer: our own reclaim (his 11-15 game, t4: each reclaimed jammer booked as shelled
++		// ordered the next one beside it)
+ 		return;
+ 	}
+ 	ShelledNote(vd, at, Catalog::gCostM[vd] * ((left > 0.f) ? left : 0.f), sR, by,
+diff --git a/ai/Unstable/game-side/script/standard/manager/frontline.as b/ai/Unstable/game-side/script/standard/manager/frontline.as
+index 771f2220..3ed18224 100644
+--- a/ai/Unstable/game-side/script/standard/manager/frontline.as
++++ b/ai/Unstable/game-side/script/standard/manager/frontline.as
+@@ -573,7 +573,7 @@ void Update()
+ 		gOwner[k] = Classify(ai.GetChokePointPos(gIdx[k]));
+ 
+ 	array<AIFloat3> _gates;
+-	AiLog("apex: frontline perim=" + gPerim.length()
++	AiLog(Factory::T() + "apex: frontline perim=" + gPerim.length()
+ 			+ " gates=" + GateChokes(_gates)
+ 			+ " front=" + CountEdge(FRONT) + " back=" + CountEdge(BACK)
+ 			+ " mine=" + MineEdge(FRONT) + " sectors=" + (gSectored ? int(gMateX.length()) + 1 : 1)
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/unstick.as b/ai/Unstable/game-side/script/standard/manager/military/unstick.as
+index 390ab0a5..2e870c9d 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/unstick.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/unstick.as
+@@ -204,7 +204,7 @@ void UsNudgeOne()
+ 		}
+ 		AiLog(Factory::T() + "apex: unstick-nudge " + u.circuitDef.GetName() + " #" + id
+ 			+ " q=" + u.CmdQueueSize() + " at=" + int(at.x) + "," + int(at.z)
+-			+ " to=" + int(to.x) + "," + int(to.z) + (bld ? " builder" : ""));
++			+ " to=" + int(to.x) + "," + int(to.z) + " acts=" + u.GetActTrace() + (bld ? " builder" : ""));
+ 		return;
+ 	}
+ }
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index d6e3cb37..77bf6cd6 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -1720,7 +1720,7 @@ const float TUNE_PRODUCE_FOCUS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE ea
+ const float TUNE_PRODUCE_NOCONS = 0.f;   // [toggle 0/1] strike.as: in PRODUCE no new constructor while 3 stand
+ const float TUNE_DYN_MOD = 0.f;   // [toggle 0/1] strike.as DynMod: the attack threat modifier follows the balance -- (theirs/ours)^2 when we outweigh them
+ const float TUNE_DOOR_CLEAR = 1.f;   // [toggle 0/1] BuilderTask.cpp SitePredicate: no building in any friendly factory's doorway (ours or an ally's)
+-const float TUNE_LRPC_FOCUS = 0.f;   // [toggle 0/1] brain/lrpc.as: every long-range gun in reach fires at one focus cell, switched whole
++const float TUNE_LRPC_FOCUS = 1.f;   // [toggle 0/1] brain/lrpc.as: every long-range gun in reach fires at one focus cell (buildings, or an army on our half), switched whole
+ const float TUNE_AA_DWELL = 1.f;   // [toggle 0/1] nnair.as NaEval: a strike pays the AA it crosses inside the cell (2 x its air reach at the wing's speed)
+ const float TUNE_GUN_REFUSE = 1.f;   // [toggle 0/1] RaidTask.cpp + nnair.as: a gunship wing that takes nothing at its goal for 3 s is recalled and the cell remembered (pain point); the unseen-base cell from the enemy start box
+ const float TUNE_MEX_BASIC = 1.f;   // [toggle 0/1] protect_target.as: mex cover is tower reach less raider reach, guard sites cover several mexes, a mex's first gun not scaled by the gunp head
+@@ -2164,7 +2164,7 @@ const float TUNE_STOCK_STALL_ABORT = 0.f;   // C++ only: task/builder/BuilderTas
+ const float TUNE_STOCK_STALL_WAIT = 0.f;   // C++ only: task/builder/BuilderTask.cpp:1258
+ const float TUNE_TARGET_VALUE = 1.f;   // C++ only: task/fighter/AttackTask.cpp:1073
+ const float TUNE_TASK_TRACE = 0.f;   // C++ only: task/builder/BuilderTask.cpp:446
+-const float TUNE_TRAVEL_LEAN = 1.f;   // C++ only: unit/action/FightAction.cpp:63
++const float TUNE_TRAVEL_LEAN = 1.f;   // [0/1/2] C++ only: unit/action/FightAction.cpp, MoveAction.cpp; 2 = also in contact (11-15 stalled pushes)
+ const float TUNE_TRAVEL_SAMESTEP = 0.f;   // C++ only: unit/action/FightAction.cpp:97
+ const float TUNE_WAKE_SPLIT = 1.f;   // C++ only: unit/CircuitUnit.cpp:210
+ 
+diff --git a/cpp/src/circuit/unit/action/FightAction.cpp b/cpp/src/circuit/unit/action/FightAction.cpp
+index 5a6c1601..0c2b1a6e 100644
+--- a/cpp/src/circuit/unit/action/FightAction.cpp
++++ b/cpp/src/circuit/unit/action/FightAction.cpp
+@@ -60,8 +60,11 @@ void CFightAction::Update(CCircuitAI* circuit)
+ 	constexpr int LEAN_AHEAD = 4;
+ 	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
+ 	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
+-	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
+-	if (lean) {
++	// 2: in contact too (his 11-15: the per-second order to the next waypoint aimed into wrecks and our own crowd,
++	// re-sent until the push stalled; "move further up ... stop giving quite so many move orders").
++	const float leanT = circuit->GetTunable("apex_travel_lean", 1.f);
++	bool lean = leanT > 0.f;
++	if (lean && (leanT < 2.f)) {
+ 		const AIFloat3& up = unit->GetPos(lastFrame);
+ 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+ 		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
+diff --git a/cpp/src/circuit/unit/action/MoveAction.cpp b/cpp/src/circuit/unit/action/MoveAction.cpp
+index 94195800..87aae2f0 100644
+--- a/cpp/src/circuit/unit/action/MoveAction.cpp
++++ b/cpp/src/circuit/unit/action/MoveAction.cpp
+@@ -125,7 +125,9 @@ void CMoveAction::Update(CCircuitAI* circuit)
+ 	constexpr int LEAN_AHEAD = 4;
+ 	// ...only where nothing armed can reach the unit before the far waypoint does: a fight needs the
+ 	// per-second orders (the first A/B: army held worse in 3 of 4 seeds with lean everywhere).
+-	bool lean = circuit->GetTunable("apex_travel_lean", 1.f) > 0.f;
++	// 2: in contact too (FightAction.cpp, his 11-15 stalled pushes)
++	const float leanT = circuit->GetTunable("apex_travel_lean", 1.f);
++	bool lean = leanT > 0.f;
+ 	const AIFloat3& up = unit->GetPos(lastFrame);
+ 	// ...and far enough ahead that the next order lands before the unit gets there: its speed over the order lag
+ 	// and the update period (his 10-31: fast bombers turned around between orders in a lagging game)
+@@ -133,7 +135,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
+ 	const float lagS = circuit->GetOrderLagSec();
+ 	const float leadD = ((circuit->GetTunable("apex_travel_lag", 1.f) > 0.f) && (lagS > CCircuitAI::ORDER_LAG_REAL_S))
+ 			? unit->GetCircuitDef()->GetSpeed() * (lagS + 2.f) : 0.f;
+-	if (lean) {
++	if (lean && (leanT < 2.f)) {
+ 		const int t0 = std::min(pathIterator + increment * LEAN_AHEAD, pathMaxIndex);
+ 		const float r = up.distance2D(pPath->posPath[t0]) + unit->GetCircuitDef()->GetMaxRange();
+ 		lean = circuit->GetEnemyManager()->GetEnemyArmedCostNear(up, r) <= 0.f;
+diff --git a/game-patches/gadgets/dev_scenario.lua b/game-patches/gadgets/dev_scenario.lua
+index 81533044..2d54919b 100644
+--- a/game-patches/gadgets/dev_scenario.lua
++++ b/game-patches/gadgets/dev_scenario.lua
+@@ -160,7 +160,43 @@ local function issue(rec)
+ 	end
+ end
+ 
++-- dev_scenario_wrecks: "name:n:ref:x:z:spacing|..." -- a feature def, or a unit def standing for its corpse, in a
++-- square block like a unit group (clutter a push has to cross).
++local function spawnWrecks(spec)
++	for part in tostring(spec or ""):gmatch("[^|]+") do
++		local f = {}
++		for tok in part:gmatch("[^:]+") do
++			f[#f + 1] = tok
++		end
++		local name = f[1] or ""
++		if not FeatureDefNames[name] and UnitDefNames[name] then
++			name = UnitDefNames[name].corpse or name
++		end
++		local fd = FeatureDefNames[name]
++		if not fd then
++			Echo("[BARAI_SCEN] ERROR unknown feature " .. tostring(f[1]))
++		else
++			local n, sp = tonumber(f[2]) or 1, tonumber(f[6]) or 48
++			local cx, cz = toWorld(f[3] or "c", tonumber(f[4]) or 0, tonumber(f[5]) or 0)
++			local cols = math.max(1, math.ceil(math.sqrt(n)))
++			local rows = math.ceil(n / cols)
++			local px, pz = -fwdZ, fwdX
++			local made = 0
++			for i = 0, n - 1 do
++				local a = (math.floor(i / cols) - (rows - 1) / 2) * sp
++				local b = (i % cols - (cols - 1) / 2) * sp
++				local wx, wz = cx + a * fwdX + b * px, cz + a * fwdZ + b * pz
++				if Spring.CreateFeature(fd.id, wx, Spring.GetGroundHeight(wx, wz), wz, math.random(0, 65535)) then
++					made = made + 1
++				end
++			end
++			Echo(string.format("[BARAI_SCEN_WRECKS] def=%s n=%d x=%d z=%d", name, made, cx, cz))
++		end
++	end
++end
++
+ local function spawnAll()
++	spawnWrecks(modOptions.dev_scenario_wrecks)
+ 	for gi, g in ipairs(groups) do
+ 		local ud, mobile = defFacts(g.def)
+ 		local team = (g.order == "ai" or not mobile) and mainTeam[g.side] or holderTeam[g.side]
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 172a0d95..2de555d2 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -412,7 +412,7 @@ local NAMES = {
+ 	"apex_income_accel",     -- floor.as IncomeAccelM: income wants credited the share of income times the in-flight gain (0)
+ 	"apex_lab_assist",       -- want_assist.as LabAssistGuard: lab orders priced, lab guards priced by the time they save (0)
+ 	"apex_site_cache",       -- sites.as: LatheSite/SuperSite answers cached one memo lifetime (0)
+-	"apex_travel_lean",      -- MoveAction/FightAction/SupportAction: walkers told 4 waypoints at once, re-ordered near the last; speed and escort only on change (1)
++	"apex_travel_lean",      -- MoveAction/FightAction/SupportAction: walkers told 4 waypoints at once, re-ordered near the last; speed and escort only on change (1); 2 = Move/Fight also within armed reach
+ 	"apex_catchup_wall",     -- perf.as CatchingUp: behind the server, elections budgeted per wall second (1)
+ 	"apex_reach_orders",     -- CircuitUnit ReachOrder: a move/fight/patrol point the unit cannot reach goes to the nearest reachable one (0)
+ 	"apex_elec_avg_us",      -- decide.as ElecFrameRoll: average election budget per frame, us (0 off)
+@@ -451,7 +451,7 @@ local NAMES = {
+ 	"apex_produce_nocons", -- strike.as: no new constructors in PRODUCE (0)
+ 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
+ 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
+-	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one (0)
++	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
+ 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
+ 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
+ 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
+diff --git a/tools/contract.py b/tools/contract.py
+index 447d17a7..8e79e428 100644
+--- a/tools/contract.py
++++ b/tools/contract.py
+@@ -34,7 +34,7 @@ class Seat:
+ 
+ KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
+         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
+-        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships")
++        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim")
+ 
+ 
+ def load(match: Path) -> list[Seat]:
+@@ -215,6 +215,68 @@ def gunships_sent_to_lose(s: Seat):
+     return sum(1 for v in nets if v < 0) / len(nets) if len(nets) >= 2 else None
+ 
+ 
++def army_stuck_per_10(s: Seat):
++    """His 11-15 v0.5.13 game: pushes stall because the move order points "right inside of a bunch of things ...
++    dead robot bodies", "it continuously retries to move to a place it can't go". Army units the stuck watcher caught
++    standing under an order (unstick-nudge without `builder`), per ten game minutes (t4-t7 there: 123-203 by ~40 min)."""
++    n = sum(1 for _f, b in s.lines["unstick-nudge "] if " builder" not in b)
++    end = max((r["frame"] for r in s.stats), default=0)
++    return 10.0 * n / (end / 1800.0) if end > 1800 * 5 else None
++
++
++FRONT_CELLS = re.compile(r"cAlly=(\d+) cFoe=(\d+)")
++
++
++def ground_given_up(s: Seat):
++    """His 11-15 v0.5.13 game: "consistently getting pushed back ... if you keep falling back and getting more and more
++    tight into your base, you will definitely not win ... it's just a slow death" (doctrine: push the front back).
++    Our share of the held cells (cAlly over cAlly+cFoe) from minute 10: the deepest fall below its own running peak
++    (t4 there: 176 of 1001 cells at minute 26, 17 of 1383 by minute 48)."""
++    peak = worst = 0.0
++    seen = False
++    for f, b in s.lines["frontline perim"]:
++        m = FRONT_CELLS.search(b)
++        if f < 18000 or not m or int(m.group(1)) + int(m.group(2)) == 0:
++            continue
++        seen = True
++        share = int(m.group(1)) / (int(m.group(1)) + int(m.group(2)))
++        peak = max(peak, share)
++        worst = max(worst, peak - share)
++    return worst if seen else None
++
++
++SENSE_R = {"rad": 2100, "frad": 2100, "arad": 3500, "jamt": 500, "veil": 760, "shroud": 700, "jam": 390}
++SENSE_PLACED = re.compile(r"placed t=\d+ ((arm|cor|leg)(rad|frad|arad|jamt|veil|shroud|jam)) at=(-?\d+),(-?\d+)")
++SENSE_DIED = re.compile(r"unit-destroyed ((arm|cor|leg)(rad|frad|arad|jamt|veil|shroud|jam)) .*? at=(-?\d+),(-?\d+)")
++
++
++def stacked_senses(s: Seat):
++    """His 11-15 v0.5.13 game: "multiple radar or jammers completely adjacent to each other ... pretty much pointless";
++    a jammer hides the buildings around it, one is enough (t4: five Cortex jammers in a row 32 apart, t6: three Veils
++    40 apart). Radar or jammer placements within a quarter of their own range of a standing one of the same kind
++    (radar with radar, jammer with jammer); a rebuild on a dead one's spot is not stacking."""
++    ev = sorted([(f, 0, m) for f, b in s.lines["placed t="] if (m := SENSE_PLACED.search(b))]
++                + [(f, 1, m) for f, b in s.lines["unit-destroyed "] if (m := SENSE_DIED.search(b))], key=lambda e: (e[0], e[1]))
++    if not ev:
++        return None
++    standing = {"radar": [], "jam": []}
++    stacked = 0
++    for _f, died, m in ev:
++        kind = "radar" if m.group(3) in ("rad", "frad", "arad") else "jam"
++        x, z = float(m.group(4)), float(m.group(5))
++        if died:
++            near = min(range(len(standing[kind])), default=None,
++                       key=lambda i: math.hypot(standing[kind][i][0] - x, standing[kind][i][1] - z))
++            if near is not None and math.hypot(standing[kind][near][0] - x, standing[kind][near][1] - z) < 64:
++                standing[kind].pop(near)
++            continue
++        r = SENSE_R[m.group(3)]
++        if any(math.hypot(a - x, b - z) < 0.25 * r for a, b in standing[kind]):
++            stacked += 1
++        standing[kind].append((x, z))
++    return float(stacked)
++
++
+ ADV_PLANT = re.compile(r"^(arm|cor|leg)(a(lab|vp|ap|sy)|gant|shltx|haap|halab|havp)")
+ _SLOW_CACHE: dict = {}
+ 
+@@ -379,6 +441,9 @@ CHECKS = [
+     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
+     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"
+     ("gunships sent to lose", gunships_sent_to_lose, "mean", 0.10, 0.0),  # "just sitting around doing nothing"
++    ("stacked radar/jammers", stacked_senses, "mean", 0.5, 0.0),     # "completely adjacent ... pretty much pointless"
++    ("army stuck per 10 min", army_stuck_per_10, "mean", 5.0, 0.0),  # "continuously retries to move to a place it can't go"
++    ("ground given up share", ground_given_up, "mean", 0.05, 0.0),   # "falling back ... tight into your base ... slow death"
+     ("anomalous seats", anomalous_seat, "mean", 0.10, 0.0),          # "acts dramatically different"
+     ("log peak cons per income", cons_peak, "mean", 0.10, None),   # mean: a median falls between map clusters
+     ("army share (neg)", army_share, "median", 0.03, None),
+diff --git a/tools/mp_archive.py b/tools/mp_archive.py
+index 63fc8d5d..97260aec 100644
+--- a/tools/mp_archive.py
++++ b/tools/mp_archive.py
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env python3
+ """His multiplayer games become training games.
+ 
+-    python tools/mp_archive.py            # one pass: archive new games, build what has a replay
++    python tools/mp_archive.py [--limit N] # one pass: archive new games, build what has a replay (newest first)
+     python tools/mp_archive.py --watch    # archive only, every 30 s while no game of his is running
+ 
+ 1. ARCHIVE. Our AI writes its decisions to data/AI/Skirmish/<short>/<version>/
+@@ -143,20 +143,28 @@ def build(gdir):
+     return out
+ 
+ 
+-def one_pass(env):
++def one_pass(env, limit=None):
+     state = load_state()
+     ARCH.mkdir(parents=True, exist_ok=True)
+     archive(env, state)
+     STATE.write_text(json.dumps(state))
+-    for g in sorted(ARCH.glob("*")):
++    # Newest first, and never while he plays: each build is a headless playback (11-15: a pass rebuilding October games
++    # started a new replay engine minutes after his next game began, past the guard that had stopped the last one).
++    for g in sorted(ARCH.glob("*"), reverse=True):
+         if g.is_dir() and (g / "game.json").is_file():
+-            build(g)
++            if his_game_running():
++                print("mp_archive: his game is running, builds stopped")
++                return
++            if build(g) is not None and limit is not None:
++                limit -= 1
++                if limit <= 0:
++                    return
+ 
+ 
+ def main(argv):
+     env = bar_env.load()
+     if "--watch" not in argv:
+-        one_pass(env)
++        one_pass(env, int(argv[argv.index("--limit") + 1]) if "--limit" in argv else None)
+         return 0
+     # Watching only archives: the next game overwrites the logs, and a replay
+     # build is a long headless playback that would compete with his next game.
+diff --git a/tools/scenario.py b/tools/scenario.py
+index 67a4badb..c6af3111 100644
+--- a/tools/scenario.py
++++ b/tools/scenario.py
+@@ -91,6 +91,11 @@ def encode_units(spec: dict) -> str:
+     return "|".join(out)
+ 
+ 
++def encode_wrecks(spec: dict) -> str:
++    return "|".join(":".join([w["def"], str(w.get("n", 1)), w["at"][0], str(int(w["at"][1])), str(int(w["at"][2])),
++                              str(int(w.get("spacing", 48)))]) for w in spec.get("wrecks", []))
++
++
+ def gadget_check(install: bool) -> None:
+     dst = bar_env.load().game_sdd / "luarules" / "gadgets" / GADGET.name
+     if dst.exists() and filecmp.cmp(GADGET, dst, shallow=False):
+@@ -132,6 +137,8 @@ def launch(spec: dict, args, slot: int) -> tuple[subprocess.Popen, Path]:
+            "--modoption", f"dev_scenario_los={spec.get('los', 'global')}",
+            "--modoption", f"dev_maxgameminutes={end_frame / FPS / 60:.4f}",
+            "--modoption", f"debugcommands={end_frame + 3 * FPS}:quitforce"]
++    if spec.get("wrecks"):
++        cmd += ["--modoption", f"dev_scenario_wrecks={encode_wrecks(spec)}"]
+     if coms != "keep":
+         cmd += ["--modoption", "deathmode=neverend"]
+     for side in (0, 1):
+@@ -181,6 +188,11 @@ def parse(text: str) -> dict:
+             d["errors"].append(line.strip()[:200])
+         elif "apex: " in line:
+             tag = line.split("apex: ", 1)[1].split(" ", 1)[0]
++            if tag == "unstick-nudge" and not line.rstrip().endswith(" builder"):
++                d["stuck"] = d.get("stuck", 0) + 1
++            if tag == "order-src":
++                m = re.search(r" fightwalk=(\d+)/", line)
++                d["fwalk"] = d.get("fwalk", 0) + (int(m.group(1)) if m else 0)
+             if ARMY_TAG.search(tag):
+                 d["apex"][tag] = d["apex"].get(tag, 0) + 1
+     return d
+@@ -216,6 +228,10 @@ def counters(d: dict, spec: dict) -> dict:
+     for side, key in ((1, "first_kill_s"), (0, "first_loss_s")):
+         fr = [int(x["frame"]) for x in d["deaths"] if x["side"] == str(side)]
+         c[key] = round((min(fr) - spawn) / FPS, 1) if fr else -1
++    fr = sorted(int(x["frame"]) for x in d["deaths"] if x["side"] == "1")
++    c["all_killed_s"] = round((fr[-1] - spawn) / FPS, 1) if fr and len(fr) == c["spawned1"] else 9999
++    c["stuck"] = d.get("stuck", 0)          # army units the stuck watch found not moving on an order
++    c["fightwalk"] = d.get("fwalk", 0)      # fight-walk orders sent (order-src, per minute summed)
+     return c
+ 
+ 
+@@ -267,7 +283,8 @@ def judge(mdir: Path, spec: dict | None = None) -> bool | None:
+     print(f"   our deaths  alone {c['alone']}  still {c['still']}  never fired {c['nofire']}")
+     print(f"   contact     {c['contacted']} reached reach, {c['trickle']} trickled in "
+           f"(> {spec.get('window_s', 4)} s after the first)")
+-    print(f"   first kill  {c['first_kill_s']} s   first loss {c['first_loss_s']} s")
++    print(f"   first kill  {c['first_kill_s']} s   first loss {c['first_loss_s']} s   all killed {c['all_killed_s']} s")
++    print(f"   stuck       {c['stuck']} nudges   fight-walk orders {c['fightwalk']}")
+     kd = {k: v for k, v in c.items() if ":" in k}
+     if kd:
+         print("   by def      " + "  ".join(f"{k}={v}" for k, v in sorted(kd.items())))
+diff --git a/tools/scenarios/wreck_push.json b/tools/scenarios/wreck_push.json
+new file mode 100644
+index 00000000..3c41f36e
+--- /dev/null
++++ b/tools/scenarios/wreck_push.json
+@@ -0,0 +1,17 @@
++{
++  "about": "our squad of 12 pushes through a field of wrecks to an enemy group holding past it (his 11-15: move orders aim inside dead robot bodies and are re-sent over and over, pushes stall)",
++  "passes": "every enemy dead inside 120 s and at most 2 stuck-unit nudges",
++  "map": "Geyser Plains",
++  "seconds": 150,
++  "wrecks": [
++    {"def": "armwar", "n": 64, "at": ["c", -350, 0], "spacing": 56}
++  ],
++  "units": [
++    {"side": 0, "def": "armwar", "n": 12, "at": ["c", -1000, 0], "order": "ai"},
++    {"side": 1, "def": "armpw", "n": 8, "at": ["c", 250, 0], "spacing": 56, "order": "hold"},
++    {"side": 1, "def": "armllt", "n": 1, "at": ["c", 350, 0], "order": "hold"}
++  ],
++  "expect": [
++    {"all_killed_s": ["<=", 120], "stuck": ["<=", 2]}
++  ]
++}

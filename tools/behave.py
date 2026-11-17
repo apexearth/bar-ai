@@ -5,8 +5,8 @@ no equivalent -- every finding came from reading code backwards and guessing at
 mechanism, and six real defects were found without one of them being shown to
 win a game. apexearth, 2026-09-08:
 
-    "you have no good way to understand the effects of what you're doing. fuck
-    if you could just watch it like me you'd see how obviously terrible it is."
+    without a way to see the effects of a change, the effects stay unknown; watching the game shows
+    plainly what is wrong.
 
 That is the actual problem, and this is the substitute for eyes. Each detector
 below is one of his repeated complaints turned into a number, so a change can be

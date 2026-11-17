@@ -46,3 +46,16 @@ the ally's ground, or hand the con and the bank to the ally -- not only which ve
 A scenario that wipes most of a seat's base mid-game (tools/scenario.py), then trace which rule blocks the rebuild.
 Wanted behaviour: a seat that lost its base always has a path back -- income at the nearest spot it can hold, then
 a lab, then cons; a danger veto must leave something it can build.
+
+## 11-16: the open-ground case recovers on v0.5.14 (tools/scenarios/rebuild_bare.json)
+
+One T1 con, two extractors, two solars, no lab, no commander, nothing of theirs near (Geyser Plains, NullAI): the con
+builds extractors, orders a lab at 2.5 min (`request new armlab`, walk358 build530: no 48-min walk), the lab stands at
+4.2 min and its queue runs (facqueue orders 4 -> 8, milreq 4-5), then a nano, an advanced solar and wind.
+`matches/scenario-dev/20261116-094238-rebuild_bare`. The scenario banks 20k metal, so it shows the path, not its speed.
+
+Our frozen seats in rc8-rc10 / na7-na9 (12 of 104 seat-games, release seats about as many) are the contested case:
+rc10-rc2-C9704 t0 lost 21k in 2 min at minute 20 with the enemy army on its base (`foeHeld=100-120`, own spots
+priced hot), cons 7 -> 0 as they died, the lab priced 1-8 against extractors at 40k. rc10-rc2-C9701 t1 rebuilt a lab
+at minute 28 once the ground cleared. What remains is the fight for the base (validation row 114, his decision), not
+a missing rebuild rule.

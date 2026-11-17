@@ -1,0 +1,16 @@
+{
+  "about": "a lost base on open ground (his 11-14 'when we lose too much of our base we don't rebuild'): our seat has one T1 constructor, two extractors and two solars, no lab, no commander; nothing of theirs near (their lab far away, NullAI)",
+  "passes": "a path back: a lab rises and makes constructors (judge from the log: unit-finished lines for a plant and for new builders on side 0)",
+  "map": "Geyser Plains",
+  "seconds": 360,
+  "enemy": "none",
+  "units": [
+    {"side": 0, "def": "armck", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
+    {"side": 0, "def": "armmex", "n": 2, "at": ["s0", -250, 0], "spacing": 140, "order": "ai"},
+    {"side": 0, "def": "armsolar", "n": 2, "at": ["s0", 0, 200], "spacing": 100, "order": "ai"},
+    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"}
+  ],
+  "expect": [
+    {"dead0": ["<=", 0]}
+  ]
+}

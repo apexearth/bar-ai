@@ -10,8 +10,9 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
-| [v0514-review-deferred](issues/v0514-review-deferred.md) | 11-16 | ten review findings left for the next version (held gun idles after its kill, first-arrival weight jump, sensor spacing vs nanoframes, perf) |
-| [no-rebuild-after-base-loss](issues/no-rebuild-after-base-loss.md) | 11-14 | a seat that loses most of its base never rebuilds: its last con re-takes one lab order every 30 s, no eco want reaches it |
+| [v0512-targets](issues/v0512-targets.md) | 11-16 | his v0.5.12 targets and the 11-15/16 asks, one row each: check, v0.5.14 vs v0.5.13, aim, status |
+| [v0514-review-deferred](issues/v0514-review-deferred.md) | 11-16 | eleven findings left for the next version (held gun idles after its kill, first-arrival weight jump, sensor spacing vs nanoframes, perf, near-done check counts volume) |
+| [no-rebuild-after-base-loss](issues/no-rebuild-after-base-loss.md) | 11-14 | open ground recovers in v0.5.14 (rebuild_bare: lab at 4.2 min); recent frozen seats are bases under an enemy army (row 114) |
 | [fighters-dropped-510](issues/fighters-dropped-510.md) | 11-12 | v0.5.10/11 build 20-40% less fighter metal than v0.5.07 and 1.5-2x the bombers; his watch: enemy owns the sky |
 | [v0510-review-deferred](issues/v0510-review-deferred.md) | 11-12 | five findings left for the next version (metal-field site check, army-target readers, race end, perf) |
 | [cons-flee-to-map-edge](issues/cons-flee-to-map-edge.md) | 11-04 | constructors run to the map edge when threat covers the whole map, and idle there |
@@ -29,6 +30,7 @@ unproven. `python tools/trial_report.py` after his games.
 | [eco-half-his-curve](issues/eco-half-his-curve.md) | 10-22 | energy and build power behind his curve from minute 2; what was measured and removed |
 | [performance](issues/performance.md) | 10-31 | 16-AI budget fails 1.7x in v0.5.01; his seats 2-3.5 ms; scav 8v8 4x; LatheSiteRaw spikes |
 | [site-moved-after-pricing](issues/site-moved-after-pricing.md) | 10-15 | the defence-site net moves a priced site 4,450 elmos; the commander leash misses it |
+| [commander-flees-forward](issues/commander-flees-forward.md) | 11-16 | with their army in our base the commander's evade steps him toward their side; faster chasers follow |
 | [t3-switch-army-aa](issues/t3-switch-army-aa.md) | 10-10 | forward AA dies unbuilt; queued T3 counted at nameplate; cons as costly as T2 army |
 | [mex-losses-vs-barb](issues/mex-losses-vs-barb.md) | 10-10 | fewer claims by m5; the raider that kills our mex lives; small DEFEND pools never detach |
 | [defence-funnel](issues/defence-funnel.md) | 10-09 | 68% of ground-gun attempts refused; T2 guns late and the slow kinds |

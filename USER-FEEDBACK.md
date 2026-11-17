@@ -46,7 +46,7 @@ plays in `TODO.md`; the full older text is in git (`git log -p USER-FEEDBACK.md`
 - A dead mex is rebuilt quickly (six reports). Structural; a rebuild preemption would be a rule and needs his say.
 - A T2 lab is built by many hands; is T2 at ~4 min and ~27 income what he wants? Gantry timing open.
 - A T2 lab is not started while the front is being lost. Open.
-- A pulsar alone at mid-map mexes with 79 nanos and nothing else: *"if you're gonna commit so goddamn hard, at least build more defensive turrets around there."* The guns of a second base where the economy commits are not built.
+- A pulsar alone at mid-map mexes with 79 nanos and nothing else: if we commit that hard there, we should build more defensive turrets around it. The guns of a second base where the economy commits are not built.
 - Guarding a constructor ends when the job no longer needs the hands. Built 09-13/14, unverified.
 - Constructors do not walk out alone onto ground where the last one died; lost mexes are not passively conceded. First half built; the army retaking the mexes is open.
 

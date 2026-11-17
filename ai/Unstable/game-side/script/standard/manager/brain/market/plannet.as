@@ -328,8 +328,7 @@ bool AirPlantOwed(int d)
 		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < int(ceil(gAirPlantMax)));
 }
 
-// WHICH AI IS PLAYING, said once per team in chat and by every bot in its log.
-const int BOARD_BANNER = 300;
+// WHICH AI IS PLAYING, said once a game in chat and by every bot in its log.
 bool gVersionLogged = false;
 void VersionBanner()
 {
@@ -337,11 +336,16 @@ void VersionBanner()
 		gVersionLogged = true;
 		AiLog("apex: version t=" + ai.teamId + " " + ai.GetAiVersion() + " nets=" + NNW_GAMES + " script=" + APEX_SCRIPT);
 	}
-	if ((ai.frame < 3 * SECOND) || (ai.GetTeamBoard(BOARD_BANNER, -1.f) >= 0.f))
+	if ((ai.frame < 3 * SECOND) || gRosterAsked)
 		return;
-	ai.SetTeamBoard(BOARD_BANNER, float(ai.frame));
-	ai.SendChat("Apex " + ai.GetAiVersion() + " - scripts " + APEX_SCRIPT + " - nets " + NNW_GAMES);
+	gRosterAsked = true;
+	// his 11-16: one line naming every AI of ours and its version, once a game; plain text from an AI is dropped,
+	// /say reaches everyone
+	const string s = ai.RosterLineOnce();
+	if (s != "")
+		ai.SendChat("/say " + s);
 }
+bool gRosterAsked = false;
 
 // THE TEAM ARMY (his 10-11: mass at the front, then all attack together -- and it
 // must not be able to flip-flop). One operation on the shared board, written only

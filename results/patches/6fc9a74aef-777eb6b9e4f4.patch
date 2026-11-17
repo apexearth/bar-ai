@@ -1,0 +1,557 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as b/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as
+index bf5db901..2055ae96 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/plannet.as
+@@ -328,8 +328,7 @@ bool AirPlantOwed(int d)
+ 		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < int(ceil(gAirPlantMax)));
+ }
+ 
+-// WHICH AI IS PLAYING, said once per team in chat and by every bot in its log.
+-const int BOARD_BANNER = 300;
++// WHICH AI IS PLAYING, said once a game in chat and by every bot in its log.
+ bool gVersionLogged = false;
+ void VersionBanner()
+ {
+@@ -337,11 +336,16 @@ void VersionBanner()
+ 		gVersionLogged = true;
+ 		AiLog("apex: version t=" + ai.teamId + " " + ai.GetAiVersion() + " nets=" + NNW_GAMES + " script=" + APEX_SCRIPT);
+ 	}
+-	if ((ai.frame < 3 * SECOND) || (ai.GetTeamBoard(BOARD_BANNER, -1.f) >= 0.f))
++	if ((ai.frame < 3 * SECOND) || gRosterAsked)
+ 		return;
+-	ai.SetTeamBoard(BOARD_BANNER, float(ai.frame));
+-	ai.SendChat("Apex " + ai.GetAiVersion() + " - scripts " + APEX_SCRIPT + " - nets " + NNW_GAMES);
+-}
++	gRosterAsked = true;
++	// his 11-16: one line naming every AI of ours and its version, once a game; plain text from an AI is dropped,
++	// /say reaches everyone
++	const string s = ai.RosterLineOnce();
++	if (s != "")
++		ai.SendChat("/say " + s);
++}
++bool gRosterAsked = false;
+ 
+ // THE TEAM ARMY (his 10-11: mass at the front, then all attack together -- and it
+ // must not be able to flip-flop). One operation on the shared board, written only
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/hooks.as b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+index e447ecd6..d2ba32fc 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/hooks.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+@@ -500,8 +500,18 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+ 		if (sp > 0)
+ 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
+ 	}
+-	if (StockCtl(unit))
++	if (StockCtl(unit)) {
++		if (RaStock() && AnswerClaimed(int(unit.id))) {
++			IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
++			if (ans !is null) {
++				unit.SetScriptFree(true);
++				return NoteElect("raid.answer", ans);
++			}
++		}
++		if (RaUnfree(int(unit.id)))
++			unit.SetScriptFree(false);
+ 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
++	}
+ 	const CCircuitDef@ cdef = unit.circuitDef;
+ 	MarkSpearhead(cdef);
+ 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as b/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
+index 4899ecc2..afd49c7b 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
+@@ -211,12 +211,43 @@ void AnswerRaid(const AIFloat3& in at, int kd)
+ 			ce.insertAt(k, escort);
+ 		}
+ 	}
++	// the smallest answer that covers the raid (his 11-16: never the whole army after a small raid): nearest first,
++	// every unit that fits in what is still needed; then the one unit that closes the rest with the least spare
+ 	float have = 0.f;
+-	uint take = 0;
+-	while ((take < cu.length()) && (have < need)) {
+-		have += Catalog::gCostM[int(cu[take].circuitDef.id)];
+-		++take;
++	array<uint> pk;
++	array<bool> used(cu.length(), false);
++	for (uint k = 0; (k < cu.length()) && (have < need); ++k) {
++		const float c = Catalog::gCostM[int(cu[k].circuitDef.id)];
++		if (have + c <= need) {
++			have += c;
++			used[k] = true;
++			pk.insertLast(k);
++		}
+ 	}
++	while (have < need) {
++		int best = -1, big = -1;
++		float bestC = 0.f, bigC = 0.f;
++		for (uint k = 0; k < cu.length(); ++k) {
++			if (used[k])
++				continue;
++			const float c = Catalog::gCostM[int(cu[k].circuitDef.id)];
++			if ((c >= need - have) && ((best < 0) || (c < bestC))) {
++				best = int(k);
++				bestC = c;
++			}
++			if ((big < 0) || (c > bigC)) {
++				big = int(k);
++				bigC = c;
++			}
++		}
++		const int k = (best >= 0) ? best : big;
++		if (k < 0)
++			break;
++		have += Catalog::gCostM[int(cu[k].circuitDef.id)];
++		used[k] = true;
++		pk.insertLast(uint(k));
++	}
++	const uint take = pk.length();
+ 	if (have < need) {
+ 		++gAnsShort;
+ 		if (AnswerLogOk())
+@@ -235,7 +266,8 @@ void AnswerRaid(const AIFloat3& in at, int kd)
+ 	gAnsSent.insertLast(int(take));
+ 	gAnsTask.insertLast(null);
+ 	int nEsc = 0, nAtk = 0;
+-	for (uint k = 0; k < take; ++k) {
++	for (uint q = 0; q < take; ++q) {
++		const uint k = pk[q];
+ 		gAnsClaim.insertLast(int(cu[k].id));
+ 		gAnsClaimSlot.insertLast(id);
+ 		if (ce[k]) {
+@@ -244,30 +276,35 @@ void AnswerRaid(const AIFloat3& in at, int kd)
+ 		}
+ 		if (ct[k].GetFightType() == int(Task::FightType::ATTACK))
+ 			++nAtk;
++		if (RaStock()) {
++			cu[k].SetScriptFree(true);
++			gRaFreed.insertLast(int(cu[k].id));
++		}
+ 		ct[k].RemoveUnit(cu[k]);
+ 	}
+ 	++gAnsSentN;
+ 	gAnsPulled += int(take);
+-	if (AnswerLogOk())
+-		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " sent at=" + int(at.x) + "," + int(at.z)
+-			+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " need=" + int(need)
+-			+ " m=" + int(have) + " n=" + take + " esc=" + nEsc + " atk=" + nAtk + " near=" + int(cd[0]) + " r=" + int(r));
++	AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " sent at=" + int(at.x) + "," + int(at.z)
++		+ " by=" + Catalog::Def(kd).GetName() + " foe=" + int(foeM) + " need=" + int(need)
++		+ " m=" + int(have) + " n=" + take + " esc=" + nEsc + " atk=" + nAtk + " near=" + int(cd[pk[0]]) + " r=" + int(r)
++		+ " army=" + int(Market::ArmyValue()));
+ }
+ 
+ void EndAnswer(uint i, const string why)
+ {
+-	if ((gAnsTask[i] !is null) && !gAnsTask[i].IsDead())
+-		gAnsTask[i].Abort();
+-	if (AnswerLogOk())
+-		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " end " + why
+-			+ " at=" + int(gAnsPos[i].x) + "," + int(gAnsPos[i].z)
+-			+ " lifeS=" + int((ai.frame - gAnsBorn[i]) / SECOND) + " n=" + gAnsSent[i]);
++	// claims first: a member the abort sends back to the election must not find its answer still waiting
+ 	for (int c = int(gAnsClaim.length()) - 1; c >= 0; --c) {
+ 		if (gAnsClaimSlot[c] == gAnsId[i]) {
+ 			gAnsClaim.removeAt(c);
+ 			gAnsClaimSlot.removeAt(c);
+ 		}
+ 	}
++	if ((gAnsTask[i] !is null) && !gAnsTask[i].IsDead())
++		gAnsTask[i].Abort();
++	if (AnswerLogOk())
++		AiLog(Factory::T() + "apex: raid-answer t=" + ai.teamId + " end " + why
++			+ " at=" + int(gAnsPos[i].x) + "," + int(gAnsPos[i].z)
++			+ " lifeS=" + int((ai.frame - gAnsBorn[i]) / SECOND) + " n=" + gAnsSent[i]);
+ 	gAnsId.removeAt(i);
+ 	gAnsPos.removeAt(i);
+ 	gAnsR.removeAt(i);
+@@ -277,9 +314,30 @@ void EndAnswer(uint i, const string why)
+ 	gAnsTask.removeAt(i);
+ }
+ 
++// apex_raid_answer_stock: under the stock army the answer still pulls units off stock tasks (his 11-16 row 114, A/B);
++// a pulled unit is scriptFree while on the answer and handed back to stock at its next election
++int gRaStock = -1;
++bool RaStock()
++{
++	if (gRaStock < 0)
++		gRaStock = (StockArmy() && (ai.GetTunable("apex_raid_answer_stock", TUNE_RAID_ANSWER_STOCK) > 0.f)) ? 1 : 0;
++	return gRaStock > 0;
++}
++
++// units the answer took out of stock control; each goes back at its next election
++array<int> gRaFreed;
++bool RaUnfree(int id)
++{
++	const int k = gRaFreed.find(id);
++	if (k < 0)
++		return false;
++	gRaFreed.removeAt(k);
++	return true;
++}
++
+ void UpdateRaidAnswer()
+ {
+-	if (StockQuiet("raidanswer"))
++	if (!RaStock() && StockQuiet("raidanswer"))
+ 		return;
+ 	for (int i = int(gAnsId.length()) - 1; i >= 0; --i) {
+ 		const uint u = uint(i);
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index 64a74e26..b154ad80 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -1145,6 +1145,9 @@ const float TUNE_OUR_AIR = 1.f;
+ // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
+ const float TUNE_SQUADS = 0.f;
+ 
++// RAID_ANSWER_STOCK: [toggle 0/1] (with STOCK_ARMY 1) the raid answer still sends near units at a raid on our ground. See docs/tunables.md.
++const float TUNE_RAID_ANSWER_STOCK = 1.f;
++
+ // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
+ //   guarding a con is a Bull missing from the line.
+ const float TUNE_ESCORT_MAX_COST = 120.f;
+diff --git a/cpp/src/circuit/script/InitScript.cpp b/cpp/src/circuit/script/InitScript.cpp
+index d66f91cb..e1c7d502 100644
+--- a/cpp/src/circuit/script/InitScript.cpp
++++ b/cpp/src/circuit/script/InitScript.cpp
+@@ -53,6 +53,8 @@
+ #include "Lua.h"
+ #include "AISCommands.h"  // UNIT_COMMAND_OPTION_*, used by CmdBuildUnit below
+ #include "Command.h"       // springai::Command, for reading a unit's own queue
++#include "SkirmishAI.h"
++#include "Info.h"
+ 
+ #include <chrono>          // apex: script-time accounting in Update()
+ #include <algorithm>
+@@ -238,6 +240,85 @@ static std::string CCircuitAI_GetAiVersion(CCircuitAI* circuit)
+ 	return circuit->GetAiVersion();
+ }
+ 
++// His 11-16: one line so players know who is who -- every AI of ours in the game by the name the lobby shows, and the
++// version this library runs. The first AI of this library to ask gets it; every later ask in the process gets "".
++static std::string CCircuitAI_RosterLineOnce(CCircuitAI* circuit)
++{
++	static bool said = false;
++	if (said) {
++		return "";
++	}
++	said = true;
++	std::string myShort;
++	{
++		std::unique_ptr<springai::Info> info(circuit->GetSkirmishAI()->GetInfo());
++		const char* s = info->GetValueByKey("shortName");
++		myShort = (s != nullptr) ? s : "";
++	}
++	auto lower = [](std::string v) { for (char& c : v) c = std::tolower((unsigned char)c); return v; };
++	auto trim = [](std::string v) {
++		const size_t a = v.find_first_not_of(" \t\r");
++		const size_t b = v.find_last_not_of(" \t\r;");
++		return (a == std::string::npos) ? std::string() : v.substr(a, b - a + 1);
++	};
++	const std::string script = circuit->GetGame()->GetSetupScript();
++	std::vector<std::string> names;
++	std::string name, shortName, version, team;
++	bool inAi = false;
++	int depth = 0;
++	size_t pos = 0;
++	while (pos <= script.size()) {
++		size_t eol = script.find('\n', pos);
++		if (eol == std::string::npos) {
++			eol = script.size();
++		}
++		const std::string line = trim(script.substr(pos, eol - pos));
++		pos = eol + 1;
++		if (!inAi) {
++			const std::string l = lower(line);
++			if ((l.rfind("[ai", 0) == 0) && (l.find(']') != std::string::npos)) {
++				inAi = true;
++				depth = 0;
++				name.clear(); shortName.clear(); version.clear(); team.clear();
++			}
++			continue;
++		}
++		for (char c : line) {
++			if (c == '{') ++depth;
++			else if (c == '}') --depth;
++		}
++		if ((depth == 1) && (line.find('=') != std::string::npos)) {
++			const size_t eq = line.find('=');
++			const std::string k = lower(trim(line.substr(0, eq)));
++			const std::string v = trim(line.substr(eq + 1));
++			if (k == "name") name = v;
++			else if (k == "shortname") shortName = v;
++			else if (k == "version") version = v;
++			else if (k == "team") team = v;
++		}
++		if ((depth <= 0) && (line.find('}') != std::string::npos)) {
++			inAi = false;
++			// a hosted game names no version and loads the highest one installed: this library
++			if ((lower(shortName) == lower(myShort)) && (version.empty() || (version == circuit->GetAiVersion()))
++				&& !name.empty()) {
++				// the name players see: the game names AIs at random (luarules ai_namer.lua, rules param ainame_<team>)
++				const std::string shown = team.empty() ? std::string()
++						: circuit->GetGame()->GetRulesParamString(("ainame_" + team).c_str(), "");
++				names.push_back(shown.empty() ? name : shown);
++			}
++		}
++	}
++	const std::string apex = "Apex " + circuit->GetAiVersion();
++	if (names.empty()) {
++		return apex;
++	}
++	std::string who;
++	for (size_t i = 0; i < names.size(); ++i) {
++		who += ((i == 0) ? "" : ((i + 1 == names.size()) ? " and " : ", ")) + names[i];
++	}
++	return who + ((names.size() == 1) ? " is " : " are ") + apex;
++}
++
+ // The engine's Pos2BuildPos snap (GameHelper.cpp): every building lands on the
+ // 16-elmo build grid, with a half-square offset when the footprint size has
+ // bit 2 set, so EDGES always meet the grid. Script placement math computes
+@@ -3067,6 +3148,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetAiVersion() const", asFUNCTION(CCircuitAI_GetAiVersion), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "string RosterLineOnce()", asFUNCTION(CCircuitAI_RosterLineOnce), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+diff --git a/cpp/src/circuit/task/fighter/FighterTask.cpp b/cpp/src/circuit/task/fighter/FighterTask.cpp
+index 2d366cc1..57602a40 100644
+--- a/cpp/src/circuit/task/fighter/FighterTask.cpp
++++ b/cpp/src/circuit/task/fighter/FighterTask.cpp
+@@ -57,7 +57,18 @@ bool IFighterTask::JoinAdmitted(const CCircuitUnit* unit) const
+ bool IFighterTask::IsStockTask() const
+ {
+ 	const CCircuitAI* circuit = manager->GetCircuit();
+-	return circuit->IsStockArmy() && !(circuit->IsOurAir() && (units.empty() ? scriptMade : airSide));
++	if (!circuit->IsStockArmy() || (circuit->IsOurAir() && (units.empty() ? scriptMade : airSide))) {
++		return false;
++	}
++	// the script's raid answer: a raid it made, crewed by units it took out of stock control, runs its goal and its end
++	if (scriptMade && (fightType == FightType::RAID)) {
++		for (const CCircuitUnit* u : units) {
++			if (u->scriptFree) {
++				return false;
++			}
++		}
++	}
++	return true;
+ }
+ 
+ bool IFighterTask::OtherSide(const CCircuitUnit* unit) const
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 2de555d2..925519f5 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -452,6 +452,7 @@ local NAMES = {
+ 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
+ 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
+ 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
++	"apex_raid_answer_stock", -- military/raidanswer.as: under the stock army the raid answer still sends near units at a raid on our ground (1, row 114)
+ 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
+ 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
+ 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
+diff --git a/tools/contract.py b/tools/contract.py
+index ef6058ab..c4f65b9d 100644
+--- a/tools/contract.py
++++ b/tools/contract.py
+@@ -21,6 +21,7 @@ import statistics
+ import sys
+ from pathlib import Path
+ 
++DEATH_LINE = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) .*? atk=(\w+)")
+ LINE = re.compile(r"\[f=(-?\d+)\] Skirmish AI <ApexUnstable-([^>]+)>: (?:\[[\d.]+m t(\d+)\] )?apex: (.*)")
+ T_IN = re.compile(r"\bt=(\d+)\b")
+ 
+@@ -30,11 +31,13 @@ class Seat:
+         self.match, self.team, self.ai = match, team, ai
+         self.stats: list[dict] = []
+         self.lines: dict[str, list[tuple[int, str]]] = collections.defaultdict(list)
++        self.deaths: list[tuple[int, str, str]] = []   # (frame, unit, killer) from [BARAI_DEATH]
+ 
+ 
+ KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
+         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
+-        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim")
++        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim", "raid-answer t=",
++        "com-pos ")
+ 
+ 
+ def load(match: Path) -> list[Seat]:
+@@ -53,6 +56,11 @@ def load(match: Path) -> list[Seat]:
+         s.stats.sort(key=lambda r: r["frame"])
+     with open(match / "infolog.txt", errors="replace") as fh:
+         for raw in fh:
++            if raw.startswith("[") and "[BARAI_DEATH]" in raw:
++                d = DEATH_LINE.search(raw)
++                if d and int(d.group(2)) in seats:
++                    seats[int(d.group(2))].deaths.append((int(d.group(1)), d.group(3), d.group(4)))
++                continue
+             if "apex: " not in raw:
+                 continue
+             m = LINE.search(raw)
+@@ -156,13 +164,17 @@ def lab_job_leaves(s: Seat):
+ 
+ def near_done_stripped(s: Seat):
+     """His 11-14: "something 95% done and then taking a long time to finally 100% complete". Crews cut to one hand on a
+-    frame already >= 90% done."""
++    frame already >= 90% done. Per 10k metal built (his 11-16: a raw count failed a seat for out-building the release);
++    a seat that built under 10k has too few frames to read."""
++    built = s.stats[-1].get("mBuiltReal", 0) if s.stats else 0
++    if built < 10000:
++        return None
+     n = 0
+     for _f, body in s.lines["ring-trim "]:
+         m = re.search(r"done=([\d.]+)", body)
+         if m and float(m.group(1)) >= 0.9:
+             n += 1
+-    return n
++    return n * 10000.0 / built
+ 
+ 
+ def t2_cons_given_early(s: Seat):
+@@ -172,6 +184,51 @@ def t2_cons_given_early(s: Seat):
+     return sum(1 for f, _b in s.lines["congift "] if f < four)
+ 
+ 
++ANS_SENT = re.compile(r"raid-answer t=\d+ sent .* m=(\d+) n=.* army=(\d+)")
++
++
++def raid_answer_share(s: Seat):
++    """His 11-16: "very aggressive enemy pushes can't hold us back from doing our own pushes and we need to make sure
++    that we don't end up with our entire army just chasing small raiding groups". The largest raid answer of the game
++    as a share of the army standing then (army= on the sent line; older logs lack it and read None)."""
++    best = None
++    for f, body in s.lines["raid-answer t="]:
++        m = ANS_SENT.search(body)
++        if not m:
++            continue
++        army = float(m.group(2))
++        if army > 0:
++            x = float(m.group(1)) / army
++            best = x if best is None else max(best, x)
++    return best
++
++
++TICKS = ("armflea", "armfav", "corfav", "legscout")
++
++
++def mex_lost_to_ticks(s: Seat):
++    """His 11-16, watching v0.5.14 vs WRDistilled on Carrot Mountains: we lose extractors to Ticks that one turret
++    would stop; one turret can guard up to four extractors and pays for itself in about a minute. Extractors of this
++    seat killed by a Tick or a scout car before minute 10."""
++    return float(sum(1 for f, u, k in s.deaths if (k in TICKS) and ("mex" in u or "moho" in u) and f < 10 * 1800))
++
++
++COM_POS = re.compile(r"com-pos t=\d+ at=\S+ fwd=(-?[\d.]+)")
++COM_DIED = re.compile(r"unit-destroyed (arm|cor|leg)com\S* .*? fwd=(-?[\d.]+)")
++
++
++def com_their_half_minutes(s: Seat):
++    """His 11-16 watch game vs WRDistilled: "we lost because the com got caught out in danger" (he walked extractor to
++    extractor to 0.70 of the way to their start, priced at zero risk). Minutes the commander stood past the middle,
++    from the 30-s com-pos samples."""
++    return 0.5 * sum(1 for _, b in s.lines["com-pos "] if (m := COM_POS.search(b)) and float(m.group(1)) > 0.5)
++
++
++def com_lost_their_half(s: Seat):
++    """The same words: 1 when the seat's commander died past the middle of the map, else 0."""
++    return float(any((m := COM_DIED.search(b)) and float(m.group(2)) > 0.5 for _, b in s.lines["unit-destroyed "]))
++
++
+ def frozen_minutes(s: Seat):
+     """His 11-14: "when we lose too much of our base we don't rebuild". Minutes after minute 8 with nothing built while
+     the seat still stood."""
+@@ -437,7 +494,7 @@ CHECKS = [
+     ("t2->4th moho (min)", t2_to_four_moho, "median", 1.0, 3.0),     # "1x to 4x ... within three minutes"
+     ("lab-job leaves/job", lab_job_leaves, "median", 0.10, 0.0),     # "no good reason it should walk away"
+     ("adv plant frame x", adv_plant_frame_x, "median", 0.5, 1.5),    # "4.5 minute T2 lab turned into 7"
+-    ("near-done strips", near_done_stripped, "mean", 2.0, 0.0),      # "we should stop doing that"
++    ("near-done /10k built", near_done_stripped, "mean", 0.1, 0.0),  # "we should stop doing that"
+     ("t2 cons given early", t2_cons_given_early, "mean", 0.25, 0.0), # "upgrade our metal extractors" first
+     ("supers before 4 moho", supers_before_upgrades, "mean", 0.5, 0.0),  # the same, strategic builds first
+     ("lone t2 con minutes", lone_t2_minutes, "mean", 1.0, 0.0),      # "only one T2 con. Just one."
+@@ -445,6 +502,10 @@ CHECKS = [
+     ("oldest plant order min", oldest_order_minutes, "mean", 1.0, None),  # n/a vs a release that cannot log it
+     ("no t2 by minute 20", no_t2_by_20, "mean", 0.10, None),         # the T2 checks skip such seats
+     ("frozen minutes", frozen_minutes, "mean", 1.0, 0.0),            # "we don't rebuild"
++    ("raid answer army share", raid_answer_share, "mean", 0.1, None),  # "not our entire army chasing small raids"
++    ("com minutes on their half", com_their_half_minutes, "mean", 0.5, None),  # "the com got caught out in danger"
++    ("com lost on their half", com_lost_their_half, "mean", 0.05, 0.0),
++    ("mex lost to ticks by 10 min", mex_lost_to_ticks, "mean", 0.5, 0.0),  # one turret guards up to four extractors
+     ("bare-hands minutes", bare_hands_minutes, "mean", 1.0, 0.0),    # "we don't really try to rebuild it"
+     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
+     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"
+diff --git a/tools/scenarios/raid_home.json b/tools/scenarios/raid_home.json
+new file mode 100644
+index 00000000..8134267f
+--- /dev/null
++++ b/tools/scenarios/raid_home.json
+@@ -0,0 +1,18 @@
++{
++  "about": "an early raid on our base (row 114; rc8's loss: lab raided by Pawns and Fleas by minute 4): 10 Pawns walk in on our lab, extractors and solars; 8 Warriors of ours stand 600 out on the far side under the stock army",
++  "passes": "the raid costs us less with apex_raid_answer_stock 1 than 0 (judge on vs off: lost_m0, killed:armpw)",
++  "map": "Geyser Plains",
++  "seconds": 150,
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
++    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", -200, 150], "spacing": 120, "order": "ai"},
++    {"side": 0, "def": "armsolar", "n": 6, "at": ["s0", 0, -250], "spacing": 90, "order": "ai"},
++    {"side": 0, "def": "armwar", "n": 8, "at": ["s0", -600, 0], "spacing": 50, "order": "ai"},
++    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
++    {"side": 1, "def": "armpw", "n": 10, "at": ["s0", 900, 0], "spacing": 40, "order": "fight", "to": ["s0", 0, 0]}
++  ],
++  "expect": [
++    {"killed:armpw": [">=", 8]}
++  ]
++}
+diff --git a/tools/scenarios/rebuild_bare.json b/tools/scenarios/rebuild_bare.json
+new file mode 100644
+index 00000000..c8b76952
+--- /dev/null
++++ b/tools/scenarios/rebuild_bare.json
+@@ -0,0 +1,16 @@
++{
++  "about": "a lost base on open ground (his 11-14 'when we lose too much of our base we don't rebuild'): our seat has one T1 constructor, two extractors and two solars, no lab, no commander; nothing of theirs near (their lab far away, NullAI)",
++  "passes": "a path back: a lab rises and makes constructors (judge from the log: unit-finished lines for a plant and for new builders on side 0)",
++  "map": "Geyser Plains",
++  "seconds": 360,
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "armck", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
++    {"side": 0, "def": "armmex", "n": 2, "at": ["s0", -250, 0], "spacing": 140, "order": "ai"},
++    {"side": 0, "def": "armsolar", "n": 2, "at": ["s0", 0, 200], "spacing": 100, "order": "ai"},
++    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"}
++  ],
++  "expect": [
++    {"dead0": ["<=", 0]}
++  ]
++}
+diff --git a/tools/scenarios/ticks_mexes.json b/tools/scenarios/ticks_mexes.json
+new file mode 100644
+index 00000000..c7f160d8
+--- /dev/null
++++ b/tools/scenarios/ticks_mexes.json
+@@ -0,0 +1,18 @@
++{
++  "about": "Ticks on an outlying extractor field (his 11-16 vs WRDistilled on Carrot Mountains: extractors lost to Ticks that one light turret would stop; one turret guards up to four and pays for itself in about a minute): 4 Ticks walk from the centre onto our 4 extractors 700 out from the base; we have a lab, 2 constructors and solars",
++  "passes": "a turret goes up at the field and it holds: at most 1 extractor lost",
++  "map": "Geyser Plains",
++  "seconds": 180,
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
++    {"side": 0, "def": "armck", "n": 2, "at": ["s0", 150, 0], "spacing": 60, "order": "ai"},
++    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", 700, 500], "spacing": 160, "order": "ai"},
++    {"side": 0, "def": "armsolar", "n": 6, "at": ["s0", -250, 0], "spacing": 90, "order": "ai"},
++    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
++    {"side": 1, "def": "armflea", "n": 4, "at": ["c", 0, 500], "spacing": 30, "order": "fight", "to": ["s0", 700, 500]}
++  ],
++  "expect": [
++    {"lost:armmex": ["<=", 1]}
++  ]
++}

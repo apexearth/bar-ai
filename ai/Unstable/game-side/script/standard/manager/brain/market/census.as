@@ -288,8 +288,8 @@ array<Id> gOwnGenIds;
 array<CCircuitUnit@> gOwnConv;
 array<Id> gOwnConvIds;
 // High-value structures (labs, fusions, gantries...): each deserves its
-// own turret ring (apexearth: "so shit at protecting important buildings
-// like T2 -- 2700 metal investment dying").
+// own turret ring (apexearth: we protect important buildings badly; a T2
+// lab, a 2,700-metal investment, died).
 array<CCircuitUnit@> gOwnBig;
 array<Id> gOwnBigIds;
 

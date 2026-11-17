@@ -92,8 +92,8 @@ void PeelSurplus()
 			wantN = planN;
 		// THE FOUNDER NEVER LEAVES. A ring seen lathing the frame trims the
 		// crew to one hand, never to none: turrets work their nearest target
-		// and an unattended frame decays (apexearth 2026-09-20: "those nano
-		// turrets don't seem to give a crap").
+		// and an unattended frame decays (apexearth 2026-09-20: the nano turrets
+		// ignore it).
 		if ((wantN > 1) && NanoFed(t, crew.length(), 0.f, 0.f)) {
 			wantN = 1;
 			++gNanoFedPeel;

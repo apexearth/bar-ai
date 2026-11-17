@@ -801,9 +801,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					bestGain *= gDwEff[d];
 				}
 				// WHICH TOWER DOES THIS RULE ACTUALLY PICK, AND WHY.
-				// apexearth, watching: "I wanna scream at teal here for making
-				// 15 god damn Gauntlet turrets... 5 pulsars would save our
-				// asses right now." The numbers say he is right -- Gauntlet
+				// apexearth, watching: teal made 15 Gauntlet turrets where five
+				// Pulsars would have saved us. The numbers say he is right -- Gauntlet
 				// 105 dps for 1,250 metal against Pulsar 1,091 for 3,500, so
 				// 3.7x the damage per metal -- and this ranking is what stands
 				// between them. One census of every candidate the builder can

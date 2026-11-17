@@ -53,6 +53,8 @@
 #include "Lua.h"
 #include "AISCommands.h"  // UNIT_COMMAND_OPTION_*, used by CmdBuildUnit below
 #include "Command.h"       // springai::Command, for reading a unit's own queue
+#include "SkirmishAI.h"
+#include "Info.h"
 
 #include <chrono>          // apex: script-time accounting in Update()
 #include <algorithm>
@@ -236,6 +238,85 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
 static std::string CCircuitAI_GetAiVersion(CCircuitAI* circuit)
 {
 	return circuit->GetAiVersion();
+}
+
+// His 11-16: one line so players know who is who -- every AI of ours in the game by the name the lobby shows, and the
+// version this library runs. The first AI of this library to ask gets it; every later ask in the process gets "".
+static std::string CCircuitAI_RosterLineOnce(CCircuitAI* circuit)
+{
+	static bool said = false;
+	if (said) {
+		return "";
+	}
+	said = true;
+	std::string myShort;
+	{
+		std::unique_ptr<springai::Info> info(circuit->GetSkirmishAI()->GetInfo());
+		const char* s = info->GetValueByKey("shortName");
+		myShort = (s != nullptr) ? s : "";
+	}
+	auto lower = [](std::string v) { for (char& c : v) c = std::tolower((unsigned char)c); return v; };
+	auto trim = [](std::string v) {
+		const size_t a = v.find_first_not_of(" \t\r");
+		const size_t b = v.find_last_not_of(" \t\r;");
+		return (a == std::string::npos) ? std::string() : v.substr(a, b - a + 1);
+	};
+	const std::string script = circuit->GetGame()->GetSetupScript();
+	std::vector<std::string> names;
+	std::string name, shortName, version, team;
+	bool inAi = false;
+	int depth = 0;
+	size_t pos = 0;
+	while (pos <= script.size()) {
+		size_t eol = script.find('\n', pos);
+		if (eol == std::string::npos) {
+			eol = script.size();
+		}
+		const std::string line = trim(script.substr(pos, eol - pos));
+		pos = eol + 1;
+		if (!inAi) {
+			const std::string l = lower(line);
+			if ((l.rfind("[ai", 0) == 0) && (l.find(']') != std::string::npos)) {
+				inAi = true;
+				depth = 0;
+				name.clear(); shortName.clear(); version.clear(); team.clear();
+			}
+			continue;
+		}
+		for (char c : line) {
+			if (c == '{') ++depth;
+			else if (c == '}') --depth;
+		}
+		if ((depth == 1) && (line.find('=') != std::string::npos)) {
+			const size_t eq = line.find('=');
+			const std::string k = lower(trim(line.substr(0, eq)));
+			const std::string v = trim(line.substr(eq + 1));
+			if (k == "name") name = v;
+			else if (k == "shortname") shortName = v;
+			else if (k == "version") version = v;
+			else if (k == "team") team = v;
+		}
+		if ((depth <= 0) && (line.find('}') != std::string::npos)) {
+			inAi = false;
+			// a hosted game names no version and loads the highest one installed: this library
+			if ((lower(shortName) == lower(myShort)) && (version.empty() || (version == circuit->GetAiVersion()))
+				&& !name.empty()) {
+				// the name players see: the game names AIs at random (luarules ai_namer.lua, rules param ainame_<team>)
+				const std::string shown = team.empty() ? std::string()
+						: circuit->GetGame()->GetRulesParamString(("ainame_" + team).c_str(), "");
+				names.push_back(shown.empty() ? name : shown);
+			}
+		}
+	}
+	const std::string apex = "Apex " + circuit->GetAiVersion();
+	if (names.empty()) {
+		return apex;
+	}
+	std::string who;
+	for (size_t i = 0; i < names.size(); ++i) {
+		who += ((i == 0) ? "" : ((i + 1 == names.size()) ? " and " : ", ")) + names[i];
+	}
+	return who + ((names.size() == 1) ? " is " : " are ") + apex;
 }
 
 // The engine's Pos2BuildPos snap (GameHelper.cpp): every building lands on the
@@ -3067,6 +3148,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetAiVersion() const", asFUNCTION(CCircuitAI_GetAiVersion), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "string RosterLineOnce()", asFUNCTION(CCircuitAI_RosterLineOnce), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 SnapBuildPos(CCircuitDef@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_SnapBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

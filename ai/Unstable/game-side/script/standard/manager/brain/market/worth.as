@@ -759,9 +759,8 @@ float UnitPPC(int d)
 			// available: Platypus (260m, 1170hp, speed 90) scored p=10.956
 			// against Fatboy (1400m, 7800hp, speed 30) at p=0.120 -- 91x --
 			// while their RAW power per metal is 0.034 against 0.029, a factor
-			// of 1.2. apexearth: "we could have made a fatboy easily and kicked
-			// the enemies butt but we made like 1 hound, then a fuckin platypus
-			// which is USELESS here."
+			// of 1.2. apexearth: a Fatboy would have beaten them easily, but we
+			// made one Hound and then a Platypus, which is useless here.
 			if ((safe > 0.f) && (relHp > 1.f))
 				v /= pow(relHp, wHp * safe);
 		}
@@ -780,7 +779,7 @@ float UnitPPC(int d)
 // needed, so neither is judged.
 //
 // READ AGAINST WHAT THEY FIELD (apexearth 2026-09-19: "if the enemy has
-// Tzars or Fatboys ... I shouldn't be building crappy short-range units").
+// Tzars or Fatboys ... I shouldn't be building weak short-range units").
 // The DLL keeps one bucket per (our type, what killed it) and weights them
 // by the enemy attackers it currently knows of, by metal; a matchup with no
 // deaths of its own reads as its killer's tier, then as the pool. The tier

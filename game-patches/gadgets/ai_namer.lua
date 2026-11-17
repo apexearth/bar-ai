@@ -14,7 +14,7 @@ end
 
 if gadgetHandler:IsSyncedCode() then
 	local cachedGameID
-	-- gameID seems to be the only fucking thing that is truly random in this space? but it's a random garbage of numbers and letters, and we need to filter it out
+	-- gameID seems to be the only thing that is truly random in this space? but it's a random garbage of numbers and letters, and we need to filter it out
 	function gadget:GameID(gameID)
 		-- make sure gameID is a string because i'm not actually sure
 		cachedGameID = tostring(gameID)

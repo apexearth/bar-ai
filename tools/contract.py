@@ -21,6 +21,7 @@ import statistics
 import sys
 from pathlib import Path
 
+DEATH_LINE = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) .*? atkteam=(-?\d+) atk=(\w+)")
 LINE = re.compile(r"\[f=(-?\d+)\] Skirmish AI <ApexUnstable-([^>]+)>: (?:\[[\d.]+m t(\d+)\] )?apex: (.*)")
 T_IN = re.compile(r"\bt=(\d+)\b")
 
@@ -30,11 +31,14 @@ class Seat:
         self.match, self.team, self.ai = match, team, ai
         self.stats: list[dict] = []
         self.lines: dict[str, list[tuple[int, str]]] = collections.defaultdict(list)
+        self.deaths: list[tuple[int, str, str]] = []   # (frame, unit, killer) from [BARAI_DEATH]
+        self.kills: list[tuple[int, str, str]] = []    # (frame, their unit, our killer)
 
 
 KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
-        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim")
+        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim", "raid-answer t=",
+        "com-pos ", "armyest t=")
 
 
 def load(match: Path) -> list[Seat]:
@@ -53,6 +57,13 @@ def load(match: Path) -> list[Seat]:
         s.stats.sort(key=lambda r: r["frame"])
     with open(match / "infolog.txt", errors="replace") as fh:
         for raw in fh:
+            if raw.startswith("[") and "[BARAI_DEATH]" in raw:
+                d = DEATH_LINE.search(raw)
+                if d and int(d.group(2)) in seats:
+                    seats[int(d.group(2))].deaths.append((int(d.group(1)), d.group(3), d.group(5)))
+                if d and int(d.group(4)) in seats and int(d.group(4)) != int(d.group(2)):
+                    seats[int(d.group(4))].kills.append((int(d.group(1)), d.group(3), d.group(5)))
+                continue
             if "apex: " not in raw:
                 continue
             m = LINE.search(raw)
@@ -156,13 +167,17 @@ def lab_job_leaves(s: Seat):
 
 def near_done_stripped(s: Seat):
     """His 11-14: "something 95% done and then taking a long time to finally 100% complete". Crews cut to one hand on a
-    frame already >= 90% done."""
+    frame already >= 90% done. Per 10k metal built (his 11-16: a raw count failed a seat for out-building the release);
+    a seat that built under 10k has too few frames to read."""
+    built = s.stats[-1].get("mBuiltReal", 0) if s.stats else 0
+    if built < 10000:
+        return None
     n = 0
     for _f, body in s.lines["ring-trim "]:
         m = re.search(r"done=([\d.]+)", body)
         if m and float(m.group(1)) >= 0.9:
             n += 1
-    return n
+    return n * 10000.0 / built
 
 
 def t2_cons_given_early(s: Seat):
@@ -170,6 +185,101 @@ def t2_cons_given_early(s: Seat):
     Advanced cons given away before this seat had four advanced extractors."""
     four = next((r["frame"] for r in s.stats if r.get("t2Mex", 0) >= 4), 10 ** 9)
     return sum(1 for f, _b in s.lines["congift "] if f < four)
+
+
+ANS_SENT = re.compile(r"raid-answer t=\d+ sent .* m=(\d+) n=.* army=(\d+)")
+
+
+def raid_answer_share(s: Seat):
+    """His 11-16: "very aggressive enemy pushes can't hold us back from doing our own pushes and we need to make sure
+    that we don't end up with our entire army just chasing small raiding groups". The largest raid answer of the game
+    as a share of the army standing then (army= on the sent line; older logs lack it and read None)."""
+    best = None
+    for f, body in s.lines["raid-answer t="]:
+        m = ANS_SENT.search(body)
+        if not m:
+            continue
+        army = float(m.group(2))
+        if army > 0:
+            x = float(m.group(1)) / army
+            best = x if best is None else max(best, x)
+    return best
+
+
+TICKS = ("armflea", "armfav", "corfav", "legscout")
+
+
+def mex_lost_to_ticks(s: Seat):
+    """His 11-16, watching v0.5.14 vs WRDistilled on Carrot Mountains: we lose extractors to Ticks that one turret
+    would stop; one turret can guard up to four extractors and pays for itself in about a minute. Extractors of this
+    seat killed by a Tick or a scout car before minute 10."""
+    return float(sum(1 for f, u, k in s.deaths if (k in TICKS) and ("mex" in u or "moho" in u) and f < 10 * 1800))
+
+
+def their_mex_killed(s: Seat):
+    """His 11-16, watching v0.5.14 beat WRDistilled on Carrot Mountains: we won by out-scaling to T2 while they built
+    a huge army; we hit their base and did too little raiding of their extractors to choke their economy. Their
+    extractors this seat killed per 10 minutes played, negative (more is better)."""
+    if not s.stats:
+        return None
+    mins = s.stats[-1]["frame"] / 1800.0
+    if mins < 5:
+        return None
+    n = sum(1 for f, u, k in s.kills if "mex" in u or "moho" in u)
+    return -10.0 * n / mins
+
+
+def trade_lost_per_killed(s: Seat):
+    """His 11-16 strategy against a heavy-army opponent: make them trade worse than us (a medium army and strong
+    defences they bleed into). Metal we lost per metal we killed, at the end of the seat's game."""
+    if not s.stats:
+        return None
+    r = s.stats[-1]
+    killed = r.get("mKillReal", 0) or 0
+    return (r.get("mLostReal", 0) or 0) / max(killed, 500.0)
+
+
+def reclaim_share(s: Seat):
+    """The same strategy: resurrection bots eat the reclaim of what they lose. Metal reclaimed (and resurrected) over
+    the metal of theirs we killed, negative (more is better); None before 2,000 metal killed."""
+    if not s.stats:
+        return None
+    r = s.stats[-1]
+    killed = r.get("mKillReal", 0) or 0
+    if killed < 2000:
+        return None
+    return -((r.get("mReclaim", 0) or 0) + (r.get("mRezSpend", 0) or 0)) / killed
+
+
+ARMYEST = re.compile(r"armyest t=\d+ ours=(\d+) own=\d+ .*? theirs=(\d+)")
+
+
+def outarmied(s: Seat):
+    """His 11-16, watching WRDistilled 0.4 on Comet Catcher: we do not react properly to an opponent who builds a great
+    deal of army (his +50 game: their army 12.3k against our 3.7k at minute 12 with the economies close). Their
+    believed ground army over our side's, mean of the samples from minute 8 to 12."""
+    r = []
+    for f, b in s.lines["armyest t="]:
+        if 8 * 1800 <= f <= 12 * 1800 and (m := ARMYEST.search(b)):
+            ours, theirs = float(m.group(1)), float(m.group(2))
+            r.append(theirs / max(ours, 100.0))
+    return sum(r) / len(r) if r else None
+
+
+COM_POS = re.compile(r"com-pos t=\d+ at=\S+ fwd=(-?[\d.]+)")
+COM_DIED = re.compile(r"unit-destroyed (arm|cor|leg)com\S* .*? fwd=(-?[\d.]+)")
+
+
+def com_their_half_minutes(s: Seat):
+    """His 11-16 watch game vs WRDistilled: "we lost because the com got caught out in danger" (he walked extractor to
+    extractor to 0.70 of the way to their start, priced at zero risk). Minutes the commander stood past the middle,
+    from the 30-s com-pos samples."""
+    return 0.5 * sum(1 for _, b in s.lines["com-pos "] if (m := COM_POS.search(b)) and float(m.group(1)) > 0.5)
+
+
+def com_lost_their_half(s: Seat):
+    """The same words: 1 when the seat's commander died past the middle of the map, else 0."""
+    return float(any((m := COM_DIED.search(b)) and float(m.group(2)) > 0.5 for _, b in s.lines["unit-destroyed "]))
 
 
 def frozen_minutes(s: Seat):
@@ -437,7 +547,7 @@ CHECKS = [
     ("t2->4th moho (min)", t2_to_four_moho, "median", 1.0, 3.0),     # "1x to 4x ... within three minutes"
     ("lab-job leaves/job", lab_job_leaves, "median", 0.10, 0.0),     # "no good reason it should walk away"
     ("adv plant frame x", adv_plant_frame_x, "median", 0.5, 1.5),    # "4.5 minute T2 lab turned into 7"
-    ("near-done strips", near_done_stripped, "mean", 2.0, 0.0),      # "we should stop doing that"
+    ("near-done /10k built", near_done_stripped, "mean", 0.1, 0.0),  # "we should stop doing that"
     ("t2 cons given early", t2_cons_given_early, "mean", 0.25, 0.0), # "upgrade our metal extractors" first
     ("supers before 4 moho", supers_before_upgrades, "mean", 0.5, 0.0),  # the same, strategic builds first
     ("lone t2 con minutes", lone_t2_minutes, "mean", 1.0, 0.0),      # "only one T2 con. Just one."
@@ -445,6 +555,14 @@ CHECKS = [
     ("oldest plant order min", oldest_order_minutes, "mean", 1.0, None),  # n/a vs a release that cannot log it
     ("no t2 by minute 20", no_t2_by_20, "mean", 0.10, None),         # the T2 checks skip such seats
     ("frozen minutes", frozen_minutes, "mean", 1.0, 0.0),            # "we don't rebuild"
+    ("raid answer army share", raid_answer_share, "mean", 0.1, None),  # "not our entire army chasing small raids"
+    ("com minutes on their half", com_their_half_minutes, "mean", 0.5, None),  # "the com got caught out in danger"
+    ("com lost on their half", com_lost_their_half, "mean", 0.05, 0.0),
+    ("mex lost to ticks by 10 min", mex_lost_to_ticks, "mean", 0.5, 0.0),  # one turret guards up to four extractors
+    ("their mex killed /10min (neg)", their_mex_killed, "mean", 2.0, None),  # choke their economy, not only their base
+    ("their army / ours, 8-12 min", outarmied, "mean", 0.25, None),     # react to an opponent who builds a lot of army
+    ("lost per killed", trade_lost_per_killed, "median", 0.15, None),  # make them trade worse than us
+    ("reclaimed / killed (neg)", reclaim_share, "median", 0.05, None),  # resbots eat the reclaim
     ("bare-hands minutes", bare_hands_minutes, "mean", 1.0, 0.0),    # "we don't really try to rebuild it"
     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"

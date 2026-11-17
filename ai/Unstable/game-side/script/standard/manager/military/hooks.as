@@ -500,8 +500,18 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (sp > 0)
 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
 	}
-	if (StockCtl(unit))
+	if (StockCtl(unit)) {
+		if (RaStock() && AnswerClaimed(int(unit.id))) {
+			IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
+			if (ans !is null) {
+				unit.SetScriptFree(true);
+				return NoteElect("raid.answer", ans);
+			}
+		}
+		if (RaUnfree(int(unit.id)))
+			unit.SetScriptFree(false);
 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
+	}
 	const CCircuitDef@ cdef = unit.circuitDef;
 	MarkSpearhead(cdef);
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask

@@ -249,7 +249,7 @@ void CMetalData::MakeResourcePoints(CMap* map, Resource* res, F3Vec& vectoredSpo
 	int coordX = 0;
 	int coordZ = 0;
 	// from 0-255, the minimum percentage of resources a spot needs to have from
-	// the maximum to be saved, prevents crappier spots in between taken spaces
+	// the maximum to be saved, prevents poorer spots in between taken spaces
 	// (they are still perfectly valid and will generate resources mind you!)
 	int minIncomeForSpot = 25;  // 25/255 ~ 10%
 	AIFloat3 bufferSpot;
@@ -485,7 +485,7 @@ void CMetalData::MakeResourcePoints(CMap* map, Resource* res, F3Vec& vectoredSpo
 		tempResources = speedTempResources;
 
 		if (tempResources < minIncomeForSpot) {
-			// if the spots get too crappy it will stop running the loops to speed it all up
+			// if the spots get too poor it will stop running the loops to speed it all up
 			break;
 		}
 

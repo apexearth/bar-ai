@@ -1,0 +1,18 @@
+{
+  "about": "Ticks on an outlying extractor field (his 11-16 vs WRDistilled on Carrot Mountains: extractors lost to Ticks that one light turret would stop; one turret guards up to four and pays for itself in about a minute): 4 Ticks walk from their base onto our 4 extractors 700 out from the base; we have a lab, 2 constructors and solars",
+  "passes": "a turret goes up at the field and it holds: at most 1 extractor lost",
+  "map": "Comet Catcher Remake 1.8",
+  "seconds": 180,
+  "enemy": "none",
+  "units": [
+    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
+    {"side": 0, "def": "armck", "n": 2, "at": ["s0", 150, 0], "spacing": 60, "order": "ai"},
+    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", 700, 500], "spacing": 160, "order": "ai"},
+    {"side": 0, "def": "armsolar", "n": 6, "at": ["s0", -250, 0], "spacing": 90, "order": "ai"},
+    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
+    {"side": 1, "def": "armflea", "n": 4, "at": ["s1", -300, 500], "spacing": 30, "order": "fight", "to": ["s0", 700, 500]}
+  ],
+  "expect": [
+    {"lost:armmex": ["<=", 1]}
+  ]
+}

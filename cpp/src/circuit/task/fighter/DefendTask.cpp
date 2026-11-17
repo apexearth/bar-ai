@@ -252,8 +252,8 @@ void CDefendTask::Update()
 	}
 	if (!hunting && !scriptLaunch && (updCount % 32 == 1)) {
 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
-		// JOIN THE SQUAD, NOT THE TARGET (docs/doctrine.md; his 10-13: "We make 1 fuckin unit and are
-		// charging out to meet these guys on our doorstep", Tzars sent alone): under its bar a
+		// JOIN THE SQUAD, NOT THE TARGET (docs/doctrine.md; his 10-13: we make one unit at a time and
+		// charge it out to meet them on our doorstep, Tzars sent alone): under its bar a
 		// pool walks to the strongest live squad of its kind; only a full bar opens a new one.
 		if (!gather && (attackPower < maxPower) && !units.empty() && !militaryMgr->GetTasks(check).empty()) {
 			IFighterTask* best = militaryMgr->BestSquadToJoin(check, *units.begin(), this);

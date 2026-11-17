@@ -1,0 +1,18 @@
+{
+  "about": "an early raid on our base (row 114; rc8's loss: lab raided by Pawns and Fleas by minute 4): 10 Pawns walk in on our lab, extractors and solars; 8 Warriors of ours stand 600 out on the far side under the stock army",
+  "passes": "the raid costs us less with apex_raid_answer_stock 1 than 0 (judge on vs off: lost_m0, killed:armpw)",
+  "map": "Geyser Plains",
+  "seconds": 150,
+  "enemy": "none",
+  "units": [
+    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
+    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", -200, 150], "spacing": 120, "order": "ai"},
+    {"side": 0, "def": "armsolar", "n": 6, "at": ["s0", 0, -250], "spacing": 90, "order": "ai"},
+    {"side": 0, "def": "armwar", "n": 8, "at": ["s0", -600, 0], "spacing": 50, "order": "ai"},
+    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
+    {"side": 1, "def": "armpw", "n": 10, "at": ["s0", 900, 0], "spacing": 40, "order": "fight", "to": ["s0", 0, 0]}
+  ],
+  "expect": [
+    {"killed:armpw": [">=", 8]}
+  ]
+}

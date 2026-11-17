@@ -384,8 +384,8 @@ AIFloat3 OffFactoryExit(const AIFloat3& in pos)
 	return p;
 }
 
-// AN ALLY'S BASE IS THEIR WALKWAY (apexearth 2026-09-30: "an ally puts some
-// shit in our base and gets us stuck"). A site flush against an allied
+// AN ALLY'S BASE IS THEIR WALKWAY (apexearth 2026-09-30: an ally builds in our
+// base and gets us stuck). A site flush against an allied
 // building closes the gaps their units walk through, so it slides away from
 // the nearest one, a building width at a time.
 const float ALLY_CLEAR = 160.f;

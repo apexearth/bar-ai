@@ -1,0 +1,208 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/hooks.as b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+index e447ecd6..6af234c7 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/hooks.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+@@ -500,8 +500,17 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
+ 		if (sp > 0)
+ 			return NoteElect((sp == 1) ? "spam.sent" : "spam.held", null);
+ 	}
+-	if (StockCtl(unit))
++	if (StockCtl(unit)) {
++		if (RaStock() && AnswerClaimed(int(unit.id))) {
++			IUnitTask@ ans = JwJoinable(AnswerTaskFor(int(unit.id)), unit);
++			if (ans !is null) {
++				unit.SetScriptFree(true);
++				return NoteElect("raid.answer", ans);
++			}
++		}
++		unit.SetScriptFree(false);
+ 		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
++	}
+ 	const CCircuitDef@ cdef = unit.circuitDef;
+ 	MarkSpearhead(cdef);
+ 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as b/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
+index 4899ecc2..1c9d3a5c 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/raidanswer.as
+@@ -244,6 +244,8 @@ void AnswerRaid(const AIFloat3& in at, int kd)
+ 		}
+ 		if (ct[k].GetFightType() == int(Task::FightType::ATTACK))
+ 			++nAtk;
++		if (RaStock())
++			cu[k].SetScriptFree(true);
+ 		ct[k].RemoveUnit(cu[k]);
+ 	}
+ 	++gAnsSentN;
+@@ -277,9 +279,19 @@ void EndAnswer(uint i, const string why)
+ 	gAnsTask.removeAt(i);
+ }
+ 
++// apex_raid_answer_stock: under the stock army the answer still pulls units off stock tasks (his 11-16 row 114, A/B);
++// a pulled unit is scriptFree while on the answer and handed back to stock at its next election
++int gRaStock = -1;
++bool RaStock()
++{
++	if (gRaStock < 0)
++		gRaStock = (StockArmy() && (ai.GetTunable("apex_raid_answer_stock", TUNE_RAID_ANSWER_STOCK) > 0.f)) ? 1 : 0;
++	return gRaStock > 0;
++}
++
+ void UpdateRaidAnswer()
+ {
+-	if (StockQuiet("raidanswer"))
++	if (!RaStock() && StockQuiet("raidanswer"))
+ 		return;
+ 	for (int i = int(gAnsId.length()) - 1; i >= 0; --i) {
+ 		const uint u = uint(i);
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index 64a74e26..b154ad80 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -1145,6 +1145,9 @@ const float TUNE_OUR_AIR = 1.f;
+ // SQUADS: 1 (with STOCK_ARMY 1) hands the ground army to Army/Squad (military/army/). See docs/tunables.md.
+ const float TUNE_SQUADS = 0.f;
+ 
++// RAID_ANSWER_STOCK: [toggle 0/1] (with STOCK_ARMY 1) the raid answer still sends near units at a raid on our ground. See docs/tunables.md.
++const float TUNE_RAID_ANSWER_STOCK = 1.f;
++
+ // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
+ //   guarding a con is a Bull missing from the line.
+ const float TUNE_ESCORT_MAX_COST = 120.f;
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 2de555d2..925519f5 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -452,6 +452,7 @@ local NAMES = {
+ 	"apex_dyn_mod", -- strike.as: threat modifier from the balance (0)
+ 	"apex_door_clear", -- BuilderTask.cpp: nothing in a friendly factory's doorway (1)
+ 	"apex_lrpc_focus", -- brain/lrpc.as: the LRPC battery fires as one, armies on our half included (1)
++	"apex_raid_answer_stock", -- military/raidanswer.as: under the stock army the raid answer still sends near units at a raid on our ground (1, row 114)
+ 	"apex_aa_dwell", -- nnair.as NaEval: a strike pays the AA it crosses in the cell (1)
+ 	"apex_gun_refuse", -- RaidTask.cpp + nnair.as: gunships do not hover under AA (1)
+ 	"apex_mex_basic", -- protect_target.as: basic mex defence with the raider buffer (1)
+diff --git a/tools/contract.py b/tools/contract.py
+index ef6058ab..0b16c229 100644
+--- a/tools/contract.py
++++ b/tools/contract.py
+@@ -34,7 +34,7 @@ class Seat:
+ 
+ KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
+         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
+-        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim")
++        "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim", "raid-answer t=")
+ 
+ 
+ def load(match: Path) -> list[Seat]:
+@@ -156,13 +156,17 @@ def lab_job_leaves(s: Seat):
+ 
+ def near_done_stripped(s: Seat):
+     """His 11-14: "something 95% done and then taking a long time to finally 100% complete". Crews cut to one hand on a
+-    frame already >= 90% done."""
++    frame already >= 90% done. Per 10k metal built (his 11-16: a raw count failed a seat for out-building the release);
++    a seat that built under 10k has too few frames to read."""
++    built = s.stats[-1].get("mBuiltReal", 0) if s.stats else 0
++    if built < 10000:
++        return None
+     n = 0
+     for _f, body in s.lines["ring-trim "]:
+         m = re.search(r"done=([\d.]+)", body)
+         if m and float(m.group(1)) >= 0.9:
+             n += 1
+-    return n
++    return n * 10000.0 / built
+ 
+ 
+ def t2_cons_given_early(s: Seat):
+@@ -172,6 +176,28 @@ def t2_cons_given_early(s: Seat):
+     return sum(1 for f, _b in s.lines["congift "] if f < four)
+ 
+ 
++ANS_SENT = re.compile(r"raid-answer t=\d+ sent .* m=(\d+) n=")
++
++
++def raid_answer_share(s: Seat):
++    """His 11-16: "very aggressive enemy pushes can't hold us back from doing our own pushes and we need to make sure
++    that we don't end up with our entire army just chasing small raiding groups". The largest raid answer of the game
++    as a share of the seat's army metal then."""
++    best = None
++    for f, body in s.lines["raid-answer t="]:
++        m = ANS_SENT.search(body)
++        if not m:
++            continue
++        army = 0
++        for r in s.stats:
++            if r["frame"] <= f:
++                army = r.get("mArmy", 0)
++        if army > 0:
++            x = float(m.group(1)) / army
++            best = x if best is None else max(best, x)
++    return best
++
++
+ def frozen_minutes(s: Seat):
+     """His 11-14: "when we lose too much of our base we don't rebuild". Minutes after minute 8 with nothing built while
+     the seat still stood."""
+@@ -437,7 +463,7 @@ CHECKS = [
+     ("t2->4th moho (min)", t2_to_four_moho, "median", 1.0, 3.0),     # "1x to 4x ... within three minutes"
+     ("lab-job leaves/job", lab_job_leaves, "median", 0.10, 0.0),     # "no good reason it should walk away"
+     ("adv plant frame x", adv_plant_frame_x, "median", 0.5, 1.5),    # "4.5 minute T2 lab turned into 7"
+-    ("near-done strips", near_done_stripped, "mean", 2.0, 0.0),      # "we should stop doing that"
++    ("near-done /10k built", near_done_stripped, "mean", 0.1, 0.0),  # "we should stop doing that"
+     ("t2 cons given early", t2_cons_given_early, "mean", 0.25, 0.0), # "upgrade our metal extractors" first
+     ("supers before 4 moho", supers_before_upgrades, "mean", 0.5, 0.0),  # the same, strategic builds first
+     ("lone t2 con minutes", lone_t2_minutes, "mean", 1.0, 0.0),      # "only one T2 con. Just one."
+@@ -445,6 +471,7 @@ CHECKS = [
+     ("oldest plant order min", oldest_order_minutes, "mean", 1.0, None),  # n/a vs a release that cannot log it
+     ("no t2 by minute 20", no_t2_by_20, "mean", 0.10, None),         # the T2 checks skip such seats
+     ("frozen minutes", frozen_minutes, "mean", 1.0, 0.0),            # "we don't rebuild"
++    ("raid answer army share", raid_answer_share, "mean", 0.1, None),  # "not our entire army chasing small raids"
+     ("bare-hands minutes", bare_hands_minutes, "mean", 1.0, 0.0),    # "we don't really try to rebuild it"
+     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
+     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"
+diff --git a/tools/scenarios/raid_home.json b/tools/scenarios/raid_home.json
+new file mode 100644
+index 00000000..8134267f
+--- /dev/null
++++ b/tools/scenarios/raid_home.json
+@@ -0,0 +1,18 @@
++{
++  "about": "an early raid on our base (row 114; rc8's loss: lab raided by Pawns and Fleas by minute 4): 10 Pawns walk in on our lab, extractors and solars; 8 Warriors of ours stand 600 out on the far side under the stock army",
++  "passes": "the raid costs us less with apex_raid_answer_stock 1 than 0 (judge on vs off: lost_m0, killed:armpw)",
++  "map": "Geyser Plains",
++  "seconds": 150,
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "armlab", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
++    {"side": 0, "def": "armmex", "n": 4, "at": ["s0", -200, 150], "spacing": 120, "order": "ai"},
++    {"side": 0, "def": "armsolar", "n": 6, "at": ["s0", 0, -250], "spacing": 90, "order": "ai"},
++    {"side": 0, "def": "armwar", "n": 8, "at": ["s0", -600, 0], "spacing": 50, "order": "ai"},
++    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"},
++    {"side": 1, "def": "armpw", "n": 10, "at": ["s0", 900, 0], "spacing": 40, "order": "fight", "to": ["s0", 0, 0]}
++  ],
++  "expect": [
++    {"killed:armpw": [">=", 8]}
++  ]
++}
+diff --git a/tools/scenarios/rebuild_bare.json b/tools/scenarios/rebuild_bare.json
+new file mode 100644
+index 00000000..c8b76952
+--- /dev/null
++++ b/tools/scenarios/rebuild_bare.json
+@@ -0,0 +1,16 @@
++{
++  "about": "a lost base on open ground (his 11-14 'when we lose too much of our base we don't rebuild'): our seat has one T1 constructor, two extractors and two solars, no lab, no commander; nothing of theirs near (their lab far away, NullAI)",
++  "passes": "a path back: a lab rises and makes constructors (judge from the log: unit-finished lines for a plant and for new builders on side 0)",
++  "map": "Geyser Plains",
++  "seconds": 360,
++  "enemy": "none",
++  "units": [
++    {"side": 0, "def": "armck", "n": 1, "at": ["s0", 0, 0], "order": "ai"},
++    {"side": 0, "def": "armmex", "n": 2, "at": ["s0", -250, 0], "spacing": 140, "order": "ai"},
++    {"side": 0, "def": "armsolar", "n": 2, "at": ["s0", 0, 200], "spacing": 100, "order": "ai"},
++    {"side": 1, "def": "armlab", "n": 1, "at": ["s1", 0, 0], "order": "ai"}
++  ],
++  "expect": [
++    {"dead0": ["<=", 0]}
++  ]
++}
