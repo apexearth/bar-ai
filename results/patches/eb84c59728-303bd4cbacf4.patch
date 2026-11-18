@@ -1,0 +1,33 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/fightcensus.as b/ai/Unstable/game-side/script/standard/manager/military/fightcensus.as
+index 6ee82f16..eb255949 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/fightcensus.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/fightcensus.as
+@@ -46,6 +46,7 @@ void FightCensus()
+ 	array<int>   tasks(kinds, 0);
+ 	array<int>   units(kinds, 0);
+ 	array<float> metal(kinds, 0.f);
++	array<int>   raiders(kinds, 0);   // ground raider-role units by the task they are in
+ 	int empty = 0;
+ 	int odd = 0;
+ 	for (uint i = 0; i < gSquads.length(); ++i) {
+@@ -64,10 +65,19 @@ void FightCensus()
+ 		}
+ 		units[uint(ft)] += int(on.length());
+ 		for (uint j = 0; j < on.length(); ++j) {
+-			if ((on[j] !is null) && (on[j].circuitDef !is null))
++			if ((on[j] !is null) && (on[j].circuitDef !is null)) {
+ 				metal[uint(ft)] += on[j].circuitDef.costM;
++				if (on[j].circuitDef.IsRoleAny(Unit::Role::RAIDER.mask) && !on[j].circuitDef.IsAbleToFly())
++					++raiders[uint(ft)];
++			}
+ 		}
+ 	}
++	string rl = "";
++	for (uint k = 0; k < kinds; ++k) {
++		if (raiders[k] > 0)
++			rl += " " + FightTypeName(k) + "=" + raiders[k];
++	}
++	AiLog(Factory::T() + "apex: raidercensus t=" + ai.teamId + rl);
+ 	string line = "";
+ 	for (uint k = 0; k < kinds; ++k) {
+ 		line += " " + FightTypeName(k) + "=" + tasks[k] + "/" + units[k]
