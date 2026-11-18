@@ -109,6 +109,53 @@ float MexFloorFactor(const AIFloat3& in pos)
 	return f;
 }
 
+// THE EARLY EXTRACTOR TILT IS CAPPED AT THE GUARD'S (his 11-17, Ticks taking extractors one light turret saves): until
+// the fielded army reaches the leak screen (MexFloorFactor's early term), the nets' lift on an extractor is held to the
+// best lift on a defence want in the same election, so base gains decide between the next extractor and the gun that
+// keeps the last ones (measured: extractor nn x7-24 against turret x0.3-1, first guard after the first Tick kill).
+int gMtcN = 0, gMtcCut = 0, gMtcLogAt = 0;
+void MexTiltCap(array<Want@>@ ranked)
+{
+	const float screen = ai.GetTunable("apex_leak_screen_m", TUNE_LEAK_SCREEN_M);
+	if ((screen <= 1.f) || (ArmyValue() >= screen))
+		return;
+	float protNn = -1.f;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if ((ranked[i].kind == WK_PROTECT) && (ranked[i].value > 0.f) && (ranked[i].nnMult > protNn)
+			&& (ranked[i].def !is null) && (ProtClassOf(int(ranked[i].def.id)) == PROT_DEF))
+			protNn = ranked[i].nnMult;
+	}
+	if (protNn <= 0.f)
+		return;
+	++gMtcN;
+	bool moved = false;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		Want@ w = ranked[i];
+		if ((w.kind != WK_MEX) || (w.nnMult <= protNn))
+			continue;
+		w.value *= protNn / w.nnMult;
+		w.nnMult = protNn;
+		moved = true;
+	}
+	if (!moved)
+		return;
+	++gMtcCut;
+	for (uint i = 1; i < ranked.length(); ++i) {
+		Want@ w = ranked[i];
+		uint j = i;
+		while ((j > 0) && (ranked[j - 1].value < w.value)) {
+			@ranked[j] = ranked[j - 1];
+			--j;
+		}
+		@ranked[j] = w;
+	}
+	if (ai.frame >= gMtcLogAt) {
+		gMtcLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: mex-tilt-cap t=" + ai.teamId + " protNn=" + formatFloat(protNn, "", 0, 3)
+			+ " top=" + ((ranked.length() > 0) ? KindName(ranked[0].kind) : "-") + " elections=" + gMtcN + " cut=" + gMtcCut);
+	}
+}
+
 // THE MEX'S VALUE IS ITS STREAM, not its 50-metal shell (apexearth
 // 2026-08-28: "we run around building a lot of mexes but we lose them all
 // to enemies" -- the guard want priced insurance on the shell, came out at
@@ -962,6 +1009,13 @@ float DefenceTarget()
 	gDmTgtK = DefMeasuredPressure(DefMeasuredMean());
 	if (DefMeasuredOn())
 		gDefTgtM *= gDmTgtK;
+	// ...but not the per-mex floor: the measured rate is 0 until the first raid kills something, which priced every
+	// turret -1 until a Tick had taken an extractor (defmeasured-stat target=237->0).
+	{
+		const float floorT = gMexFloorSum * ecoRamp * DefAmountMult();
+		if (gDefTgtM < floorT)
+			gDefTgtM = floorT;
+	}
 	return gDefTgtM;
 }
 

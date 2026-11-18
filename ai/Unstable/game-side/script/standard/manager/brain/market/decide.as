@@ -2367,6 +2367,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	VScaleNote(ranked);
 	OppTimeReprice(unit, ranked);
 	NnScore(unit, ranked);
+	MexTiltCap(ranked);
 	WalkForgoneStat(unit, ranked);
 	NnTechNote(ranked);
 	T2EcoNoteOffer(unit, ranked);

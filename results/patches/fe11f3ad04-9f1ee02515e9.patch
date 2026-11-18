@@ -1,0 +1,149 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as b/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as
+index 845b0fdc..9897eeab 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as
+@@ -2367,6 +2367,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
+ 	VScaleNote(ranked);
+ 	OppTimeReprice(unit, ranked);
+ 	NnScore(unit, ranked);
++	MexTiltCap(ranked);
+ 	WalkForgoneStat(unit, ranked);
+ 	NnTechNote(ranked);
+ 	T2EcoNoteOffer(unit, ranked);
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
+index c9ea691a..1c475177 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
+@@ -747,6 +747,13 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
+ 			if (hz < mexHz)
+ 				hz = mexHz;
+ 		}
++		// ...and an uncovered extractor's guard sees that rate whichever threat priced the site (early the wave prior
++		// beats the floor, and the guard read the quiet measured rate: 0.0029 vs 0.0083; his 11-17, Ticks).
++		else if (isMexG && BareMexOn() && (hz < BareMexHzAt(s))
++			&& (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER) <= 1.f)
++			&& MexUnguardedInReach(s, reach)) {
++			hz = BareMexHzAt(s);
++		}
+ 		const float face = FaceAt(s);
+ 		if (sg * face > hz)
+ 			hz = sg * face;
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+index 6bedb6a3..f547d896 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+@@ -109,6 +109,53 @@ float MexFloorFactor(const AIFloat3& in pos)
+ 	return f;
+ }
+ 
++// THE EARLY EXTRACTOR TILT IS CAPPED AT THE GUARD'S (his 11-17, Ticks taking extractors one light turret saves): until
++// the fielded army reaches the leak screen (MexFloorFactor's early term), the nets' lift on an extractor is held to the
++// best lift on a defence want in the same election, so base gains decide between the next extractor and the gun that
++// keeps the last ones (measured: extractor nn x7-24 against turret x0.3-1, first guard after the first Tick kill).
++int gMtcN = 0, gMtcCut = 0, gMtcLogAt = 0;
++void MexTiltCap(array<Want@>@ ranked)
++{
++	const float screen = ai.GetTunable("apex_leak_screen_m", TUNE_LEAK_SCREEN_M);
++	if ((screen <= 1.f) || (ArmyValue() >= screen))
++		return;
++	float protNn = -1.f;
++	for (uint i = 0; i < ranked.length(); ++i) {
++		if ((ranked[i].kind == WK_PROTECT) && (ranked[i].value > 0.f) && (ranked[i].nnMult > protNn)
++			&& (ranked[i].def !is null) && (ProtClassOf(int(ranked[i].def.id)) == PROT_DEF))
++			protNn = ranked[i].nnMult;
++	}
++	if (protNn <= 0.f)
++		return;
++	++gMtcN;
++	bool moved = false;
++	for (uint i = 0; i < ranked.length(); ++i) {
++		Want@ w = ranked[i];
++		if ((w.kind != WK_MEX) || (w.nnMult <= protNn))
++			continue;
++		w.value *= protNn / w.nnMult;
++		w.nnMult = protNn;
++		moved = true;
++	}
++	if (!moved)
++		return;
++	++gMtcCut;
++	for (uint i = 1; i < ranked.length(); ++i) {
++		Want@ w = ranked[i];
++		uint j = i;
++		while ((j > 0) && (ranked[j - 1].value < w.value)) {
++			@ranked[j] = ranked[j - 1];
++			--j;
++		}
++		@ranked[j] = w;
++	}
++	if (ai.frame >= gMtcLogAt) {
++		gMtcLogAt = ai.frame + 30 * SECOND;
++		AiLog(Factory::T() + "apex: mex-tilt-cap t=" + ai.teamId + " protNn=" + formatFloat(protNn, "", 0, 3)
++			+ " top=" + ((ranked.length() > 0) ? KindName(ranked[0].kind) : "-") + " elections=" + gMtcN + " cut=" + gMtcCut);
++	}
++}
++
+ // THE MEX'S VALUE IS ITS STREAM, not its 50-metal shell (apexearth
+ // 2026-08-28: "we run around building a lot of mexes but we lose them all
+ // to enemies" -- the guard want priced insurance on the shell, came out at
+@@ -962,6 +1009,13 @@ float DefenceTarget()
+ 	gDmTgtK = DefMeasuredPressure(DefMeasuredMean());
+ 	if (DefMeasuredOn())
+ 		gDefTgtM *= gDmTgtK;
++	// ...but not the per-mex floor: the measured rate is 0 until the first raid kills something, which priced every
++	// turret -1 until a Tick had taken an extractor (defmeasured-stat target=237->0).
++	{
++		const float floorT = gMexFloorSum * ecoRamp * DefAmountMult();
++		if (gDefTgtM < floorT)
++			gDefTgtM = floorT;
++	}
+ 	return gDefTgtM;
+ }
+ 
+diff --git a/tools/contract.py b/tools/contract.py
+index d14b8e2e..e7e4150f 100644
+--- a/tools/contract.py
++++ b/tools/contract.py
+@@ -701,26 +701,18 @@ def main(argv):
+     # HEAD TO HEAD (memory: release-gate-head-to-head -- no release without beating the previous one): a game is ours
+     # when our side won, or at the time cap built more metal than theirs. Under half fails.
+     ahead = 0
+-    marks = []
+     for m in sorted({s.match for s in seats}):
+         res = json.loads((Path(_MATCH_DIRS[m]) / "result.json").read_text())
+         rb = res.get("result") if isinstance(res.get("result"), dict) else {}
+         win = [w for w in (rb.get("winner_specs") or res.get("winner_specs") or []) if w]
+         mine = sum(s.stats[-1].get("mBuiltReal", 0) for s in ours if s.match == m and s.stats)
+         theirs_b = sum(s.stats[-1].get("mBuiltReal", 0) for s in theirs if s.match == m and s.stats)
+-        mark = any(a.us in str(w) for w in win) if win else (mine > theirs_b)
+-        marks.append(mark)
+-        ahead += mark
++        ahead += any(a.us in str(w) for w in win) if win else (mine > theirs_b)
++    # A point test, not resampled like the checks above: the burden of proof is on the new code.
+     h2h = ahead / max(1, games)
+-    sure = 0.0
+-    if h2h < 0.5 and marks:
+-        n = len(marks)
+-        sure = sum(sum(marks[rng.randrange(n)] for _ in range(n)) < 0.5 * n for _ in range(RESAMPLES)) / RESAMPLES
+-    h2h_bad = h2h < 0.5 and sure >= SURE
++    h2h_bad = h2h < 0.5
+     fails += h2h_bad
+-    rows.append(("games won or ahead", -h2h, -0.5, None,
+-                 "FAIL (does not beat the release, %.0f%% of resamples)" % (100 * sure) if h2h_bad
+-                 else "under half, within noise (%.0f%% of resamples)" % (100 * sure) if h2h < 0.5 else "ok"))
++    rows.append(("games won or ahead", -h2h, -0.5, None, "FAIL (does not beat the release)" if h2h_bad else "ok"))
+     fmt = lambda x, name: "-" if x is None else "%.2f" % (abs(x) if ("share" in name or "ahead" in name) else x)
+     if a.md:
+         print("| check | ours | release | his aim | verdict |\n|---|---|---|---|---|")
+diff --git a/tools/dashboard_coverage.json b/tools/dashboard_coverage.json
+index 5de0b101..86eff7d6 100644
+--- a/tools/dashboard_coverage.json
++++ b/tools/dashboard_coverage.json
+@@ -101,7 +101,6 @@
+     "TUNE_MASS_NO_COMMIT_RATIO",
+     "TUNE_MASS_VS_ARMY",
+     "TUNE_MASS_VS_ENEMY",
+-    "TUNE_MEDIC_FRAC",
+     "TUNE_MEDIC_R",
+     "TUNE_MEDIC_SETBACK",
+     "TUNE_MEDIC_SHARE",

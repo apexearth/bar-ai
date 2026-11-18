@@ -701,26 +701,18 @@ def main(argv):
     # HEAD TO HEAD (memory: release-gate-head-to-head -- no release without beating the previous one): a game is ours
     # when our side won, or at the time cap built more metal than theirs. Under half fails.
     ahead = 0
-    marks = []
     for m in sorted({s.match for s in seats}):
         res = json.loads((Path(_MATCH_DIRS[m]) / "result.json").read_text())
         rb = res.get("result") if isinstance(res.get("result"), dict) else {}
         win = [w for w in (rb.get("winner_specs") or res.get("winner_specs") or []) if w]
         mine = sum(s.stats[-1].get("mBuiltReal", 0) for s in ours if s.match == m and s.stats)
         theirs_b = sum(s.stats[-1].get("mBuiltReal", 0) for s in theirs if s.match == m and s.stats)
-        mark = any(a.us in str(w) for w in win) if win else (mine > theirs_b)
-        marks.append(mark)
-        ahead += mark
+        ahead += any(a.us in str(w) for w in win) if win else (mine > theirs_b)
+    # A point test, not resampled like the checks above: the burden of proof is on the new code.
     h2h = ahead / max(1, games)
-    sure = 0.0
-    if h2h < 0.5 and marks:
-        n = len(marks)
-        sure = sum(sum(marks[rng.randrange(n)] for _ in range(n)) < 0.5 * n for _ in range(RESAMPLES)) / RESAMPLES
-    h2h_bad = h2h < 0.5 and sure >= SURE
+    h2h_bad = h2h < 0.5
     fails += h2h_bad
-    rows.append(("games won or ahead", -h2h, -0.5, None,
-                 "FAIL (does not beat the release, %.0f%% of resamples)" % (100 * sure) if h2h_bad
-                 else "under half, within noise (%.0f%% of resamples)" % (100 * sure) if h2h < 0.5 else "ok"))
+    rows.append(("games won or ahead", -h2h, -0.5, None, "FAIL (does not beat the release)" if h2h_bad else "ok"))
     fmt = lambda x, name: "-" if x is None else "%.2f" % (abs(x) if ("share" in name or "ahead" in name) else x)
     if a.md:
         print("| check | ours | release | his aim | verdict |\n|---|---|---|---|---|")

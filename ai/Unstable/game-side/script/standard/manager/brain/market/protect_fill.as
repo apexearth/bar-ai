@@ -747,6 +747,13 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (hz < mexHz)
 				hz = mexHz;
 		}
+		// ...and an uncovered extractor's guard sees that rate whichever threat priced the site (early the wave prior
+		// beats the floor, and the guard read the quiet measured rate: 0.0029 vs 0.0083; his 11-17, Ticks).
+		else if (isMexG && BareMexOn() && (hz < BareMexHzAt(s))
+			&& (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER) <= 1.f)
+			&& MexUnguardedInReach(s, reach)) {
+			hz = BareMexHzAt(s);
+		}
 		const float face = FaceAt(s);
 		if (sg * face > hz)
 			hz = sg * face;

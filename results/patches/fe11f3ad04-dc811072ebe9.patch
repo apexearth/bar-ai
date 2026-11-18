@@ -1,0 +1,133 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as b/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as
+index 845b0fdc..9897eeab 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/decide.as
+@@ -2367,6 +2367,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
+ 	VScaleNote(ranked);
+ 	OppTimeReprice(unit, ranked);
+ 	NnScore(unit, ranked);
++	MexTiltCap(ranked);
+ 	WalkForgoneStat(unit, ranked);
+ 	NnTechNote(ranked);
+ 	T2EcoNoteOffer(unit, ranked);
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
+index c9ea691a..60106e42 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_fill.as
+@@ -747,6 +747,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
+ 			if (hz < mexHz)
+ 				hz = mexHz;
+ 		}
++		// ...and with the tilt cap, an uncovered extractor's guard sees that rate whichever threat priced the site
++		// (early the wave prior beats the floor, and the guard read the quiet measured rate: 0.0029 vs 0.0083).
++		else if (isMexG && BareMexOn() && MexTiltOn()
++			&& (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", TUNE_UNIT_COVER) <= 1.f)
++			&& MexUnguardedInReach(s, reach)) {
++			const float bm = BareMexHzAt(s);
++			if (hz < bm)
++				hz = bm;
++		}
+ 		const float face = FaceAt(s);
+ 		if (sg * face > hz)
+ 			hz = sg * face;
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+index 6bedb6a3..52ba2d8d 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+@@ -109,6 +109,58 @@ float MexFloorFactor(const AIFloat3& in pos)
+ 	return f;
+ }
+ 
++// THE EARLY EXTRACTOR TILT IS CAPPED AT THE GUARD'S (his 11-17, Ticks taking extractors one light turret saves): until
++// the fielded army reaches the leak screen (MexFloorFactor's early term), the nets' lift on an extractor is held to the
++// best lift on a defence want in the same election, so base gains decide between the next extractor and the gun that
++// keeps the last ones (measured: extractor nn x7-24 against turret x0.3-1, first guard after the first Tick kill).
++bool MexTiltOn()
++{
++	return ai.GetTunable("apex_mex_tilt_cap", TUNE_MEX_TILT_CAP) > 0.f;
++}
++int gMtcN = 0, gMtcCut = 0, gMtcLogAt = 0;
++void MexTiltCap(array<Want@>@ ranked)
++{
++	if (!MexTiltOn())
++		return;
++	const float screen = ai.GetTunable("apex_leak_screen_m", TUNE_LEAK_SCREEN_M);
++	if ((screen <= 1.f) || (ArmyValue() >= screen))
++		return;
++	float protNn = -1.f;
++	for (uint i = 0; i < ranked.length(); ++i) {
++		if ((ranked[i].kind == WK_PROTECT) && (ranked[i].value > 0.f) && (ranked[i].nnMult > protNn))
++			protNn = ranked[i].nnMult;
++	}
++	if (protNn <= 0.f)
++		return;
++	++gMtcN;
++	bool moved = false;
++	for (uint i = 0; i < ranked.length(); ++i) {
++		Want@ w = ranked[i];
++		if ((w.kind != WK_MEX) || (w.nnMult <= protNn))
++			continue;
++		w.value *= protNn / w.nnMult;
++		w.nnMult = protNn;
++		moved = true;
++	}
++	if (!moved)
++		return;
++	++gMtcCut;
++	for (uint i = 1; i < ranked.length(); ++i) {
++		Want@ w = ranked[i];
++		uint j = i;
++		while ((j > 0) && (ranked[j - 1].value < w.value)) {
++			@ranked[j] = ranked[j - 1];
++			--j;
++		}
++		@ranked[j] = w;
++	}
++	if (ai.frame >= gMtcLogAt) {
++		gMtcLogAt = ai.frame + 30 * SECOND;
++		AiLog(Factory::T() + "apex: mex-tilt-cap t=" + ai.teamId + " protNn=" + formatFloat(protNn, "", 0, 3)
++			+ " top=" + ((ranked.length() > 0) ? KindName(ranked[0].kind) : "-") + " elections=" + gMtcN + " cut=" + gMtcCut);
++	}
++}
++
+ // THE MEX'S VALUE IS ITS STREAM, not its 50-metal shell (apexearth
+ // 2026-08-28: "we run around building a lot of mexes but we lose them all
+ // to enemies" -- the guard want priced insurance on the shell, came out at
+@@ -962,6 +1014,13 @@ float DefenceTarget()
+ 	gDmTgtK = DefMeasuredPressure(DefMeasuredMean());
+ 	if (DefMeasuredOn())
+ 		gDefTgtM *= gDmTgtK;
++	// ...but not the per-mex floor while the tilt cap runs: the measured rate is 0 until the first raid kills
++	// something, which priced every turret -1 until a Tick had taken an extractor (defmeasured-stat target=237->0).
++	if (MexTiltOn()) {
++		const float floorT = gMexFloorSum * ecoRamp * DefAmountMult();
++		if (gDefTgtM < floorT)
++			gDefTgtM = floorT;
++	}
+ 	return gDefTgtM;
+ }
+ 
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index 808b088d..087554de 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -1458,6 +1458,7 @@ const float TUNE_PERSONA = 0.f;   // [toggle 0/1] persona_style.as + persona.as:
+ const float TUNE_PERSONA_FORCE = -1.f;   // [style] persona_style.as: >= 0 the team plays that style all game (0 BALANCED 1 ARTY 2 STEALTH 3 AIR 4 FAST 5 T3 6 NUKE 7 SHIELD 8 SCOUT); -1 hidden random draw. Needs apex_persona
+ const float TUNE_INFLIGHT_PS = 1.f;   // [toggle 0/1] price.as displacedM: each job in progress waits min(this cost, its remaining cost)/income, as stalled metal is shared (floor.as InFlightHoldM)
+ const float TUNE_BARE_MEX_HZ = 1.f;   // [toggle 0/1] protect_measured.as: an unguarded extractor's guard is priced on how fast our unguarded extractors die, by forward fraction (his 10-26 insurance ruling)
++const float TUNE_MEX_TILT_CAP = 1.f;   // [toggle 0/1] protect_target.as MexTiltCap: early, an extractor's net lift is capped at the best defence want's, and the per-mex floor holds before any attack is measured (his 11-17, Ticks; A/B, then delete)
+ const float TUNE_LADDER_YIELDS = 1.f;   // [toggle 0/1] decide.as CategoryDraw: the ladder's spot claim no longer jumps a constructor's tower priced above it (the commander was always exempt)
+ const float TUNE_ECO_SEAT_T3 = 0.f;   // [toggle 0/1] ecoseat.as EcoSeatT3: past half its growth target the eco seat builds the team's gantry and its T3 (his 10-26)
+ const float TUNE_ECO_SEAT2_SHARE = 0.33f;   // [0.33/0.5/1] army.as EcoRoleTargetM: the second eco seat grows to this share of the first's target (his 10-31: a half eco)
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 4ce3f26a..60222208 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -649,6 +649,7 @@ local NAMES = {
+ 	"apex_eco_lean", -- army.as: a 3-4 player team's farthest seat leans eco, this share of the phase, not strict (0)
+ 	"apex_ladder_yields", -- decide.as: the ladder's mex claim yields to a tower priced above it (0)
+ 	"apex_bare_mex_hz", -- protect_measured.as: a bare extractor's guard on our bare extractors' death rate (0)
++	"apex_mex_tilt_cap", -- protect_target.as: early extractor net lift capped at the guard's; per-mex floor unmeasured (1, A/B)
+ 	"apex_inflight_ps", -- price.as: the in-flight hold under shared metal, min(cost, remaining) (0)
+ 	"apex_persona", -- persona_style.as + persona.as: hidden team style and seat flavours (0)
+ 	"apex_persona_force", -- persona_style.as: the team plays this style all game, -1 hidden draw (-1)
