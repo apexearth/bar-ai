@@ -24,18 +24,18 @@ check gates a release only against the previous release. Re-run this table after
 | Constructor blob | `log peak cons per income` | -1.67 | -1.64 | - | level |
 | LRPC on encroaching armies | scenarios lrpc_army, lrpc_melee | 4 and 12 Hammers killed; own line spared | 0 and 0 | - | shipped in v0.5.14 |
 | Base lost while the pricer read covered | `base lost while 'covered' k` | 6.26 | 4.64 | 0 | FAIL pooled; rc10 alone 4.41 vs 4.40; the release side reads 4.5-8.0 by batch |
-| Releases v0.5.12, v0.5.13, v0.5.14, v0.5.15 | git tags, GitHub releases | - | - | - | released; v0.5.15 (engine 2026.09.03) checked after shipping: rv2/rv3/rv5/rv6, 80 games vs v0.5.14, won or ahead 0.56 vs 0.50, nothing that repeats |
+| Releases v0.5.12 - v0.5.16 | git tags, GitHub releases | - | - | - | released; v0.5.16 (11-17) passed rc16 vs v0.5.15, won or ahead 14 of 20, contract PASS recorded, fresh review clean; v0.5.15 (engine 2026.09.03) checked after shipping: rv2/rv3/rv5/rv6, 80 games vs v0.5.14, won or ahead 0.56 vs 0.50, nothing that repeats |
 
 ## The 11-16 asks (vs WRDistilled), as of 11-17
 
 | Ask | Check | Where it stands |
 |---|---|---|
 | Our AI on BAR's new engine | lobby shows Apex | done: v0.5.14 and v0.5.15 installed and run on recoil_2026.09.03 |
-| One chat line naming each Apex AI by its game name | `/say` at 3 s | in v0.5.15; one line per host built on the test copy, not released; his live game unconfirmed |
+| One chat line naming each Apex AI by its game name | `/say` at 3 s | in v0.5.15; one line per host in v0.5.16 (smoke: "Shellshocker is Apex v0.5.16"); his live game unconfirmed |
 | The commander not caught out on their half | `com minutes on their half`, `com lost on their half` | COM_UNSEEN measured and removed; v0.5.15 level with v0.5.14 over 80 games; the extractor-claim walk past the middle is open (validation 117) |
-| Extractors not lost to Ticks | `mex lost to ticks by 10 min`, scenario ticks_mexes | DEF_NN_FLOOR measured and removed; two fixes await his choice (validation 118) |
-| Raid their extractors | `their mex killed /10min` | cause found (spam aimed at their base core, no ground raid pool fills); direction awaits his choice (validation 119) |
-| Heavy-army strategy: medium army behind defences, resbots eat the reclaim, win the trade | `lost per killed`, `reclaimed / killed`, `their army / ours` | resbot cap off vs 12%: 24 pairs, trade better in 16 (p~0.12), reclaim share unchanged; lifting it awaits his call |
+| Extractors not lost to Ticks | `mex lost to ticks by 10 min`, scenario ticks_mexes | v0.5.16: early extractor net lift capped at the guard's, per-mex floor not zeroed before the first raid, bare rate for uncovered guards; vs WRDistilled 16 pairs, lost to Ticks by 10 min 37 vs 70 (t=-4.66). Open: losses where no guard was anticipated (validation 118) |
+| Raid their extractors | `their mex killed /10min` | his choice (spam aimed at their economy) built and measured, no effect over 32 pairs (17.2 vs 16.0), removed; open with no tested lever (validation 119) |
+| Heavy-army strategy: medium army behind defences, resbots eat the reclaim, win the trade | `lost per killed`, `reclaimed / killed`, `their army / ours` | resbot cap removed in v0.5.16 on his rule (48 pairs: won or ahead 21 vs 16, lost per killed 1.06 vs 1.25) |
 | No swearing in files | grep | done (code, tools, docs reworded) |
 | Tests on Comet Catcher 1v1, both +50 | batch lists | done since 11-16 |
-| The audit gate | contract per page | identical play fails ~2 of ~25 checks per 20-40 games; noise-aware margins await his OK |
+| The audit gate | contract per page | his 11-17 OK: a check fails only past noise (90% of game resamples); identical play now passes; the head-to-head stays a point test (beat the previous release) |
