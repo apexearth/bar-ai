@@ -1,0 +1,40 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/hooks.as b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+index 5a514a89..36d6f597 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/hooks.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/hooks.as
+@@ -412,6 +412,11 @@ int SpamSend(CCircuitUnit@ unit, const CCircuitDef@ cdef)
+ 	// while the T1 lab is still the ground army (no T2 land plant), its Pawns and Grunts are the army, not spam
+ 	if (!SpamSendOn() || !SpamPhase() || (Market::TopOwnLandPlantTier() < 2) || !IsFodder(cdef))
+ 		return 0;
++	// his 11-17: mid and late game we barely raid -- every raider became spam at the T2 plant (vs WRDistilled 12-18 min:
++	// 606 sent, 895 lost, 41 extractors killed; 18-24: 7). With this off a raider keeps the stock raid routing.
++	if (cdef.IsRoleAny(Unit::Role::RAIDER.mask)
++		&& (ai.GetTunable("apex_spam_send_raiders", TUNE_SPAM_SEND_RAIDERS) <= 0.f))
++		return 0;
+ 	const int id = int(unit.id);
+ 	if (id < 0)
+ 		return 0;
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index 808b088d..2d1bd208 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -1949,6 +1949,7 @@ const float TUNE_RAIDER_MASSING = 0.f;
+ const float TUNE_SPAM_RAIDERS = 1.f;
+ 
+ const float TUNE_SPAM_SEND = 1.f;   // [toggle 0/1] hooks.as SpamSend: late fodder gets one fight order at their base and none after
++const float TUNE_SPAM_SEND_RAIDERS = 1.f;   // [toggle 0/1] hooks.as SpamSend: raider-role fodder is sent as spam after the T2 plant (0: it keeps raiding; his 11-17, A/B)
+ const float TUNE_SPAM_SHELL = 1.f;   // [toggle 0/1] hooks.as SpamShellPick: late fodder moves to where fire on our structures comes from (his 11-07)
+ const float TUNE_WING_BUILD = 1.f;   // [toggle 0/1] air/wing.as WingShort: the armed wing's bombers/fighters unmuted on the basic plant and its escort in the fighter target (his 11-07)
+ const float TUNE_AIR_AA_UNLOCK = 0.f; // [toggle 0/1] air/nnair.as NaAACands: seen AA clusters offered to the bombers at their metal plus the strike they unlock (his 11-07)
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 4ce3f26a..c7e26ac6 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -434,6 +434,7 @@ local NAMES = {
+ 	"apex_air_rich",
+ 	"apex_lrpc_prize", -- want_super.as: LRPC kills priced like a bomber's (1)
+ 	"apex_spam_send", -- hooks.as: late fodder sent once at their base, never re-ordered (1)
++	"apex_spam_send_raiders", -- hooks.as: raider-role fodder sent as spam after T2 (1; 0 keeps them raiding, A/B)
+ 	"apex_mex_cover_site", -- execute.as: no interior gun waived for a mex it does not cover (1)
+ 	"apex_stock_heal", -- RetreatTask.cpp: stock wounded to a manned medic station (1)
+ 	"apex_strike_schedule", -- strike.as: his timed play (0)
