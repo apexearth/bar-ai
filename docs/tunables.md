@@ -85,7 +85,7 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 ## Defence, towers, AA, insurance
 
 - `TUNE_DEF_MEASURED` = 1. His 10-15. In a 4v4 the measured attack rate was 1-8% of the assumed one. Needs the gadget (S8). On since v0.3.2; `apex: defmeasured-stat`.
-- `TUNE_LEAK_SCREEN_M` = 800. An estimate (~8 Ticks), not measured.
+- `TUNE_LEAK_SCREEN_M` = 800. An estimate (~8 Ticks), not measured. Live only in `MexTiltCap`: the `MexFloorFactor` term (`1 - army/screen`, at most 1) never beats the gun floor (`MexGunsWanted` >= 1), so it changes no price (found 11-18; issues/ticks-flank-extractors.md).
 - `TUNE_DEF_SITE_WALK` = 1. His complaint: a con should cover the mex it just built; 0 is the distance-blind arm.
 - `TUNE_DEFEND_LEASH` = 0.55. 0.35 lost more (ceded the corridor's mexes).
 - `TUNE_SHIELD_COVER_FRAC` = 0.5. His "too many shields while there's still no threat". First A/B owed.
@@ -125,7 +125,7 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_NN_BLEND` = 1. His call: the nets steer in his slot and lobby games.
 - `TUNE_NN_EXPLORE` = 0. His call: nothing plays random on purpose in lobby games; training passes its own share.
 - `TUNE_NN_PLAN_EXPLORE` = 0.1. His "much less" whole-team strategy exploration (forced RUSH won 0/21).
-- `TUNE_PLAN_EXPLORE` = 0. Lobby option 'Try strategies': draws only the team plan, so his multiplayer games teach the plan net without random builders.
+- `TUNE_PLAN_EXPLORE` = 0. Lobby option 'Try strategies' removed 11-18 (unmeasured, confusing; the plan net is not training). It drew only the team plan, so his multiplayer games teach the plan net without random builders.
 - `TUNE_GUNP_RULE` = 1. 0.35x vs 1x over 24 games each was within noise; left at 1 for the head to learn.
 - `TUNE_CON_RULE` = 2.5. 2.5x read eco 0.99 vs 0.69 at minute 11 against 1x, at the cost of army (0.42 vs 0.67); 1.6x gave up the eco without buying the army back.
 - `TUNE_PERSONA` = 0. Off from v0.5.03 by his 11-02 choice; the lobby "Personalities" option turns it on. 11-02 Comet Catcher vs v0.5.02, 4 seeds per size: damage efficiency 22/11/11% worse at 1v1/2v2/4v4, metal by min 20 82/83/95% of off.

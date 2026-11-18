@@ -2,97 +2,38 @@
 -- The options a lobby shows when you click into this bot. Format: the spring
 -- source's AI/Skirmish/NullAI/data/AIOptions.lua. Every apex_* key reaches the
 -- AI through GetTunable, which reads the value as a number -- a list's item
--- keys are numbers for that reason, and a key that is not one ('auto') leaves
--- the AI's own default.
+-- keys are numbers for that reason. A key not listed here plays the AI's own
+-- default (11-18: the team strategy lists, net influence, commander merge,
+-- game-side files and the one-item profile list were removed; the C++ falls
+-- back to game-side files on, merge off, profile 'standard').
 --------------------------------------------------------------------------------
 
 local options = {
 	{ -- section
 		key    = 'play',
-		name   = 'Strategy and play style',
-		desc   = 'How THIS bot plays. Each bot in the lobby has its own settings.',
+		name   = 'Play style',
+		desc   = 'How THIS bot plays. Each bot in the lobby has its own settings. The defaults are the strongest play.',
 		type   = 'section',
-	},
-	{ -- list
-		key     = 'apex_plan_force',
-		name    = 'Team strategy',
-		desc    = 'The way this bot\'s team means to win. "Let the AI choose" is normal play: the strategy net picks and changes it as the game goes. Any other choice holds that strategy all game -- set the same on every bot of the team.',
-		type    = 'list',
-		section = 'play',
-		def     = 'auto',
-		items   = {
-			{ key = 'auto', name = 'Let the AI choose', desc = 'Normal play: the strategy net decides. It never picks Greed, Deep greed or Turtle on its own.' },
-			{ key = '0', name = 'Normal', desc = 'Balanced economy and army, no special push.' },
-			{ key = '1', name = 'Mass T3', desc = 'Gantries and experimental units, then a team push.' },
-			{ key = '2', name = 'Nukes and missiles', desc = 'Nuke silos, tactical and EMP launchers, then a team push.' },
-			{ key = '3', name = 'Long-range artillery', desc = 'LRPCs, Ragnarok and Starfall, then a team push.' },
-			{ key = '4', name = 'Mass and push', desc = 'Normal production; the army gathers and pushes together.' },
-			{ key = '5', name = 'Mass air', desc = 'Air plants early (the AI picks how many), air army, then a team push.' },
-			{ key = '6', name = 'Rush', desc = 'Twice the army, early attacks together.' },
-			{ key = '7', name = 'Greed', desc = 'Half the army while the enemy is seen sitting passive; the rest into economy. Only when chosen here.' },
-			{ key = '9', name = 'Deep greed', desc = 'A quarter of the army while the enemy is seen passive. Risky. Only when chosen here.' },
-			{ key = '8', name = 'Turtle', desc = 'Heavy defences and anti-air, no push. Only when chosen here.' },
-		},
 	},
 	{ -- list
 		key     = 'apex_persona',
 		name    = 'Personalities',
-		desc    = 'On: the team plays a hidden strategy that can change during the game, and each bot has its own tastes (front bots like defences, back bots like air). More varied, measured somewhat weaker. Set it the same on every bot of a team.',
+		desc    = 'Off: the standard AI, its strongest play. On: each game the team secretly picks a style (balanced, artillery, snipers and stealth, air, T3, nukes or rush) and leans its building toward it, switching style if it keeps trading badly; each bot also gets its own random tastes. More varied games, measured somewhat weaker. Set it the same on every bot of a team.',
 		type    = 'list',
 		section = 'play',
 		def     = '0',
 		items   = {
-			{ key = '0', name = 'Off', desc = 'Normal play (strongest).' },
-			{ key = '1', name = 'On', desc = 'Hidden team strategies and per-bot tastes.' },
+			{ key = '0', name = 'Off', desc = 'The standard AI (strongest).' },
+			{ key = '1', name = 'On', desc = 'A hidden team style and per-bot tastes: more varied, somewhat weaker.' },
 		},
-	},
-	{ -- list
-		key     = 'apex_persona_force',
-		name    = 'Team play style',
-		desc    = 'With Personalities on: which strategy the team plays. "Surprise me" keeps it hidden and random, and the team may change strategy during the game. Any other choice holds that strategy all game.',
-		type    = 'list',
-		section = 'play',
-		def     = 'auto',
-		items   = {
-			{ key = 'auto', name = 'Surprise me', desc = 'A hidden strategy the game allows, drawn at the start.' },
-			{ key = '0', name = 'Normal', desc = 'No special strategy.' },
-			{ key = '9', name = 'Rush', desc = 'Twice the army, early attacks together.' },
-			{ key = '1', name = 'Artillery', desc = 'Long-range units and long-range plasma cannons.' },
-			{ key = '2', name = 'Snipers and stealth', desc = 'Snipers and radar jammers.' },
-			{ key = '3', name = 'Mass air', desc = 'Air plants and an air army.' },
-			{ key = '5', name = 'T3 rush', desc = 'An early gantry and experimental units.' },
-			{ key = '6', name = 'Nukes and missiles', desc = 'Nuke silos, tactical and EMP launchers.' },
-		},
-	},
-	{ -- number
-		key     = 'apex_plan_explore',
-		name    = 'Try strategies (training)',
-		desc    = '1 = this bot picks its team\'s strategy at random and plays everything else normally, so the AI learns which strategies work against people. Use it on one bot per team. Ignored when Team strategy is set. 0 = off.',
-		type    = 'number',
-		section = 'play',
-		def     = 0,
-		min     = 0,
-		max     = 1,
-		step    = 1,
 	},
 	{ -- number
 		key     = 'apex_eco_force',
 		name    = 'Economy player',
-		desc    = '0 = off. Above 0 makes THIS bot the team\'s economy player: it builds economy first, to that share of its economy target, before army and defence. 1 = full economy phase, 0.5 = half as long. A threat to its base brings army and defence back.',
+		desc    = '0 = off. Above 0 makes this bot its team\'s economy player: it builds economy first and holds back army and defence until its economy is halfway to its goal, then brings them in. 1 = a full economy phase, 0.5 = half as long. An enemy army near its base brings army and defence back while it stays. Suits a bot at the back of a team. Not measured.',
 		type    = 'number',
 		section = 'play',
 		def     = 0,
-		min     = 0,
-		max     = 1,
-		step    = 0.1,
-	},
-	{ -- number
-		key     = 'apex_nn_blend',
-		name    = 'Neural net influence',
-		desc    = 'How much the trained nets steer decisions. 1 = full (each net still only has the say it has earned). 0 = the hand-written rules alone -- use it if the nets misbehave.',
-		type    = 'number',
-		section = 'play',
-		def     = 1,
 		min     = 0,
 		max     = 1,
 		step    = 0.1,
@@ -119,14 +60,6 @@ local options = {
 		section = 'advanced',
 		def     = true,
 	},
-	{ -- bool
-		key     = 'comm_merge',
-		name    = 'Merge nearby allied bots',
-		desc    = 'Bots that start next to each other hand their commanders to one bot. Leave off.',
-		type    = 'bool',
-		section = 'advanced',
-		def     = false,
-	},
 	{ -- string
 		key     = 'disabledunits',
 		name    = 'Units this bot never builds',
@@ -134,27 +67,6 @@ local options = {
 		type    = 'string',
 		section = 'advanced',
 		def     = '',
-	},
-	{ -- bool
-		key     = 'game_config',
-		name    = 'Use this AI\'s game-side files',
-		desc    = 'Leave on. Off loads the copy shipped with the engine-side install instead.',
-		type    = 'bool',
-		section = 'advanced',
-		def     = true,
-	},
-	-- One profile on purpose: the easy/medium/hard/rush trees were stock BARb
-	-- variants carrying none of this AI's work.
-	{ -- list
-		key     = 'profile',
-		name    = 'Profile',
-		desc    = 'There is one: the full AI.',
-		type    = 'list',
-		section = 'advanced',
-		def     = 'standard',
-		items   = {
-			{ key = 'standard', name = 'Standard', desc = 'The full AI.' },
-		},
 	},
 }
 

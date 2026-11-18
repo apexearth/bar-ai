@@ -37,17 +37,14 @@ Some things to know:
 
 ### Lobby options
 
-Each Apex bot in a lobby has its own options. The defaults are what gets tested. The forced team
-strategies, the economy player and "Try strategies" are experimental, so expect odd games when you
-change them.
+Each Apex bot in a lobby has its own options. The defaults are the AI's strongest play and what
+gets tested.
 
 | Option | What it does |
 |---|---|
-| Team strategy | Let the AI choose (default), or force one: Normal, Mass T3, Nukes and missiles, Long-range artillery, Mass and push, Mass air, Rush, Greed, Deep greed, Turtle. |
-| Economy player | Makes this bot its team's economy player: economy first, army and defence once its base is threatened. 0 is off, 1 is a full economy phase. |
-| Neural net influence | 1 lets the trained nets steer (default). 0 plays the hand-written rules alone, if the nets misbehave. |
-| Try strategies | Picks the team strategy at random instead of letting the AI choose. Use on one bot per team. |
-| Advanced | Map-wide vision (a cheat), keeping out of allied bases, units this bot never builds, and a few more. |
+| Personalities | Off (default): the standard AI. On: each game the team secretly picks a style (balanced, artillery, snipers and stealth, air, T3, nukes or rush) and leans its building toward it, switching style if it keeps trading badly; each bot also gets its own random tastes. More varied games, measured somewhat weaker. Set it the same on every bot of a team. |
+| Economy player | 0 (default) is off. Above 0 makes this bot its team's economy player: economy first, army and defence held back until its economy is halfway to its goal, then brought in. 1 is a full economy phase, 0.5 half as long. An enemy army near its base brings army and defence back while it stays. Suits a bot at the back of a team. Not measured. |
+| Advanced | Map-wide vision (a cheat), keeping out of allied bases (leave on), and units this bot never builds. |
 
 ## What is different about it
 
@@ -123,11 +120,9 @@ nuke salvos, long-range plasma.
   cheat is an explicit lobby option, off by default.
 - It runs entirely on the host. Nothing is added to the game's synced code, so it works in normal
   multiplayer lobbies with no mod.
-- Apex players on one team share a team board. They agree on one team strategy per game (mass T3,
-  nukes and missiles, long-range artillery, mass air, rush, greed, turtle, or normal), co-build one
-  experimental gantry, share extractor upgrades, and give advanced constructors to allies who have
-  none. This team play is experimental: the strategies run, but whether each one plays well has
-  not been measured.
+- Apex players on one team share a team board. They co-build one experimental gantry, share
+  extractor upgrades, and give advanced constructors to allies who have none; with Personalities on
+  they also play one shared style. This team play is experimental and not measured.
 
 ### Measured, not guessed
 

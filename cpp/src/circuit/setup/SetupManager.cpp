@@ -700,7 +700,7 @@ bool CSetupManager::LoadConfig(const std::string& profile, const std::vector<std
 	OptionValues* options = circuit->GetSkirmishAI()->GetOptionValues();
 	const char* value = options->GetValueByKey("game_config");
 	delete options;
-	if ((value != nullptr) && StringToBool(value)) {
+	if ((value == nullptr) || StringToBool(value)) {  // absent = our game-side config (AIOptions.lua dropped game_config 11-18)
 		dirname = utils::GetAIDataGameDir(circuit->GetSkirmishAI(), "config");
 		config = ReadConfig(dirname, profile, parts, true);
 		if (config != nullptr) {

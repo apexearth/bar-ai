@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..daee85e4 100644
+index aeea9339..d90bf754 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -6,6 +6,7 @@
@@ -70,6 +70,15 @@ index aeea9339..daee85e4 100644
  
  namespace circuit {
  
+@@ -103,7 +127,7 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
+ 		, actionIterator(0)
+ 		, isCheating(false)
+ 		, isAllyAware(true)
+-		, isCommMerge(true)
++		, isCommMerge(false)
+ 		, isAllyBaseAvoid(true)
+ 		, isInitialized(false)
+ 		, isSavegame(false)
 @@ -134,6 +158,103 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
  	ownerTeamId = teamId = skirmishAI->GetTeamId();
  	team = std::unique_ptr<Team>(WrappTeam::GetInstance(skirmishAIId, teamId));
@@ -3563,7 +3572,17 @@ index aeea9339..daee85e4 100644
  			actionUnits[actionIterator] = actionUnits.back();
  			actionUnits.pop_back();
  			DeleteTeamUnit(unit);
-@@ -1751,6 +4709,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1696,7 +4654,8 @@ std::string CCircuitAI::InitOptions()
+ 	}
+ 
+ 	value = options->GetValueByKey("profile");
+-	std::string profile = ((value != nullptr) && strlen(value) > 0) ? value : "";
++	// Absent from the lobby (AIOptions.lua dropped the one-item list 11-18): the one profile there is.
++	std::string profile = ((value != nullptr) && strlen(value) > 0) ? value : "standard";
+ 
+ 	delete options;
+ 	return profile;
+@@ -1751,6 +4710,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -15866,7 +15885,7 @@ index f908a504..69fbae94 100644
  
  } // namespace circuit
 diff --git a/src/circuit/script/ScriptManager.cpp b/src/circuit/script/ScriptManager.cpp
-index 30164fa8..d2d4ed42 100644
+index 30164fa8..dd1fe4a9 100644
 --- a/src/circuit/script/ScriptManager.cpp
 +++ b/src/circuit/script/ScriptManager.cpp
 @@ -5,6 +5,7 @@
@@ -15892,7 +15911,17 @@ index 30164fa8..d2d4ed42 100644
  	// Create the script engine
  	engine = asCreateScriptEngine(ANGELSCRIPT_VERSION);
  	// Set the message callback to receive information on errors in human readable form.
-@@ -163,7 +172,7 @@ bool CScriptManager::Load(const char* modname, const std::string& subdir, const
+@@ -143,7 +152,8 @@ bool CScriptManager::Load(const char* modname, const std::string& subdir, const
+ 	OptionValues* options = circuit->GetSkirmishAI()->GetOptionValues();
+ 	const char* value = options->GetValueByKey("game_config");
+ 	delete options;
+-	bool isGameCfg = (value != nullptr) && StringToBool(value);
++	// Absent from the lobby (AIOptions.lua dropped it 11-18): our game-side files, the only ones that run this AI.
++	bool isGameCfg = (value == nullptr) || StringToBool(value);
+ 	if (isGameCfg) {
+ 		dirname = utils::GetAIDataGameDir(circuit->GetSkirmishAI(), "script") + subdir + SLASH;
+ 		isGameCfg = utils::FileExists(circuit->GetCallback(), dirname + filename);  // Locate game-side script
+@@ -163,7 +173,7 @@ bool CScriptManager::Load(const char* modname, const std::string& subdir, const
  		}
  	}
  
@@ -15901,7 +15930,7 @@ index 30164fa8..d2d4ed42 100644
  	r = builder.AddSectionFromFile((dirname + filename).c_str());
  	if (r < 0) {
  		// The builder wasn't able to load the string. Maybe some
-@@ -233,7 +242,7 @@ bool CScriptManager::Exec(asIScriptContext* ctx)
+@@ -233,7 +243,7 @@ bool CScriptManager::Exec(asIScriptContext* ctx)
  		if (r == asEXECUTION_EXCEPTION) {
  			// An exception occurred, let the script writer know what happened so it can be corrected.
  			std::lock_guard<spring::mutex> mlock(mtx);
@@ -15910,7 +15939,7 @@ index 30164fa8..d2d4ed42 100644
  						 "\n  Exception: %s"
  						 "\n  Function: %s"
  						 "\n  Line: %i",
-@@ -275,7 +284,7 @@ void CScriptManager::MessageCallback(const asSMessageInfo* msg, void* param)
+@@ -275,7 +285,7 @@ void CScriptManager::MessageCallback(const asSMessageInfo* msg, void* param)
  	} else if (msg->type == asMSGTYPE_INFORMATION) {
  		type = "INFO";
  	}
@@ -16045,7 +16074,7 @@ index 66b8c225..5d7f4c8b 100644
  	const ModOptions& GetModOptions() const { return modoptions; }
  
 diff --git a/src/circuit/setup/SetupManager.cpp b/src/circuit/setup/SetupManager.cpp
-index 3df26d7e..036614f1 100644
+index 3df26d7e..2c246266 100644
 --- a/src/circuit/setup/SetupManager.cpp
 +++ b/src/circuit/setup/SetupManager.cpp
 @@ -63,7 +63,66 @@ CSetupManager::CSetupManager(CCircuitAI* circuit, CSetupData* setupData)
@@ -16128,6 +16157,15 @@ index 3df26d7e..036614f1 100644
  void CSetupManager::ReadConfig()
  {
  	const Json::Value& root = GetConfig();
+@@ -636,7 +700,7 @@ bool CSetupManager::LoadConfig(const std::string& profile, const std::vector<std
+ 	OptionValues* options = circuit->GetSkirmishAI()->GetOptionValues();
+ 	const char* value = options->GetValueByKey("game_config");
+ 	delete options;
+-	if ((value != nullptr) && StringToBool(value)) {
++	if ((value == nullptr) || StringToBool(value)) {  // absent = our game-side config (AIOptions.lua dropped game_config 11-18)
+ 		dirname = utils::GetAIDataGameDir(circuit->GetSkirmishAI(), "config");
+ 		config = ReadConfig(dirname, profile, parts, true);
+ 		if (config != nullptr) {
 diff --git a/src/circuit/setup/SetupManager.h b/src/circuit/setup/SetupManager.h
 index 4863ac91..20800371 100644
 --- a/src/circuit/setup/SetupManager.h

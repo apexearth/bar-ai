@@ -10,6 +10,8 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
+| [ticks-flank-extractors](issues/ticks-flank-extractors.md) | 11-18 | stock escorts: ~3 flank extractors lost to Ticks by min 10 vs 1 for v0.5.16; home army idles; deferred to our own fight layer |
+| [modoption-overridden-by-lobby](issues/modoption-overridden-by-lobby.md) | 11-18 | 10-07..11-18 the lobby's nn_blend default beat `--modoption apex_nn_blend=0`: rules-only controls likely ran the nets |
 | [v0512-targets](issues/v0512-targets.md) | 11-16 | his v0.5.12 targets and the 11-15/16 asks, one row each: check, v0.5.14 vs v0.5.13, aim, status |
 | [v0514-review-deferred](issues/v0514-review-deferred.md) | 11-16 | eleven findings left for the next version (held gun idles after its kill, first-arrival weight jump, sensor spacing vs nanoframes, perf, near-done check counts volume) |
 | [no-rebuild-after-base-loss](issues/no-rebuild-after-base-loss.md) | 11-14 | open ground recovers in v0.5.14 (rebuild_bare: lab at 4.2 min); recent frozen seats are bases under an enemy army (row 114) |

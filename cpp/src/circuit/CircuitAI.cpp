@@ -127,7 +127,7 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 		, actionIterator(0)
 		, isCheating(false)
 		, isAllyAware(true)
-		, isCommMerge(true)
+		, isCommMerge(false)
 		, isAllyBaseAvoid(true)
 		, isInitialized(false)
 		, isSavegame(false)
@@ -4654,7 +4654,8 @@ std::string CCircuitAI::InitOptions()
 	}
 
 	value = options->GetValueByKey("profile");
-	std::string profile = ((value != nullptr) && strlen(value) > 0) ? value : "";
+	// Absent from the lobby (AIOptions.lua dropped the one-item list 11-18): the one profile there is.
+	std::string profile = ((value != nullptr) && strlen(value) > 0) ? value : "standard";
 
 	delete options;
 	return profile;

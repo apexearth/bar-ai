@@ -152,7 +152,8 @@ bool CScriptManager::Load(const char* modname, const std::string& subdir, const 
 	OptionValues* options = circuit->GetSkirmishAI()->GetOptionValues();
 	const char* value = options->GetValueByKey("game_config");
 	delete options;
-	bool isGameCfg = (value != nullptr) && StringToBool(value);
+	// Absent from the lobby (AIOptions.lua dropped it 11-18): our game-side files, the only ones that run this AI.
+	bool isGameCfg = (value == nullptr) || StringToBool(value);
 	if (isGameCfg) {
 		dirname = utils::GetAIDataGameDir(circuit->GetSkirmishAI(), "script") + subdir + SLASH;
 		isGameCfg = utils::FileExists(circuit->GetCallback(), dirname + filename);  // Locate game-side script

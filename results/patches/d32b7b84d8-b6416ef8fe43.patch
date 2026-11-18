@@ -1,0 +1,94 @@
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+index f547d896..09b17842 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+@@ -73,6 +73,7 @@ float MexCoverFloorM()
+ int   gMexEarlyAt = -999999;   // the screen term is per frame, not per site
+ float gMexEarly = 0.f;
+ bool  gMexEarlyOk = false;
++int   gMexScreenLogAt = 0;
+ 
+ float MexFloorFactor(const AIFloat3& in pos)
+ {
+@@ -81,7 +82,14 @@ float MexFloorFactor(const AIFloat3& in pos)
+ 		const float screen = ai.GetTunable("apex_leak_screen_m",
+ 				TUNE_LEAK_SCREEN_M);
+ 		gMexEarlyOk = (screen > 1.f);
+-		gMexEarly = gMexEarlyOk ? (1.f - ArmyValue() / screen) : 0.f;
++		const float screenM = (ai.GetTunable("apex_screen_home", TUNE_SCREEN_HOME) > 0.f)
++				? Military::HomeArmyM() : ArmyValue();
++		gMexEarly = gMexEarlyOk ? (1.f - screenM / screen) : 0.f;
++		if (ai.frame >= gMexScreenLogAt) {
++			gMexScreenLogAt = ai.frame + 30 * SECOND;
++			AiLog("apex: leak-screen t=" + ai.teamId + " army=" + int(ArmyValue())
++				+ " home=" + int(Military::HomeArmyM()) + " early=" + formatFloat(gMexEarly, "", 0, 2));
++		}
+ 	}
+ 	// The floor is the guns the spot earns (MexGunsWanted), in light-tower
+ 	// cover: one gun's worth at home, four at the doorstep. The old shape
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/guardposts.as b/ai/Unstable/game-side/script/standard/manager/military/guardposts.as
+index 319e81ff..20203a66 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/guardposts.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/guardposts.as
+@@ -94,6 +94,37 @@ void ArmyCoverSample()
+ 	}
+ }
+ 
++// The army that screens home: inside the leash and not retreating. Runs under
++// the stock army, where ArmyCoverSample does not.
++int   gHomeArmyAt = -999999;
++float gHomeArmyM = 0.f;
++float HomeArmyM()
++{
++	if (ai.frame < gHomeArmyAt + 2 * SECOND)
++		return gHomeArmyM;
++	gHomeArmyAt = ai.frame;
++	float homeM = 0.f;
++	if (Builder::gHomeSet) {
++		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
++		for (uint i = 0; i < gCombatId.length(); ++i) {
++			CCircuitUnit@ u = ai.GetTeamUnit(Id(gCombatId[i]));
++			if ((u is null) || (u.circuitDef is null))
++				continue;
++			const AIFloat3 p = u.GetPos(ai.frame);
++			if (!OnMap(p))
++				continue;
++			IUnitTask@ t = u.task;
++			if ((t !is null) && (t.GetType() == Task::Type::RETREAT))
++				continue;
++			const int d = int(u.circuitDef.id);
++			if (p.distance2D(Builder::gHomePos) <= leash + PostReach(d))
++				homeM += Catalog::gCostM[d];
++		}
++	}
++	gHomeArmyM = homeM;
++	return homeM;
++}
++
+ float UnitCoverAt(const AIFloat3& in pos)
+ {
+ 	float m = 0.f;
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index 808b088d..de27f6b3 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -484,6 +484,7 @@ const float TUNE_MEX_COVER_FLOOR = 1.0f;
+ // [metal] -- Fielded army value at which the mobile screen, not per-mex
+ //   towers, takes over answering leaks. See docs/tunables.md.
+ const float TUNE_LEAK_SCREEN_M = 800.f;
++const float TUNE_SCREEN_HOME = 1.f;   // docs/tunables.md
+ 
+ // [ratio] -- A choke-gate site's threat floor as a multiple of the arriving
+ //   wave: the gate keeps deepening until its cover OVERWHELMS the push, not
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 4ce3f26a..c9c8f500 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -578,6 +578,7 @@ local NAMES = {
+ 	"apex_wall_line_w",       -- want_protect.as: the front line's pull relative to the ring -- completing the line outbids deepening it (2.0)
+ 	"apex_rez_util",          -- production.as: share of a rez bot's work rate actually delivered; the fleet saturates when have x buildPower x this covers the wreck stream (0.25)
+ 	"apex_leak_screen_m",     -- want_protect.as: fielded army value at which the mobile screen takes over leak defence; below it every mex carries the full cover floor (800)
++	"apex_screen_home",       -- protect_target.as: the leak screen counts only army inside the home leash (1) or all army (0)
+ 	"apex_air_aa_split",      -- air/state.as: 1 = strike sizes vs enemy AA divided by their base count (one raid, one base), 0 = whole-map AA census
+ 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
+ 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)

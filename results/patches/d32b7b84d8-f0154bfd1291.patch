@@ -1,0 +1,352 @@
+diff --git a/ai/Unstable/engine-side/AIOptions.lua b/ai/Unstable/engine-side/AIOptions.lua
+index 71bd2f78..5b3bafc2 100644
+--- a/ai/Unstable/engine-side/AIOptions.lua
++++ b/ai/Unstable/engine-side/AIOptions.lua
+@@ -2,83 +2,35 @@
+ -- The options a lobby shows when you click into this bot. Format: the spring
+ -- source's AI/Skirmish/NullAI/data/AIOptions.lua. Every apex_* key reaches the
+ -- AI through GetTunable, which reads the value as a number -- a list's item
+--- keys are numbers for that reason, and a key that is not one ('auto') leaves
+--- the AI's own default.
++-- keys are numbers for that reason. A key not listed here plays the AI's own
++-- default (11-18: the team strategy lists, net influence, commander merge,
++-- game-side files and the one-item profile list were removed; the C++ falls
++-- back to game-side files on, merge off, profile 'standard').
+ --------------------------------------------------------------------------------
+ 
+ local options = {
+ 	{ -- section
+ 		key    = 'play',
+-		name   = 'Strategy and play style',
+-		desc   = 'How THIS bot plays. Each bot in the lobby has its own settings.',
++		name   = 'Play style',
++		desc   = 'How THIS bot plays. Each bot in the lobby has its own settings. The defaults are the strongest play.',
+ 		type   = 'section',
+ 	},
+-	{ -- list
+-		key     = 'apex_plan_force',
+-		name    = 'Team strategy',
+-		desc    = 'The way this bot\'s team means to win. "Let the AI choose" is normal play: the strategy net picks and changes it as the game goes. Any other choice holds that strategy all game -- set the same on every bot of the team.',
+-		type    = 'list',
+-		section = 'play',
+-		def     = 'auto',
+-		items   = {
+-			{ key = 'auto', name = 'Let the AI choose', desc = 'Normal play: the strategy net decides. It never picks Greed, Deep greed or Turtle on its own.' },
+-			{ key = '0', name = 'Normal', desc = 'Balanced economy and army, no special push.' },
+-			{ key = '1', name = 'Mass T3', desc = 'Gantries and experimental units, then a team push.' },
+-			{ key = '2', name = 'Nukes and missiles', desc = 'Nuke silos, tactical and EMP launchers, then a team push.' },
+-			{ key = '3', name = 'Long-range artillery', desc = 'LRPCs, Ragnarok and Starfall, then a team push.' },
+-			{ key = '4', name = 'Mass and push', desc = 'Normal production; the army gathers and pushes together.' },
+-			{ key = '5', name = 'Mass air', desc = 'Air plants early (the AI picks how many), air army, then a team push.' },
+-			{ key = '6', name = 'Rush', desc = 'Twice the army, early attacks together.' },
+-			{ key = '7', name = 'Greed', desc = 'Half the army while the enemy is seen sitting passive; the rest into economy. Only when chosen here.' },
+-			{ key = '9', name = 'Deep greed', desc = 'A quarter of the army while the enemy is seen passive. Risky. Only when chosen here.' },
+-			{ key = '8', name = 'Turtle', desc = 'Heavy defences and anti-air, no push. Only when chosen here.' },
+-		},
+-	},
+ 	{ -- list
+ 		key     = 'apex_persona',
+ 		name    = 'Personalities',
+-		desc    = 'On: the team plays a hidden strategy that can change during the game, and each bot has its own tastes (front bots like defences, back bots like air). More varied, measured somewhat weaker. Set it the same on every bot of a team.',
++		desc    = 'Off: the standard AI, its strongest play. On: each game the team secretly picks a style (balanced, artillery, snipers and stealth, air, T3, nukes or rush) and leans its building toward it, switching style if it keeps trading badly; each bot also gets its own random tastes. More varied games, measured somewhat weaker. Set it the same on every bot of a team.',
+ 		type    = 'list',
+ 		section = 'play',
+ 		def     = '0',
+ 		items   = {
+-			{ key = '0', name = 'Off', desc = 'Normal play (strongest).' },
+-			{ key = '1', name = 'On', desc = 'Hidden team strategies and per-bot tastes.' },
++			{ key = '0', name = 'Off', desc = 'The standard AI (strongest).' },
++			{ key = '1', name = 'On', desc = 'A hidden team style and per-bot tastes: more varied, somewhat weaker.' },
+ 		},
+ 	},
+-	{ -- list
+-		key     = 'apex_persona_force',
+-		name    = 'Team play style',
+-		desc    = 'With Personalities on: which strategy the team plays. "Surprise me" keeps it hidden and random, and the team may change strategy during the game. Any other choice holds that strategy all game.',
+-		type    = 'list',
+-		section = 'play',
+-		def     = 'auto',
+-		items   = {
+-			{ key = 'auto', name = 'Surprise me', desc = 'A hidden strategy the game allows, drawn at the start.' },
+-			{ key = '0', name = 'Normal', desc = 'No special strategy.' },
+-			{ key = '9', name = 'Rush', desc = 'Twice the army, early attacks together.' },
+-			{ key = '1', name = 'Artillery', desc = 'Long-range units and long-range plasma cannons.' },
+-			{ key = '2', name = 'Snipers and stealth', desc = 'Snipers and radar jammers.' },
+-			{ key = '3', name = 'Mass air', desc = 'Air plants and an air army.' },
+-			{ key = '5', name = 'T3 rush', desc = 'An early gantry and experimental units.' },
+-			{ key = '6', name = 'Nukes and missiles', desc = 'Nuke silos, tactical and EMP launchers.' },
+-		},
+-	},
+-	{ -- number
+-		key     = 'apex_plan_explore',
+-		name    = 'Try strategies (training)',
+-		desc    = '1 = this bot picks its team\'s strategy at random and plays everything else normally, so the AI learns which strategies work against people. Use it on one bot per team. Ignored when Team strategy is set. 0 = off.',
+-		type    = 'number',
+-		section = 'play',
+-		def     = 0,
+-		min     = 0,
+-		max     = 1,
+-		step    = 1,
+-	},
+ 	{ -- number
+ 		key     = 'apex_eco_force',
+ 		name    = 'Economy player',
+-		desc    = '0 = off. Above 0 makes THIS bot the team\'s economy player: it builds economy first, to that share of its economy target, before army and defence. 1 = full economy phase, 0.5 = half as long. A threat to its base brings army and defence back.',
++		desc    = '0 = off. Above 0 makes this bot its team\'s economy player: it builds economy first and holds back army and defence until its economy is halfway to its goal, then brings them in. 1 = a full economy phase, 0.5 = half as long. Enemies near its base end the phase early. Suits a bot at the back of a team. Not measured.',
+ 		type    = 'number',
+ 		section = 'play',
+ 		def     = 0,
+@@ -86,17 +38,6 @@ local options = {
+ 		max     = 1,
+ 		step    = 0.1,
+ 	},
+-	{ -- number
+-		key     = 'apex_nn_blend',
+-		name    = 'Neural net influence',
+-		desc    = 'How much the trained nets steer decisions. 1 = full (each net still only has the say it has earned). 0 = the hand-written rules alone -- use it if the nets misbehave.',
+-		type    = 'number',
+-		section = 'play',
+-		def     = 1,
+-		min     = 0,
+-		max     = 1,
+-		step    = 0.1,
+-	},
+ 	{ -- section
+ 		key    = 'advanced',
+ 		name   = 'Advanced',
+@@ -119,14 +60,6 @@ local options = {
+ 		section = 'advanced',
+ 		def     = true,
+ 	},
+-	{ -- bool
+-		key     = 'comm_merge',
+-		name    = 'Merge nearby allied bots',
+-		desc    = 'Bots that start next to each other hand their commanders to one bot. Leave off.',
+-		type    = 'bool',
+-		section = 'advanced',
+-		def     = false,
+-	},
+ 	{ -- string
+ 		key     = 'disabledunits',
+ 		name    = 'Units this bot never builds',
+@@ -135,27 +68,6 @@ local options = {
+ 		section = 'advanced',
+ 		def     = '',
+ 	},
+-	{ -- bool
+-		key     = 'game_config',
+-		name    = 'Use this AI\'s game-side files',
+-		desc    = 'Leave on. Off loads the copy shipped with the engine-side install instead.',
+-		type    = 'bool',
+-		section = 'advanced',
+-		def     = true,
+-	},
+-	-- One profile on purpose: the easy/medium/hard/rush trees were stock BARb
+-	-- variants carrying none of this AI's work.
+-	{ -- list
+-		key     = 'profile',
+-		name    = 'Profile',
+-		desc    = 'There is one: the full AI.',
+-		type    = 'list',
+-		section = 'advanced',
+-		def     = 'standard',
+-		items   = {
+-			{ key = 'standard', name = 'Standard', desc = 'The full AI.' },
+-		},
+-	},
+ }
+ 
+ return options
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/army.as b/ai/Unstable/game-side/script/standard/manager/brain/market/army.as
+index 586304c0..7fc17f16 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/army.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/army.as
+@@ -813,6 +813,16 @@ float LineSpend()
+ float gArmyVal = 0.f;
+ int gArmyValStamp = -1;
+ 
++// The army's defs, shared with Military::HomeArmyM so the two cannot drift.
++bool ArmyDef(int d)
++{
++	if (!Catalog::gMobile[d] || Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
++		return false;
++	// A unit that cannot hit the ground is the AA role's, not the army's:
++	// counted here it closed the army gap with Archangels.
++	return (Catalog::gSurfT[d] > 0.01f) && !ReachDead(d);
++}
++
+ float ArmyValue()
+ {
+ 	if (gArmyValStamp == gOwnStamp)
+@@ -822,14 +832,7 @@ float ArmyValue()
+ 	const array<int>@ _own4 = OwnedDefs();
+ 	for (uint _oi4 = 0; _oi4 < _own4.length(); ++_oi4) {
+ 		const uint d = uint(_own4[_oi4]);
+-		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
+-			continue;
+-		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
+-			|| Catalog::gKamikaze[int(d)])
+-			continue;
+-		// A unit that cannot hit the ground is the AA role's, not the army's:
+-		// counted here it closed the army gap with Archangels.
+-		if ((Catalog::gSurfT[int(d)] <= 0.01f) || ReachDead(int(d)))
++		if ((gOwnCount[d] <= 0) || !ArmyDef(int(d)))
+ 			continue;
+ 		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
+ 	}
+diff --git a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+index f547d896..6c243bd6 100644
+--- a/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
++++ b/ai/Unstable/game-side/script/standard/manager/brain/market/protect_target.as
+@@ -73,6 +73,7 @@ float MexCoverFloorM()
+ int   gMexEarlyAt = -999999;   // the screen term is per frame, not per site
+ float gMexEarly = 0.f;
+ bool  gMexEarlyOk = false;
++int   gMexScreenLogAt = 0;
+ 
+ float MexFloorFactor(const AIFloat3& in pos)
+ {
+@@ -81,7 +82,14 @@ float MexFloorFactor(const AIFloat3& in pos)
+ 		const float screen = ai.GetTunable("apex_leak_screen_m",
+ 				TUNE_LEAK_SCREEN_M);
+ 		gMexEarlyOk = (screen > 1.f);
+-		gMexEarly = gMexEarlyOk ? (1.f - ArmyValue() / screen) : 0.f;
++		const float screenM = (ai.GetTunable("apex_screen_home", TUNE_SCREEN_HOME) > 0.f)
++				? Military::HomeArmyM() : ArmyValue();
++		gMexEarly = gMexEarlyOk ? (1.f - screenM / screen) : 0.f;
++		if (ai.frame >= gMexScreenLogAt) {
++			gMexScreenLogAt = ai.frame + 30 * SECOND;
++			AiLog("apex: leak-screen t=" + ai.teamId + " army=" + int(ArmyValue())
++				+ " home=" + int(Military::HomeArmyM()) + " early=" + formatFloat(gMexEarly, "", 0, 2));
++		}
+ 	}
+ 	// The floor is the guns the spot earns (MexGunsWanted), in light-tower
+ 	// cover: one gun's worth at home, four at the doorstep. The old shape
+@@ -110,7 +118,7 @@ float MexFloorFactor(const AIFloat3& in pos)
+ }
+ 
+ // THE EARLY EXTRACTOR TILT IS CAPPED AT THE GUARD'S (his 11-17, Ticks taking extractors one light turret saves): until
+-// the fielded army reaches the leak screen (MexFloorFactor's early term), the nets' lift on an extractor is held to the
++// the whole fielded army reaches the leak screen (ArmyValue; the guard floor reads only the army at home), the nets' lift on an extractor is held to the
+ // best lift on a defence want in the same election, so base gains decide between the next extractor and the gun that
+ // keeps the last ones (measured: extractor nn x7-24 against turret x0.3-1, first guard after the first Tick kill).
+ int gMtcN = 0, gMtcCut = 0, gMtcLogAt = 0;
+diff --git a/ai/Unstable/game-side/script/standard/manager/military/guardposts.as b/ai/Unstable/game-side/script/standard/manager/military/guardposts.as
+index 319e81ff..338a3cab 100644
+--- a/ai/Unstable/game-side/script/standard/manager/military/guardposts.as
++++ b/ai/Unstable/game-side/script/standard/manager/military/guardposts.as
+@@ -94,6 +94,40 @@ void ArmyCoverSample()
+ 	}
+ }
+ 
++// The ground army that screens home: ArmyValue's defs, not fliers, inside the
++// leash and not retreating. Runs under the stock army, where ArmyCoverSample
++// does not.
++int   gHomeArmyAt = -999999;
++float gHomeArmyM = 0.f;
++float HomeArmyM()
++{
++	if (ai.frame < gHomeArmyAt + 2 * SECOND)
++		return gHomeArmyM;
++	gHomeArmyAt = ai.frame;
++	float homeM = 0.f;
++	if (Builder::gHomeSet) {
++		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
++		for (uint i = 0; i < gCombatId.length(); ++i) {
++			CCircuitUnit@ u = ai.GetTeamUnit(Id(gCombatId[i]));
++			if ((u is null) || (u.circuitDef is null))
++				continue;
++			const AIFloat3 p = u.GetPos(ai.frame);
++			if (!OnMap(p))
++				continue;
++			IUnitTask@ t = u.task;
++			if ((t !is null) && (t.GetType() == Task::Type::RETREAT))
++				continue;
++			const int d = int(u.circuitDef.id);
++			if (!Market::ArmyDef(d) || Catalog::gFlyer[d])
++				continue;
++			if (p.distance2D(Builder::gHomePos) <= leash + PostReach(d))
++				homeM += Catalog::gCostM[d];
++		}
++	}
++	gHomeArmyM = homeM;
++	return homeM;
++}
++
+ float UnitCoverAt(const AIFloat3& in pos)
+ {
+ 	float m = 0.f;
+diff --git a/ai/Unstable/game-side/script/standard/tunables.as b/ai/Unstable/game-side/script/standard/tunables.as
+index 808b088d..de27f6b3 100644
+--- a/ai/Unstable/game-side/script/standard/tunables.as
++++ b/ai/Unstable/game-side/script/standard/tunables.as
+@@ -484,6 +484,7 @@ const float TUNE_MEX_COVER_FLOOR = 1.0f;
+ // [metal] -- Fielded army value at which the mobile screen, not per-mex
+ //   towers, takes over answering leaks. See docs/tunables.md.
+ const float TUNE_LEAK_SCREEN_M = 800.f;
++const float TUNE_SCREEN_HOME = 1.f;   // docs/tunables.md
+ 
+ // [ratio] -- A choke-gate site's threat floor as a multiple of the arriving
+ //   wave: the gate keeps deepening until its cover OVERWHELMS the push, not
+diff --git a/cpp/src/circuit/CircuitAI.cpp b/cpp/src/circuit/CircuitAI.cpp
+index daee85e4..d90bf754 100644
+--- a/cpp/src/circuit/CircuitAI.cpp
++++ b/cpp/src/circuit/CircuitAI.cpp
+@@ -127,7 +127,7 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
+ 		, actionIterator(0)
+ 		, isCheating(false)
+ 		, isAllyAware(true)
+-		, isCommMerge(true)
++		, isCommMerge(false)
+ 		, isAllyBaseAvoid(true)
+ 		, isInitialized(false)
+ 		, isSavegame(false)
+@@ -4654,7 +4654,8 @@ std::string CCircuitAI::InitOptions()
+ 	}
+ 
+ 	value = options->GetValueByKey("profile");
+-	std::string profile = ((value != nullptr) && strlen(value) > 0) ? value : "";
++	// Absent from the lobby (AIOptions.lua dropped the one-item list 11-18): the one profile there is.
++	std::string profile = ((value != nullptr) && strlen(value) > 0) ? value : "standard";
+ 
+ 	delete options;
+ 	return profile;
+diff --git a/cpp/src/circuit/script/ScriptManager.cpp b/cpp/src/circuit/script/ScriptManager.cpp
+index d2d4ed42..dd1fe4a9 100644
+--- a/cpp/src/circuit/script/ScriptManager.cpp
++++ b/cpp/src/circuit/script/ScriptManager.cpp
+@@ -152,7 +152,8 @@ bool CScriptManager::Load(const char* modname, const std::string& subdir, const
+ 	OptionValues* options = circuit->GetSkirmishAI()->GetOptionValues();
+ 	const char* value = options->GetValueByKey("game_config");
+ 	delete options;
+-	bool isGameCfg = (value != nullptr) && StringToBool(value);
++	// Absent from the lobby (AIOptions.lua dropped it 11-18): our game-side files, the only ones that run this AI.
++	bool isGameCfg = (value == nullptr) || StringToBool(value);
+ 	if (isGameCfg) {
+ 		dirname = utils::GetAIDataGameDir(circuit->GetSkirmishAI(), "script") + subdir + SLASH;
+ 		isGameCfg = utils::FileExists(circuit->GetCallback(), dirname + filename);  // Locate game-side script
+diff --git a/cpp/src/circuit/setup/SetupManager.cpp b/cpp/src/circuit/setup/SetupManager.cpp
+index bc49fc6f..2c246266 100644
+--- a/cpp/src/circuit/setup/SetupManager.cpp
++++ b/cpp/src/circuit/setup/SetupManager.cpp
+@@ -700,7 +700,7 @@ bool CSetupManager::LoadConfig(const std::string& profile, const std::vector<std
+ 	OptionValues* options = circuit->GetSkirmishAI()->GetOptionValues();
+ 	const char* value = options->GetValueByKey("game_config");
+ 	delete options;
+-	if ((value != nullptr) && StringToBool(value)) {
++	if ((value == nullptr) || StringToBool(value)) {  // absent = our game-side config (AIOptions.lua dropped game_config 11-18)
+ 		dirname = utils::GetAIDataGameDir(circuit->GetSkirmishAI(), "config");
+ 		config = ReadConfig(dirname, profile, parts, true);
+ 		if (config != nullptr) {
+diff --git a/game-patches/gadgets/dev_tunables.lua b/game-patches/gadgets/dev_tunables.lua
+index 4ce3f26a..c9c8f500 100644
+--- a/game-patches/gadgets/dev_tunables.lua
++++ b/game-patches/gadgets/dev_tunables.lua
+@@ -578,6 +578,7 @@ local NAMES = {
+ 	"apex_wall_line_w",       -- want_protect.as: the front line's pull relative to the ring -- completing the line outbids deepening it (2.0)
+ 	"apex_rez_util",          -- production.as: share of a rez bot's work rate actually delivered; the fleet saturates when have x buildPower x this covers the wreck stream (0.25)
+ 	"apex_leak_screen_m",     -- want_protect.as: fielded army value at which the mobile screen takes over leak defence; below it every mex carries the full cover floor (800)
++	"apex_screen_home",       -- protect_target.as: the leak screen counts only army inside the home leash (1) or all army (0)
+ 	"apex_air_aa_split",      -- air/state.as: 1 = strike sizes vs enemy AA divided by their base count (one raid, one base), 0 = whole-map AA census
+ 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
+ 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)
