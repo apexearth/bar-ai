@@ -24,7 +24,7 @@ check gates a release only against the previous release. Re-run this table after
 | Constructor blob | `log peak cons per income` | -1.67 | -1.64 | - | level |
 | LRPC on encroaching armies | scenarios lrpc_army, lrpc_melee | 4 and 12 Hammers killed; own line spared | 0 and 0 | - | shipped in v0.5.14 |
 | Base lost while the pricer read covered | `base lost while 'covered' k` | 6.26 | 4.64 | 0 | FAIL pooled; rc10 alone 4.41 vs 4.40; the release side reads 4.5-8.0 by batch |
-| Releases v0.5.12 - v0.5.16 | git tags, GitHub releases | - | - | - | released; v0.5.16 (11-17) passed rc16 vs v0.5.15, won or ahead 14 of 20, contract PASS recorded, fresh review clean; v0.5.15 (engine 2026.09.03) checked after shipping: rv2/rv3/rv5/rv6, 80 games vs v0.5.14, won or ahead 0.56 vs 0.50, nothing that repeats |
+| Releases v0.5.12 - v0.5.17 | git tags, GitHub releases | - | - | - | released; v0.5.17 (11-18, 05f05db0): rc19 vs v0.5.16 won or ahead 11 of 20 (rc17, same game code, 17 of 20), contract PASS recorded, fresh review findings fixed, CI green; v0.5.16 (11-17) passed rc16 vs v0.5.15, won or ahead 14 of 20, contract PASS recorded, fresh review clean; v0.5.15 (engine 2026.09.03) checked after shipping: rv2/rv3/rv5/rv6, 80 games vs v0.5.14, won or ahead 0.56 vs 0.50, nothing that repeats |
 
 ## The 11-16 asks (vs WRDistilled), as of 11-17
 
@@ -33,8 +33,9 @@ check gates a release only against the previous release. Re-run this table after
 | Our AI on BAR's new engine | lobby shows Apex | done: v0.5.14 and v0.5.15 installed and run on recoil_2026.09.03 |
 | One chat line naming each Apex AI by its game name | `/say` at 3 s | in v0.5.15; one line per host in v0.5.16 (smoke: "Shellshocker is Apex v0.5.16"); his live game unconfirmed |
 | The commander not caught out on their half | `com minutes on their half`, `com lost on their half` | COM_UNSEEN measured and removed; v0.5.15 level with v0.5.14 over 80 games; the extractor-claim walk past the middle is open (validation 117) |
-| Extractors not lost to Ticks | `mex lost to ticks by 10 min`, scenario ticks_mexes | v0.5.16: early extractor net lift capped at the guard's, per-mex floor not zeroed before the first raid, bare rate for uncovered guards; vs WRDistilled 16 pairs, lost to Ticks by 10 min 37 vs 70 (t=-4.66). Open: losses where no guard was anticipated (validation 118) |
-| Raid their extractors | `their mex killed /10min` | his choice (spam aimed at their economy) built and measured, no effect over 32 pairs (17.2 vs 16.0), removed; open with no tested lever (validation 119) |
+| Extractors not lost to Ticks | `mex lost to ticks by 10 min`, scenario ticks_mexes | v0.5.16: early extractor net lift capped at the guard's, per-mex floor not zeroed before the first raid, bare rate for uncovered guards; vs WRDistilled 16 pairs, lost to Ticks by 10 min 37 vs 70 (t=-4.66). Open: losses where no guard was anticipated (validation 118). v0.5.17's stock escorts raise it vs BARb (2.40 vs 1.00 a game, contract FAIL); his 11-18 call: shipped, deferred to our own fight layer (issues/ticks-flank-extractors.md) |
+| Raid their extractors | `their mex killed /10min` | his choice (spam aimed at their economy) built and measured, no effect over 32 pairs (17.2 vs 16.0), removed. v0.5.17: stock escorts free the raiders; vs BARb hard, enemy extractors killed by raiders after minute 12 37 vs 13 (20 seeds), income at 20 263 vs 228 (validation 119) |
+| Lobby options a player can understand (his 11-18, after a player's Greed question) | AIOptions.lua | v0.5.17: only Personalities, Economy player and Advanced remain, each described plainly; C++ fallbacks keep the removed ones at their old defaults |
 | Heavy-army strategy: medium army behind defences, resbots eat the reclaim, win the trade | `lost per killed`, `reclaimed / killed`, `their army / ours` | resbot cap removed in v0.5.16 on his rule (48 pairs: won or ahead 21 vs 16, lost per killed 1.06 vs 1.25) |
 | No swearing in files | grep | done (code, tools, docs reworded) |
 | Tests on Comet Catcher 1v1, both +50 | batch lists | done since 11-16 |
