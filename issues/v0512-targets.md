@@ -23,7 +23,7 @@ check gates a release only against the previous release. Re-run this table after
 | Stuck pushes into wrecks | `army stuck /10min/1k army` | 2.01 | 2.52 | 0 | better |
 | Constructor blob | `log peak cons per income` | -1.67 | -1.64 | - | level |
 | LRPC on encroaching armies | scenarios lrpc_army, lrpc_melee | 4 and 12 Hammers killed; own line spared | 0 and 0 | - | shipped in v0.5.14 |
-| Base lost while the pricer read covered | `base lost while 'covered' k` | 6.26 | 4.64 | 0 | FAIL pooled; rc10 alone 4.41 vs 4.40; the release side reads 4.5-8.0 by batch |
+| Base lost while the pricer read covered | `base lost /covered min` (enemy kills of finished structures on our half, per minute read covered; median seat) | 57 (rc9+rc10) | 49 | 0 | 11-18: the old per-game total counted our own reclaims and cancelled frames and grew with time spent covered; per covered minute v0.5.17 loses 743 vs v0.5.16's 1,011 (rc17+rc19 pooled), medians within noise (v0.5.16 alone 120-728 by batch); losses are mostly late army pushes and air, not spam |
 | Releases v0.5.12 - v0.5.17 | git tags, GitHub releases | - | - | - | released; v0.5.17 (11-18, 05f05db0): rc19 vs v0.5.16 won or ahead 11 of 20 (rc17, same game code, 17 of 20), contract PASS recorded, fresh review findings fixed, CI green; v0.5.16 (11-17) passed rc16 vs v0.5.15, won or ahead 14 of 20, contract PASS recorded, fresh review clean; v0.5.15 (engine 2026.09.03) checked after shipping: rv2/rv3/rv5/rv6, 80 games vs v0.5.14, won or ahead 0.56 vs 0.50, nothing that repeats |
 
 ## The 11-16 asks (vs WRDistilled), as of 11-17
