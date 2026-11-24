@@ -88,9 +88,21 @@ text: `git log -p TODO.md`.
 
 ## Move the hot script into C++ (his 11-03: "we've just always had performance issues")
 
-Wanted eventually, not this week. In his 16-seat 8v8 (v0.5.05, 1x) the scripts were ~85% of AI time (19.5 of
-23 s per seat per game-minute) and 0.76 ms per AI per frame against the 0.417 ms budget. The builder election
-leads (hk.maketask.builder 903 ms, bld.pump 460, bld.decide 375 in one window); want.protect, want.mexup,
-want.mex next. AngelScript has no JIT here. The plan: the election's inner pricing loop as C++ bindings, the
-rules staying in script (hot-swappable deploys, tunables, nets); proven identical on fixed seeds by the decide
-lines; measured with frametime.py. Not Rust: CircuitAI and the script bindings are C++.
+NOW (his 11-24: "I want to see some performance improvements ... I'm lagging more than pretty much any other
+player"; a dedicated session). Every AI seat runs on the HOST's machine, so his PC carries all of them. Measure on
+his kind of game, not a light one: a heavy late 8v8 at 1x with many constructors and units (the 11-24 4v4 Red Comet
+read of ~6% of frame time is not representative; the 8v8 numbers below are). Targets: the election's 13 ms spikes
+(hk.maketask.builder max 12.9 ms) and its mean, then want.protect / mexup / mex. Instruments: apex_perf=1 lines,
+tools/frametime.py, tools/hitch.py, tools/asprof.py (apex_asprof=4); skill ai-performance, cpp-dll.
+
+Measured 11-24 (8v8 Greenest Fields +100, line profile results/perf/): the pricing loop is NOT hot (ValueOf ~45 ms
+inclusive in 19 late minutes of 8 AIs). The profile is flat: no function over ~4% self. Done and measured: the
+collector once a frame, no line cues, the election re-sum, LiftFits/Def caches (-4% to -13% AI time, mirror games).
+Worst minute was 0.593 ms per AI per frame before; still over 0.417. Next, by measured cost in the late game:
+tight script loops to move into C++ or restructure (AatCoverRefresh/ProtClassOf over the whole ledger on every
+stamp, ComNearest, PfCoverRing, SplashRefresh, FoeMemStep, NaPathAA, RiskFill); native calls the script makes
+often (EnemiesToReclaimNear 22 us a cell, FacExitGap 1.9 ms, EnemyReachSlack 51 us, nano CreateAssistTask
+~60 us, 40% of it the area query); the indivisible proposer recomputes behind the 10-15 ms spikes (mc.protect,
+mc.plant, mc.sense/sense.jam); a 179 ms factory site search (site-fail r=1600). Tried and dropped: the bundled
+AngelScript JIT (its native calls break on MinGW x64, and once routed through AngelScript it crashed in its own
+code after 3.6 min, with no clear gain).

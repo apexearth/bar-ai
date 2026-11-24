@@ -551,11 +551,19 @@ int WallDef()
 	return gWallDef;
 }
 
+array<CCircuitDef@> gDefOf;   // the engine's defs never change; asked millions of times a game
 CCircuitDef@ Def(int defId)
 {
 	if (!ValidId(defId))
 		return null;
-	return ai.GetCircuitDef(Id(defId));
+	if (gDefOf.length() <= uint(defId))
+		gDefOf.resize(uint(gDefCount + 1));
+	CCircuitDef@ d = gDefOf[uint(defId)];
+	if (d is null) {
+		@d = ai.GetCircuitDef(Id(defId));
+		@gDefOf[uint(defId)] = d;
+	}
+	return d;
 }
 
 // Def ids the given builder def can build (empty for non-builders).

@@ -47,6 +47,8 @@ lines it produces, one per game-minute per player:
 | `apex: perf work (...) qavg= qmax=` | the SHARED worker pool (threat/influence/enemy rebuilds, every path query); NOT in aiMs, comes out of the engine's sim thread; `wait=` is queue latency |
 | `apex: perf sweep <helper>=elements/calls` | how much WORK the O(n) helpers did |
 | `apex: perf map t= ...` | element counts of the per-ally-team map rebuild |
+| `apex: asgc ...` | the script collector, once a minute (ScriptManager::GcAfterExec) |
+| `apex: asprof ...` | only with `--modoption apex_asprof=4`: per-line script time; read with `python tools/asprof.py <run>` (callback overhead ~95 ns a line is taken off; inclusive is raw) |
 
 **The batching signature: a section whose `maxMs` is many times its `avgUs`.**
 That section does N things in one frame. Lowering its frequency makes the

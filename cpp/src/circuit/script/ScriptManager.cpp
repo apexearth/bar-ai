@@ -6,6 +6,8 @@
  */
 
 #include <mutex>
+#include <chrono>
+#include <algorithm>
 #include "script/ScriptManager.h"
 #ifdef DEBUG_VIS
 #include "script/Script.h"
@@ -71,7 +73,12 @@ void CScriptManager::Init()
 	r = engine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS,             false); ASSERT(r >= 0);  // Default: false
 	r = engine->SetEngineProperty(asEP_ALLOW_MULTILINE_STRINGS,             true); ASSERT(r >= 0);  //** Default: false
 	r = engine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES,        false); ASSERT(r >= 0);  // Default: false
-	r = engine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES,            false); ASSERT(r >= 0);  // Default: false
+	{
+		// A line cue is a SUSPEND before every statement: nothing here suspends a script, and the line table that
+		// names an exception's line is built either way. Only the line callback (apex_asprof) needs them.
+		const bool cues = circuit->GetTunable("apex_asprof", 0.f) > 0.f;
+		r = engine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES, !cues); ASSERT(r >= 0);  // Default: false
+	}
 	r = engine->SetEngineProperty(asEP_INIT_GLOBAL_VARS_AFTER_BUILD,        true); ASSERT(r >= 0);  // Default: true
 	r = engine->SetEngineProperty(asEP_REQUIRE_ENUM_SCOPE,                 false); ASSERT(r >= 0);  // Default: false
 	r = engine->SetEngineProperty(asEP_SCRIPT_SCANNER,                         1); ASSERT(r >= 0);  // Default: 1 (UTF8)  // 0 - ASCII, 1 - UTF8
@@ -237,7 +244,72 @@ bool CScriptManager::Exec(asIScriptContext* ctx)
 	ZoneValue(ctx->GetFunction()->GetId());
 #endif
 
+	if ((profK < 0) && (circuit->GetLastFrame() > 0)) {
+		SetupFromTunables();
+	}
+	if (gcOwn && (execDepth++ == 0)) {
+		engine->GetGCStatistics(&gcPre);
+		if (circuit->GetLastFrame() >= miscNextDump) {
+			if (miscNextDump > 0) {
+				GcDump();
+			}
+			miscNextDump = circuit->GetLastFrame() + 1800;
+		}
+	}
+	bool profThis = false;
+	if (profK > 0) {
+		std::lock_guard<spring::mutex> plock(profMtx);
+		if (profDepth == 0) {
+			if (circuit->GetLastFrame() >= profNextDump) {
+				if (profNextDump > 0) {
+					ProfDump();
+				}
+				profNextDump = circuit->GetLastFrame() + 1800;
+			}
+			profActive = ((profTick++ % (unsigned)profK) == 0);
+		}
+		++profDepth;
+		profThis = profActive;
+		if (profThis) {
+			const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					std::chrono::steady_clock::now().time_since_epoch()).count();
+			if (!profCtxStack.empty()) {
+				ProfCharge(profCtxStack.back(), now);
+			}
+			profCtxStack.push_back(ctx);
+			ProfRun& run = profRun[ctx];
+			run.fn = nullptr;
+			run.stack.clear();
+			run.lastNs = now;
+			ctx->SetLineCallback(asFUNCTION(CScriptManager::ProfLineCb), this, asCALL_CDECL);
+			++profExecs;
+		} else {
+			ctx->ClearLineCallback();
+		}
+	}
+
 	int r = ctx->Execute();
+
+	if (profK > 0) {
+		std::lock_guard<spring::mutex> plock(profMtx);
+		if (profThis) {
+			const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					std::chrono::steady_clock::now().time_since_epoch()).count();
+			ProfCharge(ctx, now);
+			profRun[ctx].fn = nullptr;
+			ctx->ClearLineCallback();
+			if (!profCtxStack.empty()) {
+				profCtxStack.pop_back();
+			}
+			if (!profCtxStack.empty()) {
+				profRun[profCtxStack.back()].lastNs = now;
+			}
+		}
+		--profDepth;
+	}
+	if (gcOwn && (--execDepth == 0)) {
+		GcAfterExec();
+	}
 	if (r != asEXECUTION_FINISHED) {
 		// The execution didn't complete as expected. Determine what happened.
 		if (r == asEXECUTION_EXCEPTION) {
@@ -254,6 +326,176 @@ bool CScriptManager::Exec(asIScriptContext* ctx)
 		return false;
 	}
 	return true;
+}
+
+void CScriptManager::SetupFromTunables()
+{
+	profK = std::max(0, (int)circuit->GetTunable("apex_asprof", 0.f));
+	gcOwn = true;
+	engine->SetEngineProperty(asEP_AUTO_GARBAGE_COLLECT, false);
+	circuit->LOG("apex: asvm asprof=%d", profK);
+}
+
+// AngelScript's collector steps after every Execute even when nothing new was made (441k steps in 19 min of an 8v8
+// for ~650 new objects a minute an AI, 3.3 s). Here: once a frame, the one step each new object is owed (its own
+// rule), and one idle step a second. A second's steps batched into one call cost a 14 ms frame, so they are not.
+void CScriptManager::GcAfterExec()
+{
+	++execCalls;
+	asUINT cur = 0;
+	engine->GetGCStatistics(&cur);
+	gcPendingNew += (cur > gcPre) ? (cur - gcPre) : 0;
+	const int frame = circuit->GetLastFrame();
+	if (frame == gcLastFrame) {
+		return;
+	}
+	gcLastFrame = frame;
+	asUINT steps;
+	if (gcPendingNew > 0) {
+		steps = gcPendingNew;
+	} else if ((cur > 0) && (frame - gcIdleFrame >= 30)) {
+		steps = 1;
+	} else {
+		return;
+	}
+	gcIdleFrame = frame;
+	gcPendingNew = 0;
+	const auto t0 = std::chrono::steady_clock::now();
+	engine->GarbageCollect(asGC_ONE_STEP | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE, steps);
+	const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+	gcNs += ns;
+	gcMaxNs = std::max(gcMaxNs, ns);
+	gcSteps += steps;
+	++gcCalls;
+}
+
+void CScriptManager::GcDump()
+{
+	asUINT size = 0, destroyed = 0, detected = 0, newObjs = 0, newDestroyed = 0;
+	engine->GetGCStatistics(&size, &destroyed, &detected, &newObjs, &newDestroyed);
+	circuit->LOG("apex: asgc execs=%llu gcCalls=%llu steps=%llu gcMs=%.1f maxMs=%.2f size=%u destroyed=%u detected=%u new=%u newDestroyed=%u",
+			(unsigned long long)execCalls, (unsigned long long)gcCalls, (unsigned long long)gcSteps,
+			gcNs / 1e6, gcMaxNs / 1e6, size, destroyed, detected, newObjs, newDestroyed);
+	gcNs = gcMaxNs = gcSteps = gcCalls = execCalls = 0;
+}
+
+void CScriptManager::ProfCharge(asIScriptContext* ctx, int64_t now)
+{
+	ProfRun& run = profRun[ctx];
+	const int64_t d = now - run.lastNs;
+	run.lastNs = now;
+	if ((run.fn == nullptr) || (d <= 0)) {
+		return;
+	}
+	const uint64_t key = ((uint64_t)(uint32_t)run.fn->GetId() << 20) | (uint64_t)(run.line & 0xFFFFF);
+	ProfAcc& a = profLine[key];
+	if (a.hits == 0) {
+		profLineOf[key] = {run.fn, run.sec};
+	}
+	a.ns += d;
+	++a.hits;
+	ProfAcc& f = profSelf[run.fn];
+	f.ns += d;
+	++f.hits;
+	for (size_t i = 0; i < run.stack.size(); ++i) {
+		asIScriptFunction* fn = run.stack[i];
+		bool dup = false;
+		for (size_t j = 0; j < i; ++j) {
+			if (run.stack[j] == fn) {
+				dup = true;
+				break;
+			}
+		}
+		if (!dup) {
+			profIncl[fn].ns += d;
+		}
+	}
+	profTotalNs += d;
+}
+
+void CScriptManager::ProfLineCb(asIScriptContext* ctx, void* param)
+{
+	CScriptManager* mgr = static_cast<CScriptManager*>(param);
+	const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count();
+	std::lock_guard<spring::mutex> plock(mgr->profMtx);
+	mgr->ProfCharge(ctx, now);
+	ProfRun& run = mgr->profRun[ctx];
+	const char* sec = nullptr;
+	run.line = ctx->GetLineNumber(0, nullptr, &sec);
+	run.sec = sec;
+	asIScriptFunction* top = ctx->GetFunction(0);
+	if (run.fn != top) {
+		// Entering a function: it was called once more.
+		if ((run.stack.empty()) || (ctx->GetCallstackSize() > run.stack.size())) {
+			++mgr->profIncl[top].hits;
+		}
+	}
+	run.fn = top;
+	const asUINT n = ctx->GetCallstackSize();
+	run.stack.resize(n);
+	for (asUINT i = 0; i < n; ++i) {
+		run.stack[i] = ctx->GetFunction(i);
+	}
+	run.lastNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+void CScriptManager::ProfDump()
+{
+	auto fnName = [](asIScriptFunction* fn) {
+		std::string s;
+		const char* ns = fn->GetNamespace();
+		if ((ns != nullptr) && (*ns != '\0')) {
+			s.append(ns).append("::");
+		}
+		const char* obj = fn->GetObjectName();
+		if ((obj != nullptr) && (*obj != '\0')) {
+			s.append(obj).append(".");
+		}
+		s.append(fn->GetName());
+		return s;
+	};
+	auto baseName = [](const char* p) {
+		if (p == nullptr) {
+			return std::string("?");
+		}
+		const char* b = p;
+		for (const char* c = p; *c != '\0'; ++c) {
+			if ((*c == '/') || (*c == '\\')) {
+				b = c + 1;
+			}
+		}
+		return std::string(b);
+	};
+	const int TOP = 40;
+	circuit->LOG("apex: asprof win k=%d execs=%llu totalMs=%.1f frame=%d", profK,
+			(unsigned long long)profExecs, profTotalNs / 1e6, circuit->GetLastFrame());
+	{
+		std::vector<std::pair<uint64_t, ProfAcc>> v(profLine.begin(), profLine.end());
+		std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second.ns > b.second.ns; });
+		for (int i = 0; (i < TOP) && (i < (int)v.size()); ++i) {
+			const auto& of = profLineOf[v[i].first];
+			circuit->LOG("apex: asprof line %.2f %llu %s:%u %s", v[i].second.ns / 1e6,
+					(unsigned long long)v[i].second.hits, baseName(of.second).c_str(),
+					(unsigned)(v[i].first & 0xFFFFF), fnName(of.first).c_str());
+		}
+	}
+	for (int pass = 0; pass < 2; ++pass) {
+		auto& m = (pass == 0) ? profSelf : profIncl;
+		std::vector<std::pair<asIScriptFunction*, ProfAcc>> v(m.begin(), m.end());
+		std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second.ns > b.second.ns; });
+		for (int i = 0; (i < TOP) && (i < (int)v.size()); ++i) {
+			circuit->LOG("apex: asprof %s %.2f %llu %s", (pass == 0) ? "self" : "incl", v[i].second.ns / 1e6,
+					(unsigned long long)v[i].second.hits, fnName(v[i].first).c_str());
+		}
+	}
+	profLine.clear();
+	profLineOf.clear();
+	profSelf.clear();
+	profIncl.clear();
+	profTotalNs = 0;
+	profExecs = 0;
 }
 
 asIScriptContext* CScriptManager::ProvideContext(asIScriptEngine* engine, void* param)

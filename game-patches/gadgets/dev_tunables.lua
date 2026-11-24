@@ -299,6 +299,7 @@ local NAMES = {
 	"apex_nuke_trade",
 	"apex_oneshot_bomber_scale",
 	"apex_perf",
+	"apex_asprof",
 	"apex_porc_obsolete_ratio",
 	"apex_porc_obsolete_secs",
 	"apex_push_boost",

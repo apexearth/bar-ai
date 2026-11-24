@@ -68,6 +68,12 @@ is on its page; uncommitted code is in `patches/`. This index is generated (`too
 | 2026-11-16 | [lrpc_melee + lrpc_army after review 2: director holds guns, own-fire guard](lrpc/2026-11-16-lrpc-melee-lrpc-army-after-review-2-director-holds-guns-own-.md) | 6 | 0-0 | 0-0 | - | lrpc_army (on): 4 and 12 Hammers killed (was 10/6/12/15). lrpc_melee: Warriors lost 12 and 7 with the battery on, 12 and 12 off; Hammers all dead in 62/45 s on, 82/70 s off. No sign of own fire. 2+2 runs: direction. |
 | 2026-11-16 | [lrpc_army: the battery on an encroaching army (focus on vs off)](lrpc/2026-11-16-lrpc-army-the-battery-on-an-encroaching-army-focus-on-vs-off.md) | 4 | 0-0 | 0-0 | - | After the fix: focus on killed 5 and 12 of 16 Hammers, focus off 0 and 0 (fusions 8/8 both). The cannons still die: 16 Hammers vs 4 unescorted guns. 2+2 runs: direction, needs a long game. |
 
+## perf
+
+| date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
+|---|---|---|---|---|---|---|
+| 2026-11-24 | [Hot script: identical-behaviour VM and script fixes (mirror 8v8s)](perf/2026-11-24-hot-script-identical-behaviour-vm-and-script-fixes-mirror-8v.md) | 2 | 1-1 | 0-0 | x0.98 | AI time -4.2% (game 1) and -13.0% (game 2) over minutes 2-17, where both sides field comparable armies; script-only (main hook) -10.6% / -3.0%. Later minutes track whichever side is winning. Collector: 3.3 s -> 0.28 s in 19 min of 8 AIs. Verdict still FAIL (worst minute ~0.55 ms est. vs 0.417) |
+
 ## randomizer
 
 | date | batch | games | W-L | timeouts w-l | income at 20 | verdict |

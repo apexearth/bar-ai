@@ -600,10 +600,18 @@ double ElecWindow()
 {
 	return (gRevisitEma > 1.f) ? double(gRevisitEma) : 1.0;
 }
+// ElecRemainUs for each next step, summed in its order: the queue is hundreds of sets late in a big game.
+array<double> gRemainAt(uint(ELEC_STEPS) + 1, 0.0);
 void ElecDemandRefresh()
 {
 	const double w = ElecWindow();
 	gElecDemandUs = 0.0;
+	for (int s = 0; s < ELEC_STEPS; ++s) {
+		double r = 0.0;
+		for (int t = s; t < ELEC_STEPS; ++t)
+			r += gStepEma[uint(t)];
+		gRemainAt[uint(s)] = r;
+	}
 	for (uint q = 0; q < gElecQ.length(); ++q) {
 		const int uid = gElecQ[q];
 		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length()))) ? gElecOf[uid] : null;
@@ -612,7 +620,7 @@ void ElecDemandRefresh()
 		double left = w - double(ai.frame - st.startFrame);
 		if (left < 1.0)
 			left = 1.0;
-		gElecDemandUs += ElecRemainUs(st) / left;
+		gElecDemandUs += gRemainAt[uint((st.step < ELEC_STEPS) ? st.step : ELEC_STEPS)] / left;
 	}
 }
 double ElecSliceUs()

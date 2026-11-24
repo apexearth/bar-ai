@@ -7,7 +7,8 @@ namespace Market {
 
 array<int> gLiftTurretDefs;
 bool gLiftDefsReady = false;
-dictionary gLiftFit;
+// CanLift answers per (transport def, cargo def): a row per transport, -1 unasked.
+array<array<int8>@> gLiftFitRow;
 
 void LiftDefsInit()
 {
@@ -24,12 +25,21 @@ void LiftDefsInit()
 
 bool LiftFits(int t, int c)
 {
-	const string k = formatInt(t * 65536 + c);
-	int64 got;
-	if (gLiftFit.get(k, got))
+	const uint n = uint(Catalog::gDefCount + 1);
+	if ((t < 0) || (c < 0) || (uint(t) >= n) || (uint(c) >= n))
+		return Catalog::Def(t).CanLift(Catalog::Def(c));
+	if (gLiftFitRow.length() < n)
+		gLiftFitRow.resize(n);
+	array<int8>@ row = gLiftFitRow[uint(t)];
+	if (row is null) {
+		@row = array<int8>(n, -1);
+		@gLiftFitRow[uint(t)] = row;
+	}
+	const int8 got = row[uint(c)];
+	if (got >= 0)
 		return got != 0;
 	const bool ok = Catalog::Def(t).CanLift(Catalog::Def(c));
-	gLiftFit.set(k, ok ? int64(1) : int64(0));
+	row[uint(c)] = ok ? 1 : 0;
 	return ok;
 }
 
