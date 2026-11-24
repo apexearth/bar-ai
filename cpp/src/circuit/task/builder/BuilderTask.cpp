@@ -643,6 +643,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	// calling it twice makes the second search step around the first call's own
 	// reservation.
 	float searchRadius = 200 * SQUARE_SIZE;
+	bool offRefused = false;
 	if (onGrid) {
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		const float slot = std::max(buildDef->GetFootX(), buildDef->GetFootZ())
@@ -681,10 +682,97 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		bool searched = false;
 		int budget = LATTICE_PROBES;
 		int ringTaken = 0, ringExit = 0;
-		// apex_flush_place (his 10-18: "build up down left right off one of the existing types when
-		// you can"): the sites flush against an edge of one of our buildings, aligned to one of its
-		// corners, nearest the ask first. The lattice rings remain the fallback.
-		if (circuit->GetTunable("apex_flush_place", 1.f) > 0.f) {
+		const float flushMode = circuit->GetTunable("apex_flush_place", 2.f);
+		// apex_flush_place 2 (his 11-22: "you can't be in situations where you're off by one"; a 4x4 that does not
+		// fit its spot is not moved one off, something smaller goes there): only the def's own lattice cells, ranked
+		// first by the slivers they would leave (a 1-2 square gap to one of our buildings: ground nothing fills), then
+		// by the edge they share with our buildings (fill the corner), then nearest the ask.
+		if (flushMode >= 1.5f) {
+			const bool ew = (facing & 1) != 0;
+			const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
+			const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
+			struct Rect { float x, z, hx, hz; bool fixed; };
+			std::vector<Rect> rects;
+			const auto& ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(snapped, FLUSH_REACH, false);
+			for (ICoreUnit::Id id : ids) {
+				CCircuitUnit* nu = circuit->GetTeamUnit(id);
+				if ((nu == nullptr) || nu->GetCircuitDef()->IsMobile()) {
+					continue;
+				}
+				CCircuitDef* nd = nu->GetCircuitDef();
+				const bool nEw = (nu->GetUnit()->GetBuildingFacing() & 1) != 0;
+				const AIFloat3 np = nu->GetPos(frame);
+				rects.push_back({np.x, np.z, float(nEw ? nd->GetFootZ() : nd->GetFootX()) * SQUARE_SIZE,
+						float(nEw ? nd->GetFootX() : nd->GetFootZ()) * SQUARE_SIZE, nd->IsMex() || nd->IsNeedGeo()});
+			}
+			constexpr float SLIVER = SQUARE_SIZE * 2 * 3;  // under three build squares
+			// near first: the cell asked and its neighbours, then two rings out, then the rest (11-22 watch: ranked by
+			// contact alone, nano turrets stood a median 258 from their asked cell, out of their plant's reach)
+			struct Cand { int tier, slivers; float contact, sq; AIFloat3 c; };
+			std::vector<Cand> cands;
+			for (int ring = 0; ring <= LATTICE_RINGS; ++ring) {
+				for (int j = -ring; j <= ring; ++j) {
+					for (int i = -ring; i <= ring; ++i) {
+						if ((std::abs(i) != ring) && (std::abs(j) != ring)) {
+							continue;
+						}
+						AIFloat3 cell;
+						if (!circuit->LatticeNeighbour(snapped, buildDef, facing, i, j, cell)) {
+							continue;
+						}
+						int slivers = 0;
+						float contact = .0f;
+						bool taken = false;
+						for (const Rect& b : rects) {
+							const float gx = std::fabs(cell.x - b.x) - hx - b.hx;
+							const float gz = std::fabs(cell.z - b.z) - hz - b.hz;
+							if ((gx < -1.f) && (gz < -1.f)) {
+								taken = true;
+								break;
+							}
+							const float ox = std::min({-gx, 2.f * hx, 2.f * b.hx});
+							const float oz = std::min({-gz, 2.f * hz, 2.f * b.hz});
+							if ((std::fabs(gx) <= 1.f) && (gz < -1.f)) contact += oz;
+							if ((std::fabs(gz) <= 1.f) && (gx < -1.f)) contact += ox;
+							if (!b.fixed && (((gx > 1.f) && (gx < SLIVER - 1.f) && (gz < -1.f))
+									|| ((gz > 1.f) && (gz < SLIVER - 1.f) && (gx < -1.f)))) {
+								++slivers;
+							}
+						}
+						if (!taken) {
+							cands.push_back({(ring <= 1) ? 0 : ((ring <= 3) ? 1 : 2), slivers, contact,
+									cell.SqDistance2D(snapped), cell});
+						}
+					}
+				}
+			}
+			std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) {
+				if (a.tier != b.tier) return a.tier < b.tier;
+				if (a.slivers != b.slivers) return a.slivers < b.slivers;
+				if (std::fabs(a.contact - b.contact) > 1.f) return a.contact > b.contact;
+				return a.sq < b.sq;
+			});
+			for (const Cand& k : cands) {
+				if (--budget < 0) {
+					break;
+				}
+				if (!cellFree(k.c)) {
+					++ringTaken;
+					continue;
+				}
+				if (!KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, k.c)) {
+					++ringExit;
+					continue;
+				}
+				pos = k.c;
+				searchRadius = SQUARE_SIZE * 2;
+				found = true;
+				circuit->LOG("apex: packed t=%i %s at=%.0f,%.0f contact=%.0f slivers=%i from=%.0f",
+						circuit->GetTeamId(), buildDef->GetDef()->GetName(), pos.x, pos.z, k.contact, k.slivers,
+						std::sqrt(k.sq));
+				break;
+			}
+		} else if (flushMode > 0.f) {
 			const bool ew = (facing & 1) != 0;
 			const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
 			const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
@@ -812,7 +900,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 			if (utils::is_valid(buildPos)) {
 				const AIFloat3 wide = buildPos;
 				SetBuildPos(-RgtVector);   // the commit reserved it; probe without that
-				AIFloat3 cell;
+				AIFloat3 cell = -RgtVector;
 				float bestSq = -1.f;
 				AIFloat3 best;
 				int nTaken = 0, nExit = 0;
@@ -845,8 +933,35 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 						}
 					}
 				}
+				// his 11-22: off by one only where it spoils nothing ("it's right next to a mountain ... okay fine"):
+				// a lattice cell this footprint would cut into that could still be built on refuses the spot, and the
+				// want fails so the script elects something else for the ground
+				bool spoils = false;
+				if ((bestSq < .0f) && (flushMode >= 1.5f) && utils::is_valid(cell)) {
+					const bool ew = (facing & 1) != 0;
+					const float hx = float(ew ? buildDef->GetFootZ() : buildDef->GetFootX()) * SQUARE_SIZE;
+					const float hz = float(ew ? buildDef->GetFootX() : buildDef->GetFootZ()) * SQUARE_SIZE;
+					for (int j = -1; (j <= 1) && !spoils; ++j) {
+						for (int i = -1; (i <= 1) && !spoils; ++i) {
+							AIFloat3 c;
+							if (!circuit->LatticeNeighbour(cell, buildDef, facing, i, j, c)) {
+								continue;
+							}
+							if ((std::fabs(c.x - wide.x) < 2.f * hx - 1.f) && (std::fabs(c.z - wide.z) < 2.f * hz - 1.f)
+								&& circuit->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), c, facing))
+							{
+								spoils = true;
+							}
+						}
+					}
+				}
 				if (bestSq >= .0f) {
 					SetBuildPos(best);
+				} else if (spoils) {
+					offRefused = true;
+					circuit->LOG("apex: off-lattice refused t=%i %s at=%.0f,%.0f asked=%.0f,%.0f taken=%i exit=%i",
+							circuit->GetTeamId(), buildDef->GetDef()->GetName(),
+							wide.x, wide.z, snapped.x, snapped.z, nTaken, nExit);
 				} else {
 					circuit->LOG("apex: off-lattice t=%i %s at=%.0f,%.0f asked=%.0f,%.0f taken=%i exit=%i",
 							circuit->GetTeamId(), buildDef->GetDef()->GetName(),
@@ -899,7 +1014,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
 		)
 	} else {
-		if (circuit->GetSetupManager()->GetBasePos().SqDistance2D(position) < SQUARE(searchRadius)) {  // base must be full
+		if (!offRefused && (circuit->GetSetupManager()->GetBasePos().SqDistance2D(position) < SQUARE(searchRadius))) {  // base must be full (a refused off-lattice spot is not a full base)
 			circuit->GetSetupManager()->FindNewBase(unit);
 		}
 

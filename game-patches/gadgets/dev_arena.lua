@@ -539,6 +539,9 @@ end
 --------------------------------------------------------------------------------
 
 function gadget:Initialize()
+	if NOCTRL > 0 then
+		Spring.SetGameRulesParam("barai_handsoff", 1)  -- our AI reads disableAiControl live only when this is set
+	end
 	local rosterA, totalA, avgA, sightA = parseRoster(DEF_A)
 	local rosterB, totalB, avgB, sightB = parseRoster(DEF_B)
 	if not rosterA or not rosterB then

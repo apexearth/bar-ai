@@ -58,6 +58,8 @@ AIFloat3 JamSiteNear(int d, const AIFloat3& in at, float r)
 	return gJsnSite[d];
 }
 
+int gHomeRadarLog = -1000;
+
 bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		float rate, AIFloat3& out at, float& out gain)
 {
@@ -89,6 +91,27 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		const float surprise = foeUnseen / fill;
 		// an unwatched line is the approach itself, blind: the whole surprise
 		const float watch = Catalog::gRadarR[d] * ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
+		// HOME IS NEVER BLIND (his 11-20: "radar should be up before the commander leaves the home base", and at 5
+		// minutes still none). The warning is worth what we own over the army's fill horizon, the currency EyesSavedM
+		// uses. Offered at home itself, ahead of the gap search: sited from the builder's gap, the home clause never
+		// fired in the 11-20 watch game (no mast all game, the radar want priced 25 times in 6 minutes).
+		if (Builder::gHomeSet && (ai.GetTunable("apex_home_radar", TUNE_HOME_RADAR) > 0.f) && (Catalog::gRadarR[d] > 1.f)
+			&& !RadarSees(Builder::gHomePos)
+			&& !ai.SensorRedundantAt(Catalog::Def(d), Builder::gHomePos))
+		{
+			at = Builder::gHomePos;
+			// the commander is the stake a home warning guards most (measured without him: gain 2.6-3.7, the mast
+			// second in the auction at v 21-77 under extractors all 7 minutes, never built)
+			float comM = 0.f;
+			if (Builder::gComm !is null)
+				comM = Catalog::gCostM[int(Builder::gComm.circuitDef.id)];
+			gain = (gAssetsM + comM) / fill + surprise;
+			if (ai.frame - gHomeRadarLog > 300) {
+				gHomeRadarLog = ai.frame;
+				AiLog("apex: radar-home t=" + ai.teamId + " g=" + gain + " assets=" + gAssetsM);
+			}
+			return gain > 0.f;
+		}
 		// A mast the radar task would abort on its first update -- a friendly radar within 500 -- is no want
 		// (the 16-AI benchmark: corrad decided 587 times in 4 minutes, placed 29).
 		if (lineUp && (Catalog::gRadarR[d] > 1.f) && !ai.SensorRedundantAt(Catalog::Def(d), lineAt)

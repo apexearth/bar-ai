@@ -459,7 +459,13 @@ local NAMES = {
 	"apex_fac_lanes", -- FactoryTask.cpp: the lab site test refuses lanes and other factories' doors (1)
 	"apex_forecast_log", -- forecast.as: forecast error log in real games (0)
 	"apex_travel_samestep",  -- Move/FightAction: the same first waypoint is not re-sent while the unit has an order (0)
-	"apex_flush_place", -- C++ BuilderTask: flush against our buildings before the lattice rings (0)
+	"apex_flush_place", -- C++ BuilderTask: 2 (default since v0.5.18) lattice cells ranked by slivers and contact; 1 the old flush; 0 lattice only
+	"apex_streets", -- base/grid.as + C++: 1 street grid everywhere, 2 only forward of a ground plant, block-aligned
+	"apex_value_plot", -- plot.as: big eco also plots cleared core ground when it beats its legal site (0)
+	"apex_t3_sink", -- production.as: the gantry takes spare metal flow even when the bank is not spilling (1)
+	"apex_home_radar", -- protect_senseprice.as: a radar mast at home while home is unwatched (1)
+	"apex_upfirst", -- decide.as: T2 hands hoisted onto moho upgrades while one other works on energy (1)
+	"apex_com_escort", -- decide.as: comescort, the commander sent to assist the lab for 60 s while the top job is no mex (1)
 	"apex_hoist_waits", -- decide.as: hoists wait for a hand walking to a live job (0)
 	"apex_army_one_currency", -- production.as: army products in metal/s, one currency (0)
 	"apex_lab_best",         -- production.as: a lab builds its best-priced unit, not a draw (0)
@@ -544,6 +550,7 @@ local NAMES = {
 	"apex_assemble_secs",     -- AttackTask.cpp: max seconds to wait for stragglers (8)
 	"apex_siege_fear_frac",   -- SquadTask.cpp: siege row's fear radius as a share of its own range (0.9)
 	"apex_stance",            -- stance.as: master switch for stance budget/scout effects (1)
+	"apex_stance_unheld",     -- stance.as: AGGRESSIVE only when the seen army outclasses ours or a group at home outweighs what answers it (1)
 	"apex_retreat_cost_secs", -- posture.as: cost-vs-income no-retreat bar, 0 = off
 	"apex_bleed_engage",      -- deathledger.as: caution gain per forward-bleed fraction (2)
 	"apex_bleed_cap",         -- deathledger.as: caution ceiling (1.6)

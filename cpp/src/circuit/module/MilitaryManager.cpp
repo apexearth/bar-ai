@@ -3088,7 +3088,17 @@ bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
 		const bool cloakedNow = unit->GetUnit()->IsCloaked();
 		// He stands in a trap (comdecide.as), so the cost is the standing one -- 100 e/s for a
 		// commander, against the 1,000 moving that kept him visible (his 10-12).
-		const float cost = cdef->GetCloakCostStill();
+		// ...but stepping in he walks, and a walking cloak bills the moving cost (1,000 e/s): priced at the
+		// standing 100 he cloaked into an energy stall, flipped, and the base starved (radar on: 30 s cloaked by
+		// minute 14 per seat against 1 s, most of it walking).
+		bool walking = false;
+		try {
+			const springai::AIFloat3 vel = unit->GetUnit()->GetVel();   // elmos / frame
+			walking = (vel.x * vel.x + vel.z * vel.z) > 0.01f;
+		} catch (const std::exception& e) {
+			walking = true;
+		}
+		const float cost = walking ? cdef->GetCloakCost() : cdef->GetCloakCostStill();
 		const float surplus = economyMgr->GetAvgEnergyIncome() - economyMgr->GetEnergyPull()
 				+ (cloakedNow ? cost : 0.f);
 		const bool stalledNow = cloakedNow ? (commShipStallTicks >= 3) : economyMgr->IsEnergyStalling();

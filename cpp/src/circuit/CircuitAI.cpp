@@ -1040,6 +1040,27 @@ int CCircuitAI::Update(int frame)
 		garbage.erase(unit);  // NOTE: UnregisterTeamUnit may erase unit
 	}
 
+	// apex: a dev gadget that commands some of our units itself (dev_armynet, dev_arena) marks them
+	// disableAiControl and sets the game rules param barai_handsoff; only then is the mark read live (stock reads
+	// it only when a save loads). No gadget sets it in a normal game.
+	if ((frame % FRAMES_PER_SEC == 13) && (game != nullptr) && (game->GetRulesParamFloat("barai_handsoff", 0.f) > 0.f)) {
+		int released = 0;
+		for (auto& kv : teamUnits) {
+			CCircuitUnit* unit = kv.second;
+			if ((unit->GetTask() != nullptr) && (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER)
+				&& (unit->GetUnit()->GetRulesParamFloat("disableAiControl", 0.f) > 0.f)
+				&& UnitControl(unit, false))
+			{
+				++released;
+			}
+		}
+		handsOffTotal += released;
+		if ((released > 0) && (frame >= handsOffNextLog)) {
+			handsOffNextLog = frame + FRAMES_PER_SEC * 60;
+			LOG("apex: handsoff t=%i f=%i released=%i total=%i", teamId, frame, released, handsOffTotal);
+		}
+	}
+
 	for (const CEnemyUnit* data : allyTeam->GetDyingEnemies()) {
 		CEnemyInfo* enemy = GetEnemyInfo(data->GetId());
 		if (enemy != nullptr) {  // EnemyDestroyed right after UpdateEnemyDatas but before this Update
@@ -3024,6 +3045,8 @@ float CCircuitAI::GetRecentTradeRatio()
 struct STeamLane {
 	AIFloat3 anchor, fwd;
 	float pitch, half, range;
+	std::vector<AIFloat3> plants;   // apex_streets 2: the publisher's ground plants, copied by it each frame
+	bool plantsSet = false;
 };
 static std::map<int, std::map<int, STeamLane>>& TeamLanes()
 {
@@ -3166,13 +3189,67 @@ void CCircuitAI::NoteCmd(const CCircuitUnit* u, int kind)
 	++cmdCount[w][kind];
 }
 
+// An ally's street under apex_streets 2 is needed only forward of one of ITS ground plants, on that plant's column
+// (the plants it published with its lane); before it has published any, its whole grid stands, as before.
+static bool StreetForLane(const STeamLane& l, const AIFloat3& pos)
+{
+	if (!l.plantsSet) {
+		return true;
+	}
+	const float dx = pos.x - l.anchor.x, dz = pos.z - l.anchor.z;
+	const float depth = -(dx * l.fwd.x + dz * l.fwd.z);
+	const float lat = dx * -l.fwd.z + dz * l.fwd.x;
+	for (const AIFloat3& g : l.plants) {
+		const float gx = g.x - l.anchor.x, gz = g.z - l.anchor.z;
+		const float gDepth = -(gx * l.fwd.x + gz * l.fwd.z);
+		const float gLat = gx * -l.fwd.z + gz * l.fwd.x;
+		if ((depth <= gDepth + l.pitch) && (std::fabs(lat - gLat) <= l.pitch)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// A street serves a plant whose units walk out (his 11-22: "lanes are only useful if we have a factory in the back
+// which needs to get out of the base"): the ground forward of one of our ground plants, within one street pitch of
+// its column. Base coordinates as LatticePoint's: depth > 0 behind the anchor, lat across.
+bool CCircuitAI::StreetNeededAt(float depth, float lat) const
+{
+	if (groundPlantsFrame != lastFrame) {
+		groundPlantsFrame = lastFrame;
+		factoryManager->GroundPlantPositions(groundPlants, lastFrame);
+		auto lit = TeamLanes()[allyTeamId].find(teamId);
+		if (lit != TeamLanes()[allyTeamId].end()) {
+			lit->second.plants = groundPlants;   // the allies' lane test reads them (StreetForLane)
+			lit->second.plantsSet = true;
+		}
+	}
+	for (const AIFloat3& g : groundPlants) {
+		const float dx = g.x - gridAnchor.x;
+		const float dz = g.z - gridAnchor.z;
+		const float gDepth = -(dx * gridFwd.x + dz * gridFwd.z);
+		const float gLat = dx * -gridFwd.z + dz * gridFwd.x;
+		if ((depth <= gDepth + gridLanePitch) && (std::fabs(lat - gLat) <= gridLanePitch)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const
 {
 	if (!utils::is_valid(pos)) {
 		return false;
 	}
 	if (InLaneOf(gridAnchor, gridFwd, gridLanePitch, gridLaneHalf, gridRange, pos)) {
-		return true;
+		if (GetTunable("apex_streets", 2.f) < 1.5f) {
+			return true;
+		}
+		const float dx = pos.x - gridAnchor.x;
+		const float dz = pos.z - gridAnchor.z;
+		if (StreetNeededAt(-(dx * gridFwd.x + dz * gridFwd.z), dx * -gridFwd.z + dz * gridFwd.x)) {
+			return true;
+		}
 	}
 	auto it = TeamLanes().find(allyTeamId);
 	if (it == TeamLanes().end()) {
@@ -3183,7 +3260,9 @@ bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const
 			continue;
 		}
 		const STeamLane& l = kv.second;
-		if (InLaneOf(l.anchor, l.fwd, l.pitch, l.half, l.range, pos)) {
+		if (InLaneOf(l.anchor, l.fwd, l.pitch, l.half, l.range, pos)
+			&& ((GetTunable("apex_streets", 2.f) < 1.5f) || StreetForLane(l, pos)))
+		{
 			return true;
 		}
 	}
@@ -3263,7 +3342,9 @@ void CCircuitAI::LatticePoint(const AIFloat3& cell, CCircuitDef* def, int facing
 		const float dx = cell.x - gridAnchor.x;
 		const float dz = cell.z - gridAnchor.z;
 		const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
-		if (depth <= .0f) {  // no streets behind the anchor
+		if ((depth <= .0f)  // no streets behind the anchor
+			&& ((GetTunable("apex_streets", 2.f) < 1.5f) || StreetNeededAt(depth, dx * -gridFwd.z + dz * gridFwd.x)))
+		{
 			// The base axes are world axes here (the frame is a cardinal):
 			// lat runs along z when the axis runs along x, and vice versa.
 			const bool latIsZ = std::fabs(gridFwd.x) >= std::fabs(gridFwd.z);

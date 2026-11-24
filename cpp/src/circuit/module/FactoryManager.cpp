@@ -698,6 +698,25 @@ void CFactoryManager::Init()
 	circuit->GetSetupManager()->ExecOnFindStart(subinit);
 }
 
+void CFactoryManager::GroundPlantPositions(std::vector<AIFloat3>& out, int frame) const
+{
+	out.clear();
+	for (const SFactory& fac : factories) {
+		CCircuitDef* fd = fac.unit->GetCircuitDef();
+		bool ground = false;
+		for (CCircuitDef::Id o : fd->GetBuildOptions()) {
+			CCircuitDef* od = circuit->GetCircuitDef(o);
+			if ((od != nullptr) && od->IsMobile() && !od->IsAbleToFly()) {
+				ground = true;
+				break;
+			}
+		}
+		if (ground) {
+			out.push_back(fac.unit->GetPos(frame));
+		}
+	}
+}
+
 int CFactoryManager::UnitCreated(CCircuitUnit* unit, CCircuitUnit* builder)
 {
 	CCircuitDef* cdef = unit->GetCircuitDef();

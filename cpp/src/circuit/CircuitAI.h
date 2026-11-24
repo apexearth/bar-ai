@@ -691,6 +691,10 @@ private:
 	float gridCell = .0f;
 	float gridLanePitch = .0f;
 	float gridLaneHalf = .0f;
+	// apex_streets 2 (his 11-22): a street only where it serves a ground plant -- forward of it, on its column
+	bool StreetNeededAt(float depth, float lat) const;
+	mutable std::vector<springai::AIFloat3> groundPlants;
+	mutable int groundPlantsFrame = -1;
 	float gridRange = .0f;
 	#define HOT_DECAY_PERIOD	(FRAMES_PER_SEC * 20)
 	#define HOT_DECAY			0.80f   // ~1 min half-life
@@ -946,6 +950,8 @@ private:
 	int ghostPurgeNext = 0;
 	std::array<int, static_cast<int>(CCircuitDef::SniperOrder::_SIZE_)> sniperOrders{};
 	int sniperOrderNextLog = 0;
+	int handsOffTotal = 0;
+	int handsOffNextLog = 0;
 	int skirmishAIId;
 	int teamId;
 	int allyTeamId;

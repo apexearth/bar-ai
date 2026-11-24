@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 DEATH_LINE = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) .*? atkteam=(-?\d+) atk=(\w+)")
+KILLER = re.compile(r" mob=(\d) .*? atkx=(-?[\d.]+) atkz=(-?[\d.]+) .*? atkid=(\d+)")
 LINE = re.compile(r"\[f=(-?\d+)\] Skirmish AI <ApexUnstable-([^>]+)>: (?:\[[\d.]+m t(\d+)\] )?apex: (.*)")
 T_IN = re.compile(r"\bt=(\d+)\b")
 
@@ -35,6 +36,7 @@ class Seat:
         self.deaths: list[tuple[int, str, str]] = []   # (frame, unit, killer) from [BARAI_DEATH]
         self.kills: list[tuple[int, str, str]] = []    # (frame, their unit, our killer)
         self.foe_deaths: set[tuple[int, str]] = set()  # (frame, unit) of ours an enemy killed (not our own reclaim)
+        self.building_kills: list[tuple[int, int, float, float]] = []  # (frame, killer uid, killer x, z), our buildings
 
 
 KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
@@ -67,6 +69,10 @@ def load(match: Path) -> list[Seat]:
                     at = int(d.group(4))
                     if at >= 0 and ally_of.get(at, at) != ally_of.get(int(d.group(2))):
                         seats[int(d.group(2))].foe_deaths.add((int(d.group(1)), d.group(3)))
+                        k = KILLER.search(raw)
+                        if k and k.group(1) == "0":
+                            seats[int(d.group(2))].building_kills.append(
+                                (int(d.group(1)), int(k.group(4)), float(k.group(2)), float(k.group(3))))
                 if d and int(d.group(4)) in seats and int(d.group(4)) != int(d.group(2)):
                     seats[int(d.group(4))].kills.append((int(d.group(1)), d.group(3), d.group(5)))
                 continue
@@ -201,6 +207,27 @@ def mex_lost_to_ticks(s: Seat):
     would stop; one turret can guard up to four extractors and pays for itself in about a minute. Extractors of this
     seat killed by a Tick or a scout car before minute 10."""
     return float(sum(1 for f, u, k in s.deaths if (k in TICKS) and ("mex" in u or "moho" in u) and f < 10 * 1800))
+
+
+def raider_repeat_kills(s: Seat):
+    """His 11-18, watching the army model's second watch game: "as soon as a unit would go out of sight, we would sort
+    of stop chasing after it if we didn't have radar". A raider we let go comes back: our buildings killed by an
+    enemy unit that had already killed one of them at least 10 s earlier and has moved since (a turret does not), per
+    10 minutes played."""
+    if not s.stats:
+        return None
+    mins = s.stats[-1]["frame"] / 1800.0
+    if mins < 5:
+        return None
+    last = {}
+    repeats = 0
+    for f, killer, x, z in sorted(s.building_kills):
+        if killer in last:
+            lf, lx, lz = last[killer]
+            if f - lf >= 300 and math.hypot(x - lx, z - lz) >= 150:
+                repeats += 1
+        last[killer] = (f, x, z)
+    return repeats * 10.0 / mins
 
 
 def their_mex_killed(s: Seat):
@@ -553,6 +580,7 @@ CHECKS = [
     ("com minutes on their half", com_their_half_minutes, "mean", 0.5, None),  # "the com got caught out in danger"
     ("com lost on their half", com_lost_their_half, "mean", 0.05, 0.0),
     ("mex lost to ticks by 10 min", mex_lost_to_ticks, "mean", 0.5, 0.0),  # one turret guards up to four extractors
+    ("raider repeat kills /10min", raider_repeat_kills, "mean", 0.5, 0.0),  # "stop chasing after it" out of sight
     ("their mex killed /10min (neg)", their_mex_killed, "mean", 2.0, None),  # choke their economy, not only their base
     ("their army / ours, 8-12 min", outarmied, "mean", 0.25, None),     # react to an opponent who builds a lot of army
     ("lost per killed", trade_lost_per_killed, "median", 0.15, None),  # make them trade worse than us

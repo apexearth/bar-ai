@@ -2899,7 +2899,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 		&& !ComFar(unit.GetPos(ai.frame))
 		&& !((ranked.length() > 0) && ((ranked[0].kind == WK_MEX)
-			|| ((ranked[0].kind == WK_RECLAIM) && (ranked[0].spotId == RCM_SPOT))))
+			|| ((ranked[0].kind == WK_RECLAIM) && (ranked[0].spotId == RCM_SPOT))
+			// ...nor while it is the home mast (the one sense want sited exactly at home), a short job where he stands: pulled to the lab over it at 1.4 min,
+			// he left the radar and the next claims for a 60 s stint (radar on: 1.5 pulls over it per seat vs 0.3)
+			|| ((ranked[0].kind == WK_SENSE) && Builder::gHomeSet && (ranked[0].pos.distance2D(Builder::gHomePos) < 1.f))))
 		&& (ai.GetTunable("apex_com_escort", TUNE_COM_ESCORT) > 0.5f)
 		&& (ai.frame >= gComLabNextAt)   // a stint per 2 min: re-pulled on every election he walked lab <-> job (his 10-10)
 		&& ((EscortShortfall() > 0)
@@ -3364,7 +3367,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		why = "open";
 	}
 	bool upFirst = false;
-	if (!defRole && !aaPanic && !superPush && !coverPush && !openPush && UpgradesFirst(unit, ranked)) {
+	if (!defRole && !aaPanic && !superPush && !coverPush && !openPush && (ai.GetTunable("apex_upfirst", TUNE_UPFIRST) > 0.f)
+		&& UpgradesFirst(unit, ranked)) {
 		upFirst = true;
 		why = "upfirst";
 	}

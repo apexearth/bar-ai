@@ -21,8 +21,78 @@ final class Plot {
 	array<Id> occ;
 	int round = 0;
 	int unitWaits = 0;
+	bool byValue = false;
+	int madeAt = 0;
 }
 array<Plot@> gPlots;
+
+// VALUE PLOTS (his 11-22: "ok if i remove these 9 con turrets I can fit in one more AFUS here"): a big reactor or
+// converter with a legal site still asks whether cleared ground in the core is worth more, in metal -- the output it
+// starts sooner under the build power standing there (less the turrets cleared) plus the loss it avoids there, against
+// what the occupants would make over the reclaim horizon less their refund. apex_value_plot 1.
+array<int> gValueDefs;
+array<int> gValueAts;
+array<float> gValueBP;
+array<float> gValueMoverBP;
+array<AIFloat3> gValueSite;
+
+void NoteValuePlot(int d, float bp, float moverBP, const AIFloat3& in site)
+{
+	if ((ai.GetTunable("apex_value_plot", TUNE_VALUE_PLOT) <= 0.f) || !BigEcoDef(d))
+		return;
+	const int k = gValueDefs.find(d);
+	if (k >= 0) {
+		gValueAts[uint(k)] = ai.frame;
+		gValueBP[uint(k)] = bp;
+		gValueMoverBP[uint(k)] = moverBP;
+		gValueSite[uint(k)] = site;
+		return;
+	}
+	gValueDefs.insertLast(d);
+	gValueAts.insertLast(ai.frame);
+	gValueBP.insertLast(bp);
+	gValueMoverBP.insertLast(moverBP);
+	gValueSite.insertLast(site);
+}
+
+// The metal a value plot for bd at c wins against building on its legal site (gPls* hold that site and its BP)
+float ValuePlotNet(int bd, const AIFloat3& in c, const array<Id>& in occ, float& out dtOut, float& out lossOut)
+{
+	const float ePM = EPrice();
+	const float hzR = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float hz = (hzR > 1.f) ? hzR : 300.f;
+	float occBP = 0.f, lossM = 0.f;
+	for (uint i = 0; i < occ.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(occ[i]);
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const int ud = int(u.circuitDef.id);
+		const int cells = (Catalog::gAreaCells[ud] > 0) ? Catalog::gAreaCells[ud] : 1;
+		const float trickle = Catalog::gMakeE[ud] * ePM + Catalog::gConvCapacity[ud] * Catalog::gConvRatio[ud]
+				+ LatheCellBP(ud) * float(cells) * (7.f / 80.f);
+		// an occupant moves rather than dies: its refund pays its rebuild on open ground, and what is lost is its
+		// output until a constructor has raised it again (at most the horizon)
+		float down = Catalog::gBuildTime[ud] / ((gPlsMoverBP > 1.f) ? gPlsMoverBP : 100.f);
+		if (down > hz)
+			down = hz;
+		lossM += trickle * down;
+		if (IsNanoTurret(ud))
+			occBP += Catalog::gBuildPower[ud];
+	}
+	const float bt = Catalog::gBuildTime[bd];
+	const float bpHere = ((RingBPAt(c) - occBP) > 0.f ? (RingBPAt(c) - occBP) : 0.f) + gPlsMoverBP;
+	const float bpThere = ((gPlsLegalBP > 0.f) ? gPlsLegalBP : 0.f) + gPlsMoverBP;
+	float dt = (bpThere > 1.f && bpHere > 1.f) ? (bt / bpThere - bt / bpHere) : 0.f;
+	if (dt > hz)
+		dt = hz;
+	if (dt < -hz)
+		dt = -hz;
+	const float outM = Catalog::gMakeE[bd] * ePM + Catalog::gConvCapacity[bd] * Catalog::gConvRatio[bd];
+	const float safer = ExpectedLossAt(gPlsLegalSite, Catalog::gCostM[bd]) - ExpectedLossAt(c, Catalog::gCostM[bd]);
+	dtOut = dt;
+	lossOut = lossM;
+	return dt * outM + safer - lossM;
+}
 
 // no-room marks, one per waiting def
 array<int> gNoRoomDefs;
@@ -321,7 +391,7 @@ void RefreshPlot()
 			PlotZones();
 			continue;
 		}
-		if (ai.frame - NoRoomAt(p.def) > 3 * PLOT_MEMORY) {
+		if (ai.frame - (p.byValue ? p.madeAt : NoRoomAt(p.def)) > 3 * PLOT_MEMORY) {
 			PlotDrop(p, "stale");
 			continue;
 		}
@@ -336,8 +406,27 @@ void RefreshPlot()
 		if ((pick < 0) || (gNoRoomAts[k] < gNoRoomAts[uint(pick)]))
 			pick = int(k);
 	}
-	if (pick < 0)
+	if (pick < 0) {
+		int vp = -1;
+		for (uint k = 0; k < gValueDefs.length(); ++k) {
+			const int d = gValueDefs[k];
+			if ((ai.frame - gValueAts[k] > PLOT_MEMORY) || (PlotOf(d) !is null) || (PlantAskIdx(d) < 0))
+				continue;
+			if ((vp < 0) || (gValueAts[k] < gValueAts[uint(vp)]))
+				vp = int(k);
+		}
+		if ((vp < 0) || EcoDangerNear())
+			return;
+		const double _tPv = Perf::T0();
+		PlotSearchBegin(gValueDefs[uint(vp)]);
+		gPlsValue = true;
+		gPlsLegalBP = gValueBP[uint(vp)];
+		gPlsMoverBP = gValueMoverBP[uint(vp)];
+		gPlsLegalSite = gValueSite[uint(vp)];
+		PlotSearchStep();
+		Perf::Add("plot.search", _tPv);
 		return;
+	}
 	if (EcoDangerNear()) {
 		if (gNoRoomLogAts[uint(pick)] != gNoRoomAts[uint(pick)]) {
 			gNoRoomLogAts[uint(pick)] = gNoRoomAts[uint(pick)];
@@ -366,9 +455,16 @@ string gPlsForeign;
 float gPlsBestCost = 1e30f;
 AIFloat3 gPlsBestAt;
 array<Id> gPlsBestOcc;
+bool gPlsValue = false;
+float gPlsLegalBP = 0.f, gPlsMoverBP = 0.f, gPlsBestNet = 0.f, gPlsBestDt = 0.f, gPlsBestLoss = 0.f;
+AIFloat3 gPlsLegalSite;
+int gPlsLoss = 0;
 
 void PlotSearchBegin(int bd)
 {
+	gPlsValue = false;
+	gPlsBestNet = 0.f;
+	gPlsLoss = 0;
 	gPlsDef = bd;
 	gPlsPhase = 1;
 	gPlsCi = 0;
@@ -522,7 +618,17 @@ void PlotSearchStep()
 			++gPlsUncovered;
 			continue;
 		}
-		if (cost >= gPlsBestCost)
+		if (gPlsValue) {
+			float dt = 0.f, loss = 0.f;
+			const float net = ValuePlotNet(bd, c, occ, dt, loss);
+			if (net <= gPlsBestNet) {
+				++gPlsLoss;
+				continue;
+			}
+			gPlsBestNet = net;
+			gPlsBestDt = dt;
+			gPlsBestLoss = loss;
+		} else if (cost >= gPlsBestCost)
 			continue;
 		gPlsBestCost = cost;
 		gPlsBestAt = c;
@@ -536,7 +642,18 @@ void PlotSearchFinish(int bd)
 {
 	const int k = gNoRoomDefs.find(bd);
 	const int ai0 = PlantAskIdx(bd);
-	if ((k < 0) || (ai0 < 0) || (PlotOf(bd) !is null))
+	if (gPlsValue) {
+		const int vk = gValueDefs.find(bd);
+		if (vk >= 0)
+			gValueAts[uint(vk)] = -999999;   // asked again only after a fresh legal site
+		if ((ai0 < 0) || (PlotOf(bd) !is null))
+			return;
+		if (gPlsBestOcc.length() == 0) {
+			AiLog("apex: plot-value-none t=" + ai.teamId + " " + Catalog::Def(bd).GetName() + " cand=" + gPlsCandN
+				+ " loss=" + gPlsLoss + " foreign=" + gPlsForeignN + " legalBP=" + int(gPlsLegalBP));
+			return;
+		}
+	} else if ((k < 0) || (ai0 < 0) || (PlotOf(bd) !is null))
 		return;
 	if (gPlsBestOcc.length() == 0) {
 		if (gNoRoomLogAts[uint(k)] != gNoRoomAts[uint(k)]) {
@@ -555,6 +672,12 @@ void PlotSearchFinish(int bd)
 	p.occ = gPlsBestOcc;
 	p.gain = gPlantAskGain[uint(ai0)];
 	p.value = gPlantAskValue[uint(ai0)];
+	p.byValue = gPlsValue;
+	p.madeAt = ai.frame;
+	if (gPlsValue)
+		AiLog("apex: plot-value t=" + ai.teamId + " " + Catalog::Def(bd).GetName() + " at=" + int(gPlsBestAt.x) + ","
+			+ int(gPlsBestAt.z) + " net=" + int(gPlsBestNet) + " sooner=" + int(gPlsBestDt) + "s occLoss=" + int(gPlsBestLoss)
+			+ " legalBP=" + int(gPlsLegalBP) + " legal=" + int(gPlsLegalSite.x) + "," + int(gPlsLegalSite.z));
 	gPlots.insertLast(p);
 	++gPlotN;
 	Base::ReserveSite(p.at);

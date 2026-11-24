@@ -36,6 +36,43 @@ const int STANCE_DWELL = 30 * SECOND;
 int Stance() { return gStance; }
 bool StanceUnknown() { return gStance == S_UNKNOWN; }
 
+// An enemy ground group at our base that outweighs what can answer it: the guns that reach it, our own ground army
+// (it walks to its own base), allies' armies standing near it, and the commander at his fighting strength in the
+// group's own metal per strength (comship's conversion), past the answer parity. A pawn where nothing stands is not
+// this (a local-only form read one 54 m raider as AGGRESSIVE); ten pawns against an opening army are. Allies'
+// armies elsewhere do not answer it (an 8v8 team's whole army made every base raid read as held).
+float gUnheldM = 0.f;
+bool HomeForceUnheld()
+{
+	gUnheldM = 0.f;
+	if (!Builder::gHomeSet)
+		return false;
+	bool any = false;
+	const float own = OwnGroundArmyM();
+	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+	CCircuitUnit@ com = Builder::gComm;
+	const float comS = (com !is null) ? Market::UnitStrength(int(com.circuitDef.id)) * com.GetHealthPercent() : 0.f;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int g = 0; g < nG; ++g) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
+		if (!OnMap(gp) || (ForwardFraction(gp) > FWD_HOME) || (gp.distance2D(Builder::gHomePos) > Builder::BASE_DANGER_DIST))
+			continue;
+		float sl = 0.f;
+		const float m = GroundArmyOf(g, sl);
+		if (m <= 0.f)
+			continue;
+		float guns = GunsAt(gp);
+		if (guns < 0.f)
+			guns = 0.f;
+		const float comM = comS * Market::ShipMetalPerStr(g, m);
+		if (Market::StrRatio(m, guns + own + ai.GetAllyArmyMAt(gp, r) + comM) > ANSWER_PARITY) {
+			any = true;
+			gUnheldM += m;
+		}
+	}
+	return any;
+}
+
 void UpdateStance()
 {
 	if (ai.frame < gNextStanceEval)
@@ -51,16 +88,30 @@ void UpdateStance()
 	const float ours = OurArmyNow();
 
 	int want = gStance;
-	const bool hit = Builder::BaseUnderAttack() || BaseContested() || BaseRaided();
+	// AGGRESSIVE IS A FORCE WE CANNOT HOLD (his 11-23: "small raiders are not really an aggressive enemy. if
+	// they suddenly show up with a group of 10 grunts/pawns then that is much more aggressive"). Under
+	// apex_stance_unheld, contact, contested ground and a raid read nothing by themselves: a group at home
+	// counts only while it outweighs the guns and army standing where it is. Radar keeps every raider at home
+	// on the map, and the old reads went AGGRESSIVE 54% of minutes 10-12 against 27% without it.
+	const bool unheldMode = ai.GetTunable("apex_stance_unheld", TUNE_STANCE_UNHELD) > 0.f;
+	const bool hit = unheldMode ? HomeForceUnheld()
+			: (Builder::BaseUnderAttack() || BaseContested() || BaseRaided());
 	// The rival clause is DUEL-ONLY: fresh sightings are side-wide, so in an
 	// 8v8 it compared the whole enemy team's visible army against ONE
 	// player's own and read AGGRESSIVE 24-27 minutes of 40 for everyone --
 	// the greed (and its con curve) never came back, which is exactly the
 	// measured late-game scaling decay. In a team, aggression is what
 	// threatens YOUR OWN ground: base contact and raid pressure.
-	const bool rival = !Factory::TeamPlay()
-		&& (ours > 1.f)
-		&& (fresh > ours * ai.GetTunable("apex_stance_rival", TUNE_STANCE_RIVAL));
+	// ...and under apex_stance_unheld, the army we see outclassing ours (his 11-23: "it depends on whether the army
+	// we see highly outclasses our own, thats when they are aggressive"; the stance exists so we strengthen before a
+	// superior army kills us): their live sighted army against our side's ground army, quality-weighted, past the
+	// answer parity. Side against side, so it holds in a team game too.
+	// Army against army: before our side fields one there is nothing to compare, and contact at home is the read.
+	const float sideArmy = OurArmyM();
+	const bool rival = unheldMode
+		? ((sideArmy > 1.f) && (Market::StrRatio(fresh, sideArmy) > ANSWER_PARITY))
+		: (!Factory::TeamPlay() && (ours > 1.f)
+			&& (fresh > ours * ai.GetTunable("apex_stance_rival", TUNE_STANCE_RIVAL)));
 	if (hit || rival
 		|| (pressure > ai.GetTunable("apex_stance_pressure", TUNE_STANCE_PRESSURE)))
 	{
@@ -102,7 +153,8 @@ void UpdateStance()
 		+ " fresh=" + formatFloat(fresh, "", 0, 0)
 		+ " peak=" + formatFloat(gSeenPeak, "", 0, 0)
 		+ " pressure=" + formatFloat(pressure, "", 0, 2)
-		+ " ours=" + formatFloat(ours, "", 0, 0));
+		+ " ours=" + formatFloat(ours, "", 0, 0) + " side=" + formatFloat(OurArmyM(), "", 0, 0)
+		+ " unheldM=" + formatFloat(gUnheldM, "", 0, 0));
 }
 
 // The budget answer. Neutral 1.0 everywhere for UNKNOWN -- blindness changes

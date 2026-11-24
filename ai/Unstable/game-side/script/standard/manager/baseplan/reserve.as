@@ -178,15 +178,19 @@ bool LanesApply(float depth)
 	return depth <= 0.f;
 }
 
+// Is a street here at all (apex_streets 2: only where it serves a ground plant), and is this point in it?
+bool InStreet(float depth, float lat, float half)
+{
+	return LanesApply(depth) && StreetNeeded(depth, lat) && ((LaneGapL(lat) < half) || (LaneGapD(depth) < half));
+}
+
 bool InLaneAt(const AIFloat3& in p)
 {
 	if (!Ready())
 		return false;
 	float depth, lat;
 	Coords(p, depth, lat);
-	if (!LanesApply(depth))
-		return false;
-	return (LaneGap(lat) < LaneHalf()) || (LaneGap(depth) < LaneHalf());
+	return InStreet(depth, lat, LaneHalf());
 }
 
 }  // namespace Base

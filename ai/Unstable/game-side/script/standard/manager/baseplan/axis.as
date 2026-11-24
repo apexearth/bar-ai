@@ -185,9 +185,9 @@ bool Frame()
 	if (gAnchorFinal && (!gPublished || (LaneHalf() != gPublishedHalf))) {
 		gPublished = true;
 		gPublishedHalf = LaneHalf();
-		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, gPublishedHalf, GRID_RANGE);
+		ai.SetBaseGrid(LaneOrigin(), gFwd, GRID_CELL, LanePitch(), gPublishedHalf, GRID_RANGE);
 		AiLog("apex: base grid published cell=" + int(GRID_CELL)
-			+ " lane=" + int(LANE_PITCH) + "/" + int(gPublishedHalf)
+			+ " lane=" + int(LanePitch()) + "/" + int(gPublishedHalf) + " streets=" + StreetsMode()
 			+ " range=" + int(GRID_RANGE));
 	}
 	return true;

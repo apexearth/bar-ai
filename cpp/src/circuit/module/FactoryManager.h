@@ -196,6 +196,8 @@ public:
 	}
 
 	int GetFactoryCount() const { return factories.size(); }
+	// our plants whose units walk out (any mobile non-flying build option): the ones a street serves (his 11-22)
+	void GroundPlantPositions(std::vector<springai::AIFloat3>& out, int frame) const;
 	int GetNoT1FacCount() const { return noT1FacCount; }
 	float GetMetalRequire() const { return metalRequire; }
 	float GetEnergyRequire() const { return energyRequire; }

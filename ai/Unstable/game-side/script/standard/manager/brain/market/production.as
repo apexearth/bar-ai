@@ -514,6 +514,7 @@ int gSpotHandsAt = -1000;
 int gSpotHandsVal = 0;
 int gSpotHandsBind = 0;   // ConsNeedAny calls the open spots decided
 int gConFloorYieldN = 0;  // con-floor orders that yielded to an army behind its share
+int gCfyFoe = 0, gCfyFtr = 0, gCfyShare = 0, gCfCap = 0, gCfUpk = 0, gCfHold = 0, gEarnMexN = 0, gEarnMexRadar = 0, gCfAsk = 0, gCfNoNeed = 0;
 int gNextSpotHandsLog = 0;
 int gNextT2SkipLog = 0;
 int ConsNeedAny(bool walkers = false)
@@ -674,6 +675,11 @@ int SpotHandsOwed()
 	if (ai.frame >= gNextSpotHandsLog) {
 		gNextSpotHandsLog = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " floorYield=" + gConFloorYieldN
+			+ " yFoe=" + gCfyFoe + " yFtr=" + gCfyFtr + " yShare=" + gCfyShare
+			+ " outEarn=" + (gOutEarn ? 1 : 0) + " earn=" + formatFloat(gEarnOurs * 1000.f, "", 0, 1) + "/" + formatFloat(gEarnTheirs * 1000.f, "", 0, 1)
+			+ " theirMex=" + gEarnMexN + " radarOnly=" + gEarnMexRadar
+			+ " cfCap=" + gCfCap + " cfUpk=" + gCfUpk + " cfHold=" + gCfHold + " cfAsk=" + gCfAsk + " cfNoNeed=" + gCfNoNeed
+			+ " armyShare=" + formatFloat(Brain::ShareOf(Brain::ARMY), "", 0, 3) + "/" + formatFloat(Brain::TargetShare(Brain::ARMY), "", 0, 3)
 			+ " conMul=" + formatFloat(gConFloorMul, "", 0, 2) + " open=" + n
 			+ " walkS=" + formatFloat(walkS, "", 0, 1)
 			+ " cycS=" + formatFloat(cycS, "", 0, 1)
@@ -762,13 +768,19 @@ bool WeOutEarnThem()
 		return gOutEarn;
 	gEarnAt = ai.frame;
 	gEarnTheirs = 0.f;
+	gEarnMexN = 0;
+	gEarnMexRadar = 0;
 	const int total = aiEnemyMgr.GetEnemyUnitTotal();
 	for (int i = 0; i < total; ++i) {
 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (Catalog::gExtractsM[d] <= 0.f))
 			continue;
-		if (aiEnemyMgr.GetEnemyUnitLosAt(i) < 0)
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if (los < 0)
 			continue;
+		++gEarnMexN;
+		if (((los & 1) == 0) && ((los & 2) != 0))
+			++gEarnMexRadar;
 		gEarnTheirs += Catalog::gExtractsM[d];
 	}
 	gEarnOurs = 0.f;
@@ -1606,7 +1618,8 @@ CCircuitDef@ SpamLineDef(CCircuitUnit@ fac)
 {
 	// only once a T2 LAND plant makes the ground army: a seat whose T2 was an air plant gave its one land lab to spam
 	// and built no ground army from minute 15 to 45 (his watch game, 10-24)
-	if (!Military::SpamSendOn() || !Military::SpamPhase() || (TopOwnLandPlantTier() < 2)
+	// none in the eco test (his 11-22 watch: ~2k metal of spam in an eco-only game)
+	if (EcoOnly() || !Military::SpamSendOn() || !Military::SpamPhase() || (TopOwnLandPlantTier() < 2)
 		|| (fac is null) || (fac.circuitDef is null))
 		return null;
 	if (ai.frame >= gSpamFacAt) {
@@ -1811,11 +1824,15 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	// ...and SPARE MONEY GOES INTO THE ECONOMY (apexearth 2026-10-03, again):
 	// army takes it only while it is actually being thrown away. The army
 	// itself is held at their parity by ArmyFloor.
-	if ((TopOwnPlantTier() < 2) || !MetalWasting())
+	// ...EXCEPT AT THE GANTRY (his 11-22: "extra income always should be going into more production of T3"; the gantries
+	// of his Talus 7v7 stood idle 130-180 s each at army gap 0 while the bank was not yet spilling): a T3 ground line
+	// takes the spare flow whether or not it is being thrown away
+	const bool t3Sink = (ai.GetTunable("apex_t3_sink", TUNE_T3_SINK) > 0.f) && (PlantTier(fid) >= 3) && !AirPlant(fid);
+	if ((TopOwnPlantTier() < 2) || (!MetalWasting() && !t3Sink))
 		richBal = 0.f;
-	if (!ovfHands && (richBal > armyGap)) {
+	if ((!ovfHands || t3Sink) && (richBal > armyGap)) {
 		armyGap = richBal;
-		gapSrc = "rich";
+		gapSrc = t3Sink ? "t3sink" : "rich";
 	}
 	// THE ROLE MEANS IT (apexearth 2026-09-13: the rear specialist "makes no
 	// military, focusing on economy"). ArmyTarget reads zero while it grows,
@@ -3149,8 +3166,15 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= yieldCons)
 			&& (Brain::ShareOf(Brain::ARMY) * yieldMul < Brain::TargetShare(Brain::ARMY))));
 		const bool floorOn = !armyBehind;
-		if (!floorOn && (consNeedA > 0))
+		if (!floorOn && (consNeedA > 0)) {
 			++gConFloorYieldN;
+			if (foeOutguns)
+				++gCfyFoe;
+			else if (ftrOwed)
+				++gCfyFtr;
+			else
+				++gCfyShare;
+		}
 		if ((consNeedA > 0) && floorOn && walker && OpenRaceOn()) {
 			const int orcF = OpenRacePick(fac, fid, prods, d, slot);
 			if (orcF > 0) {
@@ -3160,8 +3184,24 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				return Catalog::Def(orcF);
 			}
 		}
-		if ((consNeedA > 0) && floorOn && FloorUnderCap(d) && UpkeepFloorPasses(d, fac, slot)
-			&& Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
+		bool cfGo = false;
+		if (walker) {
+			if (consNeedA > 0)
+				++gCfAsk;
+			else
+				++gCfNoNeed;
+		}
+		if ((consNeedA > 0) && floorOn) {
+			if (!FloorUnderCap(d))
+				++gCfCap;
+			else if (!UpkeepFloorPasses(d, fac, slot))
+				++gCfUpk;
+			else if (!Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
+				++gCfHold;
+			else
+				cfGo = true;
+		}
+		if (cfGo) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (con floor need=" + consNeedA

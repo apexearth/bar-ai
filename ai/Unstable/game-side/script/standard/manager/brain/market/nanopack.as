@@ -419,7 +419,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 					float pd = 0.f, pl = 0.f;
 					Base::Coords(p, pd, pl);
 					const float lh = Base::LaneHalf() + pitch * 0.5f;
-					if (Base::LanesApply(pd) && ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))) {
+					if (Base::InStreet(pd, pl, lh)) {
 						++gNPLane;
 						continue;
 					}
@@ -541,7 +541,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 					float pd = 0.f, pl = 0.f;
 					Base::Coords(p, pd, pl);
 					const float lh = Base::LaneHalf() + pitch * 0.5f;
-					if (Base::LanesApply(pd) && ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))) {
+					if (Base::InStreet(pd, pl, lh)) {
 						++gNPLane;
 						continue;
 					}

@@ -1042,6 +1042,9 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 		+ " doorRefused=" + doorRefused + " depthRefused=" + gLatheDepthRefused + why);
 	if ((bestBP < 0.f) && (interiorBP < 0.f))
 		NoteNoRoom(did);
+	else if (PlotOf(did) is null)
+		NoteValuePlot(did, (bestBP >= 0.f) ? bestBP : interiorBP, (mover is null) ? 0.f : Catalog::gBuildPower[int(mover.id)],
+				(bestBP >= 0.f) ? best : interior);
 	bool cached = false;
 	for (uint i = 0; i < gLSDefs.length(); ++i) {
 		if (gLSDefs[i] == did) {

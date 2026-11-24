@@ -37,6 +37,8 @@ text: `git log -p TODO.md`.
 | Play | His date | In one line |
 |---|---|---|
 | [one-pricing-scale](todo/one-pricing-scale.md) | 10-19 | THE CURRENT JOB (valuation): one inherited price, then no overrides |
+| [learn-army-from-replays](todo/learn-army-from-replays.md) | 11-18 | army orders learned from strong players' replays, each order weighted by its outcome and the player's rating |
+| [army-command-levels](todo/army-command-levels.md) | 11-21 | ranks that think at their own level (general, tactical, squad); risk and advantage by reach; control the valuable land; a planner |
 | [learn-from-each-decision](todo/learn-from-each-decision.md) | 11-04 | learn from what each building, fight, raid and push actually did, in damage and metal, not a 2-minute window |
 
 ## Team T2 and the economy ramp
