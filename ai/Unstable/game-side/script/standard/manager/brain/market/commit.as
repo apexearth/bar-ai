@@ -42,6 +42,61 @@ int gComSummaryNext = 0;
 
 uint ComLen() { return gComDef.length(); }
 
+// THE LEDGER'S ROWS BY DEF, in row order: the per-def queries walked every row of a ledger that runs to thousands
+// (ComNearest alone ~45M lines in 19 late minutes of an 8v8). Rebuilt when a row is added or removed (gComShape);
+// a state or position change keeps the rows where they are. A def id off the catalog takes the full walk.
+int gComShape = 0;
+int gComByDefShape = -1;
+array<array<int>@> gComByDef;
+array<int> gComByDefUsed;
+const array<int> COM_NO_ROWS;
+bool ComRowsOk(int defId)
+{
+	return (defId >= 0) && (defId <= Catalog::gDefCount);
+}
+// Rows whose def is of protect class `cls`, ascending: the class asked once per def present, not once per row.
+void ComRowsOfClass(int cls, array<int>& out rows)
+{
+	rows.resize(0);
+	ComRows(0);
+	for (uint u = 0; u < gComByDefUsed.length(); ++u) {
+		const int d = gComByDefUsed[u];
+		if (ProtClassOf(d) != cls)
+			continue;
+		const array<int>@ r = gComByDef[uint(d)];
+		for (uint k = 0; k < r.length(); ++k)
+			rows.insertLast(r[k]);
+	}
+	rows.sortAsc();
+}
+
+const array<int>@ ComRows(int defId)
+{
+	if (gComByDefShape != gComShape) {
+		for (uint u = 0; u < gComByDefUsed.length(); ++u)
+			gComByDef[uint(gComByDefUsed[u])].resize(0);
+		gComByDefUsed.resize(0);
+		if (gComByDef.length() < uint(Catalog::gDefCount + 1))
+			gComByDef.resize(uint(Catalog::gDefCount + 1));
+		for (uint i = 0; i < gComDef.length(); ++i) {
+			const int d = gComDef[i];
+			if (!ComRowsOk(d))
+				continue;
+			array<int>@ rows = gComByDef[uint(d)];
+			if (rows is null) {
+				@rows = array<int>();
+				@gComByDef[uint(d)] = rows;
+			}
+			if (rows.length() == 0)
+				gComByDefUsed.insertLast(d);
+			rows.insertLast(int(i));
+		}
+		gComByDefShape = gComShape;
+	}
+	const array<int>@ rows = gComByDef[uint(defId)];
+	return (rows is null) ? COM_NO_ROWS : rows;
+}
+
 // METAL ALREADY PROMISED, BUT NOT YET DRAWING. A commitment does not remove
 // metal from the bank -- the lathe draws it over the whole build -- so every
 // claimant reading metal.current sees the SAME pile and spends it independently.
@@ -185,6 +240,7 @@ int ComFindId(Id id)
 void ComDrop(uint i)
 {
 	gComDef.removeAt(i);
+	++gComShape;
 	gComState.removeAt(i);
 	gComId.removeAt(i);
 	gComPos.removeAt(i);
@@ -230,6 +286,7 @@ void ComTaskAdded(IUnitTask@ task)
 		return;
 	AatNoteComOrder(d);
 	gComDef.insertLast(d);
+	++gComShape;
 	gComState.insertLast(CS_ORDERED);
 	gComId.insertLast(Id(-1));
 	gComPos.insertLast(task.GetBuildPos());
@@ -286,6 +343,7 @@ void ComUnitFinished(CCircuitUnit@ unit)
 	if (i < 0) {
 		// Never task-tracked: resurrected, or otherwise engine-made.
 		gComDef.insertLast(d);
+		++gComShape;
 		gComState.insertLast(CS_FINISHED);
 		gComId.insertLast(unit.id);
 		gComPos.insertLast(at);
@@ -315,6 +373,14 @@ void ComUnitDead(CCircuitUnit@ unit)
 int ComCountOf(int defId, int mask)
 {
 	int n = 0;
+	if (ComRowsOk(defId)) {
+		const array<int>@ rows = ComRows(defId);
+		for (uint k = 0; k < rows.length(); ++k) {
+			if ((gComState[uint(rows[k])] & mask) != 0)
+				++n;
+		}
+		return n;
+	}
 	for (uint i = 0; i < gComDef.length(); ++i) {
 		if ((gComDef[i] == defId) && ((gComState[i] & mask) != 0))
 			++n;
@@ -328,7 +394,11 @@ int ComCountOf(int defId, int mask)
 int ComCountManned(int defId, int mask)
 {
 	int n = 0;
-	for (uint i = 0; i < gComDef.length(); ++i) {
+	const bool byDef = ComRowsOk(defId);
+	const array<int>@ rows = byDef ? ComRows(defId) : COM_NO_ROWS;
+	const uint len = byDef ? rows.length() : gComDef.length();
+	for (uint k = 0; k < len; ++k) {
+		const uint i = byDef ? uint(rows[k]) : k;
 		if ((gComDef[i] != defId) || ((gComState[i] & mask) == 0))
 			continue;
 		if (gComState[i] != CS_FINISHED) {
@@ -349,7 +419,11 @@ bool ComAbandoned(uint i)
 // Any row of this def, a released order aside.
 bool ComAnyHeld(int defId)
 {
-	for (uint i = 0; i < gComDef.length(); ++i) {
+	const bool byDef = ComRowsOk(defId);
+	const array<int>@ rows = byDef ? ComRows(defId) : COM_NO_ROWS;
+	const uint len = byDef ? rows.length() : gComDef.length();
+	for (uint k = 0; k < len; ++k) {
+		const uint i = byDef ? uint(rows[k]) : k;
 		if ((gComDef[i] == defId) && !ComAbandoned(i))
 			return true;
 	}
@@ -358,7 +432,11 @@ bool ComAnyHeld(int defId)
 
 bool ComAny(int defId, int mask)
 {
-	for (uint i = 0; i < gComDef.length(); ++i) {
+	const bool byDef = ComRowsOk(defId);
+	const array<int>@ rows = byDef ? ComRows(defId) : COM_NO_ROWS;
+	const uint len = byDef ? rows.length() : gComDef.length();
+	for (uint k = 0; k < len; ++k) {
+		const uint i = byDef ? uint(rows[k]) : k;
 		if ((gComDef[i] == defId) && ((gComState[i] & mask) != 0))
 			return true;
 	}
@@ -369,7 +447,11 @@ int ComNearest(int defId, const AIFloat3 &in pos, float reach, int mask)
 {
 	int best = -1;
 	float bestD = reach;
-	for (uint i = 0; i < gComDef.length(); ++i) {
+	const bool byDef = ComRowsOk(defId);
+	const array<int>@ rows = byDef ? ComRows(defId) : COM_NO_ROWS;
+	const uint len = byDef ? rows.length() : gComDef.length();
+	for (uint k = 0; k < len; ++k) {
+		const uint i = byDef ? uint(rows[k]) : k;
 		if ((gComDef[i] != defId) || ((gComState[i] & mask) == 0))
 			continue;
 		const float dd = pos.distance2D(gComPos[i]);

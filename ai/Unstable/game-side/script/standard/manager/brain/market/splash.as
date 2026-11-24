@@ -41,19 +41,11 @@ void SplashRefresh()
 		gSplNear[b] = 0.f;
 		gSplNearM[b] = 0.f;
 	}
-	const float reach = float(SPL_BINS) * SPL_BIN;
 	float metal = 0.f;
-	for (uint i = 0; i < p.length(); ++i) {
+	for (uint i = 0; i < p.length(); ++i)
 		metal += c[i];
-		for (uint j = i + 1; j < p.length(); ++j) {
-			const float dd = p[i].distance2D(p[j]);
-			if (dd < reach) {
-				const int b = int(dd / SPL_BIN);
-				gSplNear[b] += 2.f;
-				gSplNearM[b] += c[i] + c[j];
-			}
-		}
-	}
+	// The pair loop in C++ (PairBins), same order and arithmetic: 45k pairs a refresh ran in script.
+	ai.PairBins(p, c, SPL_BIN, gSplNear, gSplNearM);
 	gSplTargets = int(p.length());
 	gSplMetal = metal;
 	if (ai.frame >= gSplLogAt) {

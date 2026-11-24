@@ -99,7 +99,10 @@ public:
 									 int facing,
 									 TerrainPredicate& predicate,
 									 bool isIgnore = false,
-									 bool isHighRes = false);
+									 bool isHighRes = false,
+									 // asked before the engine's IsPossibleToBuildAt, on x and z only: a cheap
+									 // test the predicate also makes, so the result is the same, sooner
+									 const TerrainPredicate* preTest = nullptr);
 //	springai::AIFloat3 FindSpringBuildSite(CCircuitDef* cdef, const springai::AIFloat3& pos, float searchRadius, int facing);
 	void DoLineOfDef(const springai::AIFloat3& start, const springai::AIFloat3& end, CCircuitDef* buildDef,
 			std::function<void (const springai::AIFloat3& pos, CCircuitDef* buildDef)> exec) const;  // FillRowOfBuildPos
@@ -143,20 +146,23 @@ private:
 										const springai::AIFloat3& pos,
 										float searchRadius,
 										int facing,
-										TerrainPredicate& predicate);
+										TerrainPredicate& predicate,
+										const TerrainPredicate* preTest = nullptr);
 	springai::AIFloat3 FindBuildSiteByMask(CCircuitDef* cdef,
 										   const springai::AIFloat3& pos,
 										   float searchRadius,
 										   int facing,
 										   IBlockMask* mask,
-										   TerrainPredicate& predicate);
+										   TerrainPredicate& predicate,
+										   const TerrainPredicate* preTest = nullptr);
 	// NOTE: Low-resolution build site is 40-80% faster on fail and 20-50% faster on success (with large objects). But has lower precision.
 	springai::AIFloat3 FindBuildSiteByMaskLow(CCircuitDef* cdef,
 											  const springai::AIFloat3& pos,
 											  float searchRadius,
 											  int facing,
 											  IBlockMask* mask,
-											  TerrainPredicate& predicate);
+											  TerrainPredicate& predicate,
+											  const TerrainPredicate* preTest = nullptr);
 
 	int allyZoneCells;  // side of a square
 	SBlockingMap blockingMap;

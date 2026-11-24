@@ -678,6 +678,33 @@ string StandingNear(const AIFloat3& in at, float r)
 }
 
 // Live requests with a standing nanoframe within r of a point.
+// RisingNear's positions, read once: a lathe-site probe asked it per turret, each asking every live task.
+void RisingPositions(array<AIFloat3>& out ps)
+{
+	ps.resize(0);
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || lt.IsDead() || (lt.target is null))
+			continue;
+		const AIFloat3 lp = lt.GetBuildPos();
+		if (OnMap(lp))
+			ps.insertLast(lp);
+	}
+}
+int RisingNearIn(const array<AIFloat3>& in ps, const AIFloat3& in at, float r)
+{
+	int n = 0;
+	for (uint i = 0; i < ps.length(); ++i) {
+		if (ps[i].distance2D(at) < r)
+			++n;
+	}
+	return n;
+}
+
+// RingBPAt at each turret, kept while the turret grid holds the same turrets in the same places.
+array<float> gRingBPNano;
+int gRingBPEra = -1;
+
 int RisingNear(const AIFloat3& in at, float r)
 {
 	int n = 0;
@@ -876,11 +903,20 @@ AIFloat3 LatheSiteRaw(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in i
 	double _lsFind = 0.0, _lsRoom = 0.0;
 	// One probe per BLOCK: the richest squares all sit inside one block,
 	// and a big footprint fits nowhere near a block's middle.
+	array<AIFloat3> rising;
+	RisingPositions(rising);
+	NanoMaxReach();
+	if ((gRingBPEra != gNanoGridEra) || (gRingBPNano.length() != gOwnNanoPos.length())) {
+		gRingBPNano.resize(gOwnNanoPos.length());
+		for (uint i = 0; i < gOwnNanoPos.length(); ++i)
+			gRingBPNano[i] = RingBPAt(gOwnNanoPos[i]);
+		gRingBPEra = gNanoGridEra;
+	}
 	array<float> ringBP;
 	ringBP.resize(gOwnNanoPos.length());
 	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
-		ringBP[i] = RingBPAt(gOwnNanoPos[i]);
-		ringBP[i] /= float(1 + RisingNear(gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
+		ringBP[i] = gRingBPNano[i];
+		ringBP[i] /= float(1 + RisingNearIn(rising, gOwnNanoPos[i], (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f));
 	}
 	array<int> top;
 	// A block packed solid with turrets has no ground left in its reach, and the richest were exactly those (his

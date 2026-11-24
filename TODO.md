@@ -98,11 +98,13 @@ tools/frametime.py, tools/hitch.py, tools/asprof.py (apex_asprof=4); skill ai-pe
 Measured 11-24 (8v8 Greenest Fields +100, line profile results/perf/): the pricing loop is NOT hot (ValueOf ~45 ms
 inclusive in 19 late minutes of 8 AIs). The profile is flat: no function over ~4% self. Done and measured: the
 collector once a frame, no line cues, the election re-sum, LiftFits/Def caches (-4% to -13% AI time, mirror games).
-Worst minute was 0.593 ms per AI per frame before; still over 0.417. Next, by measured cost in the late game:
-tight script loops to move into C++ or restructure (AatCoverRefresh/ProtClassOf over the whole ledger on every
-stamp, ComNearest, PfCoverRing, SplashRefresh, FoeMemStep, NaPathAA, RiskFill); native calls the script makes
-often (EnemiesToReclaimNear 22 us a cell, FacExitGap 1.9 ms, EnemyReachSlack 51 us, nano CreateAssistTask
-~60 us, 40% of it the area query); the indivisible proposer recomputes behind the 10-15 ms spikes (mc.protect,
-mc.plant, mc.sense/sense.jam); a 179 ms factory site search (site-fail r=1600). Tried and dropped: the bundled
+Worst minute was 0.593 ms per AI per frame before; still over 0.417. Pass 2 (identical, checked in-game): the
+factory site search, the worst stutter (64 -> 4 ms; up to 180 ms before), the ledger by def (ComNearest & co,
+AatCoverRefresh), the lathe probe's turret scores, the splash pairs as a C++ binding (PairBins). Next, by
+measured cost in the late game: the army-side loops wait for the v0.6.00 army model (FoeMemStep, military hooks);
+script loops left (PfCoverRing, NaPathAA, RiskFill, KoHullSamples); native calls the script makes often
+(EnemiesToReclaimNear 22 us a cell, FacExitGap 1.9 ms, EnemyReachSlack 51 us, nano CreateAssistTask ~60 us);
+the rest of the lathe-site spike (ls.raw up to ~30-38 ms: its per-probe tests); the indivisible proposer
+recomputes behind the 10-15 ms spikes (mc.protect, mc.plant, mc.sense/sense.jam). Tried and dropped: the bundled
 AngelScript JIT (its native calls break on MinGW x64, and once routed through AngelScript it crashed in its own
 code after 3.6 min, with no clear gain).

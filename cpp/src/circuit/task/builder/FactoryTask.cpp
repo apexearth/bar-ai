@@ -163,10 +163,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	// (IsInBaseLane, centre and corners), and the footprint over another factory's door -- ours or any ally's, two
 	// of its footprints ahead at its own facing, its width. apex_fac_lanes 0 is the old commit.
 	const bool othersOn = circuit->GetTunable("apex_fac_lanes", 1.f) > 0.f;
-	auto othersClear = [this, circuit, othersOn](const AIFloat3& bp) {
-		if (!othersOn) {
-			return true;
-		}
+	auto onLanes = [this, circuit](const AIFloat3& bp) {
 		const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
 		const float hx = (turned ? buildDef->GetDef()->GetZSize() : buildDef->GetDef()->GetXSize()) * SQUARE_SIZE * 0.5f;
 		const float hz = (turned ? buildDef->GetDef()->GetXSize() : buildDef->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f;
@@ -174,9 +171,21 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 				AIFloat3(bp.x - hx, bp.y, bp.z + hz), AIFloat3(bp.x + hx, bp.y, bp.z + hz)};
 		for (const AIFloat3& q : pts) {
 			if (circuit->IsInBaseLane(q)) {
-				return false;
+				return true;
 			}
 		}
+		return false;
+	};
+	auto othersClear = [this, circuit, othersOn, &onLanes](const AIFloat3& bp) {
+		if (!othersOn) {
+			return true;
+		}
+		if (onLanes(bp)) {
+			return false;
+		}
+		const bool turned = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
+		const float hx = (turned ? buildDef->GetDef()->GetZSize() : buildDef->GetDef()->GetXSize()) * SQUARE_SIZE * 0.5f;
+		const float hz = (turned ? buildDef->GetDef()->GetXSize() : buildDef->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f;
 		circuit->UpdateFriendlyUnits();
 		auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(bp, 700.f);
 		bool clear = true;
@@ -276,9 +285,15 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 					&& exitOpen(p);
 		};
 	}
+	// The two tests of the predicate that read only x and z, first: a failing lab search asked the engine whether
+	// 14,600 cells could take the building and the lane test then refused nearly all of them (98 ms in one frame).
+	// The predicate makes both tests too, so the site found is the same (31 of 31 searches, 11-24).
+	CTerrainManager::TerrainPredicate preTest = [&clearsBuilder, &onLanes, othersOn](const AIFloat3& p) {
+		return clearsBuilder(p) && !(othersOn && onLanes(p));
+	};
 	const float testSize = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
-	auto checkFacing = [this, map, terrainMgr, testSize, &predicate, &pos, searchRadius, &exitOpen, &leadsOut]() {
-		AIFloat3 bp = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate);
+	auto checkFacing = [this, map, terrainMgr, testSize, &predicate, &preTest, &pos, searchRadius, &exitOpen, &leadsOut]() {
+		AIFloat3 bp = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate, false, false, &preTest);
 		if (!utils::is_valid(bp)) {
 			return false;
 		}

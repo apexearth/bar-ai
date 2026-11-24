@@ -1894,6 +1894,35 @@ static bool IsHeldEat(CCircuitAI* circuit, IUnitTask* cur)
 
 // apex: enemies in LOS within radius of pos that a lathe could reclaim -- the def allows it and the unit is not
 // cloaked. Eight floats each: id, def, x, y, z, health / max health, radius, 1 if a nanoframe.
+// apex: the pair loop of splash.as SplashRefresh, in the script's order and arithmetic: every pair of points nearer
+// than near.length() * binSize adds 2 to its distance bin and both points' weights to the same bin of nearM.
+// 300 points are 45k pairs, a burst every ten seconds that the script ran in milliseconds.
+static void CCircuitAI_PairBins(CCircuitAI* circuit, const CScriptArray* p, const CScriptArray* w, float binSize,
+		CScriptArray* nearN, CScriptArray* nearM)
+{
+	if ((p == nullptr) || (w == nullptr) || (nearN == nullptr) || (nearM == nullptr) || (binSize <= 0.f)) {
+		return;
+	}
+	const asUINT n = std::min(p->GetSize(), w->GetSize());
+	const asUINT bins = std::min(nearN->GetSize(), nearM->GetSize());
+	const float reach = float(bins) * binSize;
+	for (asUINT i = 0; i < n; ++i) {
+		const AIFloat3& pi = *static_cast<const AIFloat3*>(p->At(i));
+		const float wi = *static_cast<const float*>(w->At(i));
+		for (asUINT j = i + 1; j < n; ++j) {
+			const AIFloat3& pj = *static_cast<const AIFloat3*>(p->At(j));
+			const float dd = pi.distance2D(pj);
+			if (dd < reach) {
+				const asUINT b = asUINT(int(dd / binSize));
+				if (b < bins) {
+					*static_cast<float*>(nearN->At(b)) += 2.f;
+					*static_cast<float*>(nearM->At(b)) += wi + *static_cast<const float*>(w->At(j));
+				}
+			}
+		}
+	}
+}
+
 static CScriptArray* CCircuitAI_EnemiesToReclaimNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	asITypeInfo* at = FloatArrayType();
@@ -3272,6 +3301,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaimAlly(int, int, int)", asFUNCTION(CCircuitAI_TurretsReclaimAlly), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ EnemiesToReclaimNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_EnemiesToReclaimNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void PairBins(const array<AIFloat3>@+, const array<float>@+, float, array<float>@+, array<float>@+)", asFUNCTION(CCircuitAI_PairBins), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float LatheJobRate(CCircuitUnit@)", asFUNCTION(CCircuitAI_LatheJobRate), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaimEnemy(int, const array<CCircuitUnit@>@+, int)", asFUNCTION(CCircuitAI_TurretsReclaimEnemy), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float DefReclaimedM()", asFUNCTION(CCircuitAI_DefReclaimedM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

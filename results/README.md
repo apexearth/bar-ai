@@ -72,6 +72,7 @@ is on its page; uncommitted code is in `patches/`. This index is generated (`too
 
 | date | batch | games | W-L | timeouts w-l | income at 20 | verdict |
 |---|---|---|---|---|---|---|
+| 2026-11-24 | [Hot script pass 2: factory site search, ledger index, lathe probe, splash pairs in C++ (identity checks)](perf/2026-11-24-hot-script-pass-2-factory-site-search-ledger-index-lathe-pro.md) | 5 | 0-1 | 0-4 | x0.27 | All identical: 31/31 factory sites, 767/767 lathe probes, 0 mismatches over 15,654 + 11,098 checked ledger/cover/splash calls, no script exceptions. Factory search worst 64.2 -> 4.2 ms, 272 -> 33 ms total in 20 min; the lathe turret scores 217 -> 116 ms over 767 probes |
 | 2026-11-24 | [Hot script: identical-behaviour VM and script fixes (mirror 8v8s)](perf/2026-11-24-hot-script-identical-behaviour-vm-and-script-fixes-mirror-8v.md) | 2 | 1-1 | 0-0 | x0.98 | AI time -4.2% (game 1) and -13.0% (game 2) over minutes 2-17, where both sides field comparable armies; script-only (main hook) -10.6% / -3.0%. Later minutes track whichever side is winning. Collector: 3.3 s -> 0.28 s in 19 min of 8 AIs. Verdict still FAIL (worst minute ~0.55 ms est. vs 0.417) |
 
 ## randomizer

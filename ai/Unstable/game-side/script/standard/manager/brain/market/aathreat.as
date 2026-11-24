@@ -344,10 +344,11 @@ void AatCoverRefresh()
 		gAatCoverDone[p] = 0.f;
 	}
 	const float r = AatRadius();
-	for (uint i = 0; i < ComLen(); ++i) {
+	array<int> aaRows;
+	ComRowsOfClass(PROT_AA, aaRows);
+	for (uint k = 0; k < aaRows.length(); ++k) {
+		const uint i = uint(aaRows[k]);
 		const int d = gComDef[i];
-		if (ProtClassOf(d) != PROT_AA)
-			continue;
 		const bool done = (gComState[i] == CS_FINISHED);
 		if (!done && ((gComTask[i] is null) || (Requests::Workers(gComTask[i]) == 0)))
 			continue;

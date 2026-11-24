@@ -671,7 +671,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
 }
 
 AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
-		float searchRadius, int facing, TerrainPredicate& predicate, bool isIgnore, bool isHighRes)
+		float searchRadius, int facing, TerrainPredicate& predicate, bool isIgnore, bool isHighRes, const TerrainPredicate* preTest)
 {
 	ZoneScoped;
 
@@ -685,13 +685,13 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
 		int xmsize = mask->GetXSize();
 		int zmsize = mask->GetZSize();
 		if (!isHighRes && (searchRadius > SQUARE_SIZE * 2 * 100 || xmsize * zmsize > GRID_RATIO_LOW * GRID_RATIO_LOW * 4)) {
-			return FindBuildSiteByMaskLow(cdef, pos, searchRadius, facing, mask, predicate);
+			return FindBuildSiteByMaskLow(cdef, pos, searchRadius, facing, mask, predicate, preTest);
 		}
-		return FindBuildSiteByMask(cdef, pos, searchRadius, facing, mask, predicate);
+		return FindBuildSiteByMask(cdef, pos, searchRadius, facing, mask, predicate, preTest);
 	}
 
 	if (searchRadius > SQUARE_SIZE * 2 * 100) {
-		return FindBuildSiteLow(cdef, pos, searchRadius, facing, predicate);  // isIgnore = false
+		return FindBuildSiteLow(cdef, pos, searchRadius, facing, predicate, preTest);  // isIgnore = false
 	}
 
 	/*
@@ -733,7 +733,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
 
 		probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
 		probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
-		if (CanBeBuiltAtSafe(cdef, probePos) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {
+		if (CanBeBuiltAtSafe(cdef, probePos) && ((preTest == nullptr) || (*preTest)(probePos)) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {
 			probePos.y = map->GetElevationAt(probePos.x, probePos.z);
 			if (predicate(probePos)) {
 				return probePos;
@@ -1396,7 +1396,7 @@ const CTerrainManager::SearchOffsetsLow& CTerrainManager::GetSearchOffsetTableLo
 }
 
 AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& pos,
-		float searchRadius, int facing, TerrainPredicate& predicate)
+		float searchRadius, int facing, TerrainPredicate& predicate, const TerrainPredicate* preTest)
 {
 	UnitDef* unitDef = cdef->GetDef();
 	const int xsize = (((facing & 1) == 0) ? unitDef->GetXSize() : unitDef->GetZSize()) / 2;
@@ -1450,7 +1450,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
 
 			probePos.x = (s1.x + s2.x) * SQUARE_SIZE;
 			probePos.z = (s1.y + s2.y) * SQUARE_SIZE;
-			if (CanBeBuiltAtSafe(cdef, probePos) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {
+			if (CanBeBuiltAtSafe(cdef, probePos) && ((preTest == nullptr) || (*preTest)(probePos)) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {
 				probePos.y = map->GetElevationAt(probePos.x, probePos.z);
 				if (predicate(probePos)) {
 					return probePos;
@@ -1463,7 +1463,7 @@ AIFloat3 CTerrainManager::FindBuildSiteLow(CCircuitDef* cdef, const AIFloat3& po
 }
 
 AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3& pos,
-		float searchRadius, int facing, IBlockMask* mask, TerrainPredicate& predicate)
+		float searchRadius, int facing, IBlockMask* mask, TerrainPredicate& predicate, const TerrainPredicate* preTest)
 {
 	int xmsize = mask->GetXSize();
 	int zmsize = mask->GetZSize();
@@ -1548,7 +1548,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
 			continue;																					\
 		}																								\
 																										\
-		if (map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {	\
+		if (((preTest == nullptr) || (*preTest)(probePos)) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {	\
 			probePos.y = map->GetElevationAt(probePos.x, probePos.z);									\
 			if (predicate(probePos)) {																	\
 				return probePos;																		\
@@ -1582,7 +1582,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMask(CCircuitDef* cdef, const AIFloat3&
 }
 
 AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloat3& pos,
-		float searchRadius, int facing, IBlockMask* mask, TerrainPredicate& predicate)
+		float searchRadius, int facing, IBlockMask* mask, TerrainPredicate& predicate, const TerrainPredicate* preTest)
 {
 	UnitDef* unitDef = cdef->GetDef();
 	int xmsize, zmsize, xssize, zssize;
@@ -1686,7 +1686,7 @@ AIFloat3 CTerrainManager::FindBuildSiteByMaskLow(CCircuitDef* cdef, const AIFloa
 				continue;																						\
 			}																									\
 																												\
-			if (map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {		\
+			if (((preTest == nullptr) || (*preTest)(probePos)) && map->IsPossibleToBuildAt(unitDef, probePos, facing) && !ZoneRefuses(cdef, probePos, facing)) {		\
 				probePos.y = map->GetElevationAt(probePos.x, probePos.z);										\
 				if (predicate(probePos)) {																		\
 					return probePos;																			\
