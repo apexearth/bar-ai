@@ -38,6 +38,7 @@ text: `git log -p TODO.md`.
 |---|---|---|
 | [one-pricing-scale](todo/one-pricing-scale.md) | 10-19 | THE CURRENT JOB (valuation): one inherited price, then no overrides |
 | [learn-army-from-replays](todo/learn-army-from-replays.md) | 11-18 | army orders learned from strong players' replays, each order weighted by its outcome and the player's rating |
+| [armynet-self-play](todo/armynet-self-play.md) | 11-25 | the army model learns from our own games; a candidate counts only if it beats the champion head-to-head, 60% of 20 games |
 | [army-command-levels](todo/army-command-levels.md) | 11-21 | ranks that think at their own level (general, tactical, squad); risk and advantage by reach; control the valuable land; a planner |
 | [learn-from-each-decision](todo/learn-from-each-decision.md) | 11-04 | learn from what each building, fight, raid and push actually did, in damage and metal, not a 2-minute window |
 
@@ -47,6 +48,7 @@ text: `git log -p TODO.md`.
 |---|---|---|
 | [fly-t2-cons-to-allies](todo/fly-t2-cons-to-allies.md) | 10-19 | transports deliver T2 constructors to allies |
 | [eco-ramp](todo/eco-ramp.md) | 10-20 | his eco-test notes: upgrades, turrets ahead, packing |
+| [seat-plan](todo/seat-plan.md) | 11-05 | decide from the top, builders are hands; plan.as built, measured worse in 2v2 (11-06), runs in shadow only |
 
 ## Strategies
 

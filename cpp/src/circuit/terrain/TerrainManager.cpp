@@ -674,6 +674,7 @@ AIFloat3 CTerrainManager::FindBuildSite(CCircuitDef* cdef, const AIFloat3& pos,
 		float searchRadius, int facing, TerrainPredicate& predicate, bool isIgnore, bool isHighRes, const TerrainPredicate* preTest)
 {
 	ZoneScoped;
+	CScheduler::STimed timed(circuit->GetScheduler().get(), "c.site");
 
 	if (circuit->IsAllyAware()) {
 		MarkAllyBuildings();

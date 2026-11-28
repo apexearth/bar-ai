@@ -136,15 +136,22 @@ void UpdateAirThreat()
 	// not just eventually via the smoothed average. GetEnemyCostFresh only counts
 	// what was seen within the last freshFrames (60s default), so the reading
 	// actually falls back to 0 once the sighting goes stale.
+	// Armed aircraft only, read per unit: a lobby's assist drones (1 metal, unarmed) made "seen 1 metal of enemy air"
+	// and an AA tower before the third mex in 17 of 20 seats (11-25). The old role subtraction took their ground
+	// builders off the air too.
 	const float airRaw = aiEnemyMgr.GetEnemyCostFresh(RT::AIR);
-	const float soft = aiEnemyMgr.GetEnemyCostFresh(Unit::Role::BUILDER.type)
-	                 + aiEnemyMgr.GetEnemyCostFresh(Unit::Role::SCOUT.type);
-	float softAir = (airRaw < soft) ? airRaw : soft;
-	if (softAir > SOFT_AIR_CAP)
-		softAir = SOFT_AIR_CAP;
-	float air = airRaw - softAir * (1.f - SOFT_AIR_WEIGHT);
-	if (air < 0.f)
-		air = 0.f;
+	float air = 0.f;
+	const int nFoe = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < nFoe; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if ((d <= 0) || (d > Catalog::gDefCount) || !Catalog::gFlyer[d] || !Catalog::gMobile[d]
+				|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if ((los < 0) || ((los & (8 | 32 | 64)) != 0))
+			continue;
+		air += Catalog::gCostM[d];
+	}
 	const float ground = EnemyGroundCost() * GROUND_UNSEEN;
 	gAirRaw = air;
 	if (air > gAirSeen)

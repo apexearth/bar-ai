@@ -1908,7 +1908,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// mandate or the air lead's air line; the spare goes to nanos and eco.
 		// The eco seat spilling metal takes its air line too: air cons are the
 		// hands it lacks, and they reach a site faster (his 2026-10-03).
-		if ((PlantTier(d) < 2) && (TopOwnPlantTier() < 2) && (dClass != PC_WATER)
+		if ((PlantTier(d) < 2) && (TopOwnPlantTier() < 2) && AdvancedPlantAvailable() && (dClass != PC_WATER)
 			&& !((dClass == PC_AIR) && Air::IsAirLead())
 			&& !((dClass == PC_AIR) && gEcoRole && MetalWasting())
 			&& !evAir

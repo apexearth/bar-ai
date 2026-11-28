@@ -1,0 +1,2412 @@
+diff --git a/cpp/src/circuit/CircuitAI.cpp b/cpp/src/circuit/CircuitAI.cpp
+index d90bf754..e0a62e72 100644
+--- a/cpp/src/circuit/CircuitAI.cpp
++++ b/cpp/src/circuit/CircuitAI.cpp
+@@ -1040,6 +1040,27 @@ int CCircuitAI::Update(int frame)
+ 		garbage.erase(unit);  // NOTE: UnregisterTeamUnit may erase unit
+ 	}
+ 
++	// apex: a dev gadget that commands some of our units itself (dev_armynet, dev_arena) marks them
++	// disableAiControl and sets the game rules param barai_handsoff; only then is the mark read live (stock reads
++	// it only when a save loads). No gadget sets it in a normal game.
++	if ((frame % FRAMES_PER_SEC == 13) && (game != nullptr) && (game->GetRulesParamFloat("barai_handsoff", 0.f) > 0.f)) {
++		int released = 0;
++		for (auto& kv : teamUnits) {
++			CCircuitUnit* unit = kv.second;
++			if ((unit->GetTask() != nullptr) && (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER)
++				&& (unit->GetUnit()->GetRulesParamFloat("disableAiControl", 0.f) > 0.f)
++				&& UnitControl(unit, false))
++			{
++				++released;
++			}
++		}
++		handsOffTotal += released;
++		if ((released > 0) && (frame >= handsOffNextLog)) {
++			handsOffNextLog = frame + FRAMES_PER_SEC * 60;
++			LOG("apex: handsoff t=%i f=%i released=%i total=%i", teamId, frame, released, handsOffTotal);
++		}
++	}
++
+ 	for (const CEnemyUnit* data : allyTeam->GetDyingEnemies()) {
+ 		CEnemyInfo* enemy = GetEnemyInfo(data->GetId());
+ 		if (enemy != nullptr) {  // EnemyDestroyed right after UpdateEnemyDatas but before this Update
+diff --git a/cpp/src/circuit/CircuitAI.h b/cpp/src/circuit/CircuitAI.h
+index 5d0bbe67..a6b511d8 100644
+--- a/cpp/src/circuit/CircuitAI.h
++++ b/cpp/src/circuit/CircuitAI.h
+@@ -946,6 +946,8 @@ private:
+ 	int ghostPurgeNext = 0;
+ 	std::array<int, static_cast<int>(CCircuitDef::SniperOrder::_SIZE_)> sniperOrders{};
+ 	int sniperOrderNextLog = 0;
++	int handsOffTotal = 0;
++	int handsOffNextLog = 0;
+ 	int skirmishAIId;
+ 	int teamId;
+ 	int allyTeamId;
+diff --git a/game-patches/gadgets/dev_arena.lua b/game-patches/gadgets/dev_arena.lua
+index 3757b19b..2bf87fe8 100644
+--- a/game-patches/gadgets/dev_arena.lua
++++ b/game-patches/gadgets/dev_arena.lua
+@@ -539,6 +539,9 @@ end
+ --------------------------------------------------------------------------------
+ 
+ function gadget:Initialize()
++	if NOCTRL > 0 then
++		Spring.SetGameRulesParam("barai_handsoff", 1)  -- our AI reads disableAiControl live only when this is set
++	end
+ 	local rosterA, totalA, avgA, sightA = parseRoster(DEF_A)
+ 	local rosterB, totalB, avgB, sightB = parseRoster(DEF_B)
+ 	if not rosterA or not rosterB then
+diff --git a/game-patches/gadgets/dev_armynet.lua b/game-patches/gadgets/dev_armynet.lua
+new file mode 100644
+index 00000000..342b7089
+--- /dev/null
++++ b/game-patches/gadgets/dev_armynet.lua
+@@ -0,0 +1,278 @@
++-- dev_armynet.lua -- let the army model (tools/armynet/serve.py) fight for our side in a local game.
++--
++-- Inert unless the start script sets dev_armynet=1 (run_match.py --modoption dev_armynet=1). On the ally
++-- dev_armynet_ally (default 0), each finished army/air/radar/jammer unit of an Apex team is marked
++-- disableAiControl, and barai_handsoff is set, so our AI drops it from its own control (CCircuitAI::Update)
++-- while still owning and counting it: our AI keeps the economy and production, the model the army.
++-- Every game second the unsynced half writes the side's view to armynet_state.txt in the write dir (the replay
++-- recorder's line format, tools/replay_orders.py); serve.py answers in armynet_orders.txt, which this
++-- half reads and passes to the synced half, which orders marked units only. Local games only.
++
++function gadget:GetInfo()
++	return { name = "BARAI armynet bridge", desc = "the army model fights for our side (dev)", author = "bar-ai",
++		date = "2026-11-18", license = "GNU GPL, v2 or later", layer = 0, enabled = true }
++end
++
++local mo = Spring.GetModOptions and Spring.GetModOptions() or {}
++if mo.dev_armynet ~= "1" then
++	return
++end
++local ALLY = tonumber(mo.dev_armynet_ally or "0") or 0
++
++local function isFocus(ud)
++	if not ud or ud.isBuilding or (ud.speed or 0) <= 0 then return false end
++	if ud.customParams and ud.customParams.iscommander then return false end
++	if ud.isBuilder or (ud.buildSpeed or 0) > 0 then return false end
++	if #(ud.weapons or {}) > 0 then return true end
++	return (ud.radarDistance or ud.radarRadius or 0) > 0 or (ud.radarDistanceJam or ud.jammerRadius or 0) > 0
++end
++
++local function holders()
++	-- the Apex teams on ALLY; each is its own holder (the pairs format is kept: team,team)
++	local map = {}
++	for _, t in ipairs(Spring.GetTeamList()) do
++		local _, _, _, isAI, _, ally = Spring.GetTeamInfo(t)
++		if isAI and ally == ALLY then
++			local _, _, _, short = Spring.GetAIInfo(t)
++			if (short or ""):sub(1, 4) == "Apex" then map[t] = t end
++		end
++	end
++	return map
++end
++
++if gadgetHandler:IsSyncedCode() then
++	local controlled = {}
++	local marked, applied = 0, 0
++
++	local function mark(uid)
++		if Spring.GetUnitRulesParam(uid, "disableAiControl") ~= 1 then
++			Spring.SetUnitRulesParam(uid, "disableAiControl", 1)
++			marked = marked + 1
++		end
++	end
++
++	-- synced code cannot read AI names (GetAIInfo hides them here); the unsynced half sends the teams
++	local function setPairs(body)
++		for a in body:gmatch("(%d+),%d+") do
++			local t = tonumber(a)
++			if not controlled[t] then
++				controlled[t] = true
++				for _, uid in ipairs(Spring.GetTeamUnits(t)) do
++					local _, _, _, _, bp = Spring.GetUnitHealth(uid)
++					if (bp or 0) >= 1 and isFocus(UnitDefs[Spring.GetUnitDefID(uid)]) then mark(uid) end
++				end
++				Spring.Echo("[BARAI_ARMYNET] model commands team " .. t)
++			end
++		end
++	end
++
++	function gadget:Initialize()
++		Spring.SetGameRulesParam("barai_handsoff", 1)
++	end
++
++	function gadget:UnitFinished(unitID, unitDefID, unitTeam)
++		if controlled[unitTeam] and isFocus(UnitDefs[unitDefID]) then mark(unitID) end
++	end
++
++	function gadget:UnitGiven(unitID, unitDefID, newTeam)
++		if controlled[newTeam] and isFocus(UnitDefs[unitDefID]) then mark(unitID) end
++	end
++
++	function gadget:GameFrame(f)
++		if f % 1800 == 0 and f > 0 then
++			Spring.Echo(string.format("[BARAI_ARMYNET] minute %d units marked %d orders applied %d", f / 1800, marked, applied))
++		end
++	end
++
++	-- "armynet:uid,cmd,x,z;uid,20,target;..."
++	function gadget:RecvLuaMsg(msg, playerID)
++		if msg:sub(1, 13) == "armynetpairs:" then
++			setPairs(msg:sub(14))
++			return true
++		end
++		if msg:sub(1, 8) ~= "armynet:" then return end
++		for item in msg:sub(9):gmatch("[^;]+") do
++			local f = {}
++			for v in item:gmatch("[^,]+") do f[#f + 1] = tonumber(v) end
++			local uid, cmd = f[1], f[2]
++			if uid and cmd and Spring.ValidUnitID(uid) and controlled[Spring.GetUnitTeam(uid)]
++				and Spring.GetUnitRulesParam(uid, "disableAiControl") == 1 then
++				applied = applied + 1
++				if cmd == CMD.STOP then
++					Spring.GiveOrderToUnit(uid, CMD.STOP, {}, 0)
++				elseif cmd == CMD.ATTACK and #f == 3 then
++					if Spring.ValidUnitID(f[3]) then Spring.GiveOrderToUnit(uid, CMD.ATTACK, { f[3] }, 0) end
++				elseif #f >= 4 then
++					local x, z = f[3], f[4]
++					Spring.GiveOrderToUnit(uid, cmd, { x, Spring.GetGroundHeight(x, z), z }, 0)
++				end
++			end
++		end
++		return true
++	end
++else
++	local STATE, ORDERS, STATIC = "armynet_state.txt", "armynet_orders.txt", "armynet_static.txt"
++	local classOf, allies, holderList = {}, {}, {}
++	local lastOrders = -1
++
++	local function cls(ud)
++		if ud.customParams and ud.customParams.iscommander then return "com" end
++		if (ud.speed or 0) <= 0 or ud.isBuilding then return "static" end
++		if ud.isBuilder or (ud.buildSpeed or 0) > 0 then return "builder" end
++		if (ud.radarDistanceJam or ud.jammerRadius or 0) > 0 then return "jammer" end
++		if (ud.radarDistance or ud.radarRadius or 0) > 0 and #(ud.weapons or {}) == 0 then return "radar" end
++		if ud.canFly then return "air" end
++		if #(ud.weapons or {}) > 0 then return "army" end
++		return "other"
++	end
++
++	local function weaponStats(ud)
++		local range, ground, aa = 0, 0, 0
++		for _, w in ipairs(ud.weapons or {}) do
++			local wd = WeaponDefs[w.weaponDef]
++			if wd then
++				local d = 0
++				pcall(function() d = (wd.damages and (wd.damages[0] or wd.damages.default)) or 0 end)
++				local per = d * (wd.salvoSize or 1) * (wd.projectiles or 1) / math.max(wd.reload or 1, 0.03)
++				local only = w.onlyTargets or {}
++				if only.vtol and not only.notair and not only.surface and not only.ground then
++					aa = aa + per
++				else
++					ground = ground + per
++					range = math.max(range, wd.range or 0)
++				end
++			end
++		end
++		return range, ground, aa
++	end
++
++	function gadget:Initialize()
++		local m = holders()
++		local seen = {}
++		for src, h in pairs(m) do
++			if not seen[h] then holderList[#holderList + 1] = { h, src } seen[h] = true end
++		end
++		local fh = io.open(STATIC, "w")
++		if not fh then
++			Spring.Echo("[BARAI_ARMYNET] cannot write " .. STATIC)
++			return
++		end
++		fh:write(string.format("V 2 %d %d\n", Game.mapSizeX, Game.mapSizeZ))
++		for id, ud in pairs(UnitDefs) do
++			classOf[id] = cls(ud)
++			local r, g, a = weaponStats(ud)
++			fh:write(string.format("D %d %s %s %.0f %.0f %.1f %.0f %.1f %.1f %.0f %.0f %.0f\n", id, ud.name, classOf[id],
++				ud.metalCost or 0, ud.health or 0, ud.speed or 0, r, g, a, ud.sightDistance or ud.losRadius or 0,
++				ud.radarDistance or ud.radarRadius or 0, ud.radarDistanceJam or ud.jammerRadius or 0))
++		end
++		local gaiaAlly = select(6, Spring.GetTeamInfo(Spring.GetGaiaTeamID()))
++		for _, a in ipairs(Spring.GetAllyTeamList()) do
++			if a ~= gaiaAlly then allies[#allies + 1] = a end
++		end
++		fh:write("A " .. table.concat(allies, " ") .. "\n")
++		for _, t in ipairs(Spring.GetTeamList()) do
++			local _, _, _, isAI, _, ally = Spring.GetTeamInfo(t)
++			fh:write(string.format("T %d %d %s\n", t, ally or -1, tostring(isAI)))
++		end
++		for _, hs in ipairs(holderList) do fh:write(string.format("Q %d %d\n", hs[1], hs[2])) end
++		local n = Spring.GetGameRulesParam("mex_count") or 0
++		for i = 1, n do
++			fh:write(string.format("S %d %.0f %.0f\n", i, Spring.GetGameRulesParam("mex_x" .. i) or -1,
++				Spring.GetGameRulesParam("mex_z" .. i) or -1))
++		end
++		local step, hs = 64, {}
++		for z = step / 2, Game.mapSizeZ, step do
++			for x = step / 2, Game.mapSizeX, step do
++				hs[#hs + 1] = string.format("%.0f", Spring.GetGroundHeight(x, z))
++			end
++		end
++		fh:write("H " .. step .. " " .. table.concat(hs, " ") .. "\n")
++		fh:close()
++		Spring.Echo("[BARAI_ARMYNET] bridge on, holders " .. #holderList)
++	end
++
++	local function sightMask(uid)
++		local m = 0
++		for i, a in ipairs(allies) do
++			local raw = Spring.GetUnitLosState(uid, a, true) or 0
++			m = m + (raw % 4) * (4 ^ (i - 1))
++		end
++		return m
++	end
++
++	local function writeState(frame)
++		local out = {}
++		out[#out + 1] = "F " .. frame
++		for _, uid in ipairs(Spring.GetAllUnits()) do
++			local d = Spring.GetUnitDefID(uid)
++			if d then
++				local x, _, z = Spring.GetUnitPosition(uid)
++				local vx, _, vz = Spring.GetUnitVelocity(uid)
++				local h, mh, _, _, bp = Spring.GetUnitHealth(uid)
++				local c, tx, tz = -1, -1, -1
++				if classOf[d] ~= "static" then
++					local q = Spring.GetUnitCommands(uid, 1)
++					if q and q[1] then
++						c = q[1].id
++						local p = q[1].params or {}
++						if #p >= 3 then tx, tz = p[1], p[3]
++						elseif #p == 1 then
++							local ux, _, uz = Spring.GetUnitPosition(p[1])
++							tx, tz = ux or -1, uz or -1
++						end
++					end
++				end
++				out[#out + 1] = string.format("U %d %d %d %d %.0f %.0f %.1f %.1f %.2f %.2f %d %d %.0f %.0f", frame, uid, d,
++					Spring.GetUnitTeam(uid), x or -1, z or -1, (vx or 0) * 30, (vz or 0) * 30,
++					(h or 0) / math.max(mh or 1, 1), bp or 1, sightMask(uid), c, tx, tz)
++			end
++		end
++		out[#out + 1] = "E " .. frame
++		local fh = io.open(STATE, "w")
++		if fh then
++			fh:write(table.concat(out, "\n") .. "\n")
++			fh:close()
++		end
++	end
++
++	local function readOrders()
++		local fh = io.open(ORDERS, "r")
++		if not fh then return end
++		local head = fh:read("*l")
++		local frame = head and tonumber(head:match("^O (%d+)"))
++		if not frame or frame <= lastOrders then
++			fh:close()
++			return
++		end
++		local body = fh:read("*a") or ""
++		fh:close()
++		if not body:find("\nE\n") and body:sub(-2) ~= "E\n" then return end
++		lastOrders = frame
++		local batch, n = {}, 0
++		for ln in body:gmatch("[^\n]+") do
++			if ln ~= "E" then
++				batch[#batch + 1] = ln
++				n = n + 1
++				if #batch >= 40 then
++					Spring.SendLuaRulesMsg("armynet:" .. table.concat(batch, ";"))
++					batch = {}
++				end
++			end
++		end
++		if #batch > 0 then Spring.SendLuaRulesMsg("armynet:" .. table.concat(batch, ";")) end
++		if frame % 900 == 0 or n > 0 and frame % 300 == 0 then
++			Spring.Echo(string.format("[BARAI_ARMYNET] frame %d orders %d", frame, n))
++		end
++	end
++
++	function gadget:GameFrame(frame)
++		if #holderList == 0 then return end
++		if frame < 300 and frame % 30 == 1 then
++			local p = {}
++			for _, hs in ipairs(holderList) do p[#p + 1] = hs[2] .. "," .. hs[1] end
++			Spring.SendLuaRulesMsg("armynetpairs:" .. table.concat(p, ";"))
++		end
++		if frame % 30 == 0 then writeState(frame) end
++		if frame % 10 == 5 then readOrders() end
++	end
++end
+diff --git a/tools/armynet/data.py b/tools/armynet/data.py
+new file mode 100644
+index 00000000..64ab087f
+--- /dev/null
++++ b/tools/armynet/data.py
+@@ -0,0 +1,355 @@
++"""Training examples for the army model from replay_dataset.py's .npz files.
++
++One example = one human team at one second (a frame on the 1 s sample grid): the side's view as a map grid
++plus a token per own army/air/radar/jammer unit, and per token the label: keep its order, or the new order
++it was given in the next second (kind, cell on the grid, offset inside the cell).
++"""
++import glob
++import math
++from pathlib import Path
++
++import numpy as np
++
++G = 64
++CLASSES = ("static", "builder", "com", "army", "air", "radar", "jammer", "other")
++FOCUS = (3, 4, 5, 6)
++CMD_SLOTS = {-1: 0, 10: 1, 16: 2, 20: 3, 15: 4}
++N_CMD = 6
++N_KIND = 6
++CHANNELS = 20
++TOKEN_F = 28
++MAX_TOKENS = 160
++MEMORY_S = 300
++SCALARS = 6
++HORIZON_PICK = ((0, 0), (1, 0), (2, 0), (3, 1), (4, 1), (4, 2))  # (horizon index, measure): own 5/15/60 s, area 3/10 min, team 10 min
++
++
++def _disk(r):
++    r = int(r)
++    ys, xs = np.mgrid[-r:r + 1, -r:r + 1]
++    m = xs * xs + ys * ys <= r * r + r
++    return ys[m], xs[m]
++
++
++DISKS = [_disk(r) for r in range(0, 9)]
++
++
++class Game:
++    def __init__(self, path, neg_share=0.1, rng=None):
++        z = np.load(path)
++        self.path = Path(path)
++        self.decisions = z["decisions"]
++        self.outcome = z["outcome"]
++        self.result = z["result"]
++        self.desync = int(z["desync_frame"])
++        self._setup(z["units"], z["defs"], z["map"], z["allies"], z["teams"], z["spots"], z["heights"])
++        self._index_decisions()
++        self.examples = self._pick_examples(neg_share, rng or np.random.default_rng(0))
++
++    @classmethod
++    def live(cls, units, defs, mapxz, allies, teams, spots, heights):
++        """A game being played: no decisions or labels, just the view (tools/armynet/serve.py)."""
++        g = cls.__new__(cls)
++        g.path, g.desync = None, -1
++        g.decisions = np.zeros((0, 10))
++        g.dec_by = {}
++        g._setup(units, defs, mapxz, allies, teams, spots, heights)
++        g.examples = []
++        return g
++
++    def _setup(self, units, defs, mapxz, allies, teams, spots, heights):
++        self.units = units
++        self.defs = {int(r[0]): r[1:] for r in defs}
++        self.mapx, self.mapz = [float(v) for v in mapxz]
++        self.allies = [int(a) for a in allies]
++        self.ally_of = {int(t[0]): int(t[1]) for t in teams}
++        self.is_ai = {int(t[0]): bool(t[2]) for t in teams}
++        self.skill = {int(t[0]): float(t[3]) for t in teams}
++        self.spots = spots
++        self.height = self._grid_heights(heights)
++        nd = max(self.defs) + 1
++        self.d_cls = np.zeros(nd, np.int64)
++        self.d_metal, self.d_hp, self.d_speed, self.d_range, self.d_g, self.d_a, self.d_sight, self.d_radar = (
++            np.zeros(nd, np.float32) for _ in range(8))
++        for d, v in self.defs.items():
++            self.d_cls[d] = int(v[0])
++            self.d_metal[d], self.d_hp[d], self.d_speed[d], self.d_range[d] = v[1], v[2], v[3], v[4]
++            self.d_g[d], self.d_a[d], self.d_sight[d], self.d_radar[d] = v[5], v[6], v[7], v[8]
++        u = self.units
++        order = np.argsort(u[:, 0], kind="stable")
++        self.units = u = u[order]
++        self.frames = u[:, 0].astype(np.int64)
++        self.uid = u[:, 1].astype(np.int64)
++        self.udef = np.clip(u[:, 2].astype(np.int64), 0, nd - 1)
++        self.uteam = u[:, 3].astype(np.int64)
++        self.ually = np.array([self.ally_of.get(int(t), -9) for t in self.uteam])
++        self.ucls = self.d_cls[self.udef]
++
++    def _grid_heights(self, h):
++        """Mean height per cell (scaled per map), the share under water, and the steepest step inside the cell
++        (from the 64-elmo samples), so a cliff or ramp narrower than a cell still shows."""
++        if h.size == 0:
++            return np.zeros((3, G, G), np.float32)
++        h = h.astype(np.float32)
++        gy = np.abs(np.diff(h, axis=0, append=h[-1:]))
++        gx = np.abs(np.diff(h, axis=1, append=h[:, -1:]))
++        steep = np.maximum(gx, gy) / 64.0
++        ry = np.minimum((np.arange(h.shape[0]) * G) // h.shape[0], G - 1)
++        rx = np.minimum((np.arange(h.shape[1]) * G) // h.shape[1], G - 1)
++        cell = (ry[:, None] * G + rx[None, :]).ravel()
++        cnt = np.maximum(np.bincount(cell, minlength=G * G), 1)
++        mean = np.bincount(cell, h.ravel(), G * G) / cnt
++        water = np.bincount(cell, (h < 0).ravel().astype(np.float32), G * G) / cnt
++        mx = np.zeros(G * G, np.float32)
++        np.maximum.at(mx, cell, steep.ravel())
++        mean = mean.reshape(G, G)
++        return np.stack([(mean - mean.mean()) / (mean.std() + 1.0), water.reshape(G, G),
++                         np.minimum(mx.reshape(G, G), 3.0)]).astype(np.float32)
++
++    def _index_decisions(self):
++        d = self.decisions
++        self.dec_by = {}
++        if not len(d):
++            return
++        # combined outcome score: z-scored within the game per picked (horizon, measure), plus the result
++        cols = []
++        for h, m in HORIZON_PICK:
++            v = self.outcome[:, h, m].astype(np.float64)
++            ok = ~np.isnan(v)
++            z = np.zeros_like(v)
++            if ok.sum() > 2:
++                z[ok] = (v[ok] - v[ok].mean()) / (v[ok].std() + 1e-6)
++            cols.append(np.clip(z, -3, 3))
++        score = np.mean(cols, axis=0)
++        res = self.result.astype(np.float64)
++        score = score + np.where(res >= 0, (res - 0.5), 0.0)
++        self.dec_score = score
++        for i, row in enumerate(d):
++            sec = int(row[1]) // 30
++            self.dec_by.setdefault((int(row[2]), sec), []).append(i)
++
++    def _pick_examples(self, neg_share, rng):
++        out = []
++        human = [t for t, ai in self.is_ai.items() if not ai and self.ally_of.get(t, -9) in self.allies]
++        last = int(self.frames.max()) if len(self.frames) else 0
++        if self.desync >= 0:
++            last = min(last, self.desync)
++        for t in human:
++            secs_with = {s for (tt, s) in self.dec_by if tt == t}
++            for s in range(1, last // 30):
++                if s in secs_with or rng.random() < neg_share:
++                    out.append((t, s * 30))
++        return out
++
++    # ---- one example ----
++    def rows_at(self, f):
++        a, b = np.searchsorted(self.frames, [f, f + 1])
++        idx = np.arange(a, b)
++        sf = f - f % 300
++        if sf != f and self.path is not None:
++            a2, b2 = np.searchsorted(self.frames, [sf, sf + 1])
++            st = np.arange(a2, b2)
++            st = st[self.ucls[st] == 0]
++            idx = np.concatenate([idx, st])
++        return idx
++
++    def cell(self, x, z):
++        cx = np.clip((x / max(self.mapx, 1) * G).astype(np.int64), 0, G - 1)
++        cz = np.clip((z / max(self.mapz, 1) * G).astype(np.int64), 0, G - 1)
++        return cx, cz
++
++    def _splat(self, grid, ch, x, z, val):
++        cx, cz = self.cell(x, z)
++        np.add.at(grid[ch], (cz, cx), val)
++
++    def _splat_disk(self, grid, ch, x, z, val, radius_elmo):
++        if not len(x):
++            return
++        cx, cz = self.cell(x, z)
++        cellsize = max(self.mapx, self.mapz) / G
++        rc = np.clip(np.round(radius_elmo / cellsize).astype(np.int64), 0, len(DISKS) - 1)
++        for r in np.unique(rc):
++            m = rc == r
++            dy, dx = DISKS[r]
++            yy = (cz[m][:, None] + dy[None, :]).ravel()
++            xx = (cx[m][:, None] + dx[None, :]).ravel()
++            vv = np.repeat(val[m], len(dy))
++            ok = (yy >= 0) & (yy < G) & (xx >= 0) & (xx < G)
++            np.add.at(grid[ch], (yy[ok], xx[ok]), vv[ok])
++
++    def example(self, team, f):
++        ally = self.ally_of[team]
++        k = self.allies.index(ally)
++        u = self.units
++        idx = self.rows_at(f)
++        sight = u[idx, 10].astype(np.int64)
++        bits = (sight >> (2 * k)) & 3
++        mine = self.uteam[idx] == team
++        friend = self.ually[idx] == ally
++        foe = (self.ually[idx] != ally) & (self.ually[idx] >= 0)
++        vis = foe & ((bits & 1) > 0)
++        radar = foe & ((bits & 3) == 2)
++        cls = self.ucls[idx]
++        d = self.udef[idx]
++        metal = self.d_metal[d]
++        x, z = u[idx, 4], u[idx, 5]
++        built = u[idx, 9] >= 1.0
++        mobile_army = np.isin(cls, (3, 4))
++
++        grid = np.zeros((CHANNELS, G, G), np.float32)
++        grid[0] = self.height[0]
++        if len(self.spots):
++            self._splat(grid, 1, self.spots[:, 0], self.spots[:, 1], np.ones(len(self.spots), np.float32))
++        sel = mine & mobile_army & built
++        self._splat(grid, 2, x[sel], z[sel], metal[sel])
++        sel = mine & (cls == 0)
++        self._splat(grid, 3, x[sel], z[sel], metal[sel])
++        sel = mine & np.isin(cls, (1, 2))
++        self._splat(grid, 4, x[sel], z[sel], metal[sel])
++        sel = friend & ~mine & (cls != 0)
++        self._splat(grid, 5, x[sel], z[sel], metal[sel])
++        sel = friend & ~mine & (cls == 0)
++        self._splat(grid, 6, x[sel], z[sel], metal[sel])
++        sel = vis & (cls != 0)
++        self._splat(grid, 7, x[sel], z[sel], metal[sel])
++        self._splat(grid, 9, x[radar], z[radar], np.ones(radar.sum(), np.float32))
++
++        # memory: the enemy as this side last saw it (within MEMORY_S; buildings for the whole game)
++        mx, mz, md, mage, mstatic = self._memory(k, f, ally)
++        fade = np.exp(-mage / 60.0).astype(np.float32)
++        mmetal = self.d_metal[md]
++        s = mstatic
++        self._splat(grid, 8, mx[s], mz[s], mmetal[s])
++        nm = ~s & (mage > 0)
++        self._splat(grid, 10, mx[nm], mz[nm], mmetal[nm] * fade[nm])
++        w = np.where(s, 1.0, fade).astype(np.float32)
++        self._splat_disk(grid, 11, mx, mz, self.d_g[md] * w, self.d_range[md])
++        self._splat_disk(grid, 12, mx, mz, self.d_a[md] * w, np.maximum(self.d_range[md], 500))
++        sel = friend & built & (self.d_g[d] > 0)
++        self._splat_disk(grid, 13, x[sel], z[sel], self.d_g[d][sel], self.d_range[d][sel])
++        sel = friend & built
++        self._splat_disk(grid, 14, x[sel], z[sel], np.ones(sel.sum(), np.float32), self.d_sight[d][sel])
++        sel = friend & built & (self.d_radar[d] > 0)
++        self._splat_disk(grid, 15, x[sel], z[sel], np.ones(sel.sum(), np.float32), self.d_radar[d][sel])
++        for c in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
++            grid[c] = np.log1p(grid[c])
++        grid[14] = np.minimum(grid[14], 1)
++        grid[15] = np.minimum(grid[15], 1)
++        grid[16] = np.linspace(0, 1, G)[None, :]
++        grid[17] = np.linspace(0, 1, G)[:, None]
++        grid[18] = self.height[1]
++        grid[19] = self.height[2]
++
++        # tokens: own focus units, the most valuable first
++        ti = np.where(mine & np.isin(cls, FOCUS) & built)[0]
++        ti = ti[np.argsort(-metal[ti], kind="stable")][:MAX_TOKENS]
++        rows = idx[ti]
++        tok = np.zeros((len(ti), TOKEN_F), np.float32)
++        for j, c in enumerate(FOCUS):
++            tok[:, j] = cls[ti] == c
++        dd = d[ti]
++        tok[:, 4] = np.log1p(self.d_metal[dd])
++        tok[:, 5] = np.log1p(self.d_hp[dd])
++        tok[:, 6] = self.d_speed[dd] / 100
++        tok[:, 7] = self.d_range[dd] / 1000
++        tok[:, 8] = np.log1p(self.d_g[dd])
++        tok[:, 9] = np.log1p(self.d_a[dd])
++        tok[:, 10] = u[rows, 4] / max(self.mapx, 1)
++        tok[:, 11] = u[rows, 5] / max(self.mapz, 1)
++        tok[:, 12] = u[rows, 6] / 100
++        tok[:, 13] = u[rows, 7] / 100
++        tok[:, 14] = u[rows, 8]
++        cmd = u[rows, 11].astype(np.int64)
++        slot = np.array([CMD_SLOTS.get(int(c), 5) for c in cmd], dtype=np.int64)
++        tok[np.arange(len(ti)), 15 + slot] = 1
++        has_t = u[rows, 12] >= 0
++        tok[:, 21] = has_t
++        tok[:, 22] = np.where(has_t, (u[rows, 12] - u[rows, 4]) / 2000, 0)
++        tok[:, 23] = np.where(has_t, (u[rows, 13] - u[rows, 5]) / 2000, 0)
++        tok[:, 24] = self.d_sight[dd] / 1000
++        tok[:, 25] = self.d_radar[dd] / 1000
++        tok[:, 26] = (cls[ti] == 3) & (self.d_range[dd] > 700)
++        tok[:, 27] = 1
++
++        scal = np.array([f / 30 / 60 / 30, math.log1p(metal[mine & mobile_army].sum()) / 10,
++                         math.log1p(metal[vis & (cls != 0)].sum()) / 10, self.mapx / 16000, self.mapz / 16000,
++                         len(ti) / 100], np.float32)
++
++        # labels
++        act = np.zeros(len(ti), np.float32)
++        kind = np.full(len(ti), -1, np.int64)
++        tcell = np.full(len(ti), -1, np.int64)
++        toff = np.zeros((len(ti), 2), np.float32)
++        wt = np.zeros(len(ti), np.float32)
++        sk = self.skill.get(team, -1)
++        w_r = float(np.clip(((sk if sk > 0 else 20) - 15) / 20, 0.25, 2.0))
++        uids = self.uid[rows]
++        pos = {int(v): j for j, v in enumerate(uids)}
++        for i in self.dec_by.get((team, f // 30), []):
++            row = self.decisions[i]
++            j = pos.get(int(row[3]))
++            if j is None:
++                continue
++            act[j] = 1
++            kind[j] = int(row[4])
++            tx, tz = float(row[5]), float(row[6])
++            gx, gz = tx / max(self.mapx, 1) * G, tz / max(self.mapz, 1) * G
++            cx, cz = int(np.clip(gx, 0, G - 1)), int(np.clip(gz, 0, G - 1))
++            tcell[j] = cz * G + cx
++            toff[j] = (np.clip(gx - cx, 0, 1), np.clip(gz - cz, 0, 1))
++            wt[j] = math.exp(0.5 * float(np.clip(self.dec_score[i], -2, 2)))
++        return {"grid": grid, "tok": tok, "scal": scal, "act": act, "kind": kind, "tcell": tcell, "toff": toff,
++                "w_out": wt, "w_rating": w_r, "uid": uids}
++
++    def _memory(self, k, f, ally):
++        if not hasattr(self, "_vis"):
++            self._vis = {}
++        if k not in self._vis:
++            u = self.units
++            bits = (u[:, 10].astype(np.int64) >> (2 * k)) & 3
++            foe = (self.ually != ally) & (self.ually >= 0)
++            m = foe & (bits > 0)
++            self._vis[k] = (self.frames[m], self.uid[m], u[m, 4], u[m, 5], self.udef[m], self.ucls[m] == 0)
++        fr, ui, x, z, d, st = self._vis[k]
++        lo = np.searchsorted(fr, f - MEMORY_S * 30)
++        hi = np.searchsorted(fr, f, "right")
++        # buildings remembered for the whole game
++        sl = np.concatenate([np.where(st[:lo])[0], np.arange(lo, hi)])
++        if not len(sl):
++            e = np.zeros(0)
++            return e, e, np.zeros(0, np.int64), e, np.zeros(0, bool)
++        rev = sl[::-1]
++        _, first = np.unique(ui[rev], return_index=True)
++        keep = rev[first]
++        age = (f - fr[keep]) / 30.0
++        return x[keep], z[keep], d[keep], age.astype(np.float32), st[keep]
++
++
++def collate(batch):
++    import torch
++    n = max(1, max(len(b["tok"]) for b in batch))
++    B = len(batch)
++    tok = np.zeros((B, n, TOKEN_F), np.float32)
++    mask = np.zeros((B, n), bool)
++    act = np.zeros((B, n), np.float32)
++    kind = np.full((B, n), -1, np.int64)
++    tcell = np.full((B, n), -1, np.int64)
++    toff = np.zeros((B, n, 2), np.float32)
++    w_out = np.zeros((B, n), np.float32)
++    w_r = np.zeros((B,), np.float32)
++    for i, b in enumerate(batch):
++        m = len(b["tok"])
++        tok[i, :m], mask[i, :m] = b["tok"], True
++        act[i, :m], kind[i, :m], tcell[i, :m], toff[i, :m], w_out[i, :m] = b["act"], b["kind"], b["tcell"], b["toff"], b["w_out"]
++        w_r[i] = b["w_rating"]
++    T = torch.from_numpy
++    return {"grid": T(np.stack([b["grid"] for b in batch])), "scal": T(np.stack([b["scal"] for b in batch])),
++            "tok": T(tok), "mask": T(mask), "act": T(act), "kind": T(kind), "tcell": T(tcell), "toff": T(toff),
++            "w_out": T(w_out), "w_rating": T(w_r)}
++
++
++def find_games(roots):
++    out = []
++    for r in roots:
++        out += sorted(glob.glob(str(Path(r) / "*" / "*.npz")))
++    return out
+diff --git a/tools/armynet/model.py b/tools/armynet/model.py
+new file mode 100644
+index 00000000..855f7792
+--- /dev/null
++++ b/tools/armynet/model.py
+@@ -0,0 +1,55 @@
++"""The army model: the side's map grid and its units in, per unit keep-or-new-order, kind and place out."""
++import torch
++import torch.nn as nn
++import torch.nn.functional as F
++
++from data import CHANNELS, G, N_KIND, SCALARS, TOKEN_F
++
++
++def conv(i, o, s=1):
++    return nn.Sequential(nn.Conv2d(i, o, 3, s, 1), nn.GroupNorm(8, o), nn.GELU())
++
++
++class ArmyNet(nn.Module):
++    def __init__(self, d=128, c=64, layers=3, heads=4):
++        super().__init__()
++        self.enc64 = nn.Sequential(conv(CHANNELS, c), conv(c, c))
++        self.enc32 = nn.Sequential(conv(c, 2 * c, 2), conv(2 * c, 2 * c))
++        self.enc16 = nn.Sequential(conv(2 * c, d, 2), conv(d, d), conv(d, d))
++        self.up32 = conv(d + 2 * c, 2 * c)
++        self.up64 = conv(2 * c + c, c)
++        self.scal = nn.Linear(SCALARS, d)
++        self.tok = nn.Sequential(nn.Linear(TOKEN_F, d), nn.GELU(), nn.Linear(d, d))
++        self.at_unit = nn.Linear(d + c, d)
++        self.map_tokens = nn.Linear(d, d)
++        layer = nn.TransformerEncoderLayer(d, heads, 4 * d, 0.1, batch_first=True, norm_first=True)
++        self.units = nn.TransformerEncoder(layer, layers)
++        self.cross = nn.MultiheadAttention(d, heads, batch_first=True)
++        self.act = nn.Linear(d, 1)
++        self.kind = nn.Linear(d, N_KIND)
++        self.query = nn.Linear(d, c)
++        self.offset = nn.Sequential(nn.Linear(d + c, d), nn.GELU(), nn.Linear(d, 2))
++
++    def forward(self, grid, scal, tok, mask):
++        B = grid.shape[0]
++        f64 = self.enc64(grid)
++        f32 = self.enc32(f64)
++        f16 = self.enc16(f32) + self.scal(scal)[:, :, None, None]
++        u32 = self.up32(torch.cat([F.interpolate(f16, scale_factor=2), f32], 1))
++        u64 = self.up64(torch.cat([F.interpolate(u32, scale_factor=2), f64], 1))
++        # each unit reads the map where it stands
++        xy = tok[:, :, 10:12] * 2 - 1
++        here = F.grid_sample(u64, xy[:, :, None, :], align_corners=False)[:, :, :, 0].transpose(1, 2)
++        h = self.at_unit(torch.cat([self.tok(tok), here], -1))
++        h = self.units(h, src_key_padding_mask=~mask)
++        mt = self.map_tokens(f16.flatten(2).transpose(1, 2))
++        h = h + self.cross(h, mt, mt, need_weights=False)[0]
++        q = self.query(h)
++        cells = torch.einsum("bnc,bchw->bnhw", q, u64).reshape(B, q.shape[1], G * G) / q.shape[-1] ** 0.5
++        return {"h": h, "act": self.act(h)[..., 0], "kind": self.kind(h), "cells": cells, "u64": u64}
++
++    def offset_at(self, h, u64, cell):
++        B, n = cell.shape
++        flat = u64.flatten(2).transpose(1, 2)
++        feat = torch.gather(flat, 1, cell.clamp(min=0)[..., None].expand(B, n, flat.shape[-1]))
++        return torch.sigmoid(self.offset(torch.cat([h, feat], -1)))
+diff --git a/tools/armynet/overnight.py b/tools/armynet/overnight.py
+new file mode 100644
+index 00000000..2d0eda4b
+--- /dev/null
++++ b/tools/armynet/overnight.py
+@@ -0,0 +1,51 @@
++#!/usr/bin/env python3
++"""Turn new recordings into datasets as they land; start training once enough games exist.
++
++    python tools/armynet/overnight.py [--min-games 300] [--steps 30000]
++
++Builds .npz for every finished recording (public first) every 10 minutes; when at least --min-games public
++games have datasets, runs train.py once (runtime/armynet/<stamp>/, its log beside it) and keeps building.
++Pauses while his game runs.
++"""
++import glob
++import subprocess
++import sys
++import time
++from pathlib import Path
++
++REPO = Path(__file__).resolve().parents[2]
++sys.path.insert(0, str(REPO / "tools"))
++import mp_archive  # noqa: E402
++
++PUBLIC = "G:/bar-ai-archive/public-replays/recordings"
++LOCAL = "G:/bar-ai-archive/replay-orders"
++
++
++def main(a):
++    min_games = int(a[a.index("--min-games") + 1]) if "--min-games" in a else 300
++    steps = a[a.index("--steps") + 1] if "--steps" in a else "30000"
++    trainer = None
++    while True:
++        if mp_archive.his_game_running():
++            time.sleep(300)
++            continue
++        for root in (PUBLIC, LOCAL):
++            subprocess.run([sys.executable, str(REPO / "tools" / "replay_dataset.py"), root], check=False)
++        n = len(glob.glob(PUBLIC + "/*/*.npz"))
++        print(time.strftime("%H:%M"), "public games with datasets:", n, flush=True)
++        if trainer is None and n >= min_games:
++            out = REPO / "runtime" / "armynet" / time.strftime("%Y%m%d-%H%M")
++            out.mkdir(parents=True, exist_ok=True)
++            log = open(out / "train.log", "w")
++            trainer = subprocess.Popen([sys.executable, "-u", str(REPO / "tools" / "armynet" / "train.py"),
++                                        "--steps", steps, "--batch", "32", "--workers", "6", "--out", str(out)],
++                                       stdout=log, stderr=subprocess.STDOUT)
++            print("training started:", out, flush=True)
++        if trainer is not None and trainer.poll() is not None:
++            print("training finished, exit", trainer.returncode, flush=True)
++            return 0
++        time.sleep(600)
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1:]))
+diff --git a/tools/armynet/serve.py b/tools/armynet/serve.py
+new file mode 100644
+index 00000000..44126a2e
+--- /dev/null
++++ b/tools/armynet/serve.py
+@@ -0,0 +1,149 @@
++#!/usr/bin/env python3
++"""Run the army model for a local game through game-patches/gadgets/dev_armynet.lua.
++
++    python tools/armynet/serve.py --dir <the game's write dir> --model runtime/armynet/<run>/model.pt [--seed 1]
++
++Reads armynet_static.txt once and armynet_state.txt each time its frame advances; answers in armynet_orders.txt
++(written whole, then renamed). Our AI's units count as ours in the view, as a player's own units did in training;
++orders go to the holder's units only. Each unit takes a new order with the probability the model gives (players
++give one about every ten seconds per unit); the kind and place are the model's best.
++"""
++import os
++import sys
++import time
++from pathlib import Path
++
++import numpy as np
++import torch
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from data import CLASSES, G, MEMORY_S, Game, collate  # noqa: E402
++from model import ArmyNet  # noqa: E402
++
++KIND_CMD = {0: 0, 1: 10, 2: 16, 3: 20, 4: 16, 5: 15}
++
++
++def read_static(d):
++    defs, teams, allies, spots, holders, heights, mapxz = [], [], [], [], [], None, (0, 0)
++    for ln in open(d / "armynet_static.txt", encoding="utf-8", errors="replace"):
++        p = ln.split()
++        if not p:
++            continue
++        if p[0] == "D":
++            defs.append([float(p[1]), float(CLASSES.index(p[3]) if p[3] in CLASSES else 7)] + [float(v) for v in p[4:13]])
++        elif p[0] == "T":
++            teams.append([int(p[1]), int(p[2]), p[3] == "true", 35.0])
++        elif p[0] == "A":
++            allies = [int(v) for v in p[1:]]
++        elif p[0] == "Q":
++            holders.append((int(p[1]), int(p[2])))
++        elif p[0] == "S":
++            spots.append((float(p[2]), float(p[3])))
++        elif p[0] == "V":
++            mapxz = (int(p[2]), int(p[3]))
++        elif p[0] == "H":
++            step = int(p[1])
++            h = np.array([float(v) for v in p[2:]], np.float32)
++            nx = len(range(step // 2, mapxz[0] + 1, step))
++            heights = h[: (len(h) // nx) * nx].reshape(-1, nx)
++    return (np.array(defs, np.float32), teams, allies, np.array(spots, np.float32).reshape(-1, 2), holders,
++            heights if heights is not None else np.zeros((0, 0), np.float32), mapxz)
++
++
++def read_state(d, last):
++    try:
++        text = (d / "armynet_state.txt").read_text(encoding="utf-8", errors="replace")
++    except OSError:
++        return None, None
++    lines = text.splitlines()
++    if len(lines) < 2 or not lines[0].startswith("F ") or not lines[-1].startswith("E "):
++        return None, None
++    frame = int(lines[0].split()[1])
++    if frame <= last:
++        return None, None
++    rows = [[float(v) for v in ln.split()[1:15]] for ln in lines[1:-1] if ln.startswith("U ")]
++    return frame, np.array(rows, np.float32).reshape(-1, 14)
++
++
++def main(a):
++    def opt(name, default):
++        return a[a.index(name) + 1] if name in a else default
++    d = Path(opt("--dir", "."))
++    dev = "cuda" if torch.cuda.is_available() else "cpu"
++    model = ArmyNet().to(dev)
++    model.load_state_dict(torch.load(opt("--model", ""), map_location=dev))
++    model.eval()
++    rng = np.random.default_rng(int(opt("--seed", "1")))
++    while not (d / "armynet_static.txt").exists():
++        time.sleep(1)
++    time.sleep(1)
++    defs, teams, allies, spots, holders, heights, mapxz = read_static(d)
++    if not holders:
++        sys.exit("no holder seat in the game: add --extra-ai NullAI@<our ally> and --modoption dev_armynet=1")
++    team_arr = np.array(teams, np.float32)
++    print("map %s, holders %s, device %s" % (mapxz, holders, dev), flush=True)
++    history, last = [], -1
++    while True:
++        frame, rows = read_state(d, last)
++        if frame is None:
++            time.sleep(0.05)
++            continue
++        last = frame
++        history.append(rows)
++        while len(history) > 1 and (not len(history[0]) or history[0][0, 0] < frame - MEMORY_S * 30):
++            history.pop(0)
++        units = np.concatenate(history)
++        out = ["O %d" % frame]
++        for holder, source in holders:
++            u = units.copy()
++            u[u[:, 3] == source, 3] = holder
++            g = Game.live(u, defs, mapxz, allies, team_arr, spots, heights)
++            ex = g.example(holder, frame)
++            if not len(ex["tok"]):
++                continue
++            b = collate([ex])
++            with torch.no_grad():
++                o = model(b["grid"].to(dev), b["scal"].to(dev), b["tok"].to(dev), b["mask"].to(dev))
++                p = torch.sigmoid(o["act"][0]).cpu().numpy()
++                kind = o["kind"][0].argmax(-1).cpu().numpy()
++                cell = o["cells"][0].argmax(-1)
++                off = model.offset_at(o["h"], o["u64"], cell[None])[0].cpu().numpy()
++                cell = cell.cpu().numpy()
++            sx, sz = mapxz[0] / G, mapxz[1] / G
++            here = units[units[:, 0] == frame]
++            for j, uid in enumerate(ex["uid"]):
++                if rng.random() >= p[j]:
++                    continue
++                k = int(kind[j])
++                x = (cell[j] % G + off[j, 0]) * sx
++                z = (cell[j] // G + off[j, 1]) * sz
++                cmd = KIND_CMD[k]
++                if cmd == 0:
++                    out.append("%d,0" % uid)
++                    continue
++                if cmd == 20:
++                    foe = here[(np.array([g.ally_of.get(int(t), -9) for t in here[:, 3]]) != g.ally_of[holder])]
++                    if len(foe):
++                        dd = (foe[:, 4] - x) ** 2 + (foe[:, 5] - z) ** 2
++                        i = int(np.argmin(dd))
++                        if dd[i] < 400 ** 2:
++                            out.append("%d,20,%d" % (uid, int(foe[i, 1])))
++                            continue
++                    cmd = 16
++                out.append("%d,%d,%.0f,%.0f" % (uid, cmd, x, z))
++            if frame % 300 == 0:
++                print("frame %d units %d new orders %d mean p %.2f" % (frame, len(ex["uid"]), len(out) - 1, p.mean()),
++                      flush=True)
++        out.append("E")
++        tmp = d / "armynet_orders.tmp"
++        tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
++        for _ in range(50):
++            try:
++                os.replace(tmp, d / "armynet_orders.txt")
++                break
++            except PermissionError:  # the game has the file open for a moment
++                time.sleep(0.01)
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1:]))
+diff --git a/tools/armynet/train.py b/tools/armynet/train.py
+new file mode 100644
+index 00000000..d09865bf
+--- /dev/null
++++ b/tools/armynet/train.py
+@@ -0,0 +1,202 @@
++#!/usr/bin/env python3
++"""Train the army model on replay examples; evaluate on whole held-out games against plain rules.
++
++    python tools/armynet/train.py [--roots DIR ...] [--steps 20000] [--batch 32] [--out runtime/armynet/<name>]
++    python tools/armynet/train.py --eval-only <model.pt> [--roots ...]
++
++Roots default to both recording sets on G:. Every 10th game (by name hash) is held out. The evaluation reports, on
++held-out examples: the keep/new log loss against the base rate; the kind accuracy against "always move"; and the
++median distance in elmos from the predicted place to the player's, against "keep the current target or stand" and
++"go to the nearest enemy in sight".
++"""
++import hashlib
++import math
++import random
++import sys
++import time
++from pathlib import Path
++
++import numpy as np
++import torch
++import torch.nn.functional as F
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from data import G, Game, collate, find_games  # noqa: E402
++from model import ArmyNet  # noqa: E402
++
++REPO = Path(__file__).resolve().parents[2]
++ROOTS = ["G:/bar-ai-archive/public-replays/recordings", "G:/bar-ai-archive/replay-orders"]
++
++
++def his_game():
++    sys.path.insert(0, str(REPO / "tools"))
++    import mp_archive
++    return mp_archive.his_game_running()
++
++
++def held_out(path):
++    return int(hashlib.md5(Path(path).name.encode()).hexdigest(), 16) % 10 == 0
++
++
++class Stream(torch.utils.data.IterableDataset):
++    def __init__(self, games, per_game=64, seed=0):
++        self.games, self.per_game, self.seed = games, per_game, seed
++
++    def __iter__(self):
++        info = torch.utils.data.get_worker_info()
++        rng = random.Random(self.seed + (info.id if info else 0) + int(time.time()))
++        buf = []
++        while True:
++            path = rng.choice(self.games)
++            try:
++                g = Game(path, rng=np.random.default_rng(rng.randrange(1 << 30)))
++            except Exception as e:
++                print("skip", path, e, flush=True)
++                continue
++            if not g.examples:
++                continue
++            for t, f in rng.sample(g.examples, min(self.per_game, len(g.examples))):
++                ex = g.example(t, f)
++                if len(ex["tok"]):
++                    buf.append(ex)
++            rng.shuffle(buf)
++            while len(buf) > 256:
++                yield buf.pop()
++
++
++def losses(model, b, dev):
++    b = {k: v.to(dev) for k, v in b.items()}
++    o = model(b["grid"], b["scal"], b["tok"], b["mask"])
++    m = b["mask"].float()
++    wr = b["w_rating"][:, None]
++    l_act = (F.binary_cross_entropy_with_logits(o["act"], b["act"], reduction="none") * m * wr).sum() / m.sum()
++    new = (b["act"] > 0) & b["mask"]
++    w = (b["w_out"] * wr)[new]
++    if new.any():
++        l_kind = (F.cross_entropy(o["kind"][new], b["kind"][new].clamp(min=0), reduction="none") * w).sum() / w.sum()
++        l_cell = (F.cross_entropy(o["cells"][new], b["tcell"][new].clamp(min=0), reduction="none") * w).sum() / w.sum()
++        off = model.offset_at(o["h"], o["u64"], b["tcell"])[new]
++        l_off = ((off - b["toff"][new]).abs().sum(-1) * w).sum() / w.sum()
++    else:
++        l_kind = l_cell = l_off = torch.zeros((), device=dev)
++    return l_act + l_kind + l_cell + l_off, {"act": l_act.item(), "kind": l_kind.item(), "cell": l_cell.item(),
++                                             "off": l_off.item()}
++
++
++@torch.no_grad()
++def evaluate(model, games, dev, n_games=40, per_game=40):
++    model.eval()
++    rng = random.Random(1)
++    games = games[:]
++    rng.shuffle(games)
++    acts, preds, kinds_t, kinds_p = [], [], [], []
++    d_model, d_keep, d_enemy, d_order = [], [], [], []
++    for path in games[:n_games]:
++        g = Game(path, rng=np.random.default_rng(7))
++        if not g.examples:
++            continue
++        exs = [g.example(t, f) for t, f in rng.sample(g.examples, min(per_game, len(g.examples)))]
++        exs = [e for e in exs if len(e["tok"])]
++        if not exs:
++            continue
++        b = collate(exs)
++        bd = {k: v.to(dev) for k, v in b.items()}
++        o = model(bd["grid"], bd["scal"], bd["tok"], bd["mask"])
++        msk = b["mask"].numpy()
++        acts.append(b["act"].numpy()[msk])
++        preds.append(torch.sigmoid(o["act"]).cpu().numpy()[msk])
++        new = (b["act"].numpy() > 0) & msk
++        if not new.any():
++            continue
++        kinds_t.append(b["kind"].numpy()[new])
++        kinds_p.append(o["kind"].argmax(-1).cpu().numpy()[new])
++        cell = o["cells"].argmax(-1)
++        off = model.offset_at(o["h"], o["u64"], cell).cpu().numpy()
++        cell = cell.cpu().numpy()
++        tok = b["tok"].numpy()
++        grid = b["grid"].numpy()
++        for i, j in zip(*np.where(new)):
++            sx, sz = g.mapx / G, g.mapz / G
++            tc = int(b["tcell"][i, j])
++            tx = (tc % G + float(b["toff"][i, j, 0])) * sx
++            tz = (tc // G + float(b["toff"][i, j, 1])) * sz
++            px = (cell[i, j] % G + off[i, j, 0]) * sx
++            pz = (cell[i, j] // G + off[i, j, 1]) * sz
++            ux, uz = tok[i, j, 10] * g.mapx, tok[i, j, 11] * g.mapz
++            if tok[i, j, 21] > 0:
++                kx, kz = ux + tok[i, j, 22] * 2000, uz + tok[i, j, 23] * 2000
++            else:
++                kx, kz = ux, uz
++            ev = np.argwhere(np.expm1(grid[i, 7]) > 0)
++            if len(ev):
++                cz_, cx_ = ev[np.argmin(((ev[:, 1] + .5) * sx - ux) ** 2 + ((ev[:, 0] + .5) * sz - uz) ** 2)]
++                ex_, ez_ = (cx_ + .5) * sx, (cz_ + .5) * sz
++            else:
++                ex_, ez_ = kx, kz
++            d_model.append(math.hypot(px - tx, pz - tz))
++            d_keep.append(math.hypot(kx - tx, kz - tz))
++            d_enemy.append(math.hypot(ex_ - tx, ez_ - tz))
++            d_order.append(math.hypot(ux - tx, uz - tz))
++    model.train()
++    a, p = np.concatenate(acts), np.clip(np.concatenate(preds), 1e-6, 1 - 1e-6)
++    base = a.mean()
++    ll = -np.mean(a * np.log(p) + (1 - a) * np.log(1 - p))
++    ll0 = -np.mean(a * np.log(base) + (1 - a) * np.log(1 - base))
++    kt, kp = np.concatenate(kinds_t), np.concatenate(kinds_p)
++    med = lambda v: float(np.median(v)) if v else float("nan")
++    return {"tokens": len(a), "new_rate": round(float(base), 4), "act_logloss": round(float(ll), 4),
++            "act_logloss_base": round(float(ll0), 4), "kind_acc": round(float((kt == kp).mean()), 3),
++            "kind_acc_always_move": round(float((kt == 1).mean()), 3), "orders": len(d_model),
++            "dist_model": round(med(d_model)), "dist_keep_or_stand": round(med(d_keep)),
++            "dist_nearest_enemy": round(med(d_enemy)), "order_length": round(med(d_order))}
++
++
++def main(a):
++    def opt(name, default):
++        return a[a.index(name) + 1] if name in a else default
++    roots = [a[i + 1] for i, x in enumerate(a) if x == "--roots"] or ROOTS
++    games = find_games(roots)
++    train = [g for g in games if not held_out(g)]
++    test = [g for g in games if held_out(g)] or train[:2]
++    dev = "cuda" if torch.cuda.is_available() else "cpu"
++    print("games: %d train, %d held out; device %s" % (len(train), len(test), dev), flush=True)
++    model = ArmyNet().to(dev)
++    if "--eval-only" in a:
++        model.load_state_dict(torch.load(opt("--eval-only", ""), map_location=dev))
++        print(evaluate(model, test, dev))
++        return 0
++    steps = int(opt("--steps", "20000"))
++    out = Path(opt("--out", str(REPO / "runtime" / "armynet" / time.strftime("%Y%m%d-%H%M"))))
++    out.mkdir(parents=True, exist_ok=True)
++    dl = torch.utils.data.DataLoader(Stream(train), batch_size=int(opt("--batch", "32")), collate_fn=collate,
++                                     num_workers=int(opt("--workers", "4")), persistent_workers=int(opt("--workers", "4")) > 0)
++    optim = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
++    sched = torch.optim.lr_scheduler.OneCycleLR(optim, 3e-4, total_steps=steps, pct_start=0.05)
++    t0, agg = time.time(), {}
++    for step, b in enumerate(dl, 1):
++        loss, parts = losses(model, b, dev)
++        optim.zero_grad()
++        loss.backward()
++        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
++        optim.step()
++        sched.step()
++        for k, v in parts.items():
++            agg[k] = agg.get(k, 0) + v
++        if step % 200 == 0 and his_game():
++            print("his game is running: paused", flush=True)
++            while his_game():
++                time.sleep(120)
++        if step % 200 == 0:
++            print("step %d %.0fs " % (step, time.time() - t0) + " ".join("%s %.3f" % (k, v / 200) for k, v in agg.items()),
++                  flush=True)
++            agg = {}
++        if step % 2000 == 0 or step == steps:
++            torch.save(model.state_dict(), out / "model.pt")
++            print("eval", evaluate(model, test, dev), flush=True)
++        if step >= steps:
++            break
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1:]))
+diff --git a/tools/armynet/watch.py b/tools/armynet/watch.py
+new file mode 100644
+index 00000000..acc02a86
+--- /dev/null
++++ b/tools/armynet/watch.py
+@@ -0,0 +1,48 @@
++#!/usr/bin/env python3
++"""A watch game where the army model fights for our side.
++
++    python tools/armynet/watch.py [--model runtime/armynet/<run>/model.pt] [--map "Comet Catcher"] [--minutes 30]
++                                  [--ai Apex:v0.5.17:standard] [--vs BARb:stable:hard] [--seed N]
++
++Our AI keeps the economy and production; every army/air/radar/jammer unit it finishes goes to a NullAI holder on our
++side, which the model commands (game-patches/gadgets/dev_armynet.lua, tools/armynet/serve.py). Windowed at 10x, both
++AIs +50 (his watch settings). The model defaults to the newest runtime/armynet/*/model.pt.
++"""
++import glob
++import os
++import subprocess
++import sys
++import time
++from pathlib import Path
++
++REPO = Path(__file__).resolve().parents[2]
++
++
++def main(a):
++    def opt(name, default):
++        return a[a.index(name) + 1] if name in a else default
++    models = sorted(glob.glob(str(REPO / "runtime" / "armynet" / "*" / "model.pt")), key=os.path.getmtime)
++    model = opt("--model", models[-1] if models else "")
++    if not model:
++        sys.exit("no model under runtime/armynet")
++    stamp = time.strftime("%Y%m%d-%H%M%S")
++    wd = REPO / "matches" / ("_engine-armynet-watch-" + stamp)
++    wd.mkdir(parents=True, exist_ok=True)
++    print("model", model, "\nwrite dir", wd, flush=True)
++    log = open(wd / "serve.log", "w")
++    serve = subprocess.Popen([sys.executable, "-u", str(REPO / "tools" / "armynet" / "serve.py"), "--dir", str(wd),
++                              "--model", model], stdout=log, stderr=subprocess.STDOUT)
++    try:
++        subprocess.run([sys.executable, str(REPO / "tools" / "run_match.py"), "--a", opt("--ai", "Apex:v0.5.17:standard"),
++                        "--b", opt("--vs", "BARb:stable:hard"), "--map", opt("--map", "Comet Catcher"),
++                        "--minutes", opt("--minutes", "30"), "--seed", opt("--seed", "1"), "--watch", "--speed", "10",
++                        "--handicap", "50,50", "--extra-ai", "NullAI:0.1@0", "--modoption", "dev_armynet=1",
++                        "--write-dir", str(wd), "--out", str(REPO / "matches" / ("armynet-watch-" + stamp))], check=False)
++    finally:
++        serve.terminate()
++    print("serve log:", wd / "serve.log")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1:]))
+diff --git a/tools/public_replays.py b/tools/public_replays.py
+new file mode 100644
+index 00000000..2b35dab0
+--- /dev/null
++++ b/tools/public_replays.py
+@@ -0,0 +1,262 @@
++#!/usr/bin/env python3
++"""Public replays of strong players, for learning army control (todo/learn-army-from-replays.md).
++
++    python tools/public_replays.py pick [--preset duel|team] [--pages 20] [--min-os 30] [--min-minutes 6] [--max-minutes 60]
++    python tools/public_replays.py fetch [--limit N]          demos, then missing maps and game versions
++    python tools/public_replays.py record [--workers 3] [--limit N]
++    python tools/public_replays.py status
++
++pick pages BAR's replay service (api.bar-rts.com/replays, newest first) and judges each game's detail: no AIs,
++ended normally, no unit tweaks, start metal 1000, length in range, every player's rating (OS) at or above the floor.
++One line per game judged in ROOT/manifest.jsonl (kept or why not); re-running adds new games only.
++
++Everything downloaded lives under ROOT (G:/bar-ai-archive/public-replays): demos/ and a separate engine data
++folder data/ for maps and game versions his install lacks, read beside his install's data by the replay run.
++His install is never written to (fetching a game version there moves the byar:test tag his lobby uses).
++"""
++import glob
++import gzip
++import json
++import os
++import subprocess
++import sys
++import time
++import urllib.parse
++import urllib.request
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++import bar_env  # noqa: E402
++
++API = "https://api.bar-rts.com/replays"
++DEMO_URL = "https://storage.uk.cloud.ovh.net/v1/AUTH_10286efc0d334efd917d476d7183232e/BAR/demos/"
++ROOT = Path("G:/bar-ai-archive/public-replays")
++MANIFEST = ROOT / "manifest.jsonl"
++UA = {"User-Agent": "bar-ai replay research"}
++PRD_ENV = {"PRD_RAPID_USE_STREAMER": "false", "PRD_RAPID_REPO_MASTER": "https://repos-cdn.beyondallreason.dev/repos.gz",
++           "PRD_HTTP_SEARCH_URL": "https://files-cdn.beyondallreason.dev/find"}
++
++
++def get(url, tries=4):
++    for i in range(tries):
++        try:
++            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=90) as r:
++                return json.loads(r.read())
++        except Exception as e:  # the service is slow at times
++            if i == tries - 1:
++                raise
++            time.sleep(5 * (i + 1))
++
++
++def os_of(p):
++    try:
++        return float(str(p.get("skill", "")).strip("[]"))
++    except ValueError:
++        return None
++
++
++def data_dirs():
++    env = bar_env.load()
++    return [env.data, ROOT / "data"]
++
++
++def installed_versions():
++    names = set()
++    for d in data_dirs():
++        packages = {Path(p).stem for p in glob.glob(str(d / "packages" / "*.sdp"))}
++        for path in glob.glob(str(d / "rapid" / "*" / "*" / "versions.gz")):
++            with gzip.open(path, "rt", errors="replace") as f:
++                for line in f:
++                    parts = line.rstrip("\n").split(",")
++                    if len(parts) >= 4 and parts[1] in packages:
++                        names.add(parts[3])
++    return names
++
++
++def installed_maps():
++    out = set()
++    for d in data_dirs():
++        out |= {Path(p).stem.lower() for p in glob.glob(str(d / "maps" / "*.sd[7z]"))}
++    return out
++
++
++def installed_engines():
++    return {Path(p).name.replace("recoil_", "") for p in glob.glob(str(bar_env.load().data / "engine" / "recoil_*"))}
++
++
++def judge(d, min_os, min_minutes, max_minutes):
++    if d.get("hasBots"):
++        return "bots"
++    if not d.get("gameEndedNormally"):
++        return "not ended normally"
++    s = d.get("gameSettings") or {}
++    if s.get("tweakunits") or s.get("tweakdefs"):
++        return "tweaked units"
++    if str(s.get("startmetal", "1000")) != "1000":
++        return "start metal %s" % s.get("startmetal")
++    minutes = (d.get("durationMs") or 0) / 60000
++    if not min_minutes <= minutes <= max_minutes:
++        return "%.1f minutes" % minutes
++    players = [p for a in d.get("AllyTeams") or [] for p in a.get("Players") or []]
++    if not players:
++        return "no players"
++    low = [p for p in players if os_of(p) is None or os_of(p) < min_os]
++    if low:
++        return "OS below %s: %d of %d" % (min_os, len(low), len(players))
++    if d.get("engineVersion") not in installed_engines():
++        return "engine %s not installed" % d.get("engineVersion")
++    return None
++
++
++def line_of(d, why):
++    teams = []
++    for a in d.get("AllyTeams") or []:
++        teams.append({"ally": a.get("allyTeamId"), "won": a.get("winningTeam"),
++                      "players": [{"name": p.get("name"), "team": p.get("teamId"), "os": os_of(p),
++                                   "faction": p.get("faction")} for p in a.get("Players") or []]})
++    m = d.get("Map") or {}
++    return {"id": d["id"], "start": d.get("startTime"), "minutes": round((d.get("durationMs") or 0) / 60000, 1),
++            "preset": d.get("preset"), "file": d.get("fileName"), "game": d.get("gameVersion"),
++            "engine": d.get("engineVersion"), "map_script": m.get("scriptName"), "map_file": m.get("fileName"),
++            "ranked": (d.get("gameSettings") or {}).get("ranked_game"), "teams": teams, "keep": why is None,
++            "why": why}
++
++
++def load():
++    if not MANIFEST.exists():
++        return []
++    return [json.loads(l) for l in open(MANIFEST, encoding="utf-8") if l.strip()]
++
++
++def save(rows):
++    tmp = MANIFEST.with_suffix(".tmp")
++    with open(tmp, "w", encoding="utf-8") as f:
++        for r in rows:
++            f.write(json.dumps(r) + "\n")
++    os.replace(tmp, MANIFEST)
++
++
++def pick(preset, pages, min_os, min_minutes, max_minutes):
++    ROOT.mkdir(parents=True, exist_ok=True)
++    rows = load()
++    seen = {r["id"] for r in rows}
++    kept = 0
++    for page in range(1, pages + 1):
++        q = {"page": page, "limit": 50, "preset": preset, "hasBots": "false"}
++        data = get(API + "?" + urllib.parse.urlencode(q)).get("data") or []
++        if not data:
++            break
++        new = 0
++        for row in data:
++            if row["id"] in seen:
++                continue
++            minutes = (row.get("durationMs") or 0) / 60000
++            if not min_minutes <= minutes <= max_minutes:
++                continue
++            d = get(API + "/" + row["id"])
++            ln = line_of(d, judge(d, min_os, min_minutes, max_minutes))
++            rows.append(ln)
++            seen.add(row["id"])
++            kept += ln["keep"]
++            new += 1
++            time.sleep(0.3)
++        save(rows)
++        print("page %d: %d judged, %d kept so far" % (page, new, kept), flush=True)
++    print("manifest %d games, %d kept" % (len(rows), sum(r["keep"] for r in rows)))
++
++
++def prd(args):
++    exe = sorted(glob.glob(str(bar_env.load().data / "engine" / "recoil_*" / "pr-downloader.exe")))[-1]
++    (ROOT / "data").mkdir(parents=True, exist_ok=True)
++    return subprocess.run([exe, "--filesystem-writepath", str(ROOT / "data")] + args,
++                          env={**os.environ, **PRD_ENV}, check=False).returncode
++
++
++def fetch(limit=None):
++    rows = load()
++    kept = [r for r in rows if r["keep"]]
++    (ROOT / "demos").mkdir(parents=True, exist_ok=True)
++    n = 0
++    for r in kept:
++        path = ROOT / "demos" / r["file"]
++        if path.exists() and path.stat().st_size > 0:
++            continue
++        if limit and n >= limit:
++            break
++        url = DEMO_URL + urllib.parse.quote(r["file"])
++        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=180) as src:
++            data = src.read()
++        path.with_suffix(".part").write_bytes(data)
++        os.replace(path.with_suffix(".part"), path)
++        n += 1
++        time.sleep(0.3)
++    print("%d demos fetched" % n, flush=True)
++    have = installed_maps()
++    for script, fname in sorted({(r["map_script"], r["map_file"]) for r in kept}):
++        if (fname or "").lower() not in have:
++            prd(["--download-map", script])
++    have = installed_versions()
++    for v in sorted({r["game"] for r in kept} - have):
++        if "$VERSION" not in v:
++            prd(["--download-game", v])
++    missing = sorted({r["game"] for r in kept} - installed_versions())
++    print("game versions still missing:", missing or "none")
++
++
++def record(workers=3, limit=None):
++    import replay_orders
++    rows = [r for r in load() if r["keep"] and (ROOT / "demos" / r["file"]).exists()]
++    have = installed_versions()
++    todo = [r for r in rows if r["game"] in have
++            and not (ROOT / "recordings" / Path(r["file"]).stem / "orders.txt.gz").exists()]
++    if limit:
++        todo = todo[:limit]
++    replay_orders.batch_list([ROOT / "demos" / r["file"] for r in todo], workers, ROOT / "recordings",
++                             extra_data=ROOT / "data")
++
++
++def status():
++    rows = load()
++    kept = [r for r in rows if r["keep"]]
++    print("judged %d, kept %d" % (len(rows), len(kept)))
++    why = {}
++    for r in rows:
++        if not r["keep"]:
++            k = r["why"].split(":")[0]
++            why[k] = why.get(k, 0) + 1
++    print("turned away:", sorted(why.items(), key=lambda kv: -kv[1])[:8])
++    print("kept by preset:", {p: sum(r["preset"] == p for r in kept) for p in {r["preset"] for r in kept}})
++    print("demos on disk:", sum((ROOT / "demos" / r["file"]).exists() for r in kept))
++    print("recorded:", sum((ROOT / "recordings" / Path(r["file"]).stem / "orders.txt.gz").exists() for r in kept))
++
++
++def main(a):
++    def opt(name, default):
++        return a[a.index(name) + 1] if name in a else default
++    if a[:1] == ["pick"]:
++        pick(opt("--preset", "duel"), int(opt("--pages", "20")), float(opt("--min-os", "30")),
++             float(opt("--min-minutes", "6")), float(opt("--max-minutes", "60")))
++    elif a[:1] == ["fetch"]:
++        fetch(int(opt("--limit", "0")) or None)
++    elif a[:1] == ["record"]:
++        record(int(opt("--workers", "3")), int(opt("--limit", "0")) or None)
++    elif a[:1] == ["follow"]:
++        idle = 0
++        while idle < 3:
++            before = sum(1 for r in load() if r["keep"])
++            fetch()
++            record(int(opt("--workers", "3")), 60)
++            done = sum((ROOT / "recordings" / Path(r["file"]).stem / "orders.txt.gz").exists() for r in load() if r["keep"])
++            idle = idle + 1 if done >= sum(1 for r in load() if r["keep"]) and before == sum(1 for r in load() if r["keep"]) else 0
++            if idle:
++                time.sleep(600)
++    elif a[:1] == ["status"]:
++        status()
++    else:
++        print(__doc__)
++        return 1
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1:]))
+diff --git a/tools/replay_dataset.py b/tools/replay_dataset.py
+new file mode 100644
+index 00000000..b25b43dc
+--- /dev/null
++++ b/tools/replay_dataset.py
+@@ -0,0 +1,340 @@
++#!/usr/bin/env python3
++"""Turn a replay recording (tools/replay_orders.py) into training rows: decisions and their outcomes.
++
++    python tools/replay_dataset.py <orders.txt.gz | dir of recordings> [--out DIR]
++
++Per recording, <name>.npz beside it (or in --out):
++    units      every U sample: frame uid def team x z vx vz hp build sight cmd tx tz
++    defs       def -> class code, metal, hp, speed, range, ground_dps, aa_dps, sight, radar, jam
++    teams      team -> ally, is_ai, skill
++    decisions  frame first_frame team uid kind tx tz group n_orders shift
++    outcome    per decision, per horizon in HORIZONS: [own, area, team] in metal (see below)
++    result     per decision: 1 the team's side won, 0 lost, -1 unknown
++    spots, heights, map, allies, desync_frame (data after it is not the game that was played)
++
++A decision: a human team's move/fight/attack/patrol/area-attack/stop to an army, air, radar or jammer
++unit; a unit's orders within BURST frames of each other are one decision (the last non-queued one
++sets the target; players steer by clicking repeatedly). A group: the decisions of one team set by
++the same frame's order of the same kind.
++
++Outcomes over each horizon after the decision, in metal:
++    own   damage the group's units dealt to enemies minus damage they took (damage x metal / health)
++    area  enemy metal destroyed within AREA of the target minus our side's metal destroyed there
++    team  enemy metal destroyed anywhere minus our side's, the whole side
++"""
++import collections
++import gzip
++import re
++import sys
++from pathlib import Path
++
++import numpy as np
++
++HORIZONS = (5, 15, 60, 180, 600)
++BURST = 45
++AREA = 1000.0
++FOCUS = ("army", "air", "radar", "jammer")
++CLASSES = ("static", "builder", "com", "army", "air", "radar", "jammer", "other")
++KINDS = {0: 0, 10: 1, 16: 2, 20: 3, 21: 4, 15: 5}
++
++
++def demo_skills(rec_dir):
++    """team -> skill from the demo's start script, when the batch log names the demo (the dir is its stem)."""
++    sys.path.insert(0, str(Path(__file__).resolve().parent))
++    import bar_env
++    import replay_extract as rx
++    name = Path(rec_dir).name + ".sdfz"
++    demo = next((d / name for d in (bar_env.load().data / "demos", Path("G:/bar-ai-archive/public-replays/demos"))
++                 if (d / name).exists()), None)
++    if demo is None:
++        return {}
++    script = rx.demo_script(demo)
++    out, cur, team, skill = {}, None, None, None
++    for ln in script.splitlines() + ["[end]"]:
++        s = ln.strip()
++        if s.startswith("["):
++            if cur and team is not None and skill is not None:
++                out[team] = max(out.get(team, -1), skill)
++            cur = s.lower().startswith("[player")
++            team, skill = None, None
++            continue
++        if cur:
++            m = re.match(r"(\w+)=(.*?);", s)
++            if m and m.group(1).lower() == "team":
++                team = int(m.group(2))
++            elif m and m.group(1).lower() == "skill":
++                v = re.findall(r"[\d.]+", m.group(2))
++                skill = float(v[0]) if v else None
++    return out
++
++
++def attribute_damage(X, units, defs, def_of, team_of, ally_of, metal, hp, slack=100.0):
++    """BAR gives widgets no attacker: a victim's damage in a second is shared among the enemy units that
++    had it in weapon reach at that second's sample, by their damage a second against its kind (air or not).
++    Returns (frame, attacker, victim, metal value, attacker ally, victim ally); attacker -1 when nobody was in reach."""
++    if not len(units):
++        return []
++    frames = units[:, 0].astype(np.int64)
++    order = np.argsort(frames, kind="stable")
++    units, frames = units[order], frames[order]
++    starts = {}
++    uniq, first = np.unique(frames, return_index=True)
++    bounds = list(first) + [len(frames)]
++    for i, fr in enumerate(uniq):
++        starts[int(fr)] = (bounds[i], bounds[i + 1])
++    static_frames = np.array(sorted(fr for fr in starts if fr % 300 == 0))
++    rng = np.array([defs.get(int(d), (0,) * 10)[4] for d in range(int(max(defs) + 1))] if defs else [0.0])
++    gdps = np.array([defs.get(int(d), (0,) * 10)[5] for d in range(len(rng))])
++    adps = np.array([defs.get(int(d), (0,) * 10)[6] for d in range(len(rng))])
++    is_air = {d for d, v in defs.items() if CLASSES[v[0]] == "air"}
++    team_ally = np.full(int(max(ally_of) + 1) if ally_of else 1, -9)
++    for t, a in ally_of.items():
++        team_ally[t] = a
++
++    def snapshot(f):
++        rows = []
++        if f in starts:
++            a, b = starts[f]
++            rows.append(units[a:b])
++        if len(static_frames):
++            j = np.searchsorted(static_frames, f, "right") - 1
++            if j >= 0 and int(static_frames[j]) != f:
++                a, b = starts[int(static_frames[j])]
++                blk = units[a:b]
++                rows.append(blk[np.array([defs.get(int(d), (0,))[0] == 0 for d in blk[:, 2]], bool)])
++        return np.concatenate(rows) if rows else np.zeros((0, 14), np.float32)
++
++    out, cache_f, snap, pos = [], None, None, None
++    for f, a, v, amt in X:
++        dv = def_of.get(v)
++        if dv is None:
++            continue
++        val = min(amt / hp[dv], 1.0) * metal[dv]
++        va = ally_of.get(team_of.get(v, -9), -9)
++        if a >= 0:
++            out.append((f, a, v, val, ally_of.get(team_of.get(a, -9), -9), va))
++            continue
++        if f != cache_f:
++            cache_f, snap = f, snapshot(f)
++            pos = {int(r[1]): (r[4], r[5]) for r in snap}
++        if v not in pos or not len(snap):
++            out.append((f, -1, v, val, -9, va))
++            continue
++        vx, vz = pos[v]
++        d = snap[:, 2].astype(np.int64)
++        al = team_ally[np.clip(snap[:, 3].astype(np.int64), 0, len(team_ally) - 1)]
++        power = adps[d] if dv in is_air else gdps[d]
++        reach = (snap[:, 4] - vx) ** 2 + (snap[:, 5] - vz) ** 2 <= (rng[d] + slack) ** 2
++        ok = (al != va) & (al >= 0) & reach & (power > 0) & (snap[:, 9] >= 1.0)
++        if not ok.any():
++            out.append((f, -1, v, val, -9, va))
++            continue
++        w = power[ok] / power[ok].sum()
++        for uid, share, ally in zip(snap[ok, 1].astype(np.int64), w, al[ok]):
++            out.append((f, int(uid), v, val * float(share), int(ally), va))
++    return out
++
++
++def build(path, out_dir=None):
++    path = Path(path)
++    defs, teams, allies, spots, heights = {}, {}, [], [], None
++    mapxz = (0, 0)
++    U, C, K, X = [], [], [], []
++    winners = None
++    for ln in gzip.open(path, "rt", errors="replace"):
++        k = ln[:1]
++        p = ln.split()
++        if k == "U":
++            U.append([float(v) for v in p[1:15]])
++        elif k == "C" and len(p) >= 10:
++            ps = p[9].split(",")
++            C.append((int(p[1]), int(p[2]), int(p[3]), int(p[4]), int(p[5]), p[6], ps))
++        elif k == "C":
++            C.append((int(p[1]), int(p[2]), int(p[3]), int(p[4]), int(p[5]), "", []))
++        elif k == "X":
++            X.append((int(p[1]), int(p[2]), int(p[3]), float(p[4])))
++        elif k == "K":
++            K.append((int(p[1]), int(p[2]), int(p[3]), int(p[4]), float(p[5]), float(p[6]), int(p[7]), int(p[9])))
++        elif k == "D":
++            defs[int(p[1])] = (CLASSES.index(p[3]) if p[3] in CLASSES else 7,) + tuple(float(v) for v in p[4:13])
++        elif k == "T":
++            teams[int(p[1])] = (int(p[2]), p[3] == "true")
++        elif k == "A":
++            allies = [int(v) for v in p[1:]]
++        elif k == "S":
++            spots.append((float(p[2]), float(p[3])))
++        elif k == "H":
++            heights = np.array([float(v) for v in p[2:]], dtype=np.float32)
++            step = int(p[1])
++        elif k == "V":
++            mapxz = (int(p[2]), int(p[3]))
++        elif k == "W":
++            winners = [int(v) for v in p[2].split(",")] if len(p) > 2 and p[2] else []
++    units = np.array(U, dtype=np.float32) if U else np.zeros((0, 14), np.float32)
++    if heights is not None and mapxz[0]:
++        nx = len(range(step // 2, mapxz[0] + 1, step))
++        heights = heights[: (len(heights) // nx) * nx].reshape(-1, nx)
++
++    desync = None
++    dfile = path.parent / "desync.txt"
++    if dfile.exists():
++        fr = [int(m) for m in re.findall(r"frame-number (\d+)", dfile.read_text(errors="replace"))]
++        desync = min(fr) if fr else None
++
++    skills = demo_skills(path.parent)
++    ally_of = {t: a for t, (a, ai) in teams.items()}
++    human = {t for t, (a, ai) in teams.items() if not ai and a in allies}
++    cls = {d: v[0] for d, v in defs.items()}
++    metal = {d: v[1] for d, v in defs.items()}
++    hp = {d: max(v[2], 1.0) for d, v in defs.items()}
++    focus = {d for d, c in cls.items() if CLASSES[c] in FOCUS}
++
++    # unit id -> def and team (last known), and positions by uid for target-unit lookups
++    def_of, team_of = {}, {}
++    pos_by_uid = collections.defaultdict(list)
++    for r in units:
++        uid = int(r[1])
++        def_of[uid] = int(r[2])
++        team_of[uid] = int(r[3])
++        pos_by_uid[uid].append((r[0], r[4], r[5]))
++    for f, t, u, d, c, o, ps in C:
++        def_of.setdefault(u, d)
++        team_of.setdefault(u, t)
++
++    def where(uid, frame):
++        rows = pos_by_uid.get(uid)
++        if not rows:
++            return -1.0, -1.0
++        i = min(range(len(rows)), key=lambda j: abs(rows[j][0] - frame))
++        return rows[i][1], rows[i][2]
++
++    # decisions
++    per_unit = collections.defaultdict(list)
++    for f, t, u, d, c, o, ps in C:
++        if t in human and d in focus and c in KINDS:
++            per_unit[u].append((f, t, c, o, ps))
++    dec = []
++    for u, rows in per_unit.items():
++        rows.sort()
++        burst = [rows[0]]
++        for r in rows[1:] + [None]:
++            if r is not None and r[0] - burst[-1][0] <= BURST:
++                burst.append(r)
++                continue
++            plain = [b for b in burst if "s" not in b[3]] or burst
++            last = plain[-1]
++            f, t, c, o, ps = last
++            if len(ps) >= 3:
++                tx, tz = float(ps[0]), float(ps[2])
++            elif len(ps) == 1 and c == 20:
++                tx, tz = where(int(ps[0]), f)
++            else:
++                tx, tz = where(u, f)
++            dec.append([f, burst[0][0], t, u, KINDS[c], tx, tz, -1, len(burst), int("s" in o)])
++            burst = [r] if r is not None else []
++    dec.sort()
++    gkey = {}
++    for row in dec:
++        key = (row[2], row[0], row[4])
++        row[7] = gkey.setdefault(key, len(gkey))
++    decisions = np.array(dec, dtype=np.float64) if dec else np.zeros((0, 10))
++
++    # outcome inputs: damage in metal by attacker/victim, deaths in metal
++    dmg = attribute_damage(X, units, defs, def_of, team_of, ally_of, metal, hp)
++    total = sum(r[3] for r in dmg)
++    attributed = sum(r[3] for r in dmg if r[1] >= 0) / total if total else 0.0
++    deaths = [(f, metal.get(d, 0.0), ally_of.get(t, -9), x, z) for f, u, d, t, x, z, au, at in K]
++    # running totals: per unit, damage dealt to enemies and taken from enemies (frames, cumulative metal)
++    dealt, taken = collections.defaultdict(list), collections.defaultdict(list)
++    for f, a, v, val, aa, va in dmg:
++        if a >= 0 and aa != va:
++            dealt[a].append((f, val))
++        if aa != va:
++            taken[v].append((f, val))
++
++    def cum(d):
++        out = {}
++        for u, rows in d.items():
++            arr = np.array(rows, dtype=np.float64)
++            out[u] = (arr[:, 0], np.concatenate([[0.0], np.cumsum(arr[:, 1])]))
++        return out
++
++    dealt, taken = cum(dealt), cum(taken)
++
++    def window(c, u, f0, f1):
++        if u not in c:
++            return 0.0
++        fr, cs = c[u]
++        return cs[np.searchsorted(fr, f1, "right")] - cs[np.searchsorted(fr, f0, "right")]
++
++    dth = np.array([(f, m, a, x, z) for f, m, a, x, z in deaths], dtype=np.float64).reshape(-1, 5)
++    death_f = dth[:, 0]
++    side_cum = {a: np.concatenate([[0.0], np.cumsum(np.where(dth[:, 2] == a, dth[:, 1], 0.0))]) for a in allies}
++    all_cum = np.concatenate([[0.0], np.cumsum(dth[:, 1])])
++
++    groups = collections.defaultdict(set)
++    for row in dec:
++        groups[row[7]].add(row[3])
++
++    outcome = np.zeros((len(dec), len(HORIZONS), 3), dtype=np.float32)
++    result = np.full(len(dec), -1, dtype=np.int8)
++    cache = {}
++    for i, row in enumerate(dec):
++        f, team, g, tx, tz = row[0], row[2], row[7], row[5], row[6]
++        ally = ally_of[team]
++        if winners is not None:
++            result[i] = 1 if ally in winners else 0
++        if g in cache:
++            outcome[i] = cache[g]
++            continue
++        members = groups[g]
++        near = (dth[:, 3] - tx) ** 2 + (dth[:, 4] - tz) ** 2 <= AREA * AREA
++        for j, h in enumerate(HORIZONS):
++            end = f + h * 30
++            if desync is not None and end > desync:
++                outcome[i, j] = np.nan
++                continue
++            own = sum(window(dealt, u, f, end) - window(taken, u, f, end) for u in members)
++            lo, hi = np.searchsorted(death_f, f, "right"), np.searchsorted(death_f, end, "right")
++            ours = side_cum[ally][hi] - side_cum[ally][lo] if ally in side_cum else 0.0
++            team_d = (all_cum[hi] - all_cum[lo] - ours) - ours
++            sl = slice(lo, hi)
++            nm = near[sl]
++            mine = dth[sl, 2] == ally
++            area = dth[sl, 1][nm & ~mine].sum() - dth[sl, 1][nm & mine].sum()
++            outcome[i, j] = (own, area, team_d)
++        cache[g] = outcome[i]
++
++    defs_arr = np.array([[d] + list(v) for d, v in sorted(defs.items())], dtype=np.float32)
++    teams_arr = np.array([[t, a, int(ai), skills.get(t, -1)] for t, (a, ai) in sorted(teams.items())],
++                         dtype=np.float32)
++    out_dir = Path(out_dir) if out_dir else path.parent
++    out_dir.mkdir(parents=True, exist_ok=True)
++    dest = out_dir / (path.parent.name + ".npz")
++    np.savez_compressed(dest, units=units, defs=defs_arr, teams=teams_arr, decisions=decisions, outcome=outcome,
++                        result=result, spots=np.array(spots, np.float32), heights=heights if heights is not None
++                        else np.zeros((0, 0), np.float32), map=np.array(mapxz), allies=np.array(allies),
++                        desync_frame=np.array(desync if desync is not None else -1), horizons=np.array(HORIZONS),
++                        attributed=np.array(attributed))
++    return dest, len(dec), len(groups), attributed
++
++
++def main(argv):
++    if not argv:
++        print(__doc__)
++        return 1
++    target = Path(argv[0])
++    out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
++    paths = [target] if target.is_file() else sorted(target.glob("*/orders.txt.gz"))
++    for p in paths:
++        dest = (out or p.parent) / (p.parent.name + ".npz")
++        if "--force" not in argv and dest.exists() and dest.stat().st_mtime > p.stat().st_mtime:
++            continue
++        d, n, g, att = build(p, out)
++        print("%s decisions %d groups %d damage with an attacker in reach %.0f%%" % (d.name, n, g, 100 * att),
++              flush=True)
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1:]))
+diff --git a/tools/replay_orders.py b/tools/replay_orders.py
+new file mode 100644
+index 00000000..d75512fa
+--- /dev/null
++++ b/tools/replay_orders.py
+@@ -0,0 +1,164 @@
++#!/usr/bin/env python3
++"""Record a replay for learning army control: every order, what each team could see, deaths, damage.
++
++    python tools/replay_orders.py one <demo.sdfz> <out_dir> [max_game_minutes]
++    python tools/replay_orders.py batch [--workers 2] [--limit N] [--out G:/bar-ai-archive/replay-orders]
++
++The widget (tools/replay_orders_widget.lua) writes orders.txt, gzipped to orders.txt.gz:
++    V 2 mapX mapZ
++    D defid name class metal hp speed range ground_dps aa_dps sight radar jam
++    A allyteam...            (the order of the sight bits in U)
++    T team allyteam isAI
++    S i x z                  (metal spots)
++    H step h h h ...         (ground height every `step` elmos, rows of x)
++    C frame team uid defid cmdid mods x z p1,p2,p3[,p4]   mods: s shift c ctrl a alt m meta r right-click
++    U frame uid defid team x z vx vz health_frac build sight cmdid tx tz
++         every second for mobile units, every 10 s for buildings; sight: 2 bits per allyteam in A order
++         (1 in sight, 2 on radar); cmdid/tx/tz: the unit's current order and where it points
++    K frame uid defid team x z attacker attackerdef attackerteam    (death)
++    F frame uid defid team x z   (finished)   G frame uid newteam oldteam   (given)
++    X frame attacker victim damage   (summed over the second before frame)
++    W frame winners
++
++Batch: the demos in data/demos with a human player, newest first; one done is skipped. Pauses while
++his game runs; launches on free memory (run_match.wait_for_memory).
++"""
++import gzip
++import itertools
++import os
++import shutil
++import subprocess
++import sys
++import threading
++import time
++from concurrent.futures import ThreadPoolExecutor
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++import bar_env  # noqa: E402
++
++TOOLS = Path(__file__).resolve().parent
++DEFAULT_OUT = Path("G:/bar-ai-archive/replay-orders")
++_launch = threading.Lock()
++_launch_port = threading.Lock()
++_ports = itertools.count(os.getpid() % 50 * 4)
++
++
++def demo_engine(demo):
++    """The engine version in the demo's header (a replay plays only on its own engine)."""
++    with gzip.open(demo, "rb") as f:
++        head = f.read(16 + 8 + 256)
++    return head[24:24 + 256].split(b"\x00", 1)[0].decode("ascii", "replace").split()[0]
++
++
++def headless_for(env, demo):
++    exe = env.data / "engine" / ("recoil_" + demo_engine(demo)) / "spring-headless.exe"
++    return exe if exe.exists() else None
++
++
++def _his_game():
++    import mp_archive
++    return mp_archive.his_game_running()
++
++
++def run(demo, out, max_min=1e6, timeout=5400, yield_to_him=True, extra_data=None):
++    env = bar_env.load()
++    datadir = str(env.data) + (";" + str(extra_data) if extra_data and Path(extra_data).exists() else "")
++    out = Path(out)
++    exe = headless_for(env, demo)
++    if exe is None:
++        print("no engine %s for %s" % (demo_engine(demo), demo), flush=True)
++        return 0, None
++    wd = out / "wd"
++    (wd / "LuaUI" / "Widgets").mkdir(parents=True, exist_ok=True)
++    cfg = wd / "LuaUI" / "Config"
++    cfg.mkdir(parents=True, exist_ok=True)
++    shutil.copy2(TOOLS / "replay_orders_widget.lua", wd / "LuaUI" / "Widgets" / "replay_orders_widget.lua")
++    shutil.copy2(TOOLS / "headless.cfg", wd / "run.cfg")
++    with _launch_port:
++        port = 8600 + next(_ports) % 200
++    with open(wd / "run.cfg", "a") as c:
++        c.write("\nHostPortDefault = %d\n" % port)
++    (cfg / "orders_maxframe.txt").write_text(str(int(max_min * 60 * 30)))
++    cmd = [str(exe), "--write-dir", str(wd), "--config", str(wd / "run.cfg"), str(Path(demo).resolve())]
++    t0 = time.time()
++    stopped = False
++    with open(wd / "stdout.txt", "w") as so:
++        proc = subprocess.Popen(cmd, cwd=str(wd), stdout=so, stderr=subprocess.STDOUT,
++                                env={**os.environ, "SPRING_DATADIR": datadir})
++        checked = t0
++        while proc.poll() is None:
++            time.sleep(3)
++            if time.time() - t0 > timeout:
++                print("timeout", demo, flush=True)
++                proc.kill()
++            elif yield_to_him and time.time() - checked > 30 and (checked := time.time()) and _his_game():
++                print("his game started: stopped", demo, flush=True)
++                proc.kill()
++                stopped = True
++        proc.wait()
++    src = cfg / "orders.txt"
++    size = None
++    if not stopped and src.exists() and src.stat().st_size > 0:
++        with open(src, "rb") as fi, gzip.open(out / "orders.txt.gz", "wb", compresslevel=6) as fo:
++            shutil.copyfileobj(fi, fo)
++        size = (out / "orders.txt.gz").stat().st_size
++        src.unlink()
++    so_path = wd / "stdout.txt"
++    text = so_path.read_text(encoding="utf-8", errors="replace") if so_path.exists() else ""
++    (out / "desync.txt").write_text("\n".join(ln for ln in text.splitlines() if "DESYNC" in ln), encoding="utf-8")
++    widget_lines = [ln for ln in text.splitlines() if "replay_orders_widget" in ln or "order capture" in ln]
++    (out / "stdout.log").write_text("\n".join(widget_lines) + "\n----\n" + text[-200000:], encoding="utf-8")
++    shutil.rmtree(wd, ignore_errors=True)
++    return round(time.time() - t0), size
++
++
++def has_human(demo):
++    import replay_extract as rx
++    m = rx.meta_of(rx.demo_script(demo))
++    ai_teams = {a["team"] for a in m["ais"]}
++    return any(p["spec"] in ("0", None) and p["team"] not in ai_teams for p in m["players"])
++
++
++def batch(workers=2, limit=None, root=DEFAULT_OUT):
++    env = bar_env.load()
++    demos = sorted((env.data / "demos").glob("*.sdfz"), key=lambda p: -p.stat().st_mtime)
++    todo = [d for d in demos if not (root / d.stem / "orders.txt.gz").exists() and has_human(d)]
++    if limit:
++        todo = todo[:limit]
++    batch_list(todo, workers, root)
++
++
++def batch_list(todo, workers, root, extra_data=None):
++    import mp_archive
++    import run_match
++    print("%d demos to record, %d workers, into %s" % (len(todo), workers, root), flush=True)
++
++    def one(demo):
++        for attempt in range(20):
++            with _launch:
++                while mp_archive.his_game_running():
++                    print("his game is running: waiting", flush=True)
++                    time.sleep(120)
++                run_match.wait_for_memory(5.0, 12.0)
++                time.sleep(20)
++            wall, size = run(demo, root / demo.stem, extra_data=extra_data)
++            print("%s wall %ss gz %s" % (demo.stem, wall, size), flush=True)
++            if size or not mp_archive.his_game_running():
++                return
++
++    with ThreadPoolExecutor(workers) as ex:
++        list(ex.map(one, todo))
++
++
++if __name__ == "__main__":
++    a = sys.argv[1:]
++    if a[:1] == ["one"] and len(a) >= 3:
++        print("wall_s %s gz bytes %s" % run(a[1], a[2], float(a[3]) if len(a) > 3 else 1e6))
++    elif a[:1] == ["batch"]:
++        batch(int(a[a.index("--workers") + 1]) if "--workers" in a else 2,
++              int(a[a.index("--limit") + 1]) if "--limit" in a else None,
++              Path(a[a.index("--out") + 1]) if "--out" in a else DEFAULT_OUT)
++    else:
++        print(__doc__)
++        raise SystemExit(1)
+diff --git a/tools/replay_orders_shapes.py b/tools/replay_orders_shapes.py
+new file mode 100644
+index 00000000..ce55a790
+--- /dev/null
++++ b/tools/replay_orders_shapes.py
+@@ -0,0 +1,86 @@
++#!/usr/bin/env python3
++"""The shape of human group orders in an orders.txt (tools/replay_orders.py).
++
++    python tools/replay_orders_shapes.py <orders.txt>
++
++A group order: one human team, one frame, one move/fight order, 5+ army/air units. Its targets'
++spread along their main axis (length) and across it (width): a line is long and thin, a point
++order has every target in one spot. The line's facing is compared with the direction to the
++nearest enemy mass (5 s position samples): a line held against them stands across that direction.
++"""
++import collections
++import math
++import sys
++
++FOCUS = {"army", "air", "radar", "jammer"}
++
++
++def main(path):
++    defs, teams, groups, samples = {}, {}, collections.defaultdict(list), collections.defaultdict(list)
++    for ln in open(path, encoding="utf-8", errors="replace"):
++        p = ln.split()
++        if not p:
++            continue
++        if p[0] == "D":
++            defs[int(p[1])] = p[3]
++        elif p[0] == "T":
++            teams[int(p[1])] = (int(p[2]), p[3] == "true")
++        elif p[0] == "C" and len(p) > 9 and int(p[5]) in (10, 16):
++            t = int(p[2])
++            if teams.get(t, (0, True))[1] or defs.get(int(p[4])) not in FOCUS:
++                continue
++            ps = [float(v) for v in p[-1].split(",")]
++            if len(ps) >= 3:
++                groups[(int(p[1]), t)].append((float(p[7]), float(p[8]), ps[0], ps[2]))
++        elif p[0] == "P":
++            samples[int(p[1])].append((int(p[2]), defs.get(int(p[4])), float(p[5]), float(p[6])))
++    frames = sorted(samples)
++    kinds = collections.Counter()
++    angles = []
++    for (f, t), rows in groups.items():
++        if len(rows) < 5:
++            continue
++        tx = [r[2] for r in rows]
++        tz = [r[3] for r in rows]
++        mx, mz = sum(tx) / len(tx), sum(tz) / len(tz)
++        sxx = sum((x - mx) ** 2 for x in tx) / len(tx)
++        szz = sum((z - mz) ** 2 for z in tz) / len(tz)
++        sxz = sum((x - mx) * (z - mz) for x, z in zip(tx, tz)) / len(tx)
++        tr, det = sxx + szz, sxx * szz - sxz ** 2
++        l1 = tr / 2 + math.sqrt(max(tr * tr / 4 - det, 0))
++        l2 = max(tr - l1, 0)
++        length, width = 2 * math.sqrt(l1), 2 * math.sqrt(l2)
++        if length < 40:
++            kinds["point (all to one spot)"] += 1
++            continue
++        kinds["line (long/wide > 3)" if length > 3 * max(width, 1) else "blob (2-D spread)"] += 1
++        if length <= 3 * max(width, 1):
++            continue
++        ax = math.atan2(2 * sxz, sxx - szz) / 2
++        near = min(frames, key=lambda g: abs(g - f)) if frames else None
++        ally = teams[t][0]
++        foes = [(x, z) for tm, c, x, z in samples.get(near, []) if c in FOCUS and teams.get(tm, (ally,))[0] != ally
++                and teams.get(tm, (ally,))[0] >= 0]
++        if not foes:
++            continue
++        foes.sort(key=lambda q: (q[0] - mx) ** 2 + (q[1] - mz) ** 2)
++        fx = sum(q[0] for q in foes[:10]) / len(foes[:10])
++        fz = sum(q[1] for q in foes[:10]) / len(foes[:10])
++        to_foe = math.atan2(fz - mz, fx - mx)
++        d = abs((to_foe - ax + math.pi / 2) % math.pi - math.pi / 2)
++        angles.append((math.degrees(d), math.hypot(fx - mx, fz - mz), length))
++    total = sum(kinds.values())
++    print("human group orders (5+ units, one frame):", total)
++    for k, n in kinds.most_common():
++        print("  %-26s %5d  %.0f%%" % (k, n, 100 * n / max(total, 1)))
++    if angles:
++        across = [a for a in angles if a[0] >= 60]
++        print("lines with an enemy mass in sight: %d; standing across the direction to it (60-90 deg): %d (%.0f%%)"
++              % (len(angles), len(across), 100 * len(across) / len(angles)))
++        L = sorted(a[2] for a in angles)
++        D = sorted(a[1] for a in angles)
++        print("  line length median %.0f elmos; distance to the enemy mass median %.0f" % (L[len(L) // 2], D[len(D) // 2]))
++
++
++if __name__ == "__main__":
++    main(sys.argv[1])
+diff --git a/tools/replay_orders_stats.py b/tools/replay_orders_stats.py
+new file mode 100644
+index 00000000..46c0e95b
+--- /dev/null
++++ b/tools/replay_orders_stats.py
+@@ -0,0 +1,81 @@
++import collections
++import statistics
++import sys
++
++CMD = {0: "stop", 1: "insert", 2: "remove", 5: "wait", 10: "move", 15: "patrol", 16: "fight", 20: "attack",
++       21: "area_attack", 25: "guard", 40: "repair", 45: "firestate", 50: "movestate", 70: "wantedspeed",
++       75: "load", 81: "unload", 85: "onoff", 90: "reclaim", 95: "cloak", 110: "restore", 115: "repeat",
++       125: "resurrect", 130: "capture", 140: "autorepair", 145: "idlemode"}
++
++defs, teams, cmds, pos = {}, {}, [], []
++for ln in open(sys.argv[1], encoding="utf-8", errors="replace"):
++    p = ln.split()
++    if not p:
++        continue
++    if p[0] == "D":
++        defs[int(p[1])] = (p[2], p[3], float(p[4]))
++    elif p[0] == "T":
++        teams[int(p[1])] = (int(p[2]), p[3] == "true")
++    elif p[0] == "C":
++        cmds.append((int(p[1]), int(p[2]), int(p[3]), int(p[4]), int(p[5]), p[6] if len(p) > 9 else "",
++                     p[-1] if len(p) > 9 else ""))
++    elif p[0] == "P":
++        pos.append((int(p[1]), int(p[2]), int(p[3]), int(p[4])))
++
++FOCUS = {"army", "radar", "jammer", "air"}
++human = {t for t, (a, ai) in teams.items() if not ai and a >= 0}
++ai = {t for t, (a, ai) in teams.items() if ai}
++print("teams", len(teams), "human", sorted(human), "ai", sorted(ai))
++
++
++def side(t):
++    return "human" if t in human else "ai" if t in ai else "other"
++
++
++def name(c):
++    return CMD.get(c, "build" if c < 0 else str(c))
++
++
++by = collections.Counter((side(t), defs.get(d, ("?", "?"))[1]) for f, t, u, d, c, o, ps in cmds)
++print("\norders by side and unit class")
++for k, n in sorted(by.items(), key=lambda kv: -kv[1]):
++    print("  %-6s %-8s %7d" % (k[0], k[1], n))
++
++for s in ("human", "ai"):
++    sel = [x for x in cmds if side(x[1]) == s and defs.get(x[3], ("", ""))[1] in FOCUS]
++    print("\n== %s, focus classes (army/air/radar/jammer): %d orders" % (s, len(sel)))
++    print("  types", collections.Counter(name(x[4]) for x in sel).most_common(12))
++    print("  modifiers", collections.Counter(x[5] for x in sel).most_common(6))
++    grp = collections.Counter((x[0], x[1], x[4]) for x in sel)
++    sizes = list(grp.values())
++    if sizes:
++        print("  issue events %d, units per event median %s, mean %.1f, share of orders in events of 5+ %.2f" % (
++            len(sizes), statistics.median(sizes), statistics.mean(sizes),
++            sum(n for n in sizes if n >= 5) / sum(sizes)))
++    # positional orders only (move/fight/attack/patrol): gap between successive orders to a unit
++    last, gaps = {}, []
++    for f, t, u, d, c, o, ps in sel:
++        if c in (10, 15, 16, 20, 21):
++            if u in last and f - last[u] > 0:
++                gaps.append((f - last[u]) / 30)
++            last[u] = f
++    if gaps:
++        q = statistics.quantiles(gaps, n=4)
++        print("  seconds between move/fight/attack/patrol orders to one unit: q1 %.1f median %.1f q3 %.1f (n=%d)" % (
++            q[0], q[1], q[2], len(gaps)))
++    # how many focus units alive per sample vs how many got a positional order in the next 30 s
++    alive = collections.defaultdict(set)
++    for f, t, u, d in pos:
++        if side(t) == s and defs.get(d, ("", ""))[1] in FOCUS:
++            alive[f].add(u)
++    ordered = collections.defaultdict(set)
++    for f, t, u, d, c, o, ps in sel:
++        if c in (10, 15, 16, 20, 21):
++            ordered[f // 900].add(u)
++    rows = []
++    for f in sorted(alive):
++        if f % 900 == 0 and f > 0:
++            a = alive[f]
++            rows.append((f // 1800, len(a), len(a & ordered[f // 900])))
++    print("  per 30 s window: (minute, focus units alive, of them given a positional order in the window)")
++    print("  ", rows[::2])
+diff --git a/tools/replay_orders_widget.lua b/tools/replay_orders_widget.lua
+new file mode 100644
+index 00000000..d7e75b3a
+--- /dev/null
++++ b/tools/replay_orders_widget.lua
+@@ -0,0 +1,204 @@
++function widget:GetInfo()
++	return { name = "BARAI order capture", desc = "orders, per-allyteam sight, deaths and damage, from a replay",
++		author = "bar-ai", layer = 0, enabled = true }
++end
++
++local out, maxFrame
++local classOf, mobileDef = {}, {}
++local allies = {}
++local dmg = {}
++local GetUnitLosState = Spring.GetUnitLosState
++
++local function cls(ud)
++	if ud.customParams and ud.customParams.iscommander then return "com" end
++	local mobile = (ud.speed or 0) > 0 and not ud.isBuilding
++	if not mobile then return "static" end
++	if ud.isBuilder or (ud.buildSpeed or 0) > 0 then return "builder" end
++	if (ud.radarDistanceJam or ud.jammerRadius or 0) > 0 then return "jammer" end
++	if (ud.radarDistance or ud.radarRadius or 0) > 0 and #(ud.weapons or {}) == 0 then return "radar" end
++	if ud.canFly then return "air" end
++	if #(ud.weapons or {}) > 0 then return "army" end
++	return "other"
++end
++
++local function weaponStats(ud)
++	local range, dps, aa, ground = 0, 0, 0, 0
++	for _, w in ipairs(ud.weapons or {}) do
++		local wd = WeaponDefs[w.weaponDef]
++		if wd then
++			local d = 0
++			pcall(function() d = (wd.damages and (wd.damages[0] or wd.damages.default)) or 0 end)
++			local per = d * (wd.salvoSize or 1) * (wd.projectiles or 1) / math.max(wd.reload or 1, 0.03)
++			local only = w.onlyTargets or {}
++			local aaOnly = only.vtol and not only.notair and not only.surface and not only.ground
++			if aaOnly then
++				aa = aa + per
++			else
++				ground = ground + per
++				range = math.max(range, wd.range or 0)
++			end
++			dps = dps + per
++		end
++	end
++	return range, ground, aa
++end
++
++function widget:Initialize()
++	if not Spring.IsReplay() then
++		widgetHandler:RemoveWidget(self)
++		return
++	end
++	local f = io.open("LuaUI/Config/orders_maxframe.txt", "r")
++	maxFrame = f and tonumber(f:read("*l")) or 1e9
++	if f then f:close() end
++	out = io.open("LuaUI/Config/orders.txt", "w")
++	out:write(string.format("V 2 %d %d\n", Game.mapSizeX, Game.mapSizeZ))
++	for id, ud in pairs(UnitDefs) do
++		classOf[id] = cls(ud)
++		mobileDef[id] = classOf[id] ~= "static"
++		local r, g, a = weaponStats(ud)
++		out:write(string.format("D %d %s %s %.0f %.0f %.1f %.0f %.1f %.1f %.0f %.0f %.0f\n", id, ud.name, classOf[id],
++			ud.metalCost or 0, ud.health or 0, ud.speed or 0, r, g, a, ud.sightDistance or ud.losRadius or 0,
++			ud.radarDistance or ud.radarRadius or 0, ud.radarDistanceJam or ud.jammerRadius or 0))
++	end
++	for _, a in ipairs(Spring.GetAllyTeamList()) do
++		if a ~= select(6, Spring.GetTeamInfo(Spring.GetGaiaTeamID())) then allies[#allies + 1] = a end
++	end
++	out:write("A " .. table.concat(allies, " ") .. "\n")
++	for _, t in ipairs(Spring.GetTeamList()) do
++		local _, _, _, isAI, _, ally = Spring.GetTeamInfo(t)
++		out:write(string.format("T %d %d %s\n", t, ally or -1, tostring(isAI)))
++	end
++	local n = Spring.GetGameRulesParam("mex_count") or 0
++	for i = 1, n do
++		out:write(string.format("S %d %.0f %.0f\n", i, Spring.GetGameRulesParam("mex_x" .. i) or -1,
++			Spring.GetGameRulesParam("mex_z" .. i) or -1))
++	end
++	local step = 64
++	local hs = {}
++	for z = step / 2, Game.mapSizeZ, step do
++		for x = step / 2, Game.mapSizeX, step do
++			hs[#hs + 1] = string.format("%.0f", Spring.GetGroundHeight(x, z))
++		end
++	end
++	out:write("H " .. step .. " " .. table.concat(hs, " ") .. "\n")
++	Spring.SendCommands({ "specfullview 1", "setmaxspeed 1000", "setminspeed 1000" })
++end
++
++local function optStr(o)
++	if type(o) ~= "table" then return tostring(o) end
++	return (o.shift and "s" or "") .. (o.ctrl and "c" or "") .. (o.alt and "a" or "") .. (o.meta and "m" or "") .. (o.right and "r" or "")
++end
++
++local function params(ps)
++	local s = {}
++	for i = 1, math.min(#ps, 4) do s[i] = string.format("%.0f", ps[i]) end
++	return table.concat(s, ",")
++end
++
++function widget:UnitCommand(unitID, unitDefID, unitTeam, cmdID, cmdParams, cmdOpts, cmdTag)
++	if not out then return end
++	local x, _, z = Spring.GetUnitPosition(unitID)
++	out:write(string.format("C %d %d %d %d %d %s %.0f %.0f %s\n", Spring.GetGameFrame(), unitTeam, unitID,
++		unitDefID or -1, cmdID, optStr(cmdOpts), x or -1, z or -1, params(cmdParams)))
++end
++
++function widget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
++	if not out then return end
++	local x, _, z = Spring.GetUnitPosition(unitID)
++	out:write(string.format("K %d %d %d %d %.0f %.0f %d %d %d\n", Spring.GetGameFrame(), unitID, unitDefID or -1,
++		unitTeam or -1, x or -1, z or -1, attackerID or -1, attackerDefID or -1, attackerTeam or -1))
++end
++
++function widget:UnitFinished(unitID, unitDefID, unitTeam)
++	if not out then return end
++	local x, _, z = Spring.GetUnitPosition(unitID)
++	out:write(string.format("F %d %d %d %d %.0f %.0f\n", Spring.GetGameFrame(), unitID, unitDefID or -1, unitTeam, x or -1, z or -1))
++end
++
++function widget:UnitGiven(unitID, unitDefID, newTeam, oldTeam)
++	if not out then return end
++	out:write(string.format("G %d %d %d %d\n", Spring.GetGameFrame(), unitID, newTeam, oldTeam))
++end
++
++-- BAR's handler passes widgets no attacker (and refuses user widgets the handler); the engine's
++-- last-attacker record names it. -1 when absent: tools/replay_dataset.py shares that among the enemies in reach.
++local GetUnitLastAttacker = Spring.GetUnitLastAttacker
++function widget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer)
++	if not out or paralyzer or not damage or damage <= 0 then return end
++	local a = GetUnitLastAttacker and GetUnitLastAttacker(unitID)
++	local k = (a or -1) * 1048576 + unitID
++	dmg[k] = (dmg[k] or 0) + damage
++end
++
++local function sightMask(uid)
++	local m = 0
++	for i, a in ipairs(allies) do
++		local raw = GetUnitLosState(uid, a, true) or 0
++		m = m + (raw % 4) * (4 ^ (i - 1))
++	end
++	return m
++end
++
++local function sample(frame, statics)
++	for _, uid in ipairs(Spring.GetAllUnits()) do
++		local d = Spring.GetUnitDefID(uid)
++		if d and (mobileDef[d] or statics) then
++			local x, _, z = Spring.GetUnitPosition(uid)
++			local vx, _, vz = Spring.GetUnitVelocity(uid)
++			local h, mh, _, _, bp = Spring.GetUnitHealth(uid)
++			local c, tx, tz = -1, -1, -1
++			if mobileDef[d] then
++				local q = Spring.GetUnitCommands(uid, 1)
++				if q and q[1] then
++					c = q[1].id
++					local p = q[1].params or {}
++					if #p >= 3 then
++						tx, tz = p[1], p[3]
++					elseif #p == 1 then
++						local ux, _, uz = Spring.GetUnitPosition(p[1])
++						tx, tz = ux or -1, uz or -1
++					end
++				end
++			end
++			out:write(string.format("U %d %d %d %d %.0f %.0f %.1f %.1f %.2f %.2f %d %d %.0f %.0f\n", frame, uid, d,
++				Spring.GetUnitTeam(uid), x or -1, z or -1, (vx or 0) * 30, (vz or 0) * 30, (h or 0) / math.max(mh or 1, 1),
++				bp or 1, sightMask(uid), c, tx, tz))
++		end
++	end
++end
++
++local nextSpeed = 300
++function widget:GameFrame(frame)
++	if not out then return end
++	if frame % 30 == 0 then
++		for k, v in pairs(dmg) do
++			out:write(string.format("X %d %d %d %.0f\n", frame, math.floor(k / 1048576), k % 1048576, v))
++		end
++		dmg = {}
++		sample(frame, frame % 300 == 0)
++	end
++	if frame >= nextSpeed then
++		nextSpeed = frame + 300
++		Spring.SendCommands({ "setmaxspeed 1000", "setminspeed 1000" })
++		out:flush()
++	end
++	if frame >= maxFrame then
++		out:close()
++		out = nil
++		Spring.SendCommands("quitforce")
++	end
++end
++
++function widget:GameOver(winners)
++	if out then
++		out:write(string.format("W %d %s\n", Spring.GetGameFrame(), table.concat(winners or {}, ",")))
++		out:close()
++		out = nil
++	end
++	Spring.SendCommands("quitforce")
++end
++
++function widget:Shutdown()
++	if out then out:close() out = nil end
++end

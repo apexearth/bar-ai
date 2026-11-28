@@ -188,6 +188,7 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 			}
 		}
 		const char* dir = dirFixed.empty() ? nullptr : dirFixed.c_str();
+		armyNetDir = dirFixed;  // the army model bridge's files go in armynet-t<team>/ under it (ArmyNetBridge.cpp)
 		if (dir != nullptr) {
 			const std::string path = std::string(dir) + "apex-t" + std::to_string(teamId) + ".log";
 			// KEEP THE LAST GAME THAT RAN (apexearth 2026-09-29: a load that died
@@ -1052,13 +1053,37 @@ int CCircuitAI::Update(int frame)
 				&& UnitControl(unit, false))
 			{
 				++released;
+				handsOffIds.insert(kv.first);
+				// the model commands it now: a set target our fight logic left on would keep it aiming at that (his 11-25)
+				unit->GetUnit()->ExecuteCustomCommand(CMD_UNIT_CANCEL_TARGET, {});
 			}
 		}
+		// the gadget cleared its mark (serve --hybrid hands a unit in contact back to our fight logic): take it back
+		std::vector<CCircuitUnit*> back;
+		for (auto it = handsOffIds.begin(); it != handsOffIds.end(); ) {
+			CCircuitUnit* unit = GetTeamUnit(*it);
+			if ((unit == nullptr) || unit->IsDead()) {
+				it = handsOffIds.erase(it);
+			} else if ((unit->GetUnit()->GetRulesParamFloat("disableAiControl", 0.f) <= 0.f)
+				&& (unit->GetTask() != nullptr) && (unit->GetTask()->GetType() == IUnitTask::Type::PLAYER))
+			{
+				back.push_back(unit);
+				++handsOffBack;
+				it = handsOffIds.erase(it);
+			} else {
+				++it;
+			}
+		}
+		ArmyNetFightHere(back);
 		handsOffTotal += released;
 		if ((released > 0) && (frame >= handsOffNextLog)) {
 			handsOffNextLog = frame + FRAMES_PER_SEC * 60;
-			LOG("apex: handsoff t=%i f=%i released=%i total=%i", teamId, frame, released, handsOffTotal);
+			LOG("apex: handsoff t=%i f=%i released=%i total=%i back=%i", teamId, frame, released, handsOffTotal, handsOffBack);
 		}
+	}
+
+	if (isArmyNet) {
+		ArmyNetUpdate(frame);
 	}
 
 	for (const CEnemyUnit* data : allyTeam->GetDyingEnemies()) {
@@ -1753,6 +1778,9 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
 	unit->SetDamagedFrame(lastFrame);
 	unit->SetDamagedWeapon(weaponId);
 	unit->SetDamagedDir(dir);  // points toward the shooter (see CreateFakeEnemy)
+	if (isArmyNet) {
+		ArmyNetDamaged(unit, attackerId);
+	}
 	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
 
 	if (IsValidWeaponDefId(weaponId)) {
@@ -3713,6 +3741,7 @@ springai::AIFloat3 CCircuitAI::FindBuildSiteNear(CCircuitDef* def, const springa
 	if (tm == nullptr) {
 		return -RgtVector;
 	}
+	CScheduler::STimed timed(scheduler.get(), "c.siteNear");
 	return tm->FindBuildSite(def, pos, radius, UNIT_NO_FACING);
 }
 
@@ -4723,6 +4752,11 @@ std::string CCircuitAI::InitOptions()
 		isCommMerge = StringToBool(value);
 	}
 
+	value = options->GetValueByKey("armynet");
+	if (value != nullptr) {
+		isArmyNet = StringToBool(value);
+	}
+
 	value = options->GetValueByKey("ally_base");
 	if (value != nullptr) {
 		isAllyBaseAvoid = StringToBool(value);
@@ -4893,3 +4927,6 @@ void CCircuitAI::PrepareAreaUpdate()
 }
 
 } // namespace circuit
+
+// apex: the army model bridge (AI option "armynet")
+#include "ArmyNetBridge.inc"

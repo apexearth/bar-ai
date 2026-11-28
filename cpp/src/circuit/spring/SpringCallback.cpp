@@ -23,7 +23,7 @@ COOAICallback::COOAICallback(OOAICallback* clb)
 		, callback(clb)
 		, skirmishAIId(callback->GetSkirmishAIId())
 {
-	unitIds.resize(MAX_UNITS);
+	idBuf.resize(MAX_UNITS);
 	units.resize(MAX_UNITS);
 }
 
@@ -43,12 +43,12 @@ int COOAICallback::GetEnemyTeamSize() const
 
 const std::vector<Unit*>& COOAICallback::GetFriendlyUnits()
 {
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getFriendlyUnits(skirmishAIId, unitIds.data(), MAX_UNITS);
+	int size = sAICallback->getFriendlyUnits(skirmishAIId, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
 
 	units.resize(size);
 	for (int i = 0; i < size; ++i) {
-		units[i] = WrappUnit::GetInstance(skirmishAIId, unitIds[i]);
+		units[i] = WrappUnit::GetInstance(skirmishAIId, idBuf[i]);
 	}
 
 	return units;
@@ -58,12 +58,12 @@ const std::vector<Unit*>& COOAICallback::GetFriendlyUnitsIn(const AIFloat3& pos,
 {
 	float pos_posF3[3];
 	pos.LoadInto(pos_posF3);
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getFriendlyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, unitIds.data(), MAX_UNITS);
+	int size = sAICallback->getFriendlyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
 
 	units.resize(size);
 	for (int i = 0; i < size; ++i) {
-		units[i] = WrappUnit::GetInstance(skirmishAIId, unitIds[i]);
+		units[i] = WrappUnit::GetInstance(skirmishAIId, idBuf[i]);
 	}
 
 	return units;
@@ -81,17 +81,17 @@ const std::vector<int>& COOAICallback::GetFriendlyUnitIdsIn(const springai::AIFl
 {
 	float pos_posF3[3];
 	pos.LoadInto(pos_posF3);
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getFriendlyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, unitIds.data(), MAX_UNITS);
-	unitIds.resize(size);
+	int size = sAICallback->getFriendlyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
+	unitIds.assign(idBuf.begin(), idBuf.begin() + size);
 	return unitIds;
 }
 
 const std::vector<int>& COOAICallback::GetFriendlyUnitIds()
 {
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getFriendlyUnits(skirmishAIId, unitIds.data(), MAX_UNITS);
-	unitIds.resize(size);
+	int size = sAICallback->getFriendlyUnits(skirmishAIId, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
+	unitIds.assign(idBuf.begin(), idBuf.begin() + size);
 	return unitIds;
 }
 
@@ -102,12 +102,12 @@ Unit* COOAICallback::WrapUnit(int unitId) const
 
 const std::vector<Unit*>& COOAICallback::GetEnemyUnits()
 {
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getEnemyUnits(skirmishAIId, unitIds.data(), MAX_UNITS);
+	int size = sAICallback->getEnemyUnits(skirmishAIId, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
 
 	units.resize(size);
 	for (int i = 0; i < size; ++i) {
-		units[i] = WrappUnit::GetInstance(skirmishAIId, unitIds[i]);
+		units[i] = WrappUnit::GetInstance(skirmishAIId, idBuf[i]);
 	}
 
 	return units;
@@ -117,12 +117,12 @@ const std::vector<Unit*>& COOAICallback::GetEnemyUnitsIn(const AIFloat3& pos, fl
 {
 	float pos_posF3[3];
 	pos.LoadInto(pos_posF3);
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getEnemyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, unitIds.data(), MAX_UNITS);
+	int size = sAICallback->getEnemyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
 
 	units.resize(size);
 	for (int i = 0; i < size; ++i) {
-		units[i] = WrappUnit::GetInstance(skirmishAIId, unitIds[i]);
+		units[i] = WrappUnit::GetInstance(skirmishAIId, idBuf[i]);
 	}
 
 	return units;
@@ -148,20 +148,20 @@ const std::vector<int>& COOAICallback::GetEnemyUnitIdsIn(const AIFloat3& pos, fl
 {
 	float pos_posF3[3];
 	pos.LoadInto(pos_posF3);
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getEnemyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, unitIds.data(), MAX_UNITS);
-	unitIds.resize(size);
+	int size = sAICallback->getEnemyUnitsIn(skirmishAIId, pos_posF3, radius, spherical, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
+	unitIds.assign(idBuf.begin(), idBuf.begin() + size);
 	return unitIds;
 }
 
 const std::vector<Unit*>& COOAICallback::GetNeutralUnits()
 {
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getNeutralUnits(skirmishAIId, unitIds.data(), MAX_UNITS);
+	int size = sAICallback->getNeutralUnits(skirmishAIId, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
 
 	units.resize(size);
 	for (int i = 0; i < size; ++i) {
-		units[i] = WrappUnit::GetInstance(skirmishAIId, unitIds[i]);
+		units[i] = WrappUnit::GetInstance(skirmishAIId, idBuf[i]);
 	}
 
 	return units;
@@ -171,12 +171,12 @@ const std::vector<Unit*>& COOAICallback::GetNeutralUnitsIn(const AIFloat3& pos, 
 {
 	float pos_posF3[3];
 	pos.LoadInto(pos_posF3);
-	unitIds.resize(MAX_UNITS);
-	int size = sAICallback->getNeutralUnitsIn(skirmishAIId, pos_posF3, radius, spherical, unitIds.data(), MAX_UNITS);
+	int size = sAICallback->getNeutralUnitsIn(skirmishAIId, pos_posF3, radius, spherical, idBuf.data(), MAX_UNITS);
+	size = std::max(0, std::min(size, MAX_UNITS));
 
 	units.resize(size);
 	for (int i = 0; i < size; ++i) {
-		units[i] = WrappUnit::GetInstance(skirmishAIId, unitIds[i]);
+		units[i] = WrappUnit::GetInstance(skirmishAIId, idBuf[i]);
 	}
 
 	return units;

@@ -43,3 +43,16 @@ reference/within-reason/
 # Windows crash dumps from the shell
 *.stackdump
 reference/barandom/
+
+# Henry file transfers between machines
+/henry-inbox/
+/henry-outbox/
+
+# onnxruntime session profiles (enable_profiling)
+onnxruntime_profile__*.json
+
+# patch-apply backups
+*.orig
+
+# runs fetched from the Mac; todo/learn-army-from-replays.md cites them by this path (v0.5.18 gate)
+/matches-mac/

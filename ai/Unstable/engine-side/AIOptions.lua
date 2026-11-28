@@ -53,6 +53,14 @@ local options = {
 		def     = false,
 	},
 	{ -- bool
+		key     = 'armynet',
+		name    = 'Army model (experimental)',
+		desc    = 'A trained model commands this bot\'s army; the bot keeps its economy and production. Needs the model server running on the host PC (tools/armynet/serve.py). Off = the normal army.',
+		type    = 'bool',
+		section = 'advanced',
+		def     = false,
+	},
+	{ -- bool
 		key     = 'ally_base',
 		name    = 'Keep out of allied bases',
 		desc    = 'Do not build near an allied player\'s factories. Leave on.',

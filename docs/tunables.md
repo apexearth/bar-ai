@@ -161,7 +161,6 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_T2_CON_BASE` = 1. His "1 T2 con + 1 per 25 metal". Gating the overflow term cut metal 335-554k -> 165-262k on Carrot 1v1 (the extra T2 cons are the mohos); reverted.
 - `TUNE_T2_CON_PER_M` = 31. His 25; 25 -> 31 by the 10-04 valuation search.
 - `TUNE_CON_BASE` = 4.38. His two points (3 at 12 m/s, 5 at 100); 2.7 -> 4.38 by the 10-04 valuation search (more constructors was its one consistent signal).
-- `TUNE_T1_AIR_CON_MIN` = 10. His number.
 - `TUNE_NANO_SITE_SHARE` = 1. Replaced a 35 m/s clamp that left gantries on 2-5 nanos against the enemy's 38.
 - `TUNE_MEX_TRIES` = 10. A bound on work, not expansion: 3 read as "no ground left".
 
@@ -293,3 +292,5 @@ override reaches a game only through the deployed `dev_tunables.lua` gadget (S8)
 - `TUNE_INBASE_PATH` = 0 (`apex_inbase_path`). Removed the anomaly (119 -> 0) but not the stuck builders (21 -> 20); mexes held worse.
 - `TUNE_TRAVEL_LEAN` = 2 (`apex_travel_lean`, C++ MoveAction/FightAction): a walking unit is sent 4 waypoints ahead and re-ordered only near the last; at 1 the lean switched off within armed reach, so a unit in a fight got the next waypoint every 2 s, into wrecks and our own crowd (his 11-15 "it continuously retries"). 2 keeps the lean in contact. wreck_push, 7 pairs: stuck nudges 17 -> 0, all killed 44 -> 32 s mean, faster in 7 of 7; 4+4 games: army stuck per 1k army 3.4 -> 3.0 (results/stuck-push). Default 2 since 11-16, gated in the next release batch.
 - `apex_hold_<unit>`. Live only while losing ground; the Behemoth 2x is his call. Unmeasured.
+- (deleted 11-24) `apex_nuke_ally_blast`: allied units priced by distance and health (`GetAllyBlastM`) and the aim slid off them are the code since v5 passed (scenario 5/5; 16-game 6v6: allied loss per warhead -36%, enemy kill per warhead -2%).
+- `TUNE_NUKE_ALLY_RATIO` = 5 (`apex_nuke_ally_ratio`). His 11-24 ruling: with allies under every aim, fire only when it kills far more of theirs; 5x was the example he picked. Unmeasured.

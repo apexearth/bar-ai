@@ -160,6 +160,8 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 		UpdateChunk(c);
 }
 
+int gCycleN = 0;
+bool gCycleRun = true;
 void AiFrame()
 {
 	gFrameHook = true;
@@ -167,8 +169,15 @@ void AiFrame()
 	int ph = (ai.frame - ai.skirmishAIId) % 30;
 	if (ph < 0)
 		ph += 30;
-	if ((ph % span) == 0)
-		UpdateChunk(ph / span);
+	if ((ph % span) != 0)
+		return;
+	const int c = ph / span;
+	if (c == 0) {
+		++gCycleN;
+		gCycleRun = (gCycleN % Perf::Stretch()) == 0;
+	}
+	if (gCycleRun)
+		UpdateChunk(c);
 }
 
 void UpdateChunk(int c)
@@ -183,7 +192,6 @@ void UpdateChunk(int c)
 		{ double _t = Perf::T0(); Brain::YardWatch(); Perf::Add("up.yard", _t); }
 		{ double _t = Perf::T0(); Brain::FacExitWatch(); Perf::Add("up.facexit", _t); }
 		{ double _t = Perf::T0(); Brain::ExitPathClear(); Perf::Add("up.exitclear", _t); }
-		{ double _t = Perf::T0(); Market::LagCleanup(); Perf::Add("up.laggc", _t); }
 	}
 	if (!ApexActive())
 		return;

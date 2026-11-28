@@ -55,12 +55,31 @@ bool ComRowsOk(int defId)
 	return (defId >= 0) && (defId <= Catalog::gDefCount);
 }
 // Rows whose def is of protect class `cls`, ascending: the class asked once per def present, not once per row.
-void ComRowsOfClass(int cls, array<int>& out rows)
+// Kept per class until the ledger's shape moves, once every def in it has its class memoised (census.as).
+array<array<int>@> gRowsOfCls;
+array<int> gRowsOfClsShape;
+const array<int>@ ComRowsOfClass(int cls)
 {
-	rows.resize(0);
 	ComRows(0);
+	const bool keyed = (cls >= 0) && (cls < 64);
+	if (keyed && (gRowsOfCls.length() <= uint(cls))) {
+		gRowsOfCls.resize(uint(cls) + 1);
+		gRowsOfClsShape.resize(uint(cls) + 1);
+		for (uint c = 0; c < gRowsOfCls.length(); ++c)
+			if (gRowsOfCls[c] is null) {
+				@gRowsOfCls[c] = array<int>();
+				gRowsOfClsShape[c] = -1;
+			}
+	}
+	if (keyed && (gRowsOfClsShape[uint(cls)] == gComShape)) {
+		return gRowsOfCls[uint(cls)];
+	}
+	array<int> rows;
+	bool fixed = true;
 	for (uint u = 0; u < gComByDefUsed.length(); ++u) {
 		const int d = gComByDefUsed[u];
+		if ((d < 0) || (d >= int(gProtClass.length())) || (gProtClass[d] == 0))
+			fixed = false;
 		if (ProtClassOf(d) != cls)
 			continue;
 		const array<int>@ r = gComByDef[uint(d)];
@@ -68,6 +87,11 @@ void ComRowsOfClass(int cls, array<int>& out rows)
 			rows.insertLast(r[k]);
 	}
 	rows.sortAsc();
+	if (!keyed)
+		return rows;
+	@gRowsOfCls[uint(cls)] = rows;
+	gRowsOfClsShape[uint(cls)] = fixed ? gComShape : -1;
+	return gRowsOfCls[uint(cls)];
 }
 
 const array<int>@ ComRows(int defId)

@@ -1515,6 +1515,34 @@ static float CCircuitAI_GetFriendlyCostIn(CCircuitAI* circuit, const AIFloat3& p
 	return cost;
 }
 
+// allied (other teams', not ours) metal a blast would kill: each unit by its distance from the centre (linear falloff to the
+// edge) against its current health, as nukes.as KilledM prices theirs (11-24 scenario: full cost in radius vetoed strikes
+// that harmed no one and kept ones that killed the allies)
+static float CCircuitAI_GetAllyBlastM(CCircuitAI* circuit, const AIFloat3& pos, float radius, float damage)
+{
+	if (!utils::is_valid(pos) || (radius <= 0.f) || (damage <= 0.f)) {
+		return 0.f;
+	}
+	circuit->UpdateFriendlyUnits();
+	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius);
+	float m = 0.f;
+	for (springai::Unit* u : units) {
+		CAllyUnit* au = (u != nullptr) ? circuit->GetFriendlyUnit(u) : nullptr;
+		if ((au == nullptr) || (au->GetCircuitDef() == nullptr) || (u->GetTeam() == circuit->GetTeamId())) {
+			continue;
+		}
+		const float d = au->GetPos(circuit->GetLastFrame()).distance2D(pos);
+		if (d >= radius) {
+			continue;
+		}
+		const float dmg = damage * (1.f - d / radius);
+		const float hp = std::max(u->GetHealth(), 1.f);
+		m += au->GetCircuitDef()->GetCostM() * std::min(1.f, dmg / hp);
+	}
+	utils::free(units);
+	return m;
+}
+
 static float CCircuitAI_GetWreckValueAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	return circuit->GetWreckValueAt(pos, radius);
@@ -2676,6 +2704,15 @@ static const std::string CCircuitDef_GetName(CCircuitDef* cdef)
 	return cdef->GetDef()->GetName();
 }
 
+// a unit def's customParams entry, "" when absent (the commander's spawnpad_unit names the build turret a lobby
+// option gives it at start)
+static const std::string CCircuitDef_GetCustomParam(CCircuitDef* cdef, const std::string& key)
+{
+	const std::map<std::string, std::string>& cp = cdef->GetDef()->GetCustomParams();
+	auto it = cp.find(key);
+	return (it != cp.end()) ? it->second : std::string();
+}
+
 static float CCircuitUnit_GetRulesParamFloat(CCircuitUnit* unit, const std::string& key, float defVal)
 {
 	return unit->GetUnit()->GetRulesParamFloat(key.c_str(), defVal);
@@ -3252,6 +3289,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestRezPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestRezPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetWreckValueAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetWreckValueAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetFriendlyCostIn(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetFriendlyCostIn), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyBlastM(const AIFloat3& in, float, float)", asFUNCTION(CCircuitAI_GetAllyBlastM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetFieldWorkAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetFieldWorkAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetOwnRepairM() const", asFUNCTION(CCircuitAI_GetOwnRepairM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetWeaponStaticOwner(int) const", asMETHOD(CCircuitAI, GetWeaponStaticOwner), asCALL_THISCALL); ASSERT(r >= 0);
@@ -3367,6 +3405,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "void TglAttribute(Type)", asMETHOD(CCircuitDef, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitDef, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "const string GetName() const", asFUNCTION(CCircuitDef_GetName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "const string GetCustomParam(const string&in) const", asFUNCTION(CCircuitDef_GetCustomParam), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitDef", "const Id id", asOFFSET(CCircuitDef, id)); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAvailable(int)", asMETHODPR(CCircuitDef, IsAvailable, (int) const, bool), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CCircuitDef", "const int count", asOFFSET(CCircuitDef, count)); ASSERT(r >= 0);

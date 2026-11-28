@@ -180,6 +180,13 @@ void TickSpeed()
 }
 
 
+// While lagging, the slow update and the builder elections run one second in Stretch() (his 11-25: behind the
+// server there is almost nothing to decide; unit movement and fights stay every frame in the C++).
+int Stretch()
+{
+	return 1 + int(gLagSev);
+}
+
 float LagSeverity()
 {
 	return gLagSev;

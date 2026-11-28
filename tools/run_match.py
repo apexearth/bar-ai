@@ -795,6 +795,10 @@ def run(args) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     write_dir.mkdir(parents=True, exist_ok=True)
 
+    # 11-26: C: filled at 02:37 mid-run (17 GB of our output in 30 h); the archive step runs before a launch instead
+    import archive_old
+    archive_old.ensure_disk()
+
     # His 10-27: launch on free memory, not on a clock. Waits until a worst-case game fits beside his reserve.
     if not args.no_mem_gate:
         wait_for_memory(args.mem_game_gb, args.mem_reserve_gb)
@@ -825,7 +829,8 @@ def run(args) -> int:
         map_starts=map_starts, map_size=map_size_elmos,
         drop_ai_version=args.drop_ai_version,
         extra_modoptions={**(_barandom.modoptions(args.randomizer) if args.randomizer else {}),
-                          **dict(kv.split('=', 1) for kv in args.modoption)},
+                          **{k: (Path(v[1:]).read_text(encoding="utf-8").strip() if v.startswith("@") else v)
+                             for k, v in (kv.split('=', 1) for kv in args.modoption)}},
         extras=extras,
         restrictions={k: int(v) for k, v in (r.split('=', 1) for r in args.restrict)} or None,
         ai_options={**(json.loads(Path(args.ai_options_file).read_text(encoding="utf-8")) if args.ai_options_file else {}),
@@ -1256,7 +1261,7 @@ def main() -> int:
                     help="play BaRandom's randomized unit defs (tools/barandom.py; his 11-14), "
                          "at the pinned commit or SHA; each game rolls its own units")
     ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
-                    help="extra start-script modoption, repeatable. The one that "
+                    help="extra start-script modoption, repeatable (K=@file reads V from a file). The one that "
                          "matters for reproducing a hosted game is "
                          "ai_incomemultiplier=1.5 -- benchmarks run at 1.0, and "
                          "several behaviours only misfire on a bonused economy")

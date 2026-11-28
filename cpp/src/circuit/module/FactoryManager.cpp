@@ -1451,6 +1451,7 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
 
 IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 {
+	CScheduler::STimed timed(circuit->GetScheduler().get(), "c.nanoScan");
 	CEconomyManager* economyMgr = circuit->GetEconomyManager();
 	bool isMetalEmpty = economyMgr->IsMetalEmpty();
 	CAllyUnit* repairTarget = nullptr;
@@ -1467,9 +1468,20 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 	float curCost = std::numeric_limits<float>::max();
 	circuit->UpdateFriendlyUnits();
 	// NOTE: OOAICallback::GetFriendlyUnitsIn depends on unit's radius
-	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius * 0.9f);
-	for (Unit* u : units) {
-		auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+	// apex: ids, not a WrappUnit newed and freed per unit in reach; each unit's engine reads go through the
+	// wrapper its CAllyUnit already holds. Team or ally is decided as GetTeamOrAllyUnit decides it.
+	const std::vector<int> ids = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, radius * 0.9f);
+	const int teamId = circuit->GetTeamId();
+	for (int uid : ids) {
+		CAllyUnit* cand = circuit->GetTeamUnit(uid);
+		bool isTeam = (cand != nullptr);
+		if (cand == nullptr) {
+			cand = circuit->GetFriendlyUnit(uid);
+			if ((cand != nullptr) && (cand->GetUnit()->GetTeam() == teamId)) {
+				continue;   // ours but not registered yet: GetTeamOrAllyUnit gives it no unit either
+			}
+		}
+		Unit* u = (cand != nullptr) ? cand->GetUnit() : nullptr;
 		if ((cand == nullptr) || (cand == unit)
 			|| builderMgr->IsReclaimUnit(cand)
 			|| (isTeam ? static_cast<CCircuitUnit*>(cand)->IsAttrNoRepair() : cand->GetCircuitDef()->IsAttrNoRepair()))
@@ -1527,7 +1539,6 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 			}
 		}
 	}
-	utils::free(units);
 	// apex: a hurt gun or fighter in reach outranks any construction (his
 	// 2026-10-13: nanos behind the defences healing them while they're attacked)
 	if (armedRepair != nullptr) {

@@ -101,6 +101,7 @@ private:
 	int skirmishAIId;
 
 	std::vector<int> unitIds;
+	std::vector<int> idBuf;  // apex: the engine's fill target, MAX_UNITS for good
 	std::vector<springai::Unit*> units;
 	std::vector<int> featureIds;
 };

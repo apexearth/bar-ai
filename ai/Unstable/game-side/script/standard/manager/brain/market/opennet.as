@@ -58,6 +58,49 @@ void OpenEnd(const string& in why)
 		+ " skips=" + gOpenSkips + " decidedF=" + gOpenAt + " why=" + why);
 }
 
+// THE HANDS THE LOBBY SENDS AT START (11-25): assist drones and the commander's build turret appear a few seconds
+// in, after the opening is decided. A player reads them off the lobby; so does this, naming them as the game's own
+// spawners do (the commander's side prefix + "assistdrone", "_land" when not flying; the commander's spawnpad_unit).
+float gOpenBp = -1.f;   // the other hands' build power the plan was decided on
+float StartHandsComingBp(CCircuitUnit@ com)
+{
+	if ((com is null) || (com.circuitDef is null))
+		return 0.f;
+	dictionary@ mo = aiSetupMgr.GetModOptions();
+	const string comName = com.circuitDef.GetName();
+	float bp = 0.f;
+	if (string(mo["assistdronesenabled"]) == "enabled") {
+		const int n = int(parseInt(string(mo["assistdronescount"])));
+		const bool air = (string(mo["assistdronesair"]) == "1") || (string(mo["assistdronesair"]) == "true");
+		CCircuitDef@ dr = ai.GetCircuitDef(comName.substr(0, 3) + "assistdrone" + (air ? "" : "_land"));
+		if ((dr !is null) && (n > 0))
+			bp += Catalog::gBuildPower[int(dr.id)] * float(n);
+	}
+	if (string(mo["commanderbuildersenabled"]) == "enabled") {
+		CCircuitDef@ pad = ai.GetCircuitDef(com.circuitDef.GetCustomParam("spawnpad_unit"));
+		if (pad !is null)
+			bp += Catalog::gBuildPower[int(pad.id)];
+	}
+	return bp;
+}
+
+// The seat's other hands now: what stands, or what the lobby is sending, whichever is more.
+float OpenOtherBp(CCircuitUnit@ com)
+{
+	float have = 0.f;
+	const int cd = int(com.circuitDef.id);
+	const array<int>@ own = OwnedDefs();
+	for (uint q = 0; q < own.length(); ++q) {
+		const int c = own[q];
+		if ((c == cd) || (gOwnCount[uint(c)] <= 0) || !Catalog::gBuilder[c] || (Catalog::gBuildPower[c] <= 0.f)
+			|| (Catalog::BuildsOf(c).length() > 0 && !Catalog::gMobile[c] && !IsAssistDef(c)))
+			continue;
+		have += Catalog::gBuildPower[c] * float(gOwnCount[uint(c)]);
+	}
+	const float coming = StartHandsComingBp(com);
+	return (coming > have) ? coming : have;
+}
+
 void OpenDecide(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	Want@ plant = null;
@@ -100,8 +143,18 @@ void OpenDecide(CCircuitUnit@ unit, array<Want@>@ ranked)
 	const float comE = k * Catalog::gMakeE[cd];
 	const float needM = Catalog::gCostM[ld] + conM;
 	const float needE = Catalog::gCostE[ld] + conE;
-	const float carryM = (Eco::MCur() + comM * (labS + conS)) / ((needM > 1.f) ? needM : 1.f);
-	const float carryE = (Eco::ECur() + comE * (labS + conS)) / ((needE > 1.f) ? needE : 1.f);
+	// THE OTHER HANDS SPEND THE SAME BANK (11-25): with assist drones and a build turret the commander was not the
+	// only draw, and the lab-first test that only counted his own build stalled every seat at 20 s. Every other
+	// builder of ours spends over the same window at what an extractor costs per unit of build time.
+	const float otherBp = OpenOtherBp(unit);
+	gOpenBp = otherBp;
+	const int rateDef = ((mex !is null) && (mex.def !is null)) ? int(mex.def.id) : ld;
+	const float rateBt = (Catalog::gBuildTime[rateDef] > 1.f) ? Catalog::gBuildTime[rateDef] : 1.f;
+	const float winS = labS + conS;
+	const float otherM = otherBp * winS * Catalog::gCostM[rateDef] / rateBt;
+	const float otherE = otherBp * winS * Catalog::gCostE[rateDef] / rateBt;
+	const float carryM = (Eco::MCur() + comM * winS) / (((needM + otherM) > 1.f) ? (needM + otherM) : 1.f);
+	const float carryE = (Eco::ECur() + comE * winS) / (((needE + otherE) > 1.f) ? (needE + otherE) : 1.f);
 	const int rule = ((carryM >= 1.f) && (carryE >= 1.f)) ? OP_LAB : OP_MEX2;
 	const AIFloat3 up = unit.GetPos(ai.frame);
 	const float spd = (Catalog::gSpeed[cd] > 1.f) ? Catalog::gSpeed[cd] : 1.f;
@@ -138,7 +191,7 @@ void OpenDecide(CCircuitUnit@ unit, array<Want@>@ ranked)
 	AiLog(EcoLine("nnopen", OP_NAMES[rule], flat > 0.f, trust, st, f, OP_NAMES, w, p, gOpenPlan, "first"));
 	AiLog("apex: open-plan t=" + ai.teamId + " plan=" + OpenName(gOpenPlan) + " rule=" + OP_NAMES[rule]
 		+ " p=" + NnF(p[gOpenPlan], 3) + " k=" + NnF(k, 2)
-		+ " carryM=" + NnF(carryM, 2) + " carryE=" + NnF(carryE, 2)
+		+ " carryM=" + NnF(carryM, 2) + " carryE=" + NnF(carryE, 2) + " otherBp=" + NnF(otherBp, 0)
 		+ " lab=" + plant.def.GetName() + " con=" + ((con >= 0) ? Catalog::Def(con).GetName() : "-")
 		+ " trust=" + NnF(trust, 2) + " flat=" + NnF(flat, 2));
 }
@@ -154,6 +207,13 @@ bool OpenHoist(CCircuitUnit@ unit, array<Want@>@ ranked)
 	if ((Factory::gFacUnits.length() > 0) || AnyPlantInFlight()) {
 		OpenEnd("plant");
 		return false;
+	}
+	// MORE HANDS THAN THE PLAN WAS MADE FOR (a gift, drones the lobby did not tell of): decide again
+	if ((gOpenPlan >= 0) && (OpenOtherBp(unit) > gOpenBp)) {
+		AiLog("apex: open-replan t=" + ai.teamId + " was=" + OpenName(gOpenPlan) + " step=" + gOpenStep
+			+ " bp " + NnF(gOpenBp, 0) + " -> " + NnF(OpenOtherBp(unit), 0));
+		gOpenPlan = -1;
+		gOpenStep = 0;
 	}
 	if (gOpenPlan < 0) {
 		OpenDecide(unit, ranked);

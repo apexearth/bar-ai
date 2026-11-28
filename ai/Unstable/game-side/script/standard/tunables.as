@@ -1327,7 +1327,6 @@ const float TUNE_CON_BASE = 4.38f;
 
 // [count] -- basic air constructors kept once an air lab stands, one in the
 //   queue at a time so the other air keeps coming. See docs/tunables.md.
-const float TUNE_T1_AIR_CON_MIN = 10.f;
 
 // [metal/s per extra constructor] --
 const float TUNE_CON_PER_M = 44.f;
@@ -1339,6 +1338,8 @@ const float TUNE_LINE_FLOOR = 0.25f;
 // ECO_DANGER_M: enemy cost inside the safe radius that counts as "base close
 //   to being under attack" -- two T1 raiders' worth (2 x ~110).
 const float TUNE_ECO_DANGER_M = 250.f;
+const float TUNE_ECO_DANGER_FORCE = 1.f;   // [toggle 0/1] army.as EcoSeatDangerNear: the strict eco seat stops growing while a force at its base outweighs what answers it, or raid pressure (stance.as, his 11-23 definition); EcoDangerNear and its other users unchanged (arming it for all cost -27% income at 30, 12 8v8 games); 0 = the eco seat keeps the old never-arming test
+const float TUNE_NUKE_ALLY_RATIO = 5.f;   // nukes.as AimOffAllies: with allies under the blast, fire only when their kill is at least this many times ours (his 11-24: "fire if it kills far more of theirs"; 5 was the example he picked)
 
 // ECO_REACH_FRAC: the quiet rear claims no spot whose enemy distance is under
 //   this fraction of its own -- it expands sideways/back, never forward.
@@ -1876,7 +1877,6 @@ const float TUNE_LAG_SPEED = 0.98f;
 const float TUNE_FTR_TEAM = 1.f;   // [toggle 0/1] every.as EveryFighterGainFor: fighters (and an air plant for them) priced on the team's whole shortfall against the team's fighters, not this seat's army share (his 11-01)
 const float TUNE_FOE_AIR_MEM = 1.f;   // [toggle 0/1] foemem.as: their armed planes counted once by id and kept until seen dying; the fighter answer sizes on that memory, not on what is in sight (11-01 mirror 4v4s)
 const float TUNE_LAG_BEHIND = 1.f;   // [toggle 0/1] perf.as BehindS: the lag ladder holds and deepens while the measured order lag says we are behind the server, not only while the sim is under 1x (his 10-31)
-const float TUNE_LAG_GC = 1.f;   // [toggle 0/1] want_reclaim.as LagCleanup: while behind, idle turrets worth nothing whose self-destruct hurts nothing go at once (his 10-31)
 
 // [severity] -- How much lag severity rises per slow-speed sample; higher cuts
 //   kick in at severity 1, 2 and 3.

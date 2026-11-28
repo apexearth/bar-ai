@@ -125,6 +125,17 @@ public:
 	// spent on. jobsMs was ~87% of the whole AI frame at hour scale and had no
 	// breakdown at all; without this the C++ half is one opaque bucket.
 	void LogJobPerf(CCircuitAI* circuit);
+	// apex: time a piece of C++ that runs inside a job, under its own name (nested: it is also in its job's time)
+	struct STimed {
+		CScheduler* s;
+		const char* name;
+		std::chrono::steady_clock::time_point t0;
+		STimed(CScheduler* s, const char* name) : s(s), name(name), t0(std::chrono::steady_clock::now()) {}
+		~STimed() {
+			if (s != nullptr) s->AccountJob(name, std::chrono::duration_cast<std::chrono::microseconds>(
+					std::chrono::steady_clock::now() - t0).count());
+		}
+	};
 
 	// apex: the worker pool is shared by every AI in the process and nothing
 	// measured it -- ThreatMap/InfluenceMap/EnemyManager rebuilds and every

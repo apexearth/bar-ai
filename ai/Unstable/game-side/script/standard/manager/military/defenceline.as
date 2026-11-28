@@ -232,12 +232,6 @@ const float AA_HEAVY_PER = 1500.f;
 // so a single overflight does not swing the answer.
 const float GROUND_UNSEEN  = 3.0f;
 const float AIR_AVG_SECONDS = 240.f;
-// Enemy air builders and scouts are counted as AIR. They cannot be separated
-// from ground ones by role, so discount by the most that could plausibly be air.
-const float SOFT_AIR_WEIGHT = 0.10f;
-// Cap the discount: enemy builders+scouts include ground ones, so an uncapped
-// subtraction erases a real bomber fleet. ~7 air constructors' worth.
-const float SOFT_AIR_CAP = 2500.f;
 float gAirAvg    = -1.f;
 float gGroundAvg = -1.f;
 // Unsmoothed reading from the same tick gAirAvg is fed from. gAirAvg's 240s

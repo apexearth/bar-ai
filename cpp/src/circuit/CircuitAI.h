@@ -952,6 +952,38 @@ private:
 	int sniperOrderNextLog = 0;
 	int handsOffTotal = 0;
 	int handsOffNextLog = 0;
+	std::set<ICoreUnit::Id> handsOffIds;  // units the gadget's mark took; its mark cleared, they come back
+	int handsOffBack = 0;
+	// apex: the army model bridge inside the AI (ArmyNetBridge.cpp; AI option "armynet"): the dev gadget's job done
+	// host-side, so it runs in a hosted multiplayer game. Writes this side's view, reads the model's orders, and
+	// holds the army off the AI's own control.
+	bool isArmyNet = true;   // apex: his 11-24, on unless the lobby turns it off
+	std::string armyNetDir;
+	std::set<ICoreUnit::Id> armyNetHeld;
+	std::map<ICoreUnit::Id, float> armyNetHp;            // own unit health at the last state write
+	std::map<ICoreUnit::Id, ICoreUnit::Id> armyNetHitBy;  // own unit -> last attacker since then
+	int armyNetLastOrders = -1;
+	int armyNetOrdersAt = -1;  // game frame the last new orders file was read: no model running, no units held
+	std::map<ICoreUnit::Id, int> armyNetFoeTeam;  // enemy id -> its team when last in sight (out of sight the engine says -1)
+	int armyNetEnemyTeam = -1;  // a team of an enemy ally team, for a blip never seen
+	int armyNetApplied = 0;
+	std::map<ICoreUnit::Id, int> armyNetReleasedUntil;  // serve --hybrid: units handed to the AI's fight logic, until frame
+	int armyNetReleased = 0;
+	long long armyNetOrdersStamp = -1;  // the orders file's write time and size when last read through
+	long long armyNetOrdersSize = -1;
+	bool armyNetStaticDone = false;
+	void ArmyNetUpdate(int frame);
+	void ArmyNetLaunch(const std::string& verDir);
+	void ArmyNetWriteStatic();
+	void ArmyNetWriteState(int frame);
+	void ArmyNetReadOrders();
+	void ArmyNetHold();
+	void ArmyNetFightHere(std::vector<CCircuitUnit*>& units);
+	bool ArmyNetFocus(CCircuitUnit* unit) const;
+public:
+	void ArmyNetDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId);
+	bool IsArmyNet() const { return isArmyNet; }
+private:
 	int skirmishAIId;
 	int teamId;
 	int allyTeamId;

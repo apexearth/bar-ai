@@ -193,6 +193,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	buildSpeed     = workerTime = def->GetBuildSpeed();
 	selfDCountdown = def->GetSelfDCountdown();
 	maxThisUnit    = def->GetMaxThisUnit();
+	{
+		// A unit the lobby disabled (BAR's unit_restrictions_* set customparams.modoption_blocked: no T2, no air,
+		// no converters...) can never be built, so it does not exist for us (his 11-25)
+		const std::map<std::string, std::string>& cp = def->GetCustomParams();
+		auto it = cp.find("modoption_blocked");
+		if ((it != cp.end()) && !it->second.empty() && (it->second != "0") && (it->second != "false")) {
+			maxThisUnit = 0;
+		}
+	}
 
 //	maxRange[static_cast<RangeT>(RangeType::MAX)] = def->GetMaxWeaponRange();
 	hasDGun         = def->CanManualFire();

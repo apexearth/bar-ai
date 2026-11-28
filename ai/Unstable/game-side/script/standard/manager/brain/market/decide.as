@@ -575,8 +575,8 @@ double ElecFrameUs()
 				TUNE_ELEC_FRAME_US));
 	const double sev = double(Perf::LagSeverity()) / 3.0;
 	if ((sev <= 0.0) || (gElecBudgetUs <= AI_FRAME_BUDGET_US))
-		return gElecBudgetUs;
-	return gElecBudgetUs + (AI_FRAME_BUDGET_US - gElecBudgetUs) * ((sev < 1.0) ? sev : 1.0);
+		return gElecBudgetUs / double(Perf::Stretch());
+	return (gElecBudgetUs + (AI_FRAME_BUDGET_US - gElecBudgetUs) * ((sev < 1.0) ? sev : 1.0)) / double(Perf::Stretch());
 }
 
 // Carried across frames: a step dearer than the slice leaves a debt the next
@@ -591,27 +591,29 @@ double gElecRollWall = -1.0;
 double gElecDemandUs = 0.0;
 double ElecRemainUs(Elec@ st)
 {
-	double r = 0.0;
-	for (int s = (st is null) ? 0 : st.step; s < ELEC_STEPS; ++s)
-		r += gStepEma[uint(s)];
-	return r;
+	const int s0 = (st is null) ? 0 : st.step;
+	return gRemainAt[uint((s0 < 0) ? 0 : ((s0 > ELEC_STEPS) ? ELEC_STEPS : s0))];
 }
 double ElecWindow()
 {
 	return (gRevisitEma > 1.f) ? double(gRevisitEma) : 1.0;
 }
-// ElecRemainUs for each next step, summed in its order: the queue is hundreds of sets late in a big game.
+// What is left of a set from each step on, summed forward from that step; rebuilt only when a step's cost moves.
 array<double> gRemainAt(uint(ELEC_STEPS) + 1, 0.0);
+void StepEmaSet(uint s, double v)
+{
+	gStepEma[s] = v;
+	for (uint a = 0; a <= s; ++a) {
+		double r = 0.0;
+		for (uint t = a; t < uint(ELEC_STEPS); ++t)
+			r += gStepEma[t];
+		gRemainAt[a] = r;
+	}
+}
 void ElecDemandRefresh()
 {
 	const double w = ElecWindow();
 	gElecDemandUs = 0.0;
-	for (int s = 0; s < ELEC_STEPS; ++s) {
-		double r = 0.0;
-		for (int t = s; t < ELEC_STEPS; ++t)
-			r += gStepEma[uint(t)];
-		gRemainAt[uint(s)] = r;
-	}
 	for (uint q = 0; q < gElecQ.length(); ++q) {
 		const int uid = gElecQ[q];
 		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length()))) ? gElecOf[uid] : null;
@@ -688,8 +690,8 @@ void ElecSpendRest(double totalUs)
 		// prologue into it, which errs toward holding the finish over.
 		gElecFinishing = false;
 		const uint fs = uint(ELEC_STEPS) - 1;
-		gStepEma[fs] = (gStepEma[fs] <= 0.0) ? rest
-				: (gStepEma[fs] * 0.8 + rest * 0.2);
+		StepEmaSet(fs, (gStepEma[fs] <= 0.0) ? rest
+				: (gStepEma[fs] * 0.8 + rest * 0.2));
 	}
 	gElecCallUs = 0.0;
 	ElecSpend(rest);
@@ -713,8 +715,8 @@ void ElecCharge(int step, double us)
 {
 	if (us < 0.0)
 		us = 0.0;
-	gStepEma[uint(step)] = (gStepEma[uint(step)] <= 0.0) ? us
-			: (gStepEma[uint(step)] * 0.8 + us * 0.2);
+	StepEmaSet(uint(step), (gStepEma[uint(step)] <= 0.0) ? us
+			: (gStepEma[uint(step)] * 0.8 + us * 0.2));
 	gElecCallUs += us;
 	ElecSpend(us);
 }
@@ -1614,7 +1616,7 @@ void ElecPump()
 	ElecFrameRoll();
 	uint i = 0;
 	while (i < gElecQ.length()) {
-		if ((gElecSpentUs > ElecSliceUs()) || (gElecCredit <= 0.0))
+		if ((gElecCredit <= 0.0) || (gElecSpentUs > ElecSliceUs()))
 			return;
 		const int uid = gElecQ[i];
 		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length())))
@@ -1666,6 +1668,12 @@ void ElecLog()
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
 		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comHomeAssist=" + gComHomeAssist + "/" + gComHomeAssistAsk + " comHomeNone=" + gComHomeNone + " ladderSpill=" + gLadderSpillSkip + " comRush=" + gComRushAssist + "/" + gComRushAsk + " conRush=" + gConRushAssist + "/" + gConRushAsk + " comEscMetalSkip=" + gComEscMetalSkip + " comEscStallSkip=" + gComEscStallSkip + " comLabLeft=" + gComLabLeft + " comLabIdle=" + gComLabIdle + " comFlips=" + gComFlips + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
+	{
+		string se = "apex: elec-steps t=" + ai.teamId + " us=";
+		for (uint s = 0; s < gStepEma.length(); ++s)
+			se += ((s == 0) ? "" : ",") + int(gStepEma[s]);
+		AiLog(se);
+	}
 	gKeepMin = 0;
 	gOffCrewMin = 0;
 	gElecDone = 0;

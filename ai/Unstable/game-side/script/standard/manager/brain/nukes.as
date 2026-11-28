@@ -388,16 +388,66 @@ float KilledM(int d, float dist)
 }
 
 // Buildings by where they stand; a group's mobile members have no positions here, so each is priced at the centre.
-float GroupKilledM(int g, const AIFloat3 &in at)
+float GroupKilledM(int g, const AIFloat3 &in at, float memberDist = 0.f)
 {
 	float m = StructsKilledM(at);
 	const int n = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 	for (int k = 0; k < n; ++k) {
 		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
 		if (Catalog::ValidId(d) && Catalog::gMobile[d])
-			m += KilledM(d, 0.f);
+			m += KilledM(d, memberDist);
 	}
 	return m;
+}
+
+// his 11-24: on allies, fire only when it kills far more of theirs (apex_nuke_ally_ratio times what it kills of our
+// side); otherwise the target is out and the missile waits. g: group index, -1 economy, -2 base guess, -3 turret line
+bool AllyHold(int g, const AIFloat3 &in at, float theirs)
+{
+	const float allies = ai.GetAllyBlastM(at, gWarheadR, gWarheadD);
+	if ((allies <= 0.f) || (theirs >= ai.GetTunable("apex_nuke_ally_ratio", TUNE_NUKE_ALLY_RATIO) * allies))
+		return false;
+	AiLog(Factory::T() + "apex: nuke-ally-hold g=" + g + " at=" + int(at.x) + "," + int(at.z)
+		+ " theirs=" + int(theirs) + " allies=" + int(allies));
+	return true;
+}
+
+// With our side under the blast, slide the aim off the target's centre (a quarter, half and three quarters of the
+// radius, eight bearings) to where their kill less ours is best; g >= 0 prices a group's members at the offset, g < 0
+// is economy ground (structures by where they stand).
+float AimOffAllies(int g, const AIFloat3 &in p, float cost, AIFloat3 &out aim)
+{
+	aim = p;
+	if (ai.GetAllyBlastM(p, gWarheadR, gWarheadD) <= 0.f)
+		return cost;
+	const float at0 = cost;
+	float alliesBest = ai.GetAllyBlastM(p, gWarheadR, gWarheadD);
+	for (int s = 1; s <= 3; ++s) {
+		const float off = gWarheadR * 0.25f * float(s);
+		for (int b = 0; b < 8; ++b) {
+			const float ang = float(b) * 0.7853982f;
+			const AIFloat3 q(p.x + off * cos(ang), p.y, p.z + off * sin(ang));
+			if (!OnMap(q))
+				continue;
+			// a shift is for sparing our side only (11-24 game gate: kept for any better worth, it lifted targets
+			// over the floor and fired 40% more warheads): it must hit fewer of ours, then the best worth among those
+			const float aq = ai.GetAllyBlastM(q, gWarheadR, gWarheadD);
+			if (aq >= alliesBest)
+				continue;
+			const float c = ((g >= 0) ? GroupKilledM(g, q, off) : StructsKilledM(q)) - OwnKilledM(q);
+			if (c > cost) {
+				cost = c;
+				aim = q;
+				alliesBest = aq;
+			}
+		}
+	}
+	if (AllyHold(g, aim, cost + OwnKilledM(aim)))
+		return -1.f;
+	if (aim.x != p.x || aim.z != p.z)
+		AiLog(Factory::T() + "apex: nuke-aim-shift g=" + g + " from=" + int(p.x) + "," + int(p.z) + " to=" + int(aim.x) + "," + int(aim.z)
+			+ " worth=" + int(at0) + "->" + int(cost) + " allies@centre=" + int(ai.GetAllyBlastM(p, gWarheadR, gWarheadD)));
+	return cost;
 }
 
 // OUR OWN METAL UNDER THE BLAST (units at the warhead's falloff, buildings at their whole stake): a strike is worth
@@ -421,6 +471,10 @@ float OwnKilledM(const AIFloat3 &in at)
 				m += KilledM(d, us[k].GetPos(ai.frame).distance2D(at));
 		}
 	}
+	// ...AND OUR SIDE'S (his 11-23 hosted game: a nuke of ours landed on our own air). The team hands every silo to
+	// one seat, so the units under the blast are often another seat's or a human ally's, which the firing seat's own
+	// count never saw. Priced like theirs: each allied unit by its distance and health.
+	m += ai.GetAllyBlastM(at, gWarheadR, gWarheadD);
 	return m;
 }
 
@@ -671,7 +725,10 @@ void UpdateNukes()
 			continue;
 		// ...except the army that would end the game (his 08-21, the emergency below): losing ours beats losing the base.
 		const bool emergency = defensive && (rawCost >= ai.GetTunable("apex_nuke_emergency", TUNE_NUKE_EMERGENCY));
-		const float cost = GroupKilledM(i, p) - (emergency ? 0.f : OwnKilledM(p));
+		AIFloat3 aim = p;
+		float cost = GroupKilledM(i, p) - (emergency ? 0.f : OwnKilledM(p));
+		if (!emergency)
+			cost = AimOffAllies(i, p, cost, aim);
 		if (cost < (defensive ? defMin : minValue))
 			continue;
 		// WHO OWNS THIS GROUND, not "is any of ours near". GetAllyInflAt is
@@ -729,7 +786,7 @@ void UpdateNukes()
 		}
 		if (score > bestScore) {
 			bestScore = score;
-			bestPos = p;
+			bestPos = aim;
 			bestAntis = antis;
 			bestCost = cost;
 			bestKind = defensive ? "army" : "group";
@@ -749,7 +806,10 @@ void UpdateNukes()
 				continue;
 			if (Military::ForwardFraction(p) < ai.GetTunable("apex_nuke_def_minfwd", TUNE_NUKE_DEF_MINFWD))
 				continue;
-			const float cost = StructsKilledM(p);
+			AIFloat3 aim = p;
+			float cost = StructsKilledM(p);
+			if (ai.GetAllyBlastM(p, gWarheadR, gWarheadD) > 0.f)
+				cost = AimOffAllies(-1, p, cost - OwnKilledM(p), aim);
 			if (cost > ecoBest)
 				ecoBest = cost;
 			if (cost < minValue)
@@ -770,7 +830,7 @@ void UpdateNukes()
 				score *= decayE;
 			if (score > bestScore) {
 				bestScore = score;
-				bestPos = p;
+				bestPos = aim;
 				bestAntis = antis;
 				bestCost = cost;
 				bestKind = "economy";
@@ -800,8 +860,8 @@ void UpdateNukes()
 			mirror = AIFloat3(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
 		mirror = NukeGuessOnBaseGround(mirror);
 		if (OnMap(mirror) && !VolleyServes(mirror)) {
-			const float cost = NukeMirrorWorth(mirror, ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE))
-					- OwnKilledM(mirror);
+			const float theirsM = NukeMirrorWorth(mirror, ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE));
+			const float cost = AllyHold(-2, mirror, theirsM) ? -1.f : (theirsM - OwnKilledM(mirror));
 			int antis = AntisCovering(mirror);
 			const int assumeFrom2 = int(ai.GetTunable("apex_nuke_assume_from", TUNE_NUKE_ASSUME_FROM)
 					* 60.f) * SECOND;
@@ -833,7 +893,7 @@ void UpdateNukes()
 	if (Market::gPlan == Market::NG_MISSILE) {
 		AIFloat3 line;
 		float lineR = 0.f, lineM = 0.f;
-		if (Military::TurretTarget(line, lineR, lineM) && OnMap(line) && !VolleyServes(line)) {
+		if (Military::TurretTarget(line, lineR, lineM) && OnMap(line) && !VolleyServes(line) && !AllyHold(-3, line, lineM)) {
 			const int antis = AntisCovering(line);
 			const float score = lineM / float(1 + antis) * Market::NG_MUL;
 			if (score > bestScore) {

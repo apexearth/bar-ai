@@ -10,6 +10,13 @@ unproven. `python tools/trial_report.py` after his games.
 
 | Issue | Since | In one line |
 |---|---|---|
+| [army-off-axis-corner](issues/army-off-axis-corner.md) | 11-27 | the army model parks a group in the same far corner off the line between the bases (Comet Catcher: model bottom-left, group top-left); contract "army off the line" |
+| [unit-cap-filled-air-boats](issues/unit-cap-filled-air-boats.md) | 11-25 | at the unit cap (800) a seat's slots were fighters and boats, no ground army; the slot price is lag-only, mobile-only, and reads the lobby maxunits, not the per-player limit |
+| [slow-opening](issues/slow-opening.md) | 11-25 | AA panic on unarmed enemy drones (17/20 seats, AA by 2 min) and radar by 2 min, both before the third mex; energy is the opening limit (mex 500 E, radar 630, AA 900) |
+| [spam-stops](issues/spam-stops.md) | 11-25 | spam needs T2 (never in T1-only games); ends for good when the one spam plant dies; that plant mostly makes rez bots and AA bots (3-35 spam sent in 9-14 min) |
+| [held-air-ignores-base-attack](issues/held-air-ignores-base-attack.md) | 11-25 | held aircraft hover while the base is shot: the defend release read the enemy AA of the whole map (6,580 > 1,000) and only the base centre; fixed in source, unmeasured |
+| [enemy-walls-block-army](issues/enemy-walls-block-army.md) | 11-25 | our army stops at enemy walls; nothing reclaims them (unblock.as handles our own buildings only) |
+| [breakthrough-follow-through](issues/breakthrough-follow-through.md) | 11-24 | after killing a defensive line the army turns to another front instead of looking behind it; tools/breakthrough.py: AI breaks lines outnumbered (3 of 63 with 2x, humans 46 of 161) |
 | [ticks-flank-extractors](issues/ticks-flank-extractors.md) | 11-18 | stock escorts: ~3 flank extractors lost to Ticks by min 10 vs 1 for v0.5.16; home army idles; deferred to our own fight layer |
 | [modoption-overridden-by-lobby](issues/modoption-overridden-by-lobby.md) | 11-18 | 10-07..11-18 the lobby's nn_blend default beat `--modoption apex_nn_blend=0`: rules-only controls likely ran the nets |
 | [v0512-targets](issues/v0512-targets.md) | 11-16 | his v0.5.12 targets and the 11-15/16 asks, one row each: check, v0.5.14 vs v0.5.13, aim, status |

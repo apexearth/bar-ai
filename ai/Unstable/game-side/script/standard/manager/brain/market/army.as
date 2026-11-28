@@ -1969,8 +1969,11 @@ bool EcoDangerNear()
 	// a single overflight (claw at 4.8m with danger=0 at every sample).
 	if (ai.frame >= gEcoDangerTickAt) {
 		gEcoDangerTickAt = ai.frame + 10 * SECOND;
-		const bool hot = ai.GetEnemyCostAt(Builder::gHomePos,
-					ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
+		// GetEnemyCostAt returns a COUNT of enemy units, so against apex_eco_danger_m (250, a metal bar) this never
+		// arms. Its 14 users have played that way since it was written; arming it for all of them (11-23, 12 8v8
+		// games) cost every pair income at 30 min (-27%, 23 ARMED, all but 3 on ordinary seats). The eco seat's own
+		// exit is EcoSeatDangerNear below; this stays as it was.
+		const bool hot = ai.GetEnemyCostAt(Builder::gHomePos, ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
 				> ai.GetTunable("apex_eco_danger_m", TUNE_ECO_DANGER_M);
 		gEcoDangerStreak = hot ? (gEcoDangerStreak + 1) : 0;
 		const bool armed = gEcoDangerStreak >= 3;   // 30s sustained
@@ -2050,9 +2053,36 @@ float EcoRoleTargetM()
 // them sending the devastating bombing raids"). Latched here, read by
 // Air::IsAirLead.
 bool gWasEcoSeat = false;
+// THE ECO SEAT STOPS GROWING WHEN ITS BASE IS UNDER A FORCE IT CANNOT HOLD (his 11-23 hosted 8v8: the strict eco seat
+// was pushed from the map edge for minutes with 0 guns, its labs on one constructor, its builders reclaiming wrecks,
+// because EcoDangerNear never arms). Under apex_eco_danger_force only the eco seat's growth reads his aggression
+// (stance.as): a force at our base outweighing the guns, army and commander answering it, or raid pressure, held 30 s.
+// Every other EcoDangerNear user is unchanged. Off outside an eco seat by construction (EcoRoleActive first).
+int gEsDangerStreak = 0;
+int gEsDangerTickAt = 47;
+bool gEsDangerArmed = false;
+bool EcoSeatDangerNear()
+{
+	if (ai.GetTunable("apex_eco_danger_force", TUNE_ECO_DANGER_FORCE) <= 0.f)
+		return EcoDangerNear();
+	if (!Builder::gHomeSet)
+		return false;
+	if (ai.frame >= gEsDangerTickAt) {
+		gEsDangerTickAt = ai.frame + 10 * SECOND;
+		const bool hot = Military::HomeForceUnheld()
+				|| (Military::RaidPressure() > ai.GetTunable("apex_stance_pressure", TUNE_STANCE_PRESSURE));
+		gEsDangerStreak = hot ? (gEsDangerStreak + 1) : 0;
+		const bool armed = gEsDangerStreak >= 3;
+		if (armed != gEsDangerArmed)
+			AiLog("apex: ecoseat-danger " + (armed ? "ARMED" : "cleared") + " team=" + ai.teamId + " f=" + ai.frame);
+		gEsDangerArmed = armed;
+	}
+	return gEsDangerArmed;
+}
+
 bool EcoRoleGrowing()
 {
-	const bool g = EcoRoleActive() && !EcoDangerNear()
+	const bool g = EcoRoleActive() && !EcoSeatDangerNear()
 			&& (EcoPowerM() < EcoRoleTargetM());
 	if (g)
 		gWasEcoSeat = true;

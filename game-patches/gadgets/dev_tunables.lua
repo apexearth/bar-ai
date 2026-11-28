@@ -505,7 +505,6 @@ local NAMES = {
 	-- published, so it could not be swept: apexearth 2026-09-08 "i suspect we
 	-- arent making enough cons and fail to expand properly".
 	"apex_con_base",
-	"apex_t1_air_con_min",
 	"apex_con_per_m",
 	"apex_t2_con_base",
 	"apex_t2_con_per_m",
@@ -552,6 +551,8 @@ local NAMES = {
 	"apex_siege_fear_frac",   -- SquadTask.cpp: siege row's fear radius as a share of its own range (0.9)
 	"apex_stance",            -- stance.as: master switch for stance budget/scout effects (1)
 	"apex_stance_unheld",     -- stance.as: AGGRESSIVE only when the seen army outclasses ours or a group at home outweighs what answers it (1)
+	"apex_eco_danger_force",  -- army.as: eco danger = an unheld force at home or raid pressure; 0 = the old never-arming count test (1)
+	"apex_nuke_ally_ratio",   -- nukes.as: with allies under the blast, fire only at this many times their kill vs ours (5)
 	"apex_retreat_cost_secs", -- posture.as: cost-vs-income no-retreat bar, 0 = off
 	"apex_bleed_engage",      -- deathledger.as: caution gain per forward-bleed fraction (2)
 	"apex_bleed_cap",         -- deathledger.as: caution ceiling (1.6)
@@ -674,7 +675,6 @@ local NAMES = {
 	"apex_travel_lag", -- MoveAction.cpp: lean waypoints far enough ahead for speed x measured order lag (1)
 	"apex_bomb_lag", -- BombTask.cpp FindTarget: a moving target weighed by splash over its walk in lag + flight (1)
 	"apex_lag_behind", -- perf.as BehindS: the lag ladder holds while the order lag says we are behind the server (1)
-	"apex_lag_gc", -- want_reclaim.as LagCleanup: while behind, idle worthless turrets with a harmless blast self-destruct (1)
 	"apex_team_gantry", -- teamgant.as: a middle seat hosts the team's first gantry, the others pay (1)
 	"apex_foe_air_mem", -- foemem.as: their planes remembered until seen dying; the fighter answer sizes on it (1)
 	"apex_ftr_team", -- every.as: fighters priced on the team's whole shortfall (1)

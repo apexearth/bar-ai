@@ -53,6 +53,22 @@ def his_game_running():
         env = bar_env.load()
         if any(time.time() - p.stat().st_mtime < QUIET_S for p in bot_logs(env)):
             return True
+        # a lobby game with no AI of ours writes no bot log (11-21): the install's infolog showing game frames
+        # (the lobby alone logs f=-000001)
+        # the infolog can sit quiet for minutes mid-game (11-21: 288 s at frame 19040); the demo file is created at
+        # game start and written at its end, so a zero-byte demo under 3 h old is a game in progress
+        demos = env.data / "demos"
+        if demos.exists():
+            for p in demos.glob("*.sdfz"):
+                st = p.stat()
+                if st.st_size == 0 and time.time() - st.st_mtime < 3 * 3600:
+                    return True
+        log = env.data / "infolog.txt"
+        if log.exists() and time.time() - log.stat().st_mtime < QUIET_S:
+            with open(log, "rb") as f:
+                f.seek(max(0, log.stat().st_size - 8192))
+                if re.search(rb"\]\[f=\d{7}\]", f.read()):
+                    return True
         out = subprocess.run(["powershell", "-NoProfile", "-Command",
                               "(Get-CimInstance Win32_Process -Filter \"Name='spring.exe'\" | "
                               "Where-Object { $_.CommandLine -notmatch '--menu' -and "

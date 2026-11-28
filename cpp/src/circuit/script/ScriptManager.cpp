@@ -468,7 +468,7 @@ void CScriptManager::ProfDump()
 		}
 		return std::string(b);
 	};
-	const int TOP = 40;
+	const int TOP = 150;   // a long tail is where a 2,000-line function hides
 	circuit->LOG("apex: asprof win k=%d execs=%llu totalMs=%.1f frame=%d", profK,
 			(unsigned long long)profExecs, profTotalNs / 1e6, circuit->GetLastFrame());
 	{

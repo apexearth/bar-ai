@@ -186,12 +186,9 @@ int CeilingConsOwned()
 		return gCcoVal;
 	gCcoFrame = ai.frame;
 	gCcoOwn = gOwnStamp;
-	// THE FLOOR IS FILLED BY FLYERS ONCE A PLANT OFFERS THEM: a walker's
-	// every start costs the walk, and the floor satisfied by walkers never
-	// bought the air con (apexearth 2026-09-14: "we really need to get on
-	// the ball here with making air and using air cons"; the seat's T1 air
-	// plant produced none).
-	const bool flyLab = FlyingConLab(true);
+	// ONE COUNT (11-25): walking and flying hands alike. Counting only flyers once a plant offered them let the air
+	// plant refill the whole floor while the ground hands stood (Mac, Carrot 4v4: 84 of 90 T1 air cons). Which kind a
+	// new hand is, is HandBest's.
 	int n = 0;
 	const array<int>@ _own18 = OwnedDefs();
 	for (uint _oi18 = 0; _oi18 < _own18.length(); ++_oi18) {
@@ -200,7 +197,7 @@ int CeilingConsOwned()
 			|| !Catalog::gBuilder[int(c)]
 			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
-		if (ReachesCeiling(int(c)) && (Catalog::gFlyer[int(c)] || !flyLab))
+		if (ReachesCeiling(int(c)))
 			n += gOwnCount[c];
 	}
 	gCcoVal = n;
@@ -258,12 +255,10 @@ int CeilingWalkersAll()
 // floor below re-orders for the whole build and lands a crowd.
 int CeilingConsInFlight()
 {
-	const bool flyLab = FlyingConLab(true);
 	int n = 0;
 	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
 		CCircuitDef@ pd = Brain::gFQPendDef[i];
-		if ((pd !is null) && ReachesCeiling(int(pd.id))
-			&& (Catalog::gFlyer[int(pd.id)] || !flyLab))
+		if ((pd !is null) && ReachesCeiling(int(pd.id)))
 			++n;
 	}
 	return n;
@@ -283,45 +278,9 @@ int CeilingConsInFlight()
 //
 // The commander is excluded because it is not one of the crew -- it has the
 // opening to run and cannot be replaced if it dies working.
-// Basic (non-ceiling) flying constructors: the nano-turret hands.
-bool IsT1AirCon(int d)
-{
-	return Catalog::gMobile[d] && Catalog::gBuilder[d] && Catalog::gFlyer[d]
-		&& !ReachesCeiling(d)
-		&& !Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask);
-}
-
-int T1AirConsOwned()
-{
-	int n = 0;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
-		if ((gOwnCount[c] > 0) && IsT1AirCon(int(c)))
-			n += gOwnCount[c];
-	}
-	return n;
-}
-
-int T1AirConsInFlight()
-{
-	int n = 0;
-	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
-		CCircuitDef@ pd = Brain::gFQPendDef[i];
-		if ((pd !is null) && IsT1AirCon(int(pd.id)))
-			++n;
-	}
-	return n;
-}
-
-int T1AirConsNeed()
-{
-	const int want = int(ai.GetTunable("apex_t1_air_con_min", TUNE_T1_AIR_CON_MIN));
-	const int have = T1AirConsOwned() + T1AirConsInFlight();
-	return (have < want) ? (want - have) : 0;
-}
 
 int ConsOwnedAny()
 {
-	const bool flyLab = FlyingConLab(false);   // same law as the ceiling count
 	int n = 0;
 	const array<int>@ _own19 = OwnedDefs();
 	for (uint _oi19 = 0; _oi19 < _own19.length(); ++_oi19) {
@@ -330,8 +289,7 @@ int ConsOwnedAny()
 			|| !Catalog::gBuilder[int(c)]
 			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
-		if (Catalog::gFlyer[int(c)] || !flyLab)
-			n += gOwnCount[c];
+		n += gOwnCount[c];
 	}
 	return n;
 }
@@ -341,13 +299,11 @@ int ConsOwnedAny()
 // for the whole build and lands a crowd.
 int ConsInFlightAny()
 {
-	const bool flyLab = FlyingConLab(false);
 	int n = 0;
 	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
 		CCircuitDef@ pd = Brain::gFQPendDef[i];
 		if ((pd !is null) && pd.IsMobile() && pd.IsBuilder()
-			&& !pd.IsRoleAny(Unit::Role::COMM.mask)
-			&& (pd.IsAbleToFly() || !flyLab))
+			&& !pd.IsRoleAny(Unit::Role::COMM.mask))
 			++n;
 	}
 	return n;
@@ -510,10 +466,97 @@ bool FlyingConLab(bool ceiling)
 	return false;
 }
 
+// WHICH KIND OF HAND (11-25, one count): build power delivered per metal, a job's walk taken out. The walk is the
+// open ground's mean step (SpotHandsOwed) at the hand's own speed; the job is one claim at its own build power.
+float gSpotStep = 0.f;   // mean elmos from one open spot to the nearest held one or home
+float HandValue(int d)
+{
+	const float bp = Catalog::gBuildPower[d];
+	const float cost = Catalog::gCostM[d] + Catalog::gCostE[d] * ConvRate();
+	if ((bp <= 0.f) || (cost <= 1.f))
+		return 0.f;
+	float share = 1.f;
+	const int claimDef = ClaimExtractDef(false);
+	if ((gSpotStep > 0.f) && (Catalog::gSpeed[d] > 1.f) && (claimDef > 0)) {
+		const float job = Catalog::BuildSecondsAt(claimDef, bp);
+		const float walk = gSpotStep / Catalog::gSpeed[d];
+		share = job / (job + walk);
+	}
+	return bp * share / cost;
+}
+
+// The best hand our standing plants offer (ceiling: only hands that reach the ceiling); every 5 s.
+int gHandBestAt = -1000;
+float gHandBestAny = 0.f;
+float gHandBestCeil = 0.f;
+array<float> gHandVal;   // by def, this refresh: HandValue of each hand a standing plant offers, -1 = not a hand
+// A hand is a builder that can build an extractor (no minelayer, no assist unit, no
+// commander) and whose pool is not full; scored with the best in one refresh, so the best plant never reads below it.
+bool BuildsExtractor(int d)
+{
+	const array<int>@ bl = Catalog::BuildsOf(d);
+	for (uint i = 0; i < bl.length(); ++i) {
+		const int b = bl[i];
+		if ((b > 0) && (b <= Catalog::gDefCount) && !Catalog::gMobile[b] && (Catalog::gExtractsM[b] > 0.f))
+			return true;
+	}
+	return false;
+}
+
+void HandRefresh()
+{
+	if (ai.frame - gHandBestAt < 5 * SECOND)
+		return;
+	gHandBestAt = ai.frame;
+	gHandBestAny = 0.f;
+	gHandBestCeil = 0.f;
+	gHandVal.resize(Catalog::gDefCount + 1);
+	for (uint i = 0; i < gHandVal.length(); ++i)
+		gHandVal[i] = -1.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+		for (uint q = 0; q < pr.length(); ++q) {
+			const int d = pr[q];
+			if ((d <= 0) || (d > Catalog::gDefCount) || (gHandVal[d] >= 0.f))
+				continue;
+			if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || !Catalog::gBuilder[d]
+				|| Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask) || IsAssistDef(d) || ConPoolFull(d))
+				continue;
+			if (!BuildsExtractor(d))
+				continue;
+			const float v = HandValue(d);
+			gHandVal[d] = v;
+			if (v > gHandBestAny)
+				gHandBestAny = v;
+			if (ReachesCeiling(d) && (v > gHandBestCeil))
+				gHandBestCeil = v;
+		}
+	}
+}
+
+float HandBest(bool ceiling)
+{
+	HandRefresh();
+	return ceiling ? gHandBestCeil : gHandBestAny;
+}
+
+// This plant's hand is the one a floor's gap should take: a hand, scored in the same refresh as the best.
+bool HandIsBest(int d, bool ceiling)
+{
+	HandRefresh();
+	if ((d <= 0) || (d >= int(gHandVal.length())) || (gHandVal[d] < 0.f))
+		return false;
+	return gHandVal[d] >= (ceiling ? gHandBestCeil : gHandBestAny) * 0.999f;
+}
+
 int gSpotHandsAt = -1000;
 int gSpotHandsVal = 0;
 int gSpotHandsBind = 0;   // ConsNeedAny calls the open spots decided
 int gConFloorYieldN = 0;  // con-floor orders that yielded to an army behind its share
+int gCfHand = 0;   // floor asks left to a plant with a better hand
 int gCfyFoe = 0, gCfyFtr = 0, gCfyShare = 0, gCfCap = 0, gCfUpk = 0, gCfHold = 0, gEarnMexN = 0, gEarnMexRadar = 0, gCfAsk = 0, gCfNoNeed = 0;
 int gNextSpotHandsLog = 0;
 int gNextT2SkipLog = 0;
@@ -570,7 +613,7 @@ int ConsNeedAt(bool walkers, float mul)
 		}
 		want *= mul;
 	}
-	const int have = walkers ? (ConsWalking(false) + ConsWalking(true)) : (ConsOwnedAny() + ConsInFlightAny());
+	const int have = ConsOwnedAny() + ConsInFlightAny();
 	const int gap = int(want) - have - SpareHands(walkers ? 0 : (FlyingConLab(false) ? 1 : 2));
 	return (gap > 0) ? gap : 0;
 }
@@ -662,6 +705,7 @@ int SpotHandsOwed()
 		}
 		stepSum += best;
 	}
+	gSpotStep = stepSum / float(n);
 	const float walkS = (stepSum / float(n)) / Catalog::gSpeed[con];
 	const float cycS = walkS + Catalog::BuildSecondsAt(claimDef, Catalog::gBuildPower[con]);
 	const float costC = Catalog::gCostM[con] + Catalog::gCostE[con] * ConvRate();
@@ -678,7 +722,7 @@ int SpotHandsOwed()
 			+ " yFoe=" + gCfyFoe + " yFtr=" + gCfyFtr + " yShare=" + gCfyShare
 			+ " outEarn=" + (gOutEarn ? 1 : 0) + " earn=" + formatFloat(gEarnOurs * 1000.f, "", 0, 1) + "/" + formatFloat(gEarnTheirs * 1000.f, "", 0, 1)
 			+ " theirMex=" + gEarnMexN + " radarOnly=" + gEarnMexRadar
-			+ " cfCap=" + gCfCap + " cfUpk=" + gCfUpk + " cfHold=" + gCfHold + " cfAsk=" + gCfAsk + " cfNoNeed=" + gCfNoNeed
+			+ " cfHand=" + gCfHand + " cfCap=" + gCfCap + " cfUpk=" + gCfUpk + " cfHold=" + gCfHold + " cfAsk=" + gCfAsk + " cfNoNeed=" + gCfNoNeed
 			+ " armyShare=" + formatFloat(Brain::ShareOf(Brain::ARMY), "", 0, 3) + "/" + formatFloat(Brain::TargetShare(Brain::ARMY), "", 0, 3)
 			+ " conMul=" + formatFloat(gConFloorMul, "", 0, 2) + " open=" + n
 			+ " walkS=" + formatFloat(walkS, "", 0, 1)
@@ -1828,7 +1872,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	// of his Talus 7v7 stood idle 130-180 s each at army gap 0 while the bank was not yet spilling): a T3 ground line
 	// takes the spare flow whether or not it is being thrown away
 	const bool t3Sink = (ai.GetTunable("apex_t3_sink", TUNE_T3_SINK) > 0.f) && (PlantTier(fid) >= 3) && !AirPlant(fid);
-	if ((TopOwnPlantTier() < 2) || (!MetalWasting() && !t3Sink))
+	if (((TopOwnPlantTier() < 2) && AdvancedPlantAvailable()) || (!MetalWasting() && !t3Sink))
 		richBal = 0.f;
 	if ((!ovfHands || t3Sink) && (richBal > armyGap)) {
 		armyGap = richBal;
@@ -1840,9 +1884,14 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 	// bought army past it -- his watched specialist spent 76k on army against
 	// 48k on economy and lost the most metal on its team. While growing, none
 	// of those asks; the raid valve (EcoDangerNear) ends the growth instead.
+	// ...EXCEPT METAL IT IS THROWING AWAY (his 11-10: "all the excess metal, it better be going into military"; 11-25:
+	// "the eco player never seems to get to the point of making army"). In his T1-only Hellas Basin game the eco seat's
+	// power sat at 430-490 under a 500 target for 25 minutes with its bank full at 2,000, growing all game and making
+	// nothing: the economy it names was out of reach, and the metal it could not spend on economy was wasted, not army.
 	const bool ecoGrowing = EcoRoleGrowing();
 	if (ecoGrowing && (EcoRoleRamp() <= 0.f)) {
-		armyGap = 0.f;   // ArmyTarget already carries the ramp past half the target
+		armyGap = (MetalWasting() && !ovfHands) ? richGap : 0.f;   // ArmyTarget already carries the ramp past half the target
+		gapSrc = (armyGap > 0.f) ? "ecowaste" : gapSrc;
 		coverShare = 0.f;
 	}
 	// THE BETTER LINES SPEND FIRST. Every factory filled the whole army gap
@@ -3108,30 +3157,13 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		// same reason the T2 one is: a con priced against army loses whenever
 		// the army gap is open, and the symmetric prior keeps it open by
 		// construction. Any tier counts -- this asks for hands, not reach.
-		// An air plant adds hands; it never stands in for ground ones (his 2026-10-03):
-		// a ground plant counts only ground cons against the floor.
+		// One count of hands, walking and flying (11-25); the gap goes to the plant whose hand HandIsBest.
 		const bool walker = !Catalog::gFlyer[d];
 		if (consNeedA < 0)
 			consNeedA = ConsNeedAny(walker);
 		// FIGHTERS OWED COME BEFORE THE FLOORS (his 10-31): the army share cannot see the air answer, so at its share
 		// with no fighters the con floor took the air plant (32 T2 air cons to 2 fighters, 60k of fighters wanted)
 		const bool ftrOwed = !walker && Air::AnswerFighterOwed(prods);
-		// THE T1 AIR CON FLOOR (his ruling 2026-09-15): once an air lab
-		// stands, keep making basic air cons until ten fly -- they are the
-		// hands that raise nano turrets -- but never the whole lab: one in
-		// the queue at a time, so the other air keeps coming.
-		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
-		// the moment the last one flew, and the lab made nothing else.
-		if (!ftrOwed && !walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0) && FloorUnderCap(d)
-			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot)
-			&& Brain::BudgetHoldPasses(Brain::BDH_AIRCON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
-		{
-			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
-				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
-				+ " (t1-air-con floor need=" + T1AirConsNeed()
-				+ " have=" + T1AirConsOwned() + ")");
-			return Catalog::Def(d);
-		}
 		// ...but never past the army's share: forced cons ahead of the draw held
 		// army spend at 0-8% of a 33% target through minute 6 while BARb fielded
 		// 1,750 metal of army and its raiders ate our cons and mexes (91 normal
@@ -3192,7 +3224,9 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				++gCfNoNeed;
 		}
 		if ((consNeedA > 0) && floorOn) {
-			if (!FloorUnderCap(d))
+			if (!HandIsBest(d, false))
+				++gCfHand;
+			else if (!FloorUnderCap(d))
 				++gCfCap;
 			else if (!UpkeepFloorPasses(d, fac, slot))
 				++gCfUpk;
@@ -3224,7 +3258,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 		const bool ceilBare = (ceilNeed > 0) && (ai.GetTunable("apex_con_bare_ceiling", 1.f) > 0.f)
 				&& (float(CeilingConsAny() + CeilingPendAny()) < ai.GetTunable("apex_con_base", TUNE_CON_BASE));
 		const bool ceilOpen = ceilBare ? (CeilingPendAny() == 0)
-				: (!foeOutguns && !ftrOwed && !(walker && FlyingConLab(true)) && (CeilingConsInFlight() == 0));
+				: (!foeOutguns && !ftrOwed && HandIsBest(d, true) && (CeilingConsInFlight() == 0));
 		if ((ceilNeed > 0) && ReachesCeiling(d) && (ai.frame >= gNextT2SkipLog)) {
 			const bool upk = UpkeepFloorPasses(d, fac, slot);
 			const bool cap = FloorUnderCap(d);
@@ -3233,7 +3267,7 @@ CCircuitDef@ ConOrderForInner(CCircuitUnit@ fac, int line, int slot)
 				gNextT2SkipLog = ai.frame + 30 * SECOND;
 				AiLog("apex: t2floor-skip t=" + ai.teamId + " " + fac.circuitDef.GetName() + " " + Catalog::Def(d).GetName()
 					+ " need=" + ceilNeed + " have=" + CeilingConsOwned() + " foeOutguns=" + (foeOutguns ? 1 : 0)
-					+ " ftrOwed=" + (ftrOwed ? 1 : 0) + " walkerVsFlyLab=" + ((walker && FlyingConLab(true)) ? 1 : 0)
+					+ " ftrOwed=" + (ftrOwed ? 1 : 0) + " handBest=" + (HandIsBest(d, true) ? 1 : 0)
 					+ " inflight=" + CeilingConsInFlight() + " cap=" + (cap ? 1 : 0) + " upkeep=" + (upk ? 1 : 0)
 					+ " budgetHold=" + (hold ? 1 : 0) + " bare=" + (ceilBare ? 1 : 0) + " any=" + CeilingConsAny()
 					+ " pend=" + CeilingPendAny());

@@ -100,7 +100,9 @@ bool EcoSeatFacKeeps(int d)
 		return true;
 	if ((Catalog::gRole[d] == int(Unit::Role::AA.type)) || EcoSeatAADef(d))
 		return EcoSeatAirDanger();
-	return false;
+	// metal the economy cannot take goes to the army (his 11-10 spend ruling; 11-25: his T1-only eco seat sat on a full
+	// bank for 25 minutes and made nothing); production.as asks only for that metal while the seat grows
+	return Catalog::gMobile[d] && MetalWasting();
 }
 
 array<int> gEsJobs(20, 0);

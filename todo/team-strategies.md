@@ -36,3 +36,9 @@ Not built:
   state with its own timing window; a plan the enemy has adapted to is worth less, so repetition prices itself out.
 - **One pick across hosts**: the same team pick on every host, derived from what all hosts see alike.
 - A stealth personality dial (air, tech, aggression, fast, scout, turtle exist).
+
+His 11-22, after online games where our seats' air killed one or two humans and the rest of the humans' T3 then
+killed us (they expect the air and buy AA): switching strategy mid-game is the advantage -- *"maybe you train them to
+expect the next huge air attack but instead you reclaim your air labs and you make extra gantries and you make a ton
+of T3 and then you attack them with that ... all about switching it up, changing tactics, doing the unexpected."* The
+follow-up above, concretely: the AA they bought is the signal; the switch reclaims the plants of the old plan.

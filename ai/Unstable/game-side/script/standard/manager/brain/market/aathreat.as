@@ -344,8 +344,7 @@ void AatCoverRefresh()
 		gAatCoverDone[p] = 0.f;
 	}
 	const float r = AatRadius();
-	array<int> aaRows;
-	ComRowsOfClass(PROT_AA, aaRows);
+	const array<int>@ aaRows = ComRowsOfClass(PROT_AA);
 	for (uint k = 0; k < aaRows.length(); ++k) {
 		const uint i = uint(aaRows[k]);
 		const int d = gComDef[i];

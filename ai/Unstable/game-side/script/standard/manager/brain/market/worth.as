@@ -241,6 +241,65 @@ int TopOwnPlantTier()
 	return gTopTier;
 }
 
+// CAN THIS GAME HAVE T2 AT ALL? A rule that waits "until T2" waits forever when the lobby disabled it (his 11-25: "this
+// anticipation for T2, which will never come"). Discovered from the build tree, as a player would: from the commander,
+// every unit it can build, every unit those plants and constructors can build, and so on, over available defs only
+// (the C++ catalog drops lobby-blocked units). "Disable Tech 2" leaves the gantry unblocked, but nothing reachable
+// builds it, so it is not counted. Fixed for the game, asked once.
+int gAdvAvail = -1;
+bool AdvancedPlantAvailable()
+{
+	if (gAdvAvail >= 0)
+		return gAdvAvail > 0;
+	gAdvAvail = 0;
+	const int D = Catalog::gDefCount;
+	array<bool> reach(D + 1, false);
+	array<int> q;
+	for (int d = 1; d <= D; ++d) {
+		if (Catalog::gAvailable[d] && Catalog::gT1Hand[d] && !Catalog::gT1Line[d] && Catalog::gMobile[d]) {
+			reach[d] = true;
+			q.insertLast(d);
+		}
+	}
+	for (uint qi = 0; qi < q.length(); ++qi) {
+		const array<int>@ bl = Catalog::gBuildsList[q[qi]];
+		for (uint k = 0; k < bl.length(); ++k) {
+			const int b = bl[k];
+			if ((b <= 0) || (b > D) || reach[b] || !Catalog::gAvailable[b])
+				continue;
+			reach[b] = true;
+			if (Catalog::gBuildsList[b].length() > 0)
+				q.insertLast(b);
+		}
+	}
+	// "advanced" is what the plant makes, not how deep it sits (notech2 leaves the amphibious complex and the seaplane
+	// platform at build-tree depth 2): a reachable plant counts only if its best unit buys more combat per metal than
+	// the best of the plants the first hands build directly
+	float firstBest = 0.f;
+	for (int d = 1; d <= D; ++d) {
+		if (reach[d] && !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0)
+			&& ((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) == 0)) {
+			const float v = FacBestPPC(d);
+			if (v > firstBest)
+				firstBest = v;
+		}
+	}
+	int reached = 0;
+	string names = "";
+	for (int d = 1; d <= D; ++d) {
+		if (!reach[d] || Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0) && (FacBestPPC(d) > firstBest)) {
+			gAdvAvail = 1;
+			++reached;
+			names += " " + Catalog::Def(d).GetName();
+		}
+	}
+	AiLog("apex: adv-reach t=" + ai.teamId + " roots=" + int(q.length() > 0 ? 1 : 0) + " reached=" + q.length()
+		+ " advPlants=" + reached + " available=" + gAdvAvail + " |" + names);
+	return gAdvAvail > 0;
+}
+
 // The best tier among our standing GROUND (and water) plants.
 int TopGroundPlantTier()
 {

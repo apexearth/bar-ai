@@ -114,12 +114,17 @@ def find_dupes():
 KEEP_SUFFIXES = (".sh", ".ps1", ".py", ".bat", ".cmd", ".json", ".md")
 
 
+ARCHIVES = {"mpgames"}  # tools/mp_archive.py: his online games' logs, which the game install overwrites; not scratch
+
+
 def find_runtime(cutoff):
     out = []
     base = REPO / "runtime"
     if not base.is_dir():
         return out
     for p in base.iterdir():
+        if p.name in ARCHIVES:
+            continue
         # 10-15: an idle script is still a live one -- this deleted nn_keepalive.sh and nn_running.ps1
         # while the keepalive ran, and the search sat stopped for an hour
         if p.is_file() and p.suffix.lower() in KEEP_SUFFIXES:
@@ -130,6 +135,14 @@ def find_runtime(cutoff):
             continue
         if t and t < cutoff:
             out.append((p, tree_size(p) if p.is_dir() else file_size(str(p))))
+    # one-off engine write dirs (_engine_ab3, _engine_smoke-22056, _engine-armynet-<pid>); the shared
+    # _engine and his lanes' dirs stay
+    keep = {"_engine"} | {lanemod.write_dir(n).name for n in HIS_LANES}
+    for p in (REPO / "matches").glob("_engine*"):
+        if p.is_dir() and p.name not in keep:
+            t = newest(p)
+            if t and t < cutoff:
+                out.append((p, tree_size(p)))
     return out
 
 
@@ -138,6 +151,9 @@ def lane_parts(name: str, env):
     return [lanemod.build_out(name), lanemod.barb_src(name), lanemod.write_dir(name),
             REPO / "ai" / lanemod.variant(name),
             env.engine_dir / "AI" / "Skirmish" / lanemod.short(name)]
+
+
+HIS_LANES = {"watch"}  # Apexwatch: the slot he launches watch games from; idle between his sessions, never stale
 
 
 def find_lanes(cutoff, env):
@@ -161,6 +177,8 @@ def find_lanes(cutoff, env):
             names.add(p.name[len("_engine-"):])
     names.discard("")
     names.discard(mine)
+    names -= HIS_LANES
+    names.discard("amd64-linux")  # build-amd64-linux is the shared Linux build (build_dll.py), not a lane
 
     out = []
     for n in sorted(names):
