@@ -12,6 +12,7 @@ bar. Add a check = add one function to CHECKS; each names his words in its docst
 from __future__ import annotations
 
 import argparse
+import bisect
 import collections
 import glob
 import json
@@ -26,6 +27,9 @@ DEATH_LINE = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) .*? 
 KILLER = re.compile(r" mob=(\d) .*? atkx=(-?[\d.]+) atkz=(-?[\d.]+) .*? atkid=(\d+)")
 LINE = re.compile(r"\[f=(-?\d+)\] Skirmish AI <ApexUnstable-([^>]+)>: (?:\[[\d.]+m t(\d+)\] )?apex: (.*)")
 T_IN = re.compile(r"\bt=(\d+)\b")
+ARMY_LINE = re.compile(r"\[BARAI_ARMY\] frame=(\d+) team=(\d+) n=\d+ part=\S+ (.*)")
+DEATH_POS = re.compile(r" x=(-?\d+) z=(-?\d+) .*? built=1 mob=(\d)")
+DEATH_COST = re.compile(r" unit=(\S+) cost=([\d.]+) .*? uid=(\d+)")
 
 
 class Seat:
@@ -34,15 +38,23 @@ class Seat:
         self.stats: list[dict] = []
         self.lines: dict[str, list[tuple[int, str]]] = collections.defaultdict(list)
         self.deaths: list[tuple[int, str, str]] = []   # (frame, unit, killer) from [BARAI_DEATH]
+        self.done_deaths: list[tuple[int, str]] = []   # (frame, unit), finished units only (built=1)
         self.kills: list[tuple[int, str, str]] = []    # (frame, their unit, our killer)
         self.foe_deaths: set[tuple[int, str]] = set()  # (frame, unit) of ours an enemy killed (not our own reclaim)
         self.building_kills: list[tuple[int, int, float, float]] = []  # (frame, killer uid, killer x, z), our buildings
+        self.army_snaps: dict[int, list[tuple[int, float, float, int]]] = collections.defaultdict(list)  # frame -> (uid, x, z, fired)
+        self.foe_bld_dead: list[tuple[int, float, float]] = []  # (frame, x, z) of enemy buildings that died
+        self.army_def: dict[int, str] = {}              # army snapshot uid -> unit name
+        self.mob_deaths: list[tuple[int, float, float, float, int]] = []  # (frame, x, z, cost, uid), finished mobiles
+        self.foes: list["Seat"] = []                    # the other side's seats in this game
+        self.cost: dict[str, float] = {}                # unit name -> metal, from this game's death lines
+        self.start: tuple[float, float] | None = None   # the commander's first army snapshot
 
 
 KEEP = ("exec t=", "decide t=", "ring-trim ", "congift ", "air run scored", "air run end", "peeled ", "metal cur=",
         "facqueue takes ", "facqueue lines=", "placed t=", "latency ",
         "unit-destroyed ", "defmeasured-stat ", "nnair-go gunships", "unstick-nudge ", "frontline perim",
-        "com-pos ", "armyest t=")
+        "com-pos ", "armyest t=", "AA PANIC")
 
 
 def load(match: Path) -> list[Seat]:
@@ -60,12 +72,38 @@ def load(match: Path) -> list[Seat]:
     for s in seats.values():
         s.stats.sort(key=lambda r: r["frame"])
     ally_of = {int(r["team"]): int(r["ally"]) for r in res.get("stats") or [] if "ally" in r}
+    cost_of: dict[str, float] = {}
     with open(match / "infolog.txt", errors="replace") as fh:
         for raw in fh:
+            if raw.startswith("[") and "[BARAI_ARMY]" in raw:
+                a = ARMY_LINE.search(raw)
+                if a and int(a.group(2)) in seats:
+                    snap = seats[int(a.group(2))].army_snaps[int(a.group(1))]
+                    for it in a.group(3).replace(",", " ").split():
+                        p = it.split(":")
+                        if len(p) >= 6 and not p[1].endswith("com"):
+                            snap.append((int(p[0]), float(p[2]), float(p[3]), int(p[5])))
+                            seats[int(a.group(2))].army_def[int(p[0])] = p[1]
+                        elif len(p) >= 6 and seats[int(a.group(2))].start is None:
+                            seats[int(a.group(2))].start = (float(p[2]), float(p[3]))
+                continue
             if raw.startswith("[") and "[BARAI_DEATH]" in raw:
                 d = DEATH_LINE.search(raw)
+                bp = DEATH_POS.search(raw)
+                if d and bp and bp.group(3) == "0":
+                    for t_, s_ in seats.items():
+                        if ally_of.get(t_, t_) != ally_of.get(int(d.group(2)), int(d.group(2))):
+                            s_.foe_bld_dead.append((int(d.group(1)), float(bp.group(1)), float(bp.group(2))))
+                c = DEATH_COST.search(raw)
+                if c:
+                    cost_of[c.group(1)] = float(c.group(2))
+                if d and bp and c and bp.group(3) == "1" and int(d.group(2)) in seats:
+                    seats[int(d.group(2))].mob_deaths.append(
+                        (int(d.group(1)), float(bp.group(1)), float(bp.group(2)), float(c.group(2)), int(c.group(3))))
                 if d and int(d.group(2)) in seats:
                     seats[int(d.group(2))].deaths.append((int(d.group(1)), d.group(3), d.group(5)))
+                    if " built=1 " in raw:
+                        seats[int(d.group(2))].done_deaths.append((int(d.group(1)), d.group(3)))
                     at = int(d.group(4))
                     if at >= 0 and ally_of.get(at, at) != ally_of.get(int(d.group(2))):
                         seats[int(d.group(2))].foe_deaths.add((int(d.group(1)), d.group(3)))
@@ -92,6 +130,9 @@ def load(match: Path) -> list[Seat]:
             if team is None or int(team) not in seats:
                 continue
             seats[int(team)].lines[key].append((int(m.group(1)), body))
+    for s_ in seats.values():
+        s_.cost = cost_of
+        s_.foes = [o for o in seats.values() if ally_of.get(o.team, o.team) != ally_of.get(s_.team, s_.team)]
     return list(seats.values())
 
 
@@ -306,6 +347,188 @@ def frozen_minutes(s: Seat):
             mins += 2.0
         prev = r.get("mBuiltReal", 0)
     return mins
+
+
+LAND_PLANT = re.compile(r"^(arm|cor|leg)(lab|vp|hp|fhp|amsub|alab|avp|gant|shltx)$")
+LATENCY_DONE = re.compile(r"^latency (\w+) done=")
+
+
+CONVERTER = re.compile(r"^(arm|cor|leg)\w*(makr|mmkr|econv)\w*$")
+
+
+def no_converter_minutes(s: Seat):
+    """11-25, a T1-only replay at 44 min: both of our seats had no energy converters on a large energy income. Minutes after the first converter finished, while the seat stood, with none standing."""
+    return _none_standing_minutes(s, CONVERTER)
+
+
+BASIC_MEX = re.compile(r"^(arm|cor|leg)mex$")
+
+
+def mex_by_3_neg(s: Seat):
+    """11-25: a slow opening, AA and radar before the third extractor, nearby spots left untaken. Extractors finished by
+    minute 3, negated (more is better)."""
+    if not s.stats:
+        return None
+    return -float(sum(1 for f, b in s.lines["latency "]
+                      if f <= 5400 and (m := LATENCY_DONE.match(b)) and BASIC_MEX.match(m.group(1))))
+
+
+def aa_panic_unarmed(s: Seat):
+    """The same game: the AA panic put an AA tower up at 50 s - 2 min in 17 of 20 seats, on 1 metal of seen enemy air,
+    the enemy's assist drones (1 metal each, unarmed). Panics on under 10 metal of seen air: no armed aircraft costs that
+    little."""
+    if not s.stats:
+        return None
+    return float(sum(1 for _f, b in s.lines["AA PANIC"] if (m := AA_PANIC_SEEN.match(b)) and float(m.group(1)) < 10.0))
+
+
+AA_PANIC_SEEN = re.compile(r"^AA PANIC -- seen ([\d.]+) metal")
+
+
+def army_on_dead_ground(s: Seat):
+    """11-27 (results/armynet/2026-11-27-step2-army-instrument.md): the army walks to an enemy base and stands there
+    after the buildings are gone; nothing sends it on. Share of army unit snapshots from minute 5 standing still (under
+    100 elmos since the last snapshot), not having fired for 10 s, within 500 elmos of where an enemy building died at
+    least 30 s before."""
+    if not s.army_snaps or not s.foe_bld_dead:
+        return None
+    dead = sorted(s.foe_bld_dead)
+    last: dict[int, tuple[float, float]] = {}
+    n = idle = 0
+    for f in sorted(s.army_snaps):
+        sites = [(x, z) for df, x, z in dead if df <= f - 900]
+        for uid, x, z, fired in s.army_snaps[f]:
+            prev = last.get(uid)
+            last[uid] = (x, z)
+            if f < 9000 or prev is None:
+                continue
+            n += 1
+            if fired or (x - prev[0]) ** 2 + (z - prev[1]) ** 2 > 100 ** 2:
+                continue
+            if any((x - sx) ** 2 + (z - sz) ** 2 <= 500 ** 2 for sx, sz in sites):
+                idle += 1
+    return idle / n if n else None
+
+
+def army_lost_outgunned(s: Seat):
+    """11-27 (results/armynet/2026-11-27-odds-in-contact.md): the army goes into fights it is outgunned in and does
+    not preserve itself. Share of our army metal lost (finished army units in the army snapshots) where, at the last
+    snapshot of both sides before the death, our army metal within 1,000 elmos of the death was under 2/3 of theirs.
+    Needs the other side's army snapshots (our AI on both sides); otherwise no reading."""
+    snaps_f = [o for o in s.foes if o.army_snaps]
+    if not s.army_snaps or not snaps_f or not s.mob_deaths:
+        return None
+    ours_f = sorted(s.army_snaps)
+    lost = out = 0.0
+    for f, x, z, cost, uid in s.mob_deaths:
+        if uid not in s.army_def:
+            continue
+        i = bisect.bisect_right(ours_f, f) - 1
+        if i < 0:
+            continue
+
+        def near(seat, fr):
+            return sum(seat.cost.get(seat.army_def.get(u, ""), 0.0) for u, ux, uz, _ in seat.army_snaps[fr]
+                       if (ux - x) ** 2 + (uz - z) ** 2 <= 1000 ** 2)
+        ours = near(s, ours_f[i])
+        theirs = 0.0
+        for o in snaps_f:
+            of = sorted(o.army_snaps)
+            j = bisect.bisect_right(of, f) - 1
+            if j >= 0:
+                theirs += near(o, of[j])
+        lost += cost
+        if ours < theirs / 1.5:
+            out += cost
+    return out / lost if lost else None
+
+
+def army_in_pieces(s: Seat):
+    """11-27 (results/armynet/2026-11-27-fights-in-pieces.md): the army enters fights in pieces; the other side gathers
+    first. A fight starts at an army snapshot where one of our army units has fired (in the last 10 s) with none of
+    ours firing within 1,500 elmos of it at the snapshot before. Of our army metal within 600 of it then plus what
+    came within 600 by the snapshot 60 s later, the share that came later (arrived after the fight began)."""
+    if not s.army_snaps:
+        return None
+    fr = sorted(s.army_snaps)
+    known = sorted(v for v in s.cost.values() if v > 0)
+    dflt = known[len(known) // 2] if known else 100.0
+    there = later = 0.0
+    for i0, f in enumerate(fr):
+        i1 = bisect.bisect_right(fr, f + 1800) - 1
+        if i0 == 0 or i1 <= i0:
+            continue
+        prev = [(ux, uz) for _u, ux, uz, fired in s.army_snaps[fr[i0 - 1]] if fired]
+        starts = []
+        for _u, x, z, fired in s.army_snaps[f]:
+            if fired and not any((x - px) ** 2 + (z - pz) ** 2 <= 1500 ** 2 for px, pz in prev + starts):
+                starts.append((x, z))
+        for x, z in starts:
+            def near(fi):
+                return {u: s.cost.get(s.army_def.get(u, ""), dflt) for u, ux, uz, _ in s.army_snaps[fr[fi]]
+                        if (ux - x) ** 2 + (uz - z) ** 2 <= 600 ** 2}
+            a0, a1 = near(i0), near(i1)
+            there += sum(a0.values())
+            later += sum(v for u, v in a1.items() if u not in a0)
+    return later / (there + later) if there + later else None
+
+
+def army_off_the_line(s: Seat):
+    """11-27 (issues/army-off-axis-corner.md): part of the army parks in a far corner, off the line between the bases.
+    Share of the army's snapshot metal from minute 5 standing more than 0.3 of the start-to-start distance away from
+    the line through the two starts (the enemy start: the mean of the other side's commanders' first snapshots)."""
+    starts = [o.start for o in s.foes if o.start is not None]
+    if s.start is None or not starts or not s.army_snaps:
+        return None
+    ex, ez = sum(p[0] for p in starts) / len(starts), sum(p[1] for p in starts) / len(starts)
+    ax, az = ex - s.start[0], ez - s.start[1]
+    L = math.hypot(ax, az)
+    if L < 1:
+        return None
+    known = sorted(v for v in s.cost.values() if v > 0)
+    dflt = known[len(known) // 2] if known else 100.0
+    tot = off = 0.0
+    for f, units in s.army_snaps.items():
+        if f < 9000:
+            continue
+        for u, x, z, _ in units:
+            m = s.cost.get(s.army_def.get(u, ""), dflt)
+            across = abs((x - s.start[0]) * az - (z - s.start[1]) * ax) / L   # distance from the line
+            tot += m
+            off += m if across > 0.3 * L else 0.0
+    return off / tot if tot else None
+
+
+def no_land_lab_minutes(s: Seat):
+    """11-25, T1-only games: little land army late in the game. His 8 of 10 seats lost the land lab at minute 11-12 and bought only air plants after it. Minutes after the first
+    land plant finished, while the seat stood, with none standing."""
+    return _none_standing_minutes(s, LAND_PLANT)
+
+
+def _none_standing_minutes(s: Seat, pat):
+    ev = [(f, 1) for f, b in s.lines["latency "] if (m := LATENCY_DONE.match(b)) and pat.match(m.group(1))]
+    ev += [(f, -1) for f, u in s.done_deaths if pat.match(u)]
+    if not ev or not s.stats:
+        return None
+    ev.sort()
+    first = next((f for f, d in ev if d > 0), None)
+    if first is None:
+        return None
+    end = s.stats[-1]["frame"]
+    decided = [f for f, _b in s.lines["decide t="]]
+    if decided:
+        end = min(end, max(decided))   # a dead seat keeps reporting stats; it stood while its builders decided
+    n, at, bare = 0, first, 0
+    for f, d in ev:
+        if f < first or f > end:
+            continue
+        if n <= 0:
+            bare += f - at
+        n = max(0, n + d)
+        at = f
+    if n <= 0:
+        bare += end - at
+    return bare / 1800.0
 
 
 def bare_hands_minutes(s: Seat):
@@ -586,6 +809,14 @@ CHECKS = [
     ("lost per killed", trade_lost_per_killed, "median", 0.15, None),  # make them trade worse than us
     ("reclaimed / killed (neg)", reclaim_share, "median", 0.05, None),  # resbots eat the reclaim
     ("bare-hands minutes", bare_hands_minutes, "mean", 1.0, 0.0),    # "we don't really try to rebuild it"
+    ("mex done by 3 min (neg)", mex_by_3_neg, "median", 0.5, None),  # "before it even has more than two mexes"
+    ("AA panics on unarmed air", aa_panic_unarmed, "mean", 0.25, 0.0),  # "anti-air and radar before ... two mexes"
+    ("army idle on dead enemy ground", army_on_dead_ground, "mean", 0.02, 0.0),  # stands where their base was
+    ("army lost outgunned", army_lost_outgunned, "mean", 0.05, None),  # share of army metal lost in fights it was outgunned in
+    ("army joins fights late", army_in_pieces, "mean", 0.05, None),  # share of a fight's army that came after it began
+    ("army off the line", army_off_the_line, "mean", 0.05, None),  # share of army metal-time far off the line between the bases
+    ("minutes without a land lab", no_land_lab_minutes, "mean", 1.0, 0.0),  # "we don't really make much land Army"
+    ("minutes without a converter", no_converter_minutes, "mean", 1.0, 0.0),  # "no energy converters ... massive energy"
     ("wiped bomber runs", wing_wiped_runs, "mean", 0.15, 0.0),       # share; the release alone spans 0.40-0.57 on the same seeds
     ("runs turned back", runs_turned_back, "mean", 0.25, 0.0),       # "we turn around and we just run"
     ("gunships sent to lose", gunships_sent_to_lose, "mean", 0.10, 0.0),  # "just sitting around doing nothing"
